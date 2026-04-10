@@ -40,9 +40,9 @@ export function MethodologySection() {
 								Anthropic Claude Opus 4.6
 							</strong>
 							. Both models run the identical analysis prompt and have
-							access to the same toolset  - live Schwab quotes, the
-							full options chain with greeks, and a built-in web search
-							for catalyst verification. Each model independently produces
+							access to the same toolset, including live Schwab quotes,
+							the full options chain with greeks, and a built-in web
+							search for catalyst verification. Each model independently produces
 							its own ranked top 10 picks for the day; neither sees the
 							other&apos;s output. This is a true head-to-head comparison
 							of two independent strategists working from the same source
@@ -62,7 +62,7 @@ export function MethodologySection() {
 						</p>
 						<p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
 							All positions are opened at the market open and closed at
-							4:05 PM ET  - no trades are held overnight. The model
+							4:05 PM ET. No trades are held overnight. The model
 							identifiers used in production are configurable via the
 							OPENAI_MODEL and ANTHROPIC_MODEL environment variables and
 							default to the latest production model in each
@@ -78,33 +78,33 @@ export function MethodologySection() {
 					<AccordionContent>
 						<ul className="space-y-2 text-[15px] leading-relaxed text-muted-foreground">
 							<li>
-								<strong className="text-foreground">Profit Factor</strong>{" "}
-								 - ratio of gross winning P&amp;L to gross losing
+								<strong className="text-foreground">Profit Factor:</strong>{" "}
+								ratio of gross winning P&amp;L to gross losing
 								P&amp;L. A value above 1.0 means the system is net
 								profitable.
 							</li>
 							<li>
-								<strong className="text-foreground">Expectancy</strong>{" "}
-								 - average dollar P&amp;L per trade, accounting for
+								<strong className="text-foreground">Expectancy:</strong>{" "}
+								average dollar P&amp;L per trade, accounting for
 								both win rate and average win/loss size. Positive
 								expectancy implies long-run profitability.
 							</li>
 							<li>
-								<strong className="text-foreground">Sharpe Ratio</strong>{" "}
-								 - risk-adjusted return calculated as the mean daily
+								<strong className="text-foreground">Sharpe Ratio:</strong>{" "}
+								risk-adjusted return calculated as the mean daily
 								P&amp;L divided by its standard deviation. Higher values
 								indicate more consistent returns.
 							</li>
 							<li>
-								<strong className="text-foreground">Max Drawdown</strong>{" "}
-								 - largest peak-to-trough decline in cumulative
+								<strong className="text-foreground">Max Drawdown:</strong>{" "}
+								largest peak-to-trough decline in cumulative
 								P&amp;L. Reflects the worst observed losing streak.
 							</li>
 							<li>
 								<strong className="text-foreground">
-									Return on Capital (ROC)
+									Return on Capital (ROC):
 								</strong>{" "}
-								 - net P&amp;L divided by total capital deployed.
+								net P&amp;L divided by total capital deployed.
 								Measures how efficiently invested capital generates
 								returns.
 							</li>
@@ -134,13 +134,13 @@ export function MethodologySection() {
 					</AccordionTrigger>
 					<AccordionContent>
 						<p className="text-[15px] leading-relaxed text-muted-foreground">
-							Stock and option prices  - bid, ask, mark, greeks, open
-							interest, volume  - are sourced live from the Schwab
+							Stock and option prices (bid, ask, mark, greeks, open
+							interest, volume) are sourced live from the Schwab
 							Market Data API via authenticated OAuth. Sentiment data is
 							scraped from Reddit&apos;s public JSON feeds. Both LLMs can
 							additionally use a built-in web search tool to verify
 							catalysts, earnings dates, and recent news. Every price you
-							see in a pick comes from real market data  - the models
+							see in a pick comes from real market data, and the models
 							are explicitly instructed never to guess prices.
 						</p>
 					</AccordionContent>
@@ -160,9 +160,9 @@ export function MethodologySection() {
 							you would have made by following only OpenAI, only Claude, or
 							the combined consensus ranking. The agreement-rate stat shows
 							the fraction of dual-scored trades where the two models were
-							within one point of each other  - a rough gauge of how
-							much the models actually disagree on what looks like a good
-							setup.
+							within one point of each other, which serves as a rough
+							gauge of how much the models actually disagree on what
+							looks like a good setup.
 						</p>
 					</AccordionContent>
 				</AccordionItem>

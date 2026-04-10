@@ -302,6 +302,12 @@ export default function LandingPage() {
 							breaks ties. Both rationales are visible on the
 							dashboard.
 						</p>
+						<p className="mt-3 text-[11px] italic text-muted-foreground/70">
+							* This formula is by no means empirical or derived from
+							something meaningful in quantitative finance. It just
+							felt like it made sense. If two AIs agree, that&apos;s
+							probably worth something. Probably.
+						</p>
 					</div>
 				</div>
 			</section>
@@ -411,7 +417,7 @@ const features = [
 		icon: <Clock className="h-6 w-6 text-claude" />,
 		title: "End-of-Day Tracking",
 		description:
-			"Every pick is tracked to close. Win rates, P&L, Sharpe, drawdown - all computed automatically. No cherry-picking, no \"trust me bro\" screenshots.",
+			"Every pick is tracked to close. Win rates, P&L, Sharpe, and drawdown are all computed automatically. No cherry-picking, no \"trust me bro\" screenshots.",
 	},
 ];
 
