@@ -39,8 +39,8 @@ export function PageToolbar({
 					)}
 				</div>
 				{hasControls && (
-					<div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0 lg:flex-shrink-0">
-						<div className="flex w-max items-center gap-2 sm:gap-3 lg:w-auto lg:flex-wrap">
+					<div className="min-w-0 lg:flex-shrink-0">
+						<div className="flex flex-wrap items-center gap-2 sm:gap-3">
 							{primaryControls}
 							{secondaryControls}
 							{rightSlot}

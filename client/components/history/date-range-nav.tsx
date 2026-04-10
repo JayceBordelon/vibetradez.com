@@ -18,7 +18,7 @@ export function DateRangeNav({
 	onNext: () => void;
 }) {
 	return (
-		<div className="flex items-center overflow-hidden rounded-md border bg-card">
+		<div className="flex shrink-0 items-center overflow-hidden rounded-md border bg-card">
 			<Button
 				variant="ghost"
 				size="icon"
@@ -29,7 +29,7 @@ export function DateRangeNav({
 			>
 				<ChevronLeft className="h-4 w-4" />
 			</Button>
-			<span className="min-w-[140px] border-x px-3 py-1.5 text-center text-sm font-medium">
+			<span className="min-w-[110px] border-x px-2 py-1.5 text-center text-xs font-medium tabular-nums sm:min-w-[140px] sm:px-3 sm:text-sm">
 				{label}
 			</span>
 			<Button
