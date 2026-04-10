@@ -397,7 +397,10 @@ func sendStartupTestEmail(cfg *config.Config, db *store.Store, schwabClient *sch
 		return fmt.Errorf("template rendering: %w", err)
 	}
 
-	recipients := []string{"bordelonjayce@gmail.com"}
+	recipients := getRecipients(db)
+	if len(recipients) == 0 {
+		return fmt.Errorf("no active subscribers")
+	}
 
 	status := "All Systems Go"
 	if failCount > 0 {
@@ -418,7 +421,11 @@ func sendErrorNotification(cfg *config.Config, db *store.Store, emailClient *ema
 		return
 	}
 
-	recipients := []string{"bordelonjayce@gmail.com"}
+	recipients := getRecipients(db)
+	if len(recipients) == 0 {
+		log.Println("No active subscribers for error notification")
+		return
+	}
 
 	subject := fmt.Sprintf("VibeTradez Alert — %s", time.Now().Format("Jan 2, 3:04 PM"))
 	if err := emailClient.SendTradeEmail(cfg.EmailFrom, recipients, subject, htmlContent); err != nil {
