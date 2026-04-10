@@ -53,18 +53,24 @@
               {{end}}
 
               {{range .Sections}}
-              <div style="margin-bottom: 20px;">
+              <div style="margin-bottom: 22px;">
                 {{if .Title}}
-                <h3 class="text-primary" style="margin: 0 0 8px 0; font-size: 15px; font-weight: 700; color: #0f172a;">{{.Title}}</h3>
+                <h3 class="text-primary" style="margin: 0 0 10px 0; font-size: 15px; font-weight: 800; color: #0f172a; letter-spacing: -0.2px;">{{.Title}}</h3>
                 {{end}}
-                <p class="text-secondary" style="margin: 0; font-size: 14px; line-height: 1.7; color: #475569;">{{.Body}}</p>
+                <div class="text-secondary announce-body" style="margin: 0; font-size: 14px; line-height: 1.7; color: #475569;">{{.Body}}</div>
               </div>
               {{end}}
 
-              {{if .CTAText}}
-              <div style="text-align: center; margin-top: 28px;">
-                <a href="{{.CTAURL}}" style="display: inline-block; padding: 12px 28px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #f1f5f9; font-size: 14px; font-weight: 700; text-decoration: none; border-radius: 8px; letter-spacing: -0.2px;">{{.CTAText}}</a>
-              </div>
+              {{if .CTAs}}
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top: 28px;">
+                <tr>
+                  <td align="center">
+                    {{range $i, $cta := .CTAs}}
+                    <a href="{{$cta.URL}}" style="display: inline-block; margin: 4px 4px; padding: 12px 24px; {{if eq $cta.Style "secondary"}}background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1;{{else if and (eq $i 0) (ne $cta.Style "secondary")}}background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #f1f5f9; border: 1px solid transparent;{{else}}background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1;{{end}} font-size: 13px; font-weight: 700; text-decoration: none; border-radius: 8px; letter-spacing: -0.2px;">{{$cta.Text}}</a>
+                    {{end}}
+                  </td>
+                </tr>
+              </table>
               {{end}}
             </td>
           </tr>

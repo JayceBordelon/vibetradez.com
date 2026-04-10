@@ -726,12 +726,12 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 // ── Admin: Broadcast Announcement ──
 
 type announceRequest struct {
-	Subject  string                          `json:"subject"`
-	Badge    string                          `json:"badge"`
-	Headline string                          `json:"headline"`
-	Sections []templates.AnnouncementSection `json:"sections"`
-	CTAText  string                          `json:"cta_text"`
-	CTAURL   string                          `json:"cta_url"`
+	Subject      string                          `json:"subject"`
+	Badge        string                          `json:"badge"`
+	Headline     string                          `json:"headline"`
+	HeroImageURL string                          `json:"hero_image_url"`
+	Sections     []templates.AnnouncementSection `json:"sections"`
+	CTAs         []templates.AnnouncementCTA     `json:"ctas"`
 }
 
 func (s *Server) handleAnnounce(w http.ResponseWriter, r *http.Request) {
@@ -759,12 +759,12 @@ func (s *Server) handleAnnounce(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := templates.AnnouncementData{
-		Subject:  req.Subject,
-		Badge:    req.Badge,
-		Headline: req.Headline,
-		Sections: req.Sections,
-		CTAText:  req.CTAText,
-		CTAURL:   req.CTAURL,
+		Subject:      req.Subject,
+		Badge:        req.Badge,
+		Headline:     req.Headline,
+		HeroImageURL: req.HeroImageURL,
+		Sections:     req.Sections,
+		CTAs:         req.CTAs,
 	}
 	if data.Badge == "" {
 		data.Badge = "Announcement"
