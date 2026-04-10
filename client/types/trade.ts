@@ -20,7 +20,11 @@ export interface Trade {
 	claude_score: number;
 	claude_rationale: string;
 	combined_score: number;
+	picked_by_openai: boolean;
+	picked_by_claude: boolean;
 }
+
+export type ModelPicker = "all" | "openai" | "claude";
 
 export interface TradeSummary {
 	symbol: string;

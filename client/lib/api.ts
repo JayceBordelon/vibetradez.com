@@ -5,8 +5,14 @@ import type {
 	DashboardResponse,
 	LiveQuotesResponse,
 	ModelComparisonResponse,
+	ModelPicker,
 	WeekResponse,
 } from "@/types/trade";
+
+function pickerSuffix(picker?: ModelPicker, prefix: "?" | "&" = "&") {
+	if (!picker || picker === "all") return "";
+	return `${prefix}picker=${picker}`;
+}
 
 const HEADERS: Record<string, string> = {
 	"X-VT-Source": "dashboard",
@@ -40,14 +46,16 @@ export const api = {
 	getTradeDates: (limit = 30) =>
 		clientFetch<{ dates: string[] }>(`/api/trades/dates?limit=${limit}`),
 
-	getTrades: (date?: string) =>
+	getTrades: (date?: string, picker?: ModelPicker) =>
 		clientFetch<DashboardResponse>(
-			date ? `/api/trades/today?date=${date}` : "/api/trades/today",
+			date
+				? `/api/trades/today?date=${date}${pickerSuffix(picker)}`
+				: `/api/trades/today${pickerSuffix(picker, "?")}`,
 		),
 
-	getWeekTrades: (start: string, end: string) =>
+	getWeekTrades: (start: string, end: string, picker?: ModelPicker) =>
 		clientFetch<WeekResponse>(
-			`/api/trades/week?start=${start}&end=${end}`,
+			`/api/trades/week?start=${start}&end=${end}${pickerSuffix(picker)}`,
 		),
 
 	getLiveQuotes: () => clientFetch<LiveQuotesResponse>("/api/quotes/live"),

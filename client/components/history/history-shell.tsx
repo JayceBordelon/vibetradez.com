@@ -10,6 +10,7 @@ import { PageToolbar } from "@/components/layout/page-toolbar";
 import { Section } from "@/components/layout/section";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
+import { usePicker } from "@/lib/picker-context";
 import {
 	getRangeBounds,
 	getRangeLabel,
@@ -304,6 +305,7 @@ function EmptyState() {
 }
 
 export function HistoryShell() {
+	const { picker } = usePicker();
 	const [mode, setMode] = useState("week");
 	const [rangeOffset, setRangeOffset] = useState(0);
 	const [topFilter, setTopFilter] = useState(10);
@@ -344,8 +346,8 @@ export function HistoryShell() {
 	// Load range data
 	const loadRange = useCallback(() => {
 		const b = getRangeBounds(mode, rangeOffset);
-		api.getWeekTrades(b.start, b.end).then(setRawData);
-	}, [mode, rangeOffset]);
+		api.getWeekTrades(b.start, b.end, picker).then(setRawData);
+	}, [mode, rangeOffset, picker]);
 
 	useEffect(() => {
 		loadRange();

@@ -10,6 +10,7 @@ import { PageToolbar } from "@/components/layout/page-toolbar";
 import { Section } from "@/components/layout/section";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
+import { usePicker } from "@/lib/picker-context";
 import type {
 	DashboardResponse,
 	DashboardTrade,
@@ -85,6 +86,7 @@ function computeStats(trades: DashboardTrade[]) {
 }
 
 export function DashboardShell() {
+	const { picker } = usePicker();
 	const [dates, setDates] = useState<string[]>([]);
 	const [dayIndex, setDayIndex] = useState(0);
 	const [topFilter, setTopFilter] = useState(10);
@@ -148,8 +150,8 @@ export function DashboardShell() {
 	// Load day data
 	const loadDay = useCallback(() => {
 		const date = dates[dayIndex];
-		api.getTrades(date).then(setRawData);
-	}, [dates, dayIndex]);
+		api.getTrades(date, picker).then(setRawData);
+	}, [dates, dayIndex, picker]);
 
 	useEffect(() => {
 		if (dates.length > 0) loadDay();
