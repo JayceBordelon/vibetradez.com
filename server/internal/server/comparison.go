@@ -155,9 +155,14 @@ func (s *Server) computeRange(rangeParam string) (string, string) {
 
 type scoreSelector func(t trades.Trade) int
 
-func scoreSelectorGPT(t trades.Trade) int      { return t.GPTScore }
-func scoreSelectorClaude(t trades.Trade) int   { return t.ClaudeScore }
-func scoreSelectorCombined(t trades.Trade) int { return int(t.CombinedScore * 10) }
+func scoreSelectorGPT(t trades.Trade) int    { return t.GPTScore }
+func scoreSelectorClaude(t trades.Trade) int { return t.ClaudeScore }
+
+// scoreSelectorCombined rounds the float combined score to the nearest
+// integer so it shares a 1-10 scale with the per-model selectors. The
+// rounding only matters when two combined scores collapse to the same
+// integer; the existing stable sort then preserves the per-day input order.
+func scoreSelectorCombined(t trades.Trade) int { return int(t.CombinedScore + 0.5) }
 
 // computeModelStats simulates "what if you only followed this model's
 // ranking?" by picking the top N trades per day according to the model's
