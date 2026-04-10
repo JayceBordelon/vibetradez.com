@@ -60,7 +60,7 @@ func Load() *Config {
 
 	emailFrom := os.Getenv("EMAIL_FROM")
 	if emailFrom == "" {
-		emailFrom = "Jayce's Trading Bot <trades@vibetradez.com>"
+		emailFrom = "Vibe Tradez <trades@vibetradez.com>"
 	}
 
 	var recipients []string
