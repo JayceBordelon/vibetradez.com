@@ -68,6 +68,8 @@ func migrate(db *sql.DB) error {
 			claude_score INTEGER NOT NULL DEFAULT 0,
 			claude_rationale TEXT NOT NULL DEFAULT '',
 			combined_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+			picked_by_openai BOOLEAN NOT NULL DEFAULT false,
+			picked_by_claude BOOLEAN NOT NULL DEFAULT false,
 			created_at TIMESTAMPTZ DEFAULT NOW()
 		);
 
@@ -76,6 +78,15 @@ func migrate(db *sql.DB) error {
 		ALTER TABLE trades ADD COLUMN IF NOT EXISTS claude_score INTEGER NOT NULL DEFAULT 0;
 		ALTER TABLE trades ADD COLUMN IF NOT EXISTS claude_rationale TEXT NOT NULL DEFAULT '';
 		ALTER TABLE trades ADD COLUMN IF NOT EXISTS combined_score DOUBLE PRECISION NOT NULL DEFAULT 0;
+		ALTER TABLE trades ADD COLUMN IF NOT EXISTS picked_by_openai BOOLEAN NOT NULL DEFAULT false;
+		ALTER TABLE trades ADD COLUMN IF NOT EXISTS picked_by_claude BOOLEAN NOT NULL DEFAULT false;
+		-- Backfill existing rows: any pre-refactor trade had a non-zero
+		-- gpt_score (GPT generated the picks) so it counts as picked by
+		-- OpenAI. Pre-refactor Claude was a validator, not a picker, so
+		-- claude_score > 0 alone does NOT imply Claude originally picked
+		-- the trade — only forward-going rows from the new pipeline get
+		-- picked_by_claude = true.
+		UPDATE trades SET picked_by_openai = true WHERE picked_by_openai = false AND gpt_score > 0;
 
 		CREATE INDEX IF NOT EXISTS idx_trades_date ON trades(date);
 
@@ -218,8 +229,9 @@ func (s *Store) SaveMorningTrades(date string, tradeList []trades.Trade) error {
 			estimated_price, thesis, sentiment_score, current_price,
 			target_price, stop_loss, profit_target, risk_level,
 			catalyst, mention_count, rank,
-			gpt_score, gpt_rationale, claude_score, claude_rationale, combined_score
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+			gpt_score, gpt_rationale, claude_score, claude_rationale, combined_score,
+			picked_by_openai, picked_by_claude
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -233,6 +245,7 @@ func (s *Store) SaveMorningTrades(date string, tradeList []trades.Trade) error {
 			t.TargetPrice, t.StopLoss, t.ProfitTarget, t.RiskLevel,
 			t.Catalyst, t.MentionCount, t.Rank,
 			t.GPTScore, t.GPTRationale, t.ClaudeScore, t.ClaudeRationale, t.CombinedScore,
+			t.PickedByOpenAI, t.PickedByClaude,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert trade %s: %w", t.Symbol, err)
@@ -248,7 +261,8 @@ func (s *Store) GetMorningTrades(date string) ([]trades.Trade, error) {
 			estimated_price, thesis, sentiment_score, current_price,
 			target_price, stop_loss, profit_target, risk_level,
 			catalyst, mention_count, rank,
-			gpt_score, gpt_rationale, claude_score, claude_rationale, combined_score
+			gpt_score, gpt_rationale, claude_score, claude_rationale, combined_score,
+			picked_by_openai, picked_by_claude
 		FROM trades WHERE date = $1 ORDER BY rank, id
 	`, date)
 	if err != nil {
@@ -265,6 +279,7 @@ func (s *Store) GetMorningTrades(date string) ([]trades.Trade, error) {
 			&t.TargetPrice, &t.StopLoss, &t.ProfitTarget, &t.RiskLevel,
 			&t.Catalyst, &t.MentionCount, &t.Rank,
 			&t.GPTScore, &t.GPTRationale, &t.ClaudeScore, &t.ClaudeRationale, &t.CombinedScore,
+			&t.PickedByOpenAI, &t.PickedByClaude,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan trade row: %w", err)
@@ -345,7 +360,8 @@ func (s *Store) GetTradesForDateRange(startDate, endDate string) (map[string][]t
 			estimated_price, thesis, sentiment_score, current_price,
 			target_price, stop_loss, profit_target, risk_level,
 			catalyst, mention_count, rank,
-			gpt_score, gpt_rationale, claude_score, claude_rationale, combined_score
+			gpt_score, gpt_rationale, claude_score, claude_rationale, combined_score,
+			picked_by_openai, picked_by_claude
 		FROM trades WHERE date >= $1 AND date <= $2 ORDER BY date, rank, id
 	`, startDate, endDate)
 	if err != nil {
@@ -363,6 +379,7 @@ func (s *Store) GetTradesForDateRange(startDate, endDate string) (map[string][]t
 			&t.TargetPrice, &t.StopLoss, &t.ProfitTarget, &t.RiskLevel,
 			&t.Catalyst, &t.MentionCount, &t.Rank,
 			&t.GPTScore, &t.GPTRationale, &t.ClaudeScore, &t.ClaudeRationale, &t.CombinedScore,
+			&t.PickedByOpenAI, &t.PickedByClaude,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan trade row: %w", err)

@@ -133,18 +133,19 @@ func main() {
 	emailClient := email.NewClient(cfg.ResendAPIKey)
 	log.Printf("OpenAI: model=%s", cfg.OpenAIModel)
 
-	// Claude validator is optional. If ANTHROPIC_API_KEY is missing or set
-	// to a local stub, validations are skipped and trades persist with
-	// claude_score = 0 and an empty rationale.
-	var validator *trades.Validator
+	// Claude picker is optional. When ANTHROPIC_API_KEY is missing or
+	// set to a local stub the cron pipeline degenerates to OpenAI-only:
+	// the union has only GPT picks, picked_by_claude stays false, and
+	// the model filter on the dashboard shows an empty Claude column.
+	var claudePicker *trades.ClaudePicker
 	switch {
 	case cfg.AnthropicAPIKey == "":
-		log.Println("Anthropic: not configured (ANTHROPIC_API_KEY not set) — Claude validation disabled")
+		log.Println("Anthropic: not configured (ANTHROPIC_API_KEY not set) — Claude picking disabled")
 	case isLocalStubKey(cfg.AnthropicAPIKey):
-		log.Println("Anthropic: local stub key detected — Claude validation disabled")
+		log.Println("Anthropic: local stub key detected — Claude picking disabled")
 	default:
-		validator = trades.NewValidator(cfg.AnthropicAPIKey, cfg.AnthropicModel, schwabClient)
-		log.Printf("Anthropic: configured — Claude validation enabled (model=%s)", cfg.AnthropicModel)
+		claudePicker = trades.NewClaudePicker(cfg.AnthropicAPIKey, cfg.AnthropicModel, schwabClient)
+		log.Printf("Anthropic: configured — Claude picking enabled (model=%s)", cfg.AnthropicModel)
 	}
 
 	openJob := func() {
@@ -152,7 +153,7 @@ func main() {
 			log.Printf("Skipping morning analysis: Market closed (%s)", reason)
 			return
 		}
-		runTradeAnalysis(cfg, db, scraper, analyzer, validator, emailClient)
+		runTradeAnalysis(cfg, db, scraper, analyzer, claudePicker, emailClient)
 	}
 
 	closeJob := func() {
@@ -441,8 +442,110 @@ func getRecipients(db *store.Store) []string {
 	return emails
 }
 
-func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Scraper, analyzer *trades.Analyzer, validator *trades.Validator, emailClient *email.Client) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+// unionPicks merges two independent pick sets (one per model) into a
+// single union of unique trades. When both models picked the same ticker
+// the row carries both models' scores and rationales and both picked_by
+// flags are set; the combined score is the average of the two non-zero
+// scores. When only one model picked a ticker the other model's score
+// stays at zero (no second-pass scoring) and the combined score is just
+// that model's score. Final ranks are computed by combined score desc,
+// with picks where BOTH models agreed boosted ahead of single-model
+// picks at the same combined score so consensus picks bubble to the top.
+func unionPicks(openaiTrades, claudeTrades []trades.Trade) []trades.Trade {
+	bySymbol := make(map[string]*trades.Trade)
+
+	upsert := func(t trades.Trade) {
+		key := t.Symbol
+		if existing, ok := bySymbol[key]; ok {
+			// Merge: keep the row already in the map and overlay the
+			// fields the other model contributed.
+			if t.PickedByOpenAI {
+				existing.PickedByOpenAI = true
+				existing.GPTScore = t.GPTScore
+				existing.GPTRationale = t.GPTRationale
+			}
+			if t.PickedByClaude {
+				existing.PickedByClaude = true
+				existing.ClaudeScore = t.ClaudeScore
+				existing.ClaudeRationale = t.ClaudeRationale
+			}
+			// Prefer the more detailed contract data from whichever side
+			// supplied non-zero values, falling through to existing.
+			if existing.EstimatedPrice == 0 && t.EstimatedPrice != 0 {
+				existing.EstimatedPrice = t.EstimatedPrice
+				existing.StrikePrice = t.StrikePrice
+				existing.Expiration = t.Expiration
+				existing.DTE = t.DTE
+				existing.ContractType = t.ContractType
+			}
+			if existing.Thesis == "" && t.Thesis != "" {
+				existing.Thesis = t.Thesis
+			}
+			if existing.Catalyst == "" && t.Catalyst != "" {
+				existing.Catalyst = t.Catalyst
+			}
+			if existing.CurrentPrice == 0 && t.CurrentPrice != 0 {
+				existing.CurrentPrice = t.CurrentPrice
+			}
+		} else {
+			tc := t
+			bySymbol[key] = &tc
+		}
+	}
+
+	for _, t := range openaiTrades {
+		upsert(t)
+	}
+	for _, t := range claudeTrades {
+		upsert(t)
+	}
+
+	out := make([]trades.Trade, 0, len(bySymbol))
+	for _, t := range bySymbol {
+		// Combined score is the average of the model scores that exist.
+		// A consensus pick (both > 0) gets a real average; a single-model
+		// pick gets just that model's score.
+		var sum float64
+		var n int
+		if t.GPTScore > 0 {
+			sum += float64(t.GPTScore)
+			n++
+		}
+		if t.ClaudeScore > 0 {
+			sum += float64(t.ClaudeScore)
+			n++
+		}
+		if n > 0 {
+			t.CombinedScore = sum / float64(n)
+		}
+		out = append(out, *t)
+	}
+
+	sort.SliceStable(out, func(i, j int) bool {
+		// Primary: combined score desc.
+		if out[i].CombinedScore != out[j].CombinedScore {
+			return out[i].CombinedScore > out[j].CombinedScore
+		}
+		// Tiebreak 1: consensus picks (both models picked it) ahead of
+		// single-model picks at the same score, so the agreed-upon trades
+		// rank higher in the all-trades view.
+		ci := out[i].PickedByOpenAI && out[i].PickedByClaude
+		cj := out[j].PickedByOpenAI && out[j].PickedByClaude
+		if ci != cj {
+			return ci
+		}
+		// Tiebreak 2: stable order — symbol alphabetical.
+		return out[i].Symbol < out[j].Symbol
+	})
+
+	for i := range out {
+		out[i].Rank = i + 1
+	}
+	return out
+}
+
+func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Scraper, analyzer *trades.Analyzer, claudePicker *trades.ClaudePicker, emailClient *email.Client) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
 	log.Println("Starting trade analysis...")
@@ -456,72 +559,39 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 	}
 	log.Printf("Found %d trending tickers", len(sentimentData))
 
-	// Get top 10 trades from OpenAI (works with or without sentiment data —
-	// OpenAI will use web search to find trending tickers when Reddit fails)
+	// Both pickers run the SAME workflow with the same prompt against
+	// the same raw sentiment data. They each independently produce up to
+	// 10 ranked trades. The cron then unions both pick sets so the
+	// dashboard can show every trade either model picked, with per-pick
+	// attribution to whichever model(s) actually picked it.
 	log.Println("Analyzing trades with OpenAI...")
-	topTrades, err := analyzer.GetTopTrades(ctx, sentimentData)
+	openaiTrades, err := analyzer.GetTopTrades(ctx, sentimentData)
 	if err != nil {
-		log.Printf("Error analyzing trades: %v", err)
-		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("Trade analysis failed: %v", err))
+		log.Printf("Error analyzing trades with OpenAI: %v", err)
+		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("OpenAI analysis failed: %v", err))
 		return
 	}
-	log.Printf("Generated %d trade recommendations", len(topTrades))
+	log.Printf("OpenAI produced %d picks", len(openaiTrades))
 
+	var claudeTrades []trades.Trade
+	if claudePicker != nil {
+		log.Println("Analyzing trades with Claude...")
+		ct, cErr := claudePicker.GetTopTrades(ctx, sentimentData)
+		if cErr != nil {
+			log.Printf("Warning: Claude picking failed: %v — falling back to OpenAI-only", cErr)
+		} else {
+			claudeTrades = ct
+			log.Printf("Claude produced %d picks", len(claudeTrades))
+		}
+	}
+
+	topTrades := unionPicks(openaiTrades, claudeTrades)
 	if len(topTrades) == 0 {
 		log.Println("No trades generated, skipping email")
 		return
 	}
-
-	// Deduplicate tickers (keep first occurrence)
-	seen := make(map[string]bool)
-	var uniqueTrades []trades.Trade
-	for _, t := range topTrades {
-		if !seen[t.Symbol] {
-			seen[t.Symbol] = true
-			uniqueTrades = append(uniqueTrades, t)
-		}
-	}
-	topTrades = uniqueTrades
-
-	// Run Claude validation in parallel-friendly fashion (sequential here for
-	// simpler error handling). Claude scrutinizes each pick independently and
-	// returns a 1-10 score + rationale + concerns. We then merge those scores
-	// onto the trades, compute a combined score (simple average with Claude
-	// as the tiebreaker), and reorder ranks accordingly.
-	if validator != nil {
-		log.Println("Running Claude validation...")
-		validations, vErr := validator.ValidateTrades(ctx, topTrades)
-		if vErr != nil {
-			log.Printf("Warning: Claude validation failed: %v — continuing with GPT-only ranks", vErr)
-		} else {
-			byTicker := make(map[string]trades.Validation, len(validations))
-			for _, v := range validations {
-				byTicker[v.Symbol] = v
-			}
-			for i := range topTrades {
-				if v, ok := byTicker[topTrades[i].Symbol]; ok {
-					topTrades[i].ClaudeScore = v.Score
-					topTrades[i].ClaudeRationale = v.Rationale
-				}
-				topTrades[i].CombinedScore = float64(topTrades[i].GPTScore+topTrades[i].ClaudeScore) / 2.0
-			}
-			sort.SliceStable(topTrades, func(i, j int) bool {
-				if topTrades[i].CombinedScore != topTrades[j].CombinedScore {
-					return topTrades[i].CombinedScore > topTrades[j].CombinedScore
-				}
-				return topTrades[i].ClaudeScore > topTrades[j].ClaudeScore
-			})
-			for i := range topTrades {
-				topTrades[i].Rank = i + 1
-			}
-			log.Printf("Claude validation complete: %d trades scored and reranked", len(validations))
-		}
-	} else {
-		// Without Claude, mirror the GPT score into combined for consistency.
-		for i := range topTrades {
-			topTrades[i].CombinedScore = float64(topTrades[i].GPTScore)
-		}
-	}
+	log.Printf("Union pick set: %d unique trades (openai=%d, claude=%d)",
+		len(topTrades), len(openaiTrades), len(claudeTrades))
 
 	// Persist to database
 	date := todayDate()

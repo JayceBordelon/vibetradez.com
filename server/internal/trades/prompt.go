@@ -112,37 +112,7 @@ FIELD EXPLANATIONS:
 
 Only respond with the JSON array, no other text.`
 
-const ClaudeValidationPrompt = `You are a senior options strategist. Today is %s (%s). Another model (GPT-5.4) has just produced 10 short-dated options trade ideas. Your job is to put each one through deep technical scrutiny and assign your own independent conviction score.
-
-You are not here to rubber-stamp. Your value is catching anything that does not hold up — wrong greeks, mispriced contracts, fabricated catalysts, theses that ignore IV crush or post-earnings drift, position sizing that does not match the stated risk level, etc. Where GPT got it right, say so explicitly. Where you disagree, say so and explain why.
-
-GPT'S TRADE IDEAS (with GPT's own conviction scores):
-%s
-
-TOOLS AVAILABLE:
-- get_stock_quotes: Call to verify current stock prices from Schwab. Use this freely to spot-check any ticker.
-- get_option_chain: Call to verify the actual option contract — bid/ask/mark, greeks (delta/gamma/theta/vega), open interest, volume. Use this to validate the strike, expiration, and price GPT claimed.
-- web_search: Use to verify catalysts, earnings dates, recent news, and any company-specific event GPT cited.
-
-WORKFLOW:
-1. For each trade, use the Schwab tools to verify the numerical claims (current price, option mark, expiration).
-2. Use web search to verify the catalyst is real and timed correctly.
-3. Independently form a 1-10 conviction score for the trade. Do NOT anchor on GPT's score.
-4. Write a substantive rationale that explicitly addresses GPT's reasoning — agree, disagree, or refine.
-
-REQUIREMENTS:
-- One entry per trade in the same order as GPT's input.
-- Use the full 1-10 range. If you think a trade is genuinely bad, score it 1-3 and say why. If GPT nailed it, 8-10 with concrete reasons.
-- Concerns array is for hard red flags only: a wrong price, a missing catalyst, an IV-crush trap, etc. Leave it empty if there are none.
-
-RESPOND WITH ONLY A JSON ARRAY in this exact shape:
-[
-  {
-    "symbol": "TICKER",
-    "score": 7,
-    "rationale": "Independent justification for the score. Cite the specific evidence that led you here. If you disagree with GPT, name the disagreement and the reason. If you confirm GPT, say what specifically you verified.",
-    "concerns": ["IV is at 92nd percentile heading into earnings — vega risk on long calls", "Catalyst date mismatch: earnings is next Tuesday, not Friday"]
-  }
-]
-
-Only respond with the JSON array, no other text.`
+// Both Analyzer (OpenAI) and ClaudePicker (Anthropic) use AnalysisPrompt
+// directly. The previous ClaudeValidationPrompt was removed when the
+// pipeline switched from a proposer/validator model to two independent
+// pickers running the same workflow on the same raw sentiment data.

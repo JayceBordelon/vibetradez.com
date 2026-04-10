@@ -42,6 +42,15 @@ type Trade struct {
 	ClaudeScore     int     `json:"claude_score"`
 	ClaudeRationale string  `json:"claude_rationale"`
 	CombinedScore   float64 `json:"combined_score"`
+
+	// Picker attribution. Both models run the full AnalysisPrompt
+	// independently and each return their own 10 picks; the union of
+	// both pick sets is persisted, and these flags record which model(s)
+	// actually picked the trade. The All view shows everything; the
+	// OpenAI / Claude filter views show only the rows where the matching
+	// flag is true.
+	PickedByOpenAI bool `json:"picked_by_openai"`
+	PickedByClaude bool `json:"picked_by_claude"`
 }
 
 type TradeSummary struct {
@@ -54,15 +63,6 @@ type TradeSummary struct {
 	StockOpen    float64 `json:"stock_open"`
 	StockClose   float64 `json:"stock_close"`
 	Notes        string  `json:"notes"`
-}
-
-// Validation is Claude's per-trade output: a score and rationale that
-// either confirms or challenges GPT's pick.
-type Validation struct {
-	Symbol    string   `json:"symbol"`
-	Score     int      `json:"score"`
-	Rationale string   `json:"rationale"`
-	Concerns  []string `json:"concerns,omitempty"`
 }
 
 type Analyzer struct {
@@ -146,6 +146,7 @@ func (a *Analyzer) GetTopTrades(ctx context.Context, sentimentData []sentiment.T
 			Rank:           r.Rank,
 			GPTScore:       r.Score,
 			GPTRationale:   r.Rationale,
+			PickedByOpenAI: true,
 		})
 	}
 

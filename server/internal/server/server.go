@@ -146,6 +146,60 @@ func (s *Server) handleTradeDates(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"dates": dates})
 }
 
+// pickerFilter is the global model filter selected from the nav bar.
+// 'all' returns every union trade ranked by combined_score (default).
+// 'openai' returns only trades where picked_by_openai = true, ranked by
+// gpt_score desc. 'claude' returns only trades where picked_by_claude
+// = true, ranked by claude_score desc.
+type pickerFilter string
+
+const (
+	pickerAll    pickerFilter = "all"
+	pickerOpenAI pickerFilter = "openai"
+	pickerClaude pickerFilter = "claude"
+)
+
+func parsePicker(r *http.Request) pickerFilter {
+	switch r.URL.Query().Get("picker") {
+	case "openai":
+		return pickerOpenAI
+	case "claude":
+		return pickerClaude
+	default:
+		return pickerAll
+	}
+}
+
+// applyPickerFilter narrows and re-orders a single day's trades according
+// to the selected picker. The all view leaves the order untouched (it's
+// already ranked by combined_score from the cron). The openai / claude
+// views drop trades the chosen model didn't pick and re-rank by that
+// model's individual score, then renumber the rank field 1..N so the
+// frontend can render the same way regardless of which view is active.
+func applyPickerFilter(picker pickerFilter, in []trades.Trade) []trades.Trade {
+	if picker == pickerAll {
+		return in
+	}
+	out := make([]trades.Trade, 0, len(in))
+	for _, t := range in {
+		if picker == pickerOpenAI && t.PickedByOpenAI {
+			out = append(out, t)
+		} else if picker == pickerClaude && t.PickedByClaude {
+			out = append(out, t)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if picker == pickerOpenAI {
+			return out[i].GPTScore > out[j].GPTScore
+		}
+		return out[i].ClaudeScore > out[j].ClaudeScore
+	})
+	for i := range out {
+		out[i].Rank = i + 1
+	}
+	return out
+}
+
 func (s *Server) handleTradesToday(w http.ResponseWriter, r *http.Request) {
 	// Accept optional ?date= query param for historical browsing
 	requestDate := r.URL.Query().Get("date")
@@ -167,6 +221,8 @@ func (s *Server) handleTradesToday(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, dashboardResponse{Date: date})
 		return
 	}
+
+	morningTrades = applyPickerFilter(parsePicker(r), morningTrades)
 
 	summaries, _ := s.db.GetEODSummaries(date)
 	summaryMap := make(map[string]*trades.TradeSummary)
@@ -203,6 +259,7 @@ func (s *Server) handleTradesWeek(w http.ResponseWriter, r *http.Request) {
 	}
 
 	summariesMap, _ := s.db.GetSummariesForDateRange(start, end)
+	picker := parsePicker(r)
 
 	// Collect all dates that have trades
 	dateSet := make(map[string]bool)
@@ -217,7 +274,7 @@ func (s *Server) handleTradesWeek(w http.ResponseWriter, r *http.Request) {
 
 	days := []weekDay{}
 	for _, date := range dates {
-		dayTrades := tradesMap[date]
+		dayTrades := applyPickerFilter(picker, tradesMap[date])
 		daySummaries := summariesMap[date]
 
 		summaryMap := make(map[string]*trades.TradeSummary)

@@ -12,16 +12,23 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 
 	"vibetradez.com/internal/schwab"
+	"vibetradez.com/internal/sentiment"
 )
 
-type Validator struct {
+// ClaudePicker runs the same morning trade analysis pipeline as the
+// OpenAI Analyzer, but powered by Anthropic Claude. Both pickers consume
+// raw sentiment data, do the full Schwab + web-search workflow with the
+// same AnalysisPrompt, and independently produce 10 ranked trades. The
+// cron pipeline unions both pick sets so the dashboard / emails can show
+// what each model would have picked on its own.
+type ClaudePicker struct {
 	client anthropic.Client
 	model  string
 	schwab *schwab.Client
 }
 
-func NewValidator(apiKey, model string, schwabClient *schwab.Client) *Validator {
-	return &Validator{
+func NewClaudePicker(apiKey, model string, schwabClient *schwab.Client) *ClaudePicker {
+	return &ClaudePicker{
 		client: anthropic.NewClient(
 			option.WithAPIKey(apiKey),
 			option.WithRequestTimeout(120*time.Second),
@@ -31,46 +38,89 @@ func NewValidator(apiKey, model string, schwabClient *schwab.Client) *Validator 
 	}
 }
 
-// Model returns the Anthropic model identifier this validator is configured with.
-func (v *Validator) Model() string { return v.model }
+// Model returns the Anthropic model identifier this picker is configured with.
+func (p *ClaudePicker) Model() string { return p.model }
 
-// ValidateTrades sends GPT's picks to Claude for an independent score
-// and rationale per trade. The returned slice has one Validation per
-// input trade, indexed by symbol.
-func (v *Validator) ValidateTrades(ctx context.Context, trades []Trade) ([]Validation, error) {
-	if len(trades) == 0 {
-		return nil, nil
-	}
-
-	tradesJSON, err := json.Marshal(trades)
+// GetTopTrades runs the same workflow the OpenAI Analyzer does — pull in
+// the WSB sentiment, do its own Schwab tool calls and web search, then
+// emit 10 ranked trades. Crucially, Claude is not given GPT's picks; it
+// generates its own from scratch. The returned trades have ClaudeScore /
+// ClaudeRationale populated (because Claude is the model that produced
+// them); GPTScore / GPTRationale are left at zero for the cron pipeline
+// to merge in if GPT also picked the same ticker.
+func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentiment.TickerMention) ([]Trade, error) {
+	sentimentJSON, err := json.Marshal(sentimentData)
 	if err != nil {
-		return nil, fmt.Errorf("marshal trades for claude: %w", err)
+		return nil, fmt.Errorf("failed to marshal sentiment data: %w", err)
 	}
 
 	today := time.Now().Format("2006-01-02")
 	weekday := time.Now().Weekday().String()
-	prompt := fmt.Sprintf(ClaudeValidationPrompt, today, weekday, string(tradesJSON))
 
-	content, err := v.runConversation(ctx, prompt)
+	prompt := fmt.Sprintf(AnalysisPrompt, today, weekday, string(sentimentJSON))
+
+	content, err := p.runConversation(ctx, prompt)
 	if err != nil {
 		return nil, err
 	}
 
-	var validations []Validation
-	if err := json.Unmarshal([]byte(stripMarkdownCodeBlock(content)), &validations); err != nil {
-		return nil, fmt.Errorf("parse claude validations: %w", err)
+	var raw []gptTradeOutput
+	if err := json.Unmarshal([]byte(stripMarkdownCodeBlock(content)), &raw); err != nil {
+		return nil, fmt.Errorf("failed to parse trades from claude response: %w", err)
 	}
-	return validations, nil
+
+	trades := make([]Trade, 0, len(raw))
+	for _, r := range raw {
+		trades = append(trades, Trade{
+			Symbol:          r.Symbol,
+			ContractType:    r.ContractType,
+			StrikePrice:     r.StrikePrice,
+			Expiration:      r.Expiration,
+			DTE:             r.DTE,
+			EstimatedPrice:  r.EstimatedPrice,
+			Thesis:          r.Thesis,
+			CurrentPrice:    r.CurrentPrice,
+			TargetPrice:     r.TargetPrice,
+			StopLoss:        r.StopLoss,
+			ProfitTarget:    r.ProfitTarget,
+			RiskLevel:       r.RiskLevel,
+			Catalyst:        r.Catalyst,
+			Rank:            r.Rank,
+			ClaudeScore:     r.Score,
+			ClaudeRationale: r.Rationale,
+			PickedByClaude:  true,
+		})
+	}
+
+	// Enrich with sentiment data the same way the OpenAI Analyzer does so
+	// downstream consumers see consistent SentimentScore and MentionCount
+	// regardless of which model picked the trade.
+	type sentimentInfo struct {
+		Score    float64
+		Mentions int
+	}
+	sentimentMap := make(map[string]sentimentInfo, len(sentimentData))
+	for _, s := range sentimentData {
+		sentimentMap[s.Symbol] = sentimentInfo{Score: s.Sentiment, Mentions: s.Mentions}
+	}
+	for i := range trades {
+		if info, ok := sentimentMap[trades[i].Symbol]; ok {
+			trades[i].SentimentScore = info.Score
+			trades[i].MentionCount = info.Mentions
+		}
+	}
+
+	return trades, nil
 }
 
-func (v *Validator) buildTools() []anthropic.ToolUnionParam {
+func (p *ClaudePicker) buildTools() []anthropic.ToolUnionParam {
 	tools := []anthropic.ToolUnionParam{
 		{OfWebSearchTool20250305: &anthropic.WebSearchTool20250305Param{
 			MaxUses: anthropic.Int(8),
 		}},
 	}
 
-	if v.schwab != nil && v.schwab.IsConnected() {
+	if p.schwab != nil && p.schwab.IsConnected() {
 		tools = append(tools,
 			anthropic.ToolUnionParam{OfTool: &anthropic.ToolParam{
 				Name:        "get_stock_quotes",
@@ -105,8 +155,8 @@ func (v *Validator) buildTools() []anthropic.ToolUnionParam {
 	return tools
 }
 
-func (v *Validator) runConversation(ctx context.Context, prompt string) (string, error) {
-	tools := v.buildTools()
+func (p *ClaudePicker) runConversation(ctx context.Context, prompt string) (string, error) {
+	tools := p.buildTools()
 
 	messages := []anthropic.MessageParam{
 		anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
@@ -114,8 +164,9 @@ func (v *Validator) runConversation(ctx context.Context, prompt string) (string,
 
 	const maxRounds = 10
 	for round := 0; round < maxRounds; round++ {
-		msg, err := v.client.Messages.New(ctx, anthropic.MessageNewParams{
-			Model:     anthropic.Model(v.model),
+		_ = round
+		msg, err := p.client.Messages.New(ctx, anthropic.MessageNewParams{
+			Model:     anthropic.Model(p.model),
 			MaxTokens: 8192,
 			Messages:  messages,
 			Tools:     tools,
@@ -132,13 +183,12 @@ func (v *Validator) runConversation(ctx context.Context, prompt string) (string,
 			case anthropic.TextBlock:
 				finalText.WriteString(b.Text)
 			case anthropic.ToolUseBlock:
-				out := v.executeTool(ctx, b.Name, b.Input)
+				out := p.executeTool(ctx, b.Name, b.Input)
 				log.Printf("Claude tool call: %s → %d bytes", b.Name, len(out))
 				toolResults = append(toolResults, anthropic.NewToolResultBlock(b.ID, out, false))
 			}
 		}
 
-		// If Claude returned tool calls we need to execute them and loop.
 		if len(toolResults) > 0 {
 			messages = append(messages, msg.ToParam())
 			messages = append(messages, anthropic.NewUserMessage(toolResults...))
@@ -155,7 +205,7 @@ func (v *Validator) runConversation(ctx context.Context, prompt string) (string,
 	return "", fmt.Errorf("exceeded max claude tool rounds (%d)", maxRounds)
 }
 
-func (v *Validator) executeTool(_ context.Context, name string, input json.RawMessage) string {
+func (p *ClaudePicker) executeTool(_ context.Context, name string, input json.RawMessage) string {
 	switch name {
 	case "get_stock_quotes":
 		var args struct {
@@ -168,7 +218,7 @@ func (v *Validator) executeTool(_ context.Context, name string, input json.RawMe
 		for i := range symbols {
 			symbols[i] = strings.TrimSpace(symbols[i])
 		}
-		quotes, err := v.schwab.GetQuotes(symbols)
+		quotes, err := p.schwab.GetQuotes(symbols)
 		if err != nil {
 			return fmt.Sprintf(`{"error": %q}`, err.Error())
 		}
@@ -192,7 +242,7 @@ func (v *Validator) executeTool(_ context.Context, name string, input json.RawMe
 		if args.ToDate == "" {
 			args.ToDate = time.Now().AddDate(0, 0, 7).Format("2006-01-02")
 		}
-		chain, err := v.schwab.GetOptionChain(args.Symbol, args.ContractType, args.FromDate, args.ToDate, args.Strike)
+		chain, err := p.schwab.GetOptionChain(args.Symbol, args.ContractType, args.FromDate, args.ToDate, args.Strike)
 		if err != nil {
 			return fmt.Sprintf(`{"error": %q}`, err.Error())
 		}
