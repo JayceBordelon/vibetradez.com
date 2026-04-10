@@ -15,10 +15,19 @@ import {
 import { api } from "@/lib/api";
 import type { ChartParams } from "@/types/trade";
 
+interface TradeInfo {
+	symbol: string;
+	contract_type: string;
+	strike_price: number;
+	expiration: string;
+	current_price: number;
+}
+
 interface StockChartProps {
 	symbol: string;
 	timeframe: ChartParams;
 	strikePrice?: number;
+	trade?: TradeInfo;
 }
 
 interface DataPoint {
@@ -44,7 +53,7 @@ function formatDate(epoch: number): string {
 	return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-export function StockChart({ symbol, timeframe, strikePrice }: StockChartProps) {
+export function StockChart({ symbol, timeframe, strikePrice, trade }: StockChartProps) {
 	const [data, setData] = useState<DataPoint[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -138,15 +147,38 @@ export function StockChart({ symbol, timeframe, strikePrice }: StockChartProps) 
 	const lastDate = formatDate(data[data.length - 1].time);
 	const multiDay = firstDate !== lastDate;
 
-	// Downsample tick labels to avoid crowding
-	const tickInterval = Math.max(1, Math.floor(data.length / 8));
+	// Show only ~5 tick labels so they never overlap, even on small screens.
+	const tickInterval = Math.max(1, Math.floor(data.length / 5));
+
+	// Format change from first to last candle
+	const change = last - first;
+	const changePct = first > 0 ? (change / first) * 100 : 0;
+	const changeSign = change >= 0 ? "+" : "";
 
 	return (
-		<div className="h-full w-full">
+		<div className="flex h-full w-full flex-col">
+			{/* Chart header */}
+			<div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-3 pt-2.5 pb-1 sm:px-4">
+				<span className="font-mono text-sm font-bold text-foreground sm:text-base">
+					${symbol}
+				</span>
+				{trade && (
+					<span className="text-xs text-muted-foreground">
+						{trade.contract_type} ${trade.strike_price} · Exp {trade.expiration}
+					</span>
+				)}
+				<span className="ml-auto font-mono text-sm font-semibold tabular-nums" style={{ color: isUp ? "var(--gpt)" : "var(--red)" }}>
+					${last.toFixed(2)}{" "}
+					<span className="text-xs">
+						{changeSign}{change.toFixed(2)} ({changeSign}{changePct.toFixed(2)}%)
+					</span>
+				</span>
+			</div>
+			<div className="min-h-0 flex-1">
 			<ResponsiveContainer width="100%" height="100%">
 				<ComposedChart
 					data={data}
-					margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
+					margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
 				>
 					<defs>
 						<linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
@@ -177,9 +209,8 @@ export function StockChart({ symbol, timeframe, strikePrice }: StockChartProps) 
 						axisLine={false}
 						interval={tickInterval}
 						tickFormatter={(t) => {
-							const label = formatTime(t);
-							if (multiDay) return `${formatDate(t)} ${label}`;
-							return label;
+							if (multiDay) return formatDate(t);
+							return formatTime(t);
 						}}
 					/>
 
@@ -290,15 +321,17 @@ export function StockChart({ symbol, timeframe, strikePrice }: StockChartProps) 
 							strokeWidth={1}
 							label={{
 								value: `Strike $${strikePrice}`,
-								position: "right",
+								position: "insideTopRight",
 								fill: "var(--claude)",
 								fontSize: 10,
 								fontWeight: 600,
+								offset: 4,
 							}}
 						/>
 					)}
 				</ComposedChart>
 			</ResponsiveContainer>
+			</div>
 		</div>
 	);
 }

@@ -260,13 +260,17 @@ export function DashboardShell() {
 								onSelect={setActiveSymbol}
 							/>
 							<div className="mt-3 h-[280px] overflow-hidden rounded-lg border bg-card sm:h-[360px] lg:h-[420px]">
-								{activeSymbol && (
-									<StockChart
-										symbol={activeSymbol}
-										timeframe={chartTimeframe}
-										strikePrice={filtered.trades.find((t) => t.trade.symbol === activeSymbol)?.trade.strike_price}
-									/>
-								)}
+								{activeSymbol && (() => {
+									const activeTrade = filtered.trades.find((t) => t.trade.symbol === activeSymbol)?.trade;
+									return (
+										<StockChart
+											symbol={activeSymbol}
+											timeframe={chartTimeframe}
+											strikePrice={activeTrade?.strike_price}
+											trade={activeTrade}
+										/>
+									);
+								})()}
 							</div>
 						</Section>
 						<Section
@@ -301,13 +305,17 @@ export function DashboardShell() {
 								onSelect={setActiveSymbol}
 							/>
 							<div className="mt-3 h-[280px] overflow-hidden rounded-lg border bg-card sm:h-[360px] lg:h-[420px]">
-								{activeSymbol && (
-									<StockChart
-										symbol={activeSymbol}
-										timeframe={chartTimeframe}
-										strikePrice={filtered.trades.find((t) => t.trade.symbol === activeSymbol)?.trade.strike_price}
-									/>
-								)}
+								{activeSymbol && (() => {
+									const activeTrade = filtered.trades.find((t) => t.trade.symbol === activeSymbol)?.trade;
+									return (
+										<StockChart
+											symbol={activeSymbol}
+											timeframe={chartTimeframe}
+											strikePrice={activeTrade?.strike_price}
+											trade={activeTrade}
+										/>
+									);
+								})()}
 							</div>
 						</Section>
 						<Section
