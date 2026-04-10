@@ -1,4 +1,4 @@
-import { Info, type LucideIcon } from "lucide-react";
+import { Info } from "lucide-react";
 import type * as React from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,7 +14,12 @@ interface StatCardProps {
 	label: string;
 	value: string;
 	sub?: string;
-	icon?: LucideIcon;
+	/**
+	 * Icon component (lucide icons or custom SVG components both work).
+	 * The component is rendered as `<Icon className="..." />`, so any
+	 * component that accepts a className prop satisfies the type.
+	 */
+	icon?: React.ComponentType<{ className?: string }>;
 	tone?: "neutral" | "positive" | "negative";
 	/**
 	 * Override the value text color with a raw CSS color string. Takes

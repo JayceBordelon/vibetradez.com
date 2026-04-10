@@ -4,7 +4,7 @@ import { Percent, Target, TrendingDown, TrendingUp, Trophy } from "lucide-react"
 
 import { StatCard } from "@/components/ui/stat-card";
 import { useCountUp } from "@/hooks/use-count-up";
-import { fmtPnlInt } from "@/lib/format";
+import { fmtPnlInt, percentHueColor } from "@/lib/format";
 
 interface StatsGridProps {
 	totalPnl: number;
@@ -44,7 +44,7 @@ export function StatsGrid({
 			<StatCard
 				label="Win Rate"
 				value={`${winRate.toFixed(0)}%`}
-				tone="neutral"
+				valueColor={percentHueColor(winRate)}
 				icon={Target}
 				tooltip="Winning trades / total closed trades"
 				index={1}
@@ -62,7 +62,7 @@ export function StatsGrid({
 				label="Best Trade"
 				value={fmtPnlInt(bestPnl)}
 				sub={`$${bestSym}`}
-				tone="positive"
+				tone={bestPnl > 0 ? "positive" : bestPnl < 0 ? "negative" : "neutral"}
 				icon={Trophy}
 				index={3}
 			/>

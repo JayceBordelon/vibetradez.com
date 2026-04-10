@@ -16,6 +16,7 @@ import {
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { Section } from "@/components/layout/section";
 import { Badge } from "@/components/ui/badge";
+import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
 import { Metric } from "@/components/ui/metric";
 import { StatCard } from "@/components/ui/stat-card";
@@ -171,11 +172,7 @@ export function ModelComparisonShell() {
 												? "negative"
 												: "neutral"
 									}
-									icon={
-										data.openai.total_pnl >= 0
-											? TrendingUp
-											: TrendingDown
-									}
+									icon={OpenAILogo}
 									sub={`${data.openai.trades_evaluated} trades`}
 								/>
 								<StatCard
@@ -188,11 +185,7 @@ export function ModelComparisonShell() {
 												? "negative"
 												: "neutral"
 									}
-									icon={
-										data.anthropic.total_pnl >= 0
-											? TrendingUp
-											: TrendingDown
-									}
+									icon={ClaudeLogo}
 									sub={`${data.anthropic.trades_evaluated} trades`}
 								/>
 								<StatCard
@@ -324,10 +317,15 @@ export function ModelComparisonShell() {
 
 						<Section title="Side-by-side">
 							<div className="grid gap-4 lg:grid-cols-2">
-								<ModelCard label="OpenAI" stats={data.openai} />
+								<ModelCard
+									label="OpenAI"
+									stats={data.openai}
+									Logo={OpenAILogo}
+								/>
 								<ModelCard
 									label="Anthropic"
 									stats={data.anthropic}
+									Logo={ClaudeLogo}
 								/>
 							</div>
 						</Section>
@@ -338,17 +336,28 @@ export function ModelComparisonShell() {
 	);
 }
 
-function ModelCard({ label, stats }: { label: string; stats: ModelStats }) {
+function ModelCard({
+	label,
+	stats,
+	Logo,
+}: {
+	label: string;
+	stats: ModelStats;
+	Logo: React.ComponentType<{ className?: string }>;
+}) {
 	return (
 		<Card>
 			<CardContent className="space-y-4 p-5">
 				<div className="flex items-center justify-between">
-					<div>
-						<div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-							{label}
-						</div>
-						<div className="mt-1 font-mono text-base font-semibold">
-							{stats.model}
+					<div className="flex items-center gap-3">
+						<Logo className="h-7 w-7 text-foreground" />
+						<div>
+							<div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+								{label}
+							</div>
+							<div className="mt-0.5 font-mono text-base font-semibold">
+								{stats.model}
+							</div>
 						</div>
 					</div>
 					<Badge
