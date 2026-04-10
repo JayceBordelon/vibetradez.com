@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
+	"sort"
 	"time"
 )
 
@@ -12,22 +13,27 @@ import (
 var templateFS embed.FS
 
 type Trade struct {
-	Symbol         string
-	ContractType   string
-	StrikePrice    float64
-	Expiration     string
-	DTE            int
-	EstimatedPrice float64
-	Thesis         string
-	SentimentScore float64
-	CurrentPrice   float64
-	TargetPrice    float64
-	StopLoss       float64
-	ProfitTarget   float64
-	RiskLevel      string
-	Catalyst       string
-	MentionCount   int
-	Rank           int
+	Symbol          string
+	ContractType    string
+	StrikePrice     float64
+	Expiration      string
+	DTE             int
+	EstimatedPrice  float64
+	Thesis          string
+	SentimentScore  float64
+	CurrentPrice    float64
+	TargetPrice     float64
+	StopLoss        float64
+	ProfitTarget    float64
+	RiskLevel       string
+	Catalyst        string
+	MentionCount    int
+	Rank            int
+	GPTScore        int
+	GPTRationale    string
+	ClaudeScore     int
+	ClaudeRationale string
+	CombinedScore   float64
 }
 
 type EmailData struct {
@@ -51,6 +57,9 @@ type SummaryTrade struct {
 	Result         string
 	Notes          string
 	Rank           int
+	GPTScore       int
+	ClaudeScore    int
+	CombinedScore  float64
 }
 
 type SummaryEmailData struct {
@@ -61,6 +70,16 @@ type SummaryEmailData struct {
 	Winners     int
 	Losers      int
 	TotalPnL    float64
+	// Dual-model attribution: P&L by which model picked the top 3 trades
+	// (sorted by each model's score). Lets the EOD email surface a tiny
+	// leaderboard answering "which model would you have made more money
+	// listening to today?".
+	GPTTop3Pnl       float64
+	ClaudeTop3Pnl    float64
+	CombinedTop3Pnl  float64
+	GPTAvgScore      float64
+	ClaudeAvgScore   float64
+	AgreementPercent float64
 }
 
 type WeeklyDayData struct {
@@ -93,6 +112,17 @@ type WeeklyEmailData struct {
 	WorstTrade    string
 	WorstPnL      float64
 	DashboardURL  string
+	// Per-model backtest aggregates over the week, mirroring the
+	// /api/model-comparison response. The weekly email surfaces these so
+	// subscribers see which model's ranking would have produced the most
+	// P&L if followed in isolation.
+	GPTTotalPnl      float64
+	GPTWinRate       float64
+	ClaudeTotalPnl   float64
+	ClaudeWinRate    float64
+	CombinedTotalPnl float64
+	CombinedWinRate  float64
+	AgreementPercent float64
 }
 
 var funcMap = template.FuncMap{
@@ -267,6 +297,29 @@ func VerifyTemplates() HealthCheck {
 	return HealthCheck{Name: "Email Templates", Status: "ok", Detail: "All 4 templates rendered", Latency: fmtLatency(start)}
 }
 
+// topNPnl picks the N highest-scoring summaries by the given score
+// selector and sums their per-contract P&L. Used by both the EOD and
+// weekly emails to backtest "what if you had only followed this model
+// today / this week" without re-fetching the trades table.
+func topNPnl(trades []SummaryTrade, n int, score func(SummaryTrade) float64) float64 {
+	if len(trades) == 0 {
+		return 0
+	}
+	sorted := make([]SummaryTrade, len(trades))
+	copy(sorted, trades)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return score(sorted[i]) > score(sorted[j])
+	})
+	if len(sorted) > n {
+		sorted = sorted[:n]
+	}
+	var total float64
+	for _, t := range sorted {
+		total += (t.ClosingPrice - t.EntryPrice) * 100
+	}
+	return total
+}
+
 func fmtLatency(start time.Time) string {
 	d := time.Since(start)
 	if d < time.Millisecond {
@@ -355,14 +408,63 @@ func RenderSummaryEmail(summaryTrades []SummaryTrade) (string, error) {
 		totalPnL += t.PriceChange * 100 // per contract
 	}
 
+	// Per-model attribution: replay this single day's picks under each
+	// model's ranking and aggregate the top-3 P&L for each, the same way
+	// /api/model-comparison does for longer windows. Lets the EOD email
+	// surface a tiny "which model would you have made more money
+	// listening to today" leaderboard.
+	gptTop3Pnl := topNPnl(summaryTrades, 3, func(t SummaryTrade) float64 { return float64(t.GPTScore) })
+	claudeTop3Pnl := topNPnl(summaryTrades, 3, func(t SummaryTrade) float64 { return float64(t.ClaudeScore) })
+	combinedTop3Pnl := topNPnl(summaryTrades, 3, func(t SummaryTrade) float64 { return t.CombinedScore })
+
+	var gptScoreSum, claudeScoreSum float64
+	var gptScoreCount, claudeScoreCount int
+	var agree, dualScored int
+	for _, t := range summaryTrades {
+		if t.GPTScore > 0 {
+			gptScoreSum += float64(t.GPTScore)
+			gptScoreCount++
+		}
+		if t.ClaudeScore > 0 {
+			claudeScoreSum += float64(t.ClaudeScore)
+			claudeScoreCount++
+		}
+		if t.GPTScore > 0 && t.ClaudeScore > 0 {
+			dualScored++
+			diff := t.GPTScore - t.ClaudeScore
+			if diff < 0 {
+				diff = -diff
+			}
+			if diff <= 1 {
+				agree++
+			}
+		}
+	}
+	var gptAvg, claudeAvg, agreementPct float64
+	if gptScoreCount > 0 {
+		gptAvg = gptScoreSum / float64(gptScoreCount)
+	}
+	if claudeScoreCount > 0 {
+		claudeAvg = claudeScoreSum / float64(claudeScoreCount)
+	}
+	if dualScored > 0 {
+		agreementPct = (float64(agree) / float64(dualScored)) * 100
+	}
+
 	data := SummaryEmailData{
-		Subject:     "End of Day Trade Summary",
-		Date:        time.Now().Format("Monday, Jan 2, 2006"),
-		Trades:      summaryTrades,
-		TotalTrades: len(summaryTrades),
-		Winners:     winners,
-		Losers:      losers,
-		TotalPnL:    totalPnL,
+		Subject:          "End of Day Trade Summary",
+		Date:             time.Now().Format("Monday, Jan 2, 2006"),
+		Trades:           summaryTrades,
+		TotalTrades:      len(summaryTrades),
+		Winners:          winners,
+		Losers:           losers,
+		TotalPnL:         totalPnL,
+		GPTTop3Pnl:       gptTop3Pnl,
+		ClaudeTop3Pnl:    claudeTop3Pnl,
+		CombinedTop3Pnl:  combinedTop3Pnl,
+		GPTAvgScore:      gptAvg,
+		ClaudeAvgScore:   claudeAvg,
+		AgreementPercent: agreementPct,
 	}
 
 	var buf bytes.Buffer

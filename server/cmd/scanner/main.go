@@ -531,26 +531,33 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 	}
 	log.Printf("Saved %d trades to database for %s", len(topTrades), date)
 
-	// Convert to template trades
+	// Convert to template trades, carrying the dual-model scores and
+	// rationales through so the morning email can render the same
+	// per-pick analysis the website shows.
 	templateTrades := make([]templates.Trade, len(topTrades))
 	for i, t := range topTrades {
 		templateTrades[i] = templates.Trade{
-			Symbol:         t.Symbol,
-			ContractType:   t.ContractType,
-			StrikePrice:    t.StrikePrice,
-			Expiration:     t.Expiration,
-			DTE:            t.DTE,
-			EstimatedPrice: t.EstimatedPrice,
-			Thesis:         t.Thesis,
-			SentimentScore: t.SentimentScore,
-			CurrentPrice:   t.CurrentPrice,
-			TargetPrice:    t.TargetPrice,
-			StopLoss:       t.StopLoss,
-			ProfitTarget:   t.ProfitTarget,
-			RiskLevel:      t.RiskLevel,
-			Catalyst:       t.Catalyst,
-			MentionCount:   t.MentionCount,
-			Rank:           t.Rank,
+			Symbol:          t.Symbol,
+			ContractType:    t.ContractType,
+			StrikePrice:     t.StrikePrice,
+			Expiration:      t.Expiration,
+			DTE:             t.DTE,
+			EstimatedPrice:  t.EstimatedPrice,
+			Thesis:          t.Thesis,
+			SentimentScore:  t.SentimentScore,
+			CurrentPrice:    t.CurrentPrice,
+			TargetPrice:     t.TargetPrice,
+			StopLoss:        t.StopLoss,
+			ProfitTarget:    t.ProfitTarget,
+			RiskLevel:       t.RiskLevel,
+			Catalyst:        t.Catalyst,
+			MentionCount:    t.MentionCount,
+			Rank:            t.Rank,
+			GPTScore:        t.GPTScore,
+			GPTRationale:    t.GPTRationale,
+			ClaudeScore:     t.ClaudeScore,
+			ClaudeRationale: t.ClaudeRationale,
+			CombinedScore:   t.CombinedScore,
 		}
 	}
 
@@ -814,28 +821,47 @@ func runEndOfDayAnalysis(cfg *config.Config, db *store.Store, analyzer *trades.A
 		log.Printf("Error saving summaries to database: %v", err)
 	}
 
-	// Build rank lookup from morning trades
-	rankMap := make(map[string]int)
+	// Build a per-contract lookup that carries the rank AND each model's
+	// score from the morning save, so the EOD email can attribute every
+	// summary back to which model rated it highly.
+	type morningMeta struct {
+		Rank          int
+		GPTScore      int
+		ClaudeScore   int
+		CombinedScore float64
+	}
+	morningByKey := make(map[string]morningMeta)
 	for _, t := range savedTrades {
 		key := t.Symbol + "|" + t.ContractType + "|" + fmt.Sprintf("%.2f", t.StrikePrice)
-		rankMap[key] = t.Rank
+		morningByKey[key] = morningMeta{
+			Rank:          t.Rank,
+			GPTScore:      t.GPTScore,
+			ClaudeScore:   t.ClaudeScore,
+			CombinedScore: t.CombinedScore,
+		}
 	}
 
-	// Convert to template summary trades
+	// Convert to template summary trades, carrying the dual-model scores
+	// alongside the realised P&L so the EOD email can show a per-model
+	// attribution column and the leaderboard at the top.
 	templateSummaries := make([]templates.SummaryTrade, len(summaries))
 	for i, s := range summaries {
 		key := s.Symbol + "|" + s.ContractType + "|" + fmt.Sprintf("%.2f", s.StrikePrice)
+		meta := morningByKey[key]
 		templateSummaries[i] = templates.SummaryTrade{
-			Symbol:       s.Symbol,
-			ContractType: s.ContractType,
-			StrikePrice:  s.StrikePrice,
-			Expiration:   s.Expiration,
-			EntryPrice:   s.EntryPrice,
-			ClosingPrice: s.ClosingPrice,
-			StockOpen:    s.StockOpen,
-			StockClose:   s.StockClose,
-			Notes:        s.Notes,
-			Rank:         rankMap[key],
+			Symbol:        s.Symbol,
+			ContractType:  s.ContractType,
+			StrikePrice:   s.StrikePrice,
+			Expiration:    s.Expiration,
+			EntryPrice:    s.EntryPrice,
+			ClosingPrice:  s.ClosingPrice,
+			StockOpen:     s.StockOpen,
+			StockClose:    s.StockClose,
+			Notes:         s.Notes,
+			Rank:          meta.Rank,
+			GPTScore:      meta.GPTScore,
+			ClaudeScore:   meta.ClaudeScore,
+			CombinedScore: meta.CombinedScore,
 		}
 	}
 
