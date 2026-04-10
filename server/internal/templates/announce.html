@@ -46,6 +46,12 @@
                 {{.Date}}
               </p>
 
+              {{if .HeroImageURL}}
+              <div style="margin: 0 0 28px 0; text-align: center;">
+                <img src="{{.HeroImageURL}}" alt="" style="display: block; width: 100%; max-width: 524px; height: auto; border-radius: 8px; border: 1px solid #e2e8f0;">
+              </div>
+              {{end}}
+
               {{range .Sections}}
               <div style="margin-bottom: 20px;">
                 {{if .Title}}

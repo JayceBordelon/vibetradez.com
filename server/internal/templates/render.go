@@ -489,9 +489,14 @@ type AnnouncementData struct {
 	Badge    string
 	Headline string
 	Date     string
-	Sections []AnnouncementSection
-	CTAText  string
-	CTAURL   string
+	// HeroImageURL renders an optional full-width image at the top of
+	// the content section (right under the badge, above the headline).
+	// Leave empty to omit. Use a fully-qualified https URL — most
+	// email clients block protocol-relative or http resources.
+	HeroImageURL string
+	Sections     []AnnouncementSection
+	CTAText      string
+	CTAURL       string
 }
 
 func RenderAnnouncementEmail(data AnnouncementData) (string, error) {
