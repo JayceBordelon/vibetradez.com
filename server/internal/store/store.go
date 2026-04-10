@@ -130,6 +130,9 @@ func migrate(db *sql.DB) error {
 	return err
 }
 
+// DB returns the underlying *sql.DB for ad-hoc queries.
+func (s *Store) DB() *sql.DB { return s.db }
+
 func (s *Store) Close() error {
 	return s.db.Close()
 }
