@@ -91,8 +91,8 @@ export default function TermsPage() {
 							All trade ideas presented on this platform are
 							machine-generated suggestions, not recommendations.
 							They are produced by two large language models
-							running independently &mdash; OpenAI GPT-5.4 and
-							Anthropic Claude Opus 4.6 &mdash; each analyzing
+							running independently - OpenAI GPT-5.4 and
+							Anthropic Claude Opus 4.6 - each analyzing
 							publicly available sentiment data and live market
 							information through the same automated workflow.
 							These outputs have not been reviewed, verified, or
@@ -125,16 +125,16 @@ export default function TermsPage() {
 								Options trading involves substantial risk of
 								loss and is not suitable for all investors.
 							</strong>{" "}
-							You can lose your entire investment — and in some
+							You can lose your entire investment -and in some
 							cases, losses can exceed your initial investment.
 							Short-dated options (0–7 DTE), which are the focus
 							of this platform, are especially volatile and carry
 							elevated risk of total loss.
 						</p>
 						<p>
-							Past performance displayed on this platform —
+							Past performance displayed on this platform,
 							whether hypothetical, simulated, or based on actual
-							market data — does not guarantee future results.
+							market data, does not guarantee future results.
 							The P&amp;L figures shown are estimates based on
 							option mark prices at market open and close, and
 							may not reflect actual executable prices due to

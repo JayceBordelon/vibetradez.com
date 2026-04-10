@@ -30,12 +30,6 @@ export default function LandingPage() {
 						<span className="text-gradient-brand">Tradez</span>
 					</span>
 					<div className="flex items-center gap-3">
-						<Link
-							href="/dashboard"
-							className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:block"
-						>
-							Dashboard
-						</Link>
 						<SubscribeCTA className="hidden rounded-lg border border-border px-3.5 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted sm:inline-flex">
 							Subscribe
 						</SubscribeCTA>
@@ -43,8 +37,7 @@ export default function LandingPage() {
 							href="/dashboard"
 							className="inline-flex items-center gap-2 rounded-lg bg-foreground px-3.5 py-2 text-sm font-semibold text-background transition-opacity hover:opacity-90 sm:px-4"
 						>
-							<span className="sm:hidden">Dashboard</span>
-							<span className="hidden sm:inline">Launch App</span>
+							Dashboard
 							<ArrowRight className="h-4 w-4" />
 						</Link>
 					</div>
@@ -93,7 +86,7 @@ export default function LandingPage() {
 						I got tired of losing money on my own, so I let GPT-5.4 and
 						Claude Opus 4.6 do it instead. Every morning they independently
 						scan sentiment, pull live option chains, and each pick their
-						top 10. You get the union&mdash;ranked by combined conviction
+						top 10. You get the union, ranked by combined conviction
 						and delivered before market open. Will they beat the market?
 						Honestly, no idea. But at least the rationale will be
 						well-written.
@@ -235,7 +228,7 @@ export default function LandingPage() {
 							Each model scores every trade 1&ndash;10 and writes a
 							rationale defending its score. When they both pick the
 							same ticker, that trade automatically ranks first.
-							When they disagree&mdash;well, that&apos;s where it
+							When they disagree? Well, that&apos;s where it
 							gets interesting.
 						</p>
 					</div>
@@ -322,7 +315,7 @@ export default function LandingPage() {
 					<p className="mx-auto mb-8 max-w-xl text-muted-foreground">
 						Completely free. No credit card. No premium tier. Just
 						two AIs doing their best and one human hoping they
-						know what they&apos;re doing. Unsubscribe any time&mdash;no
+						know what they&apos;re doing. Unsubscribe any time, no
 						hard feelings.
 					</p>
 					<div className="flex w-full flex-col gap-3 px-2 sm:w-auto sm:flex-row sm:justify-center sm:gap-4 sm:px-0">
@@ -418,7 +411,7 @@ const features = [
 		icon: <Clock className="h-6 w-6 text-claude" />,
 		title: "End-of-Day Tracking",
 		description:
-			"Every pick is tracked to close. Win rates, P&L, Sharpe, drawdown\u2014all computed automatically. No cherry-picking, no \"trust me bro\" screenshots.",
+			"Every pick is tracked to close. Win rates, P&L, Sharpe, drawdown - all computed automatically. No cherry-picking, no \"trust me bro\" screenshots.",
 	},
 ];
 

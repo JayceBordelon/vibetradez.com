@@ -105,7 +105,7 @@ function computeRow(dt: DashboardTrade): RowComputed {
 		entry: hasSummary
 			? fmtMoney(summary.entry_price)
 			: fmtMoney(trade.estimated_price),
-		close: hasSummary ? fmtMoney(summary.closing_price) : "—",
+		close: hasSummary ? fmtMoney(summary.closing_price) : "-",
 	};
 }
 
@@ -218,7 +218,7 @@ function DesktopTradeRow({ dt }: { dt: DashboardTrade }) {
 							: "text-muted-foreground",
 					)}
 				>
-					{row.hasSummary ? fmtPctDec(row.stockMove) : "—"}
+					{row.hasSummary ? fmtPctDec(row.stockMove) : "-"}
 				</TableCell>
 				<TableCell
 					className={cn(
@@ -228,7 +228,7 @@ function DesktopTradeRow({ dt }: { dt: DashboardTrade }) {
 							: "text-muted-foreground",
 					)}
 				>
-					{row.hasSummary ? fmtPnlInt(row.pnl) : "—"}
+					{row.hasSummary ? fmtPnlInt(row.pnl) : "-"}
 				</TableCell>
 			</TableRow>
 			{open && (
@@ -246,15 +246,15 @@ function DesktopTradeRow({ dt }: { dt: DashboardTrade }) {
 
 function ScorePill({ gpt, claude }: { gpt: number; claude: number }) {
 	if (gpt === 0 && claude === 0) {
-		return <span className="text-muted-foreground">—</span>;
+		return <span className="text-muted-foreground">-</span>;
 	}
 	return (
 		<span className="inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-1.5 py-0.5 font-semibold">
 			<OpenAILogo className="h-3 w-3" />
-			<span>{gpt || "—"}</span>
+			<span>{gpt || "-"}</span>
 			<span className="text-muted-foreground">·</span>
 			<ClaudeLogo className="h-3 w-3" />
-			<span>{claude || "—"}</span>
+			<span>{claude || "-"}</span>
 		</span>
 	);
 }
@@ -301,7 +301,7 @@ function TradeRowCard({ dt }: { dt: DashboardTrade }) {
 							: "text-muted-foreground",
 					)}
 				>
-					{row.hasSummary ? fmtPnlInt(row.pnl) : "—"}
+					{row.hasSummary ? fmtPnlInt(row.pnl) : "-"}
 				</div>
 
 				<div className="grid grid-cols-3 gap-3 text-sm">
@@ -462,7 +462,7 @@ function TradeDetail({
 					</span>
 					{summary.notes && (
 						<span className="ml-1 text-muted-foreground">
-							— {summary.notes}
+							- {summary.notes}
 						</span>
 					)}
 				</div>

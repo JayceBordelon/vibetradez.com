@@ -1,6 +1,6 @@
 "use client";
 
-// NavBar moved to app/(app)/layout.tsx — see top of file
+// NavBar moved to app/(app)/layout.tsx
 import { CalendarX } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
