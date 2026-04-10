@@ -20,7 +20,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Metric } from "@/components/ui/metric";
 import { StatCard } from "@/components/ui/stat-card";
 import { api } from "@/lib/api";
-import { fmtPctDec, fmtPnlInt, pnlColor } from "@/lib/format";
+import { fmtPctDec, fmtPnlInt, percentHueColor, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ModelComparisonResponse, ModelStats } from "@/types/trade";
 
@@ -211,7 +211,9 @@ export function ModelComparisonShell() {
 								<StatCard
 									label="Agreement rate"
 									value={`${Math.round(data.agreement_rate * 100)}%`}
-									tone="neutral"
+									valueColor={percentHueColor(
+										data.agreement_rate * 100,
+									)}
 									sub={`${data.total_dual_scored} dual-scored trades within ±1`}
 								/>
 							</div>

@@ -16,6 +16,13 @@ interface StatCardProps {
 	sub?: string;
 	icon?: LucideIcon;
 	tone?: "neutral" | "positive" | "negative";
+	/**
+	 * Override the value text color with a raw CSS color string. Takes
+	 * precedence over `tone` for the value display. Useful for stats that
+	 * interpolate along a continuous scale (e.g. win rate from red to
+	 * green) rather than snapping to one of three semantic tones.
+	 */
+	valueColor?: string;
 	delta?: { value: string; positive: boolean };
 	tooltip?: string;
 	className?: string;
@@ -28,13 +35,15 @@ export function StatCard({
 	sub,
 	icon: Icon,
 	tone = "neutral",
+	valueColor,
 	delta,
 	tooltip,
 	className,
 	index,
 }: StatCardProps): React.JSX.Element {
-	const valueToneClass =
-		tone === "positive"
+	const valueToneClass = valueColor
+		? ""
+		: tone === "positive"
 			? "text-green"
 			: tone === "negative"
 				? "text-red"
@@ -86,6 +95,7 @@ export function StatCard({
 					"mt-2 text-[28px] font-semibold tabular-nums leading-tight",
 					valueToneClass,
 				)}
+				style={valueColor ? { color: valueColor } : undefined}
 			>
 				{value}
 			</div>

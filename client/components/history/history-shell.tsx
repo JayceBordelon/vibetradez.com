@@ -220,6 +220,60 @@ function computeAggregates(data: WeekResponse) {
 	};
 }
 
+// buildMultiEquityPoints replays the same date range under all four Top-N
+// pick-set selections (1 / 3 / 5 / 10) and merges the cumulative P&L series
+// into one row per date with one column per series. The Equity Curve always
+// renders this multi-line view so the user can compare strategies without
+// toggling the toolbar filter.
+function buildMultiEquityPoints(
+	data: WeekResponse,
+): {
+	date: string;
+	top1: number;
+	top3: number;
+	top5: number;
+	top10: number;
+}[] {
+	const filters: { key: "top1" | "top3" | "top5" | "top10"; n: number }[] = [
+		{ key: "top1", n: 1 },
+		{ key: "top3", n: 3 },
+		{ key: "top5", n: 5 },
+		{ key: "top10", n: 10 },
+	];
+
+	const merged = new Map<
+		string,
+		{
+			date: string;
+			top1: number;
+			top3: number;
+			top5: number;
+			top10: number;
+		}
+	>();
+
+	for (const f of filters) {
+		const filtered = filterByRank(data, f.n);
+		if (!filtered.days?.length) continue;
+		const points = computeAggregates(filtered).equityPoints;
+		for (const p of points) {
+			const row = merged.get(p.date) ?? {
+				date: p.date,
+				top1: 0,
+				top3: 0,
+				top5: 0,
+				top10: 0,
+			};
+			row[f.key] = p.cumPnl;
+			merged.set(p.date, row);
+		}
+	}
+
+	return Array.from(merged.values()).sort((a, b) =>
+		a.date.localeCompare(b.date),
+	);
+}
+
 function modeToLabel(mode: string): string {
 	switch (mode) {
 		case "week":
@@ -300,6 +354,14 @@ export function HistoryShell() {
 	const filtered = rawData ? filterByRank(rawData, topFilter) : null;
 	const agg = filtered?.days?.length ? computeAggregates(filtered) : null;
 
+	// Equity curve always shows all four Top-N strategies overlaid, regardless
+	// of which one is currently selected by the toolbar's TopNFilter. This
+	// lets the user compare how each pick-set would have performed at a
+	// glance without having to toggle the filter.
+	const multiEquityPoints = rawData
+		? buildMultiEquityPoints(rawData)
+		: [];
+
 	const maxOffset = maxRangeOffset(mode, availableDates);
 	const label = getRangeLabel(mode, rangeOffset);
 	const modeLabel = modeToLabel(mode);
@@ -353,13 +415,13 @@ export function HistoryShell() {
 							<>
 								<HistoryStats {...agg} />
 
-								{agg.equityPoints.length > 1 && (
+								{multiEquityPoints.length > 1 && (
 									<Section
 										title="Equity Curve"
 										subtitle="Cumulative P&L over time"
 										className="mt-8"
 									>
-										<EquityCurveChart data={agg.equityPoints} />
+										<EquityCurveChart data={multiEquityPoints} />
 									</Section>
 								)}
 

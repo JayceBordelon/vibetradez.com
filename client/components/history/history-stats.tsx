@@ -13,7 +13,13 @@ import {
 } from "lucide-react";
 
 import { StatCard } from "@/components/ui/stat-card";
-import { fmt, fmtMoneyInt, fmtPctDec, fmtPnlInt } from "@/lib/format";
+import {
+	fmt,
+	fmtMoneyInt,
+	fmtPctDec,
+	fmtPnlInt,
+	percentHueColor,
+} from "@/lib/format";
 
 interface HistoryStatsProps {
 	totalPnl: number;
@@ -82,7 +88,7 @@ export function HistoryStats({
 					label="Win Rate"
 					value={`${winRate.toFixed(0)}%`}
 					sub={`${totalWinners}W \u00B7 ${totalLosers}L`}
-					tone="neutral"
+					valueColor={percentHueColor(winRate)}
 					icon={Target}
 				/>
 				<StatCard
