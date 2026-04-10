@@ -4,6 +4,7 @@ import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
 import {
 	Collapsible,
@@ -117,11 +118,11 @@ function MorningCard({ dt, liveQuotes }: MorningCardProps) {
 					<Badge variant={moneyness.variant}>{moneyness.label}</Badge>
 					<Badge variant={riskBadgeVariant}>{trade.risk_level}</Badge>
 					{hasDualScore && (
-						<div className="ml-auto flex items-center gap-1 rounded-md border bg-muted/40 px-2 py-0.5 text-[11px] font-semibold tabular-nums">
-							<span className="text-muted-foreground">GPT</span>
+						<div className="ml-auto flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-0.5 text-[11px] font-semibold tabular-nums">
+							<OpenAILogo className="h-3 w-3 text-muted-foreground" />
 							<span>{trade.gpt_score}</span>
 							<span className="text-muted-foreground">·</span>
-							<span className="text-muted-foreground">Claude</span>
+							<ClaudeLogo className="h-3 w-3 text-muted-foreground" />
 							<span>{trade.claude_score}</span>
 						</div>
 					)}
@@ -241,6 +242,7 @@ function MorningCard({ dt, liveQuotes }: MorningCardProps) {
 									{trade.gpt_rationale && (
 										<div>
 											<div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+												<OpenAILogo className="h-3.5 w-3.5" />
 												<span>OpenAI analysis</span>
 												{trade.gpt_score > 0 && (
 													<span className="rounded bg-background px-1.5 py-0.5 tabular-nums text-foreground">
@@ -256,6 +258,7 @@ function MorningCard({ dt, liveQuotes }: MorningCardProps) {
 									{trade.claude_rationale && (
 										<div>
 											<div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+												<ClaudeLogo className="h-3.5 w-3.5" />
 												<span>Claude analysis</span>
 												{trade.claude_score > 0 && (
 													<span className="rounded bg-background px-1.5 py-0.5 tabular-nums text-foreground">

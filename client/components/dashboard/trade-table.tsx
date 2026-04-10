@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { Fragment, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
 import {
 	Collapsible,
@@ -248,11 +249,11 @@ function ScorePill({ gpt, claude }: { gpt: number; claude: number }) {
 		return <span className="text-muted-foreground">—</span>;
 	}
 	return (
-		<span className="inline-flex items-center gap-1 rounded-md border bg-muted/40 px-1.5 py-0.5 font-semibold">
-			<span className="text-muted-foreground">G</span>
+		<span className="inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-1.5 py-0.5 font-semibold">
+			<OpenAILogo className="h-3 w-3 text-muted-foreground" />
 			<span>{gpt || "—"}</span>
 			<span className="text-muted-foreground">·</span>
-			<span className="text-muted-foreground">C</span>
+			<ClaudeLogo className="h-3 w-3 text-muted-foreground" />
 			<span>{claude || "—"}</span>
 		</span>
 	);
@@ -409,6 +410,7 @@ function TradeDetail({
 					{trade.gpt_rationale && (
 						<div>
 							<div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+								<OpenAILogo className="h-3.5 w-3.5" />
 								<span>OpenAI analysis</span>
 								{trade.gpt_score > 0 && (
 									<span className="rounded bg-background px-1.5 py-0.5 tabular-nums text-foreground">
@@ -424,6 +426,7 @@ function TradeDetail({
 					{trade.claude_rationale && (
 						<div>
 							<div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+								<ClaudeLogo className="h-3.5 w-3.5" />
 								<span>Claude analysis</span>
 								{trade.claude_score > 0 && (
 									<span className="rounded bg-background px-1.5 py-0.5 tabular-nums text-foreground">
