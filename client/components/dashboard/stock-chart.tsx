@@ -6,6 +6,7 @@ import {
 	Bar,
 	CartesianGrid,
 	ComposedChart,
+	ReferenceDot,
 	ReferenceLine,
 	ResponsiveContainer,
 	Tooltip,
@@ -23,11 +24,19 @@ interface TradeInfo {
 	current_price: number;
 }
 
+interface SummaryInfo {
+	entry_price: number;
+	closing_price: number;
+	stock_open: number;
+	stock_close: number;
+}
+
 interface StockChartProps {
 	symbol: string;
 	timeframe: ChartParams;
 	strikePrice?: number;
 	trade?: TradeInfo;
+	summary?: SummaryInfo;
 }
 
 interface DataPoint {
@@ -53,7 +62,7 @@ function formatDate(epoch: number): string {
 	return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-export function StockChart({ symbol, timeframe, strikePrice, trade }: StockChartProps) {
+export function StockChart({ symbol, timeframe, strikePrice, trade, summary }: StockChartProps) {
 	const [data, setData] = useState<DataPoint[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -146,6 +155,19 @@ export function StockChart({ symbol, timeframe, strikePrice, trade }: StockChart
 	const firstDate = formatDate(data[0].time);
 	const lastDate = formatDate(data[data.length - 1].time);
 	const multiDay = firstDate !== lastDate;
+
+	// Find the first and last candle of the most recent trading day for
+	// buy/sell markers. The "buy" is at open, "sell" is near close.
+	let buyTime: number | undefined;
+	let sellTime: number | undefined;
+	if (summary) {
+		const lastDate = formatDate(data[data.length - 1].time);
+		const dayCandles = data.filter((d) => formatDate(d.time) === lastDate);
+		if (dayCandles.length > 0) {
+			buyTime = dayCandles[0].time;
+			sellTime = dayCandles[dayCandles.length - 1].time;
+		}
+	}
 
 	// Show only ~5 tick labels so they never overlap, even on small screens.
 	const tickInterval = Math.max(1, Math.floor(data.length / 5));
@@ -326,6 +348,48 @@ export function StockChart({ symbol, timeframe, strikePrice, trade }: StockChart
 								fontSize: 10,
 								fontWeight: 600,
 								offset: 4,
+							}}
+						/>
+					)}
+
+					{/* Buy marker at market open */}
+					{summary && buyTime !== undefined && (
+						<ReferenceDot
+							yAxisId="price"
+							x={buyTime}
+							y={summary.stock_open}
+							r={5}
+							fill="var(--gpt)"
+							stroke="var(--card)"
+							strokeWidth={2}
+							label={{
+								value: "BUY",
+								position: "top",
+								fill: "var(--gpt)",
+								fontSize: 9,
+								fontWeight: 700,
+								offset: 8,
+							}}
+						/>
+					)}
+
+					{/* Sell marker at market close */}
+					{summary && sellTime !== undefined && (
+						<ReferenceDot
+							yAxisId="price"
+							x={sellTime}
+							y={summary.stock_close}
+							r={5}
+							fill="var(--red)"
+							stroke="var(--card)"
+							strokeWidth={2}
+							label={{
+								value: "SELL",
+								position: "top",
+								fill: "var(--red)",
+								fontSize: 9,
+								fontWeight: 700,
+								offset: 8,
 							}}
 						/>
 					)}

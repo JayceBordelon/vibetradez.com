@@ -85,15 +85,18 @@ export default function LandingPage() {
 						Two AIs.
 						<br />
 						<span className="text-gradient-brand">
-							One Trade List.
+							Zero Humans.
 						</span>
 					</h1>
 
 					<p className="mx-auto mb-8 max-w-2xl text-base leading-relaxed text-muted-foreground sm:mb-10 sm:text-xl">
-						Every morning, GPT-5.4 and Claude Opus 4.6 independently
-						analyze market sentiment, scan options chains, and each
-						produce their top 10 picks. You get the union&mdash;ranked,
-						scored, and delivered to your inbox.
+						I got tired of losing money on my own, so I let GPT-5.4 and
+						Claude Opus 4.6 do it instead. Every morning they independently
+						scan sentiment, pull live option chains, and each pick their
+						top 10. You get the union&mdash;ranked by combined conviction
+						and delivered before market open. Will they beat the market?
+						Honestly, no idea. But at least the rationale will be
+						well-written.
 					</p>
 
 					{/* CTAs */}
@@ -134,9 +137,10 @@ export default function LandingPage() {
 							Engineered to <span className="text-gradient-brand">Disagree</span>
 						</h2>
 						<p className="mx-auto max-w-2xl text-muted-foreground">
-							Not another signal bot. Two frontier AI models run the
-							same pipeline independently, then their picks are merged
-							and ranked by combined conviction.
+							Not another signal bot. Two frontier AI models
+							run the same pipeline independently, argue with each
+							other&apos;s picks, and let you watch the results in
+							real time. Think of it as a very expensive experiment.
 						</p>
 					</div>
 
@@ -172,8 +176,8 @@ export default function LandingPage() {
 							How It Works
 						</h2>
 						<p className="mx-auto max-w-2xl text-muted-foreground">
-							From raw sentiment to ranked picks in your inbox, every
-							market morning.
+							The whole pipeline runs automatically. I mostly just
+							watch and try not to intervene.
 						</p>
 					</div>
 
@@ -228,8 +232,11 @@ export default function LandingPage() {
 							Dual-Model <span className="text-gradient-brand">Conviction</span>
 						</h2>
 						<p className="mx-auto max-w-2xl text-muted-foreground">
-							Each model scores every trade 1&ndash;10 with a written
-							rationale. The combined score determines final rank.
+							Each model scores every trade 1&ndash;10 and writes a
+							rationale defending its score. When they both pick the
+							same ticker, that trade automatically ranks first.
+							When they disagree&mdash;well, that&apos;s where it
+							gets interesting.
 						</p>
 					</div>
 
@@ -313,9 +320,10 @@ export default function LandingPage() {
 						Start Getting <span className="text-gradient-brand">Picks</span>
 					</h2>
 					<p className="mx-auto mb-8 max-w-xl text-muted-foreground">
-						Completely free. No credit card. Unsubscribe any time.
-						Picks arrive before every market open with end-of-day
-						results tracked automatically.
+						Completely free. No credit card. No premium tier. Just
+						two AIs doing their best and one human hoping they
+						know what they&apos;re doing. Unsubscribe any time&mdash;no
+						hard feelings.
 					</p>
 					<div className="flex w-full flex-col gap-3 px-2 sm:w-auto sm:flex-row sm:justify-center sm:gap-4 sm:px-0">
 						<SubscribeCTA className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand px-8 py-3.5 text-base font-semibold text-white shadow-lg transition-all hover:opacity-90 hover:shadow-xl">
@@ -380,37 +388,37 @@ const features = [
 		icon: <Brain className="h-6 w-6 text-gpt" />,
 		title: "Dual-Model Analysis",
 		description:
-			"Two frontier AI models analyze independently. No groupthink. GPT-5.4 picks, Claude Opus 4.6 picks, and you get the combined ranking.",
+			"Two frontier AI models analyze independently. No groupthink, no peeking at each other's homework. When they agree, you probably want to pay attention.",
 	},
 	{
 		icon: <TrendingUp className="h-6 w-6 text-claude" />,
 		title: "Live Market Data",
 		description:
-			"Real-time quotes and full option chains from Schwab's API. Both models use multi-turn tool calling to research before they pick.",
+			"Real-time quotes and full option chains from Schwab. Both models call tools mid-analysis to look up actual prices instead of hallucinating them. Progress.",
 	},
 	{
 		icon: <BarChart3 className="h-6 w-6 text-gpt" />,
 		title: "Full Transparency",
 		description:
-			"Every trade shows both models' scores, rationales, and any red flags. Historical performance, equity curves, and model comparison all tracked.",
+			"Every trade shows both scores, both rationales, and any red flags. Nothing is hidden. If the picks are bad, you'll know exactly whose fault it is.",
 	},
 	{
 		icon: <Mail className="h-6 w-6 text-claude" />,
 		title: "Pre-Market Email",
 		description:
-			"Ranked picks in your inbox before 9:30 AM ET every trading day. End-of-day results follow at market close. Weekly digest on Fridays.",
+			"Ranked picks in your inbox before the opening bell. EOD results at close. Weekly digest on Fridays. You can also just watch the dashboard and judge silently.",
 	},
 	{
 		icon: <Shield className="h-6 w-6 text-gpt" />,
 		title: "Completely Free",
 		description:
-			"No paywalls, no premium tiers, no credit card. This is a live experiment in dual-model trading, open for anyone to follow along.",
+			"No paywalls, no premium tiers, no credit card. This is a live experiment in letting AI trade. You're welcome to follow along and see how it goes.",
 	},
 	{
 		icon: <Clock className="h-6 w-6 text-claude" />,
 		title: "End-of-Day Tracking",
 		description:
-			"Every pick is tracked to close. Win rates, P&L, Sharpe ratio, max drawdown, and profit factor are computed automatically. No cherry-picking.",
+			"Every pick is tracked to close. Win rates, P&L, Sharpe, drawdown\u2014all computed automatically. No cherry-picking, no \"trust me bro\" screenshots.",
 	},
 ];
 

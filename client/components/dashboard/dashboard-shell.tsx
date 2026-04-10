@@ -261,13 +261,14 @@ export function DashboardShell() {
 							/>
 							<div className="mt-3 h-[280px] overflow-hidden rounded-lg border bg-card sm:h-[360px] lg:h-[420px]">
 								{activeSymbol && (() => {
-									const activeTrade = filtered.trades.find((t) => t.trade.symbol === activeSymbol)?.trade;
+									const dt = filtered.trades.find((t) => t.trade.symbol === activeSymbol);
 									return (
 										<StockChart
 											symbol={activeSymbol}
 											timeframe={chartTimeframe}
-											strikePrice={activeTrade?.strike_price}
-											trade={activeTrade}
+											strikePrice={dt?.trade.strike_price}
+											trade={dt?.trade}
+											summary={dt?.summary ?? undefined}
 										/>
 									);
 								})()}
@@ -306,13 +307,14 @@ export function DashboardShell() {
 							/>
 							<div className="mt-3 h-[280px] overflow-hidden rounded-lg border bg-card sm:h-[360px] lg:h-[420px]">
 								{activeSymbol && (() => {
-									const activeTrade = filtered.trades.find((t) => t.trade.symbol === activeSymbol)?.trade;
+									const dt = filtered.trades.find((t) => t.trade.symbol === activeSymbol);
 									return (
 										<StockChart
 											symbol={activeSymbol}
 											timeframe={chartTimeframe}
-											strikePrice={activeTrade?.strike_price}
-											trade={activeTrade}
+											strikePrice={dt?.trade.strike_price}
+											trade={dt?.trade}
+											summary={dt?.summary ?? undefined}
 										/>
 									);
 								})()}
