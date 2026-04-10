@@ -7,7 +7,7 @@ import { ModelPickerFilter } from "@/components/layout/model-picker-filter";
 import { cn } from "@/lib/utils";
 
 const tabs = [
-	{ href: "/", label: "Live Dashboard", short: "Live" },
+	{ href: "/dashboard", label: "Live Dashboard", short: "Live" },
 	{ href: "/history", label: "Historical Analytics", short: "History" },
 	{ href: "/models", label: "Models", short: "Models" },
 ] as const;
@@ -27,8 +27,9 @@ export function NavBar() {
 							className={cn(
 								"flex items-center border-b-2 px-3 py-2 text-sm font-semibold tracking-wide transition-colors sm:px-5",
 								isActive
-									? "border-primary text-primary"
+									? "border-transparent text-foreground"
 									: "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+								isActive && "nav-tab-active",
 							)}
 						>
 							<span className="sm:hidden">{tab.short}</span>

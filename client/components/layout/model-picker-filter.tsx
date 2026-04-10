@@ -37,9 +37,13 @@ export function ModelPickerFilter() {
 						onClick={() => setPicker(opt.value)}
 						className={cn(
 							"flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-semibold transition-colors",
-							active
-								? "bg-primary text-primary-foreground"
-								: "text-muted-foreground hover:bg-muted hover:text-foreground",
+							active && opt.value === "openai"
+								? "bg-gpt-light text-gpt"
+								: active && opt.value === "claude"
+									? "bg-claude-light text-claude"
+									: active
+										? "bg-gradient-brand text-white"
+										: "text-muted-foreground hover:bg-muted hover:text-foreground",
 						)}
 					>
 						{opt.Icon && <opt.Icon className="h-3.5 w-3.5" />}

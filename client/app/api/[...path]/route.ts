@@ -1,7 +1,7 @@
 // Catch-all API proxy.
 //
 // In production, Traefik routes /api/* to the Go server before requests
-// ever reach Next.js — so this handler never fires. It only handles requests
+// ever reach Next.js, so this handler never fires. It only handles requests
 // in local development (where there is no reverse proxy) by forwarding to
 // the Go server identified by the API_URL env var.
 //

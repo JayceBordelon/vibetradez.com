@@ -28,7 +28,7 @@ export function SubscribeModal({
 			<DialogContent className="max-w-md">
 				<DialogHeader>
 					<DialogTitle className="text-lg font-extrabold">
-						Get free daily trade picks
+						Get free daily <span className="text-gradient-brand">trade picks</span>
 					</DialogTitle>
 					<DialogDescription>
 						Dual-model options picks delivered to your inbox every

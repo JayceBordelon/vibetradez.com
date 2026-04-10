@@ -262,7 +262,7 @@ BEGIN
                     rlevel,
                     cat,
                     mentions,
-                    pick_idx,
+                    0, -- rank placeholder, computed below
                     gpt_s,
                     gpt_rat,
                     claude_s,
@@ -310,6 +310,25 @@ BEGIN
                     );
                 END IF;
             END LOOP;
+
+            -- Assign ranks for this day: consensus picks first (both models),
+            -- then single-model picks, sorted by combined_score desc within
+            -- each tier. This matches the production unionPicks() sort.
+            WITH ranked AS (
+                SELECT id,
+                       ROW_NUMBER() OVER (
+                           ORDER BY
+                               (picked_by_openai AND picked_by_claude) DESC,
+                               combined_score DESC,
+                               symbol
+                       ) AS new_rank
+                FROM trades
+                WHERE date = to_char(d, 'YYYY-MM-DD')
+            )
+            UPDATE trades t
+            SET rank = r.new_rank
+            FROM ranked r
+            WHERE t.id = r.id;
         END IF;
 
         d := d - 1;

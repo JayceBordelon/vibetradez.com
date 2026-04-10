@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
+	"math/rand/v2"
 	"net/http"
 	"regexp"
 	"sort"
@@ -512,11 +514,6 @@ func (s *Server) handleChart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.schwab == nil || !s.schwab.IsConnected() {
-		writeJSON(w, http.StatusServiceUnavailable, apiResponse{OK: false, Message: "Schwab not connected"})
-		return
-	}
-
 	// Default: 5 days of 5-min candles for intraday view
 	periodType := r.URL.Query().Get("periodType")
 	if periodType == "" {
@@ -539,18 +536,111 @@ func (s *Server) handleChart(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	candles, err := s.schwab.GetPriceHistory(symbol, periodType, period, frequencyType, frequency)
-	if err != nil {
-		log.Printf("Chart data error for %s: %v", symbol, err)
-		writeJSON(w, http.StatusBadGateway, apiResponse{OK: false, Message: "failed to fetch chart data"})
+	// If Schwab is connected, use real market data.
+	if s.schwab != nil && s.schwab.IsConnected() {
+		candles, err := s.schwab.GetPriceHistory(symbol, periodType, period, frequencyType, frequency)
+		if err != nil {
+			log.Printf("Chart data error for %s: %v", symbol, err)
+			writeJSON(w, http.StatusBadGateway, apiResponse{OK: false, Message: "failed to fetch chart data"})
+			return
+		}
+		w.Header().Set("Cache-Control", "public, max-age=15")
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"symbol":  symbol,
+			"candles": candles,
+		})
 		return
 	}
 
-	w.Header().Set("Cache-Control", "public, max-age=15")
+	// Schwab not available — generate synthetic candles from the trade's
+	// current_price so local dev still renders a chart.
+	candles := s.syntheticCandles(symbol, period, frequency)
+	w.Header().Set("Cache-Control", "public, max-age=60")
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"symbol":  symbol,
 		"candles": candles,
 	})
+}
+
+// syntheticCandles generates realistic-looking OHLCV candles for local dev
+// when Schwab is not connected. It looks up the symbol's current_price from
+// the trades table to anchor the simulation at the right price level.
+func (s *Server) syntheticCandles(symbol string, days, freqMinutes int) []schwab.Candle {
+	// Look up a base price from the most recent trade for this symbol.
+	basePrice := 150.0 // fallback
+	row := s.db.DB().QueryRow(
+		`SELECT current_price FROM trades WHERE symbol = $1 ORDER BY date DESC LIMIT 1`,
+		symbol,
+	)
+	if err := row.Scan(&basePrice); err != nil || basePrice <= 0 {
+		basePrice = 150.0
+	}
+
+	// Deterministic seed from symbol so the chart is stable across refreshes.
+	seed := uint64(0)
+	for _, c := range symbol {
+		seed = seed*31 + uint64(c)
+	}
+	rng := rand.New(rand.NewPCG(seed, seed^0xdeadbeef))
+
+	// Generate candles: ~78 five-minute bars per trading day (9:30-16:00).
+	barsPerDay := 390 / freqMinutes
+	totalBars := days * barsPerDay
+
+	now := time.Now()
+	// Walk back to find the start date (skip weekends).
+	tradingDays := make([]time.Time, 0, days)
+	d := now
+	for len(tradingDays) < days {
+		if d.Weekday() != time.Saturday && d.Weekday() != time.Sunday {
+			tradingDays = append(tradingDays, d)
+		}
+		d = d.AddDate(0, 0, -1)
+	}
+	// Reverse so oldest is first.
+	for i, j := 0, len(tradingDays)-1; i < j; i, j = i+1, j-1 {
+		tradingDays[i], tradingDays[j] = tradingDays[j], tradingDays[i]
+	}
+
+	candles := make([]schwab.Candle, 0, totalBars)
+	price := basePrice * (0.97 + rng.Float64()*0.06) // start near base
+
+	for _, day := range tradingDays {
+		marketOpen := time.Date(day.Year(), day.Month(), day.Day(), 9, 30, 0, 0, time.Local)
+		for bar := 0; bar < barsPerDay; bar++ {
+			t := marketOpen.Add(time.Duration(bar*freqMinutes) * time.Minute)
+
+			// Random walk with mean reversion toward basePrice.
+			drift := (basePrice - price) * 0.002
+			volatility := basePrice * 0.003
+			move := drift + volatility*(rng.Float64()-0.5)*2
+
+			open := price
+			close := price + move
+			high := math.Max(open, close) + rng.Float64()*volatility*0.5
+			low := math.Min(open, close) - rng.Float64()*volatility*0.5
+			vol := int64(50000 + rng.IntN(200000))
+
+			// Round to 2 decimals.
+			open = math.Round(open*100) / 100
+			close = math.Round(close*100) / 100
+			high = math.Round(high*100) / 100
+			low = math.Round(low*100) / 100
+
+			candles = append(candles, schwab.Candle{
+				Time:   t.Unix(),
+				Open:   open,
+				High:   high,
+				Low:    low,
+				Close:  close,
+				Volume: vol,
+			})
+
+			price = close
+		}
+	}
+
+	return candles
 }
 
 // ── Schwab OAuth ──

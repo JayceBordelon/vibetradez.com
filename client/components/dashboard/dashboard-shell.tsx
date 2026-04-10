@@ -1,6 +1,6 @@
 "use client";
 
-// NavBar moved to app/(app)/layout.tsx — see top of file
+// NavBar moved to app/(app)/layout.tsx
 import { CalendarX } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -259,13 +259,19 @@ export function DashboardShell() {
 								activeSymbol={activeSymbol}
 								onSelect={setActiveSymbol}
 							/>
-							<div className="mt-3 h-[280px] overflow-hidden rounded-lg border bg-muted sm:h-[360px] lg:h-[420px]">
-								{activeSymbol && (
-									<StockChart
-										symbol={activeSymbol}
-										timeframe={chartTimeframe}
-									/>
-								)}
+							<div className="mt-3 h-[280px] overflow-hidden rounded-lg border bg-card sm:h-[360px] lg:h-[420px]">
+								{activeSymbol && (() => {
+									const dt = filtered.trades.find((t) => t.trade.symbol === activeSymbol);
+									return (
+										<StockChart
+											symbol={activeSymbol}
+											timeframe={chartTimeframe}
+											strikePrice={dt?.trade.strike_price}
+											trade={dt?.trade}
+											summary={dt?.summary ?? undefined}
+										/>
+									);
+								})()}
 							</div>
 						</Section>
 						<Section
@@ -299,13 +305,19 @@ export function DashboardShell() {
 								activeSymbol={activeSymbol}
 								onSelect={setActiveSymbol}
 							/>
-							<div className="mt-3 h-[280px] overflow-hidden rounded-lg border bg-muted sm:h-[360px] lg:h-[420px]">
-								{activeSymbol && (
-									<StockChart
-										symbol={activeSymbol}
-										timeframe={chartTimeframe}
-									/>
-								)}
+							<div className="mt-3 h-[280px] overflow-hidden rounded-lg border bg-card sm:h-[360px] lg:h-[420px]">
+								{activeSymbol && (() => {
+									const dt = filtered.trades.find((t) => t.trade.symbol === activeSymbol);
+									return (
+										<StockChart
+											symbol={activeSymbol}
+											timeframe={chartTimeframe}
+											strikePrice={dt?.trade.strike_price}
+											trade={dt?.trade}
+											summary={dt?.summary ?? undefined}
+										/>
+									);
+								})()}
 							</div>
 						</Section>
 						<Section

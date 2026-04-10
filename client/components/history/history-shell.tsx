@@ -423,7 +423,7 @@ export function HistoryShell() {
 										subtitle="Cumulative P&L over time"
 										className="mt-8"
 									>
-										<EquityCurveChart data={multiEquityPoints} />
+										<EquityCurveChart data={multiEquityPoints} activeTopN={topFilter} />
 									</Section>
 								)}
 

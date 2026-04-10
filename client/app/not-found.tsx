@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-	title: "404 — Page not found",
+	title: "404 - Page not found",
 	description: "The page you were looking for doesn't exist on VibeTradez.",
 };
 
