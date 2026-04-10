@@ -196,7 +196,9 @@ func (s *Server) handleTradesWeek(w http.ResponseWriter, r *http.Request) {
 
 	tradesMap, err := s.db.GetTradesForDateRange(start, end)
 	if err != nil {
-		writeJSON(w, http.StatusOK, weekResponse{Start: start, End: end})
+		// Always return an empty array for days (never nil) so the
+		// frontend can safely call .map without a null guard.
+		writeJSON(w, http.StatusOK, weekResponse{Start: start, End: end, Days: []weekDay{}})
 		return
 	}
 
@@ -213,7 +215,7 @@ func (s *Server) handleTradesWeek(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Strings(dates)
 
-	var days []weekDay
+	days := []weekDay{}
 	for _, date := range dates {
 		dayTrades := tradesMap[date]
 		daySummaries := summariesMap[date]

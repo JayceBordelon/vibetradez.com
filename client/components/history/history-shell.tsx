@@ -51,13 +51,16 @@ type DayStat = {
 };
 
 function filterByRank(data: WeekResponse, topFilter: number): WeekResponse {
-	if (topFilter >= 10) return data;
+	// Server should always return an empty array, but be defensive in case
+	// an older deployment or a transient error path emits null days.
+	const days = data.days ?? [];
+	if (topFilter >= 10) return { ...data, days };
 	return {
 		...data,
-		days: data.days
+		days: days
 			.map((day) => ({
 				...day,
-				trades: day.trades.filter(
+				trades: (day.trades ?? []).filter(
 					(t) => t.trade.rank >= 1 && t.trade.rank <= topFilter,
 				),
 			}))
@@ -85,7 +88,7 @@ function computeAggregates(data: WeekResponse) {
 	const equityPoints: { date: string; cumPnl: number }[] = [];
 	const dayStats: DayStat[] = [];
 
-	for (const day of data.days) {
+	for (const day of data.days ?? []) {
 		let dayPnl = 0;
 		let dayW = 0;
 		let dayL = 0;
@@ -94,7 +97,7 @@ function computeAggregates(data: WeekResponse) {
 		let dayReturned = 0;
 		const details: DayStat["details"] = [];
 
-		for (const { trade, summary } of day.trades) {
+		for (const { trade, summary } of day.trades ?? []) {
 			totalTrades++;
 			if (summary) {
 				dayHasSummaries = true;
