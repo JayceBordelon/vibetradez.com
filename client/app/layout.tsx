@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 		template: "%s | VibeTradez",
 	},
 	description:
-		"Free daily ranked options picks powered by AI. 10 trades ranked by conviction, delivered before market open with end-of-day results.",
+		"Free daily ranked options picks powered by two LLMs running independently. OpenAI GPT-5.4 and Anthropic Claude Opus 4.6 each pick from the same raw sentiment, then the union is delivered before market open with end-of-day results.",
 	keywords: [
 		"options trading",
 		"AI trading",

@@ -13,7 +13,7 @@ export async function generateMetadata(): Promise<Metadata> {
 		const hasSummaries = data.trades?.some((t) => t.summary) ?? false;
 
 		let description =
-			"Live options trade dashboard with AI-powered daily picks and real-time analytics.";
+			"Live options trade dashboard with dual-model daily picks (OpenAI + Claude) and real-time analytics.";
 
 		if (count > 0 && hasSummaries) {
 			let totalPnl = 0;
@@ -29,13 +29,13 @@ export async function generateMetadata(): Promise<Metadata> {
 				}
 			}
 			const sign = totalPnl > 0 ? "+" : "";
-			description = `Today: ${count} picks, ${winners}W/${losers}L, ${sign}$${Math.round(totalPnl)} P&L. AI-powered options dashboard with real-time charts.`;
+			description = `Today: ${count} union picks, ${winners}W/${losers}L, ${sign}$${Math.round(totalPnl)} P&L. Dual-model options dashboard with real-time charts.`;
 		} else if (count > 0) {
 			const topSymbols = data.trades
 				.slice(0, 3)
 				.map((t) => t.trade.symbol)
 				.join(", ");
-			description = `Today's ${count} ranked picks: ${topSymbols} and more. AI-powered options dashboard.`;
+			description = `Today's ${count} union picks: ${topSymbols} and more. OpenAI + Claude dual-model dashboard.`;
 		}
 
 		return {
@@ -57,7 +57,7 @@ export async function generateMetadata(): Promise<Metadata> {
 		return {
 			title: "Live Dashboard",
 			description:
-				"Live options trade dashboard with AI-powered daily picks and real-time analytics.",
+				"Live options trade dashboard with dual-model daily picks (OpenAI + Claude) and real-time analytics.",
 			openGraph: {
 				title: "VibeTradez | Live Options Dashboard",
 				images: [{ url: OG_IMAGE, width: 1200, height: 630 }],

@@ -91,13 +91,13 @@ export default function TermsPage() {
 						<p>
 							All trade ideas presented on this platform are
 							machine-generated suggestions, not recommendations.
-							They are produced by large language models
-							(currently OpenAI&apos;s GPT-5.4, with a planned
-							migration to Anthropic&apos;s Claude) analyzing
-							publicly available sentiment data and market
-							information. These outputs have not been reviewed,
-							verified, or endorsed by any licensed financial
-							professional.
+							They are produced by two large language models
+							running independently &mdash; OpenAI GPT-5.4 and
+							Anthropic Claude Opus 4.6 &mdash; each analyzing
+							publicly available sentiment data and live market
+							information through the same automated workflow.
+							These outputs have not been reviewed, verified, or
+							endorsed by any licensed financial professional.
 						</p>
 					</Section>
 
@@ -179,11 +179,11 @@ export default function TermsPage() {
 						<p>
 							Trade suggestions are generated using data from
 							third-party sources including Reddit
-							(r/wallstreetbets, r/options), OpenAI&apos;s
-							language models, and the Schwab Market Data API.
-							While we strive for accuracy, we make no guarantees
-							regarding the completeness, reliability, or
-							timeliness of any data presented.
+							(r/wallstreetbets, r/options), the OpenAI and
+							Anthropic language model APIs, and the Schwab
+							Market Data API. While we strive for accuracy, we
+							make no guarantees regarding the completeness,
+							reliability, or timeliness of any data presented.
 						</p>
 						<p>
 							Market data, option prices, and stock quotes may be

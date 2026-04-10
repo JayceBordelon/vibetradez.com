@@ -31,7 +31,7 @@ export function SubscribeModal({
 						Get free daily trade picks
 					</DialogTitle>
 					<DialogDescription>
-						AI-powered options picks delivered to your inbox every
+						Dual-model options picks delivered to your inbox every
 						morning before market open.
 					</DialogDescription>
 				</DialogHeader>
@@ -39,10 +39,10 @@ export function SubscribeModal({
 				<div className="flex gap-2">
 					<div className="flex-1 rounded-lg border bg-muted p-2.5 text-center">
 						<div className="font-mono text-lg font-extrabold text-primary">
-							10
+							2
 						</div>
 						<div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-							Ranked Picks
+							AI Pickers
 						</div>
 					</div>
 					<div className="flex-1 rounded-lg border bg-muted p-2.5 text-center">
