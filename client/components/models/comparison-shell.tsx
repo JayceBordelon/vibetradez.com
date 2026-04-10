@@ -307,7 +307,7 @@ export function ModelComparisonShell() {
 													type="monotone"
 													dataKey="openai"
 													name={data.openai.model}
-													stroke="var(--chart-1)"
+													stroke="var(--gpt)"
 													strokeWidth={2}
 													dot={false}
 												/>
@@ -315,7 +315,7 @@ export function ModelComparisonShell() {
 													type="monotone"
 													dataKey="anthropic"
 													name={data.anthropic.model}
-													stroke="var(--green)"
+													stroke="var(--claude)"
 													strokeWidth={2}
 													dot={false}
 												/>

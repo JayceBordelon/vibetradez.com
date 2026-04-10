@@ -131,7 +131,7 @@ export default function LandingPage() {
 				<div className="mx-auto max-w-6xl px-5 sm:px-6">
 					<div className="mb-10 text-center sm:mb-16">
 						<h2 className="mb-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
-							Built <span className="text-gradient-brand">Different</span>
+							Engineered to <span className="text-gradient-brand">Disagree</span>
 						</h2>
 						<p className="mx-auto max-w-2xl text-muted-foreground">
 							Not another signal bot. Two frontier AI models run the
