@@ -27,6 +27,11 @@ CREATE TABLE IF NOT EXISTS trades (
     catalyst TEXT NOT NULL DEFAULT '',
     mention_count INTEGER NOT NULL DEFAULT 0,
     rank INTEGER NOT NULL DEFAULT 0,
+    gpt_score INTEGER NOT NULL DEFAULT 0,
+    gpt_rationale TEXT NOT NULL DEFAULT '',
+    claude_score INTEGER NOT NULL DEFAULT 0,
+    claude_rationale TEXT NOT NULL DEFAULT '',
+    combined_score DOUBLE PRECISION NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_trades_date ON trades(date);
@@ -142,6 +147,37 @@ DECLARE
     stock_close DOUBLE PRECISION;
     pnl_pct DOUBLE PRECISION;
     is_today BOOLEAN;
+
+    -- Dual-model scoring
+    gpt_s INT;
+    claude_s INT;
+    combined DOUBLE PRECISION;
+    gpt_rat TEXT;
+    claude_rat TEXT;
+    gpt_rationales TEXT[] := ARRAY[
+        'Highest conviction pick of the day. Sentiment is leaning hard into this name and the option chain shows favorable bid/ask spreads with healthy open interest.',
+        'Strong setup but the catalyst window is tight. Sized smaller because the move could happen pre-market and reduce our edge.',
+        'Multiple confirming signals: WSB mention velocity is up 3x, technicals are clean, and IV is reasonable for the move we expect.',
+        'Decent risk/reward but not a top-tier setup. Including in the list because the broader sector tailwind supports the thesis.',
+        'Speculative tail-risk play. Cheap premium and the upside scenario is asymmetric — comfortable losing the entire premium here.',
+        'Mean-reversion candidate. The stock is oversold on RSI and the option premium prices in more downside than I think will materialize.',
+        'Earnings volatility play. The expected move priced in is smaller than the historical move on similar setups for this name.',
+        'Sentiment-driven momentum. WSB is loud on this name and the contract benefits from short-dated gamma into the catalyst.',
+        'Hedge against broader exposure. Negative beta to SPY makes this useful as a portfolio protection layer for the day.',
+        'Lowest-ranked pick. Including for diversification but conviction is the weakest of the day; would skip if forced to take fewer.'
+    ];
+    claude_rationales TEXT[] := ARRAY[
+        'Confirmed: option chain pricing and underlying technical setup match GPT thesis. Greeks favor the direction with theta risk well managed.',
+        'Agree on direction but flag IV percentile at 88th — there is real vega risk if the catalyst lands soft. Score reflects that downside.',
+        'Strong technical case is real, but I cannot independently verify the WSB mention velocity claim without the raw data. Discounting slightly.',
+        'Moderate conviction. Sector tailwind argument is sound but the specific name has weaker relative strength than peers cited.',
+        'Cheap premium claim verified, but the asymmetric upside is conditioned on a specific catalyst date I could not confirm via search.',
+        'RSI oversold confirmed. However, mean reversion in trending markets is a frequent trap — would rate higher if there were a clearer reversal signal.',
+        'Earnings setup is real and the implied move does look low vs the realized history. High-confidence agreement with the analyzer.',
+        'Sentiment momentum is observable but the specific contract greeks are mediocre — gamma exposure is fine, theta drag is steeper than implied.',
+        'Hedge thesis is sound. Negative correlation to SPY is well established for this name on the timeframe.',
+        'Marginal pick. Liquidity is thin enough that even a small fill could move the mark; would not take this in size.'
+    ];
 BEGIN
     -- Walk back from today, picking weekdays
     d := today_date;
@@ -166,11 +202,21 @@ BEGIN
                 sentiment := round((-0.5 + ((pick_idx * 11 + weekday_count * 7) % 150) / 100.0)::numeric, 2);
                 mentions := 50 + ((pick_idx * 23 + weekday_count * 11) % 800);
 
+                -- Dual-model scoring: roughly correlated with rank (rank 1
+                -- gets highest scores), with a small amount of deterministic
+                -- noise so the two models occasionally disagree.
+                gpt_s := GREATEST(1, LEAST(10, (11 - pick_idx) + (((pick_idx * 7 + weekday_count * 3) % 3) - 1)));
+                claude_s := GREATEST(1, LEAST(10, (11 - pick_idx) + (((pick_idx * 11 + weekday_count * 5) % 5) - 2)));
+                combined := (gpt_s + claude_s) / 2.0;
+                gpt_rat := gpt_rationales[pick_idx];
+                claude_rat := claude_rationales[pick_idx];
+
                 INSERT INTO trades (
                     date, symbol, contract_type, strike_price, expiration, dte,
                     estimated_price, thesis, sentiment_score, current_price,
                     target_price, stop_loss, profit_target, risk_level,
-                    catalyst, mention_count, rank
+                    catalyst, mention_count, rank,
+                    gpt_score, gpt_rationale, claude_score, claude_rationale, combined_score
                 ) VALUES (
                     to_char(d, 'YYYY-MM-DD'),
                     sym,
@@ -188,7 +234,12 @@ BEGIN
                     rlevel,
                     cat,
                     mentions,
-                    pick_idx
+                    pick_idx,
+                    gpt_s,
+                    gpt_rat,
+                    claude_s,
+                    claude_rat,
+                    combined
                 );
 
                 -- Generate EOD summaries for all days EXCEPT today (the most recent)

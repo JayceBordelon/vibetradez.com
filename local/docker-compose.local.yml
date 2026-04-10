@@ -48,6 +48,9 @@ services:
       # Stub keys — server requires these to start, but local mode never calls real APIs.
       RESEND_API_KEY: re_local_stub
       OPENAI_API_KEY: sk_local_stub
+      ANTHROPIC_API_KEY: sk-local-stub
+      OPENAI_MODEL: gpt-5.4
+      ANTHROPIC_MODEL: claude-opus-4-6
       EMAIL_FROM: "Local Dev <local@vibetradez.local>"
       EMAIL_RECIPIENTS: ""
       RUN_ON_START: "false"
