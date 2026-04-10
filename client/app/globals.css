@@ -68,6 +68,14 @@
   --surface: #f1f5f9;
   --chart-grid: #e2e8f0;
   --chart-text: #4b5563;
+
+  /* AI brand colors */
+  --gpt: #10a37f;
+  --gpt-light: rgba(16, 163, 127, 0.10);
+  --gpt-border: rgba(16, 163, 127, 0.25);
+  --claude: #D97757;
+  --claude-light: rgba(217, 119, 87, 0.10);
+  --claude-border: rgba(217, 119, 87, 0.25);
 }
 
 .dark {
@@ -133,6 +141,14 @@
   --surface: #1e293b;
   --chart-grid: #334155;
   --chart-text: #94a3b8;
+
+  /* AI brand colors (dark) */
+  --gpt: #34d399;
+  --gpt-light: rgba(16, 163, 127, 0.12);
+  --gpt-border: rgba(52, 211, 153, 0.3);
+  --claude: #f4a27a;
+  --claude-light: rgba(217, 119, 87, 0.12);
+  --claude-border: rgba(244, 162, 122, 0.3);
 }
 
 @theme inline {
@@ -185,6 +201,14 @@
   --color-chart-grid: var(--chart-grid);
   --color-chart-text: var(--chart-text);
 
+  /* AI brand tokens */
+  --color-gpt: var(--gpt);
+  --color-gpt-light: var(--gpt-light);
+  --color-gpt-border: var(--gpt-border);
+  --color-claude: var(--claude);
+  --color-claude-light: var(--claude-light);
+  --color-claude-border: var(--claude-border);
+
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
 
@@ -235,6 +259,26 @@ body {
 @layer utilities {
   .tabular-nums {
     font-variant-numeric: tabular-nums;
+  }
+
+  /* GPT → Claude brand gradient */
+  .text-gradient-brand {
+    background: linear-gradient(135deg, var(--gpt), var(--claude));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .bg-gradient-brand {
+    background: linear-gradient(135deg, var(--gpt), var(--claude));
+  }
+  .border-gradient-brand {
+    border-image: linear-gradient(135deg, var(--gpt-border), var(--claude-border)) 1;
+  }
+
+  /* Active nav tab gradient underline */
+  .nav-tab-active {
+    border-image: linear-gradient(90deg, var(--gpt), var(--claude)) 1;
+    border-bottom-width: 2px;
   }
 
   /* Prose styling for Terms / long-form text */

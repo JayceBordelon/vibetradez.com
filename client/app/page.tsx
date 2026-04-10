@@ -11,6 +11,7 @@ import {
 	Clock,
 } from "lucide-react";
 import { OpenAILogo, ClaudeLogo } from "@/components/ui/brand-icons";
+import { SubscribeCTA } from "@/components/landing/subscribe-cta";
 
 export const metadata: Metadata = {
 	title: "VibeTradez | AI-Powered Options Picks",
@@ -23,10 +24,10 @@ export default function LandingPage() {
 		<div className="min-h-dvh bg-background text-foreground">
 			{/* ── Nav ── */}
 			<nav className="fixed top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl">
-				<div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+				<div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:px-6">
 					<span className="text-xl font-extrabold tracking-tight">
 						<span className="text-foreground">Vibe</span>
-						<span className="text-primary">Tradez</span>
+						<span className="text-gradient-brand">Tradez</span>
 					</span>
 					<div className="flex items-center gap-3">
 						<Link
@@ -35,6 +36,9 @@ export default function LandingPage() {
 						>
 							Dashboard
 						</Link>
+						<SubscribeCTA className="hidden rounded-lg border border-border px-3.5 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted sm:inline-flex">
+							Subscribe
+						</SubscribeCTA>
 						<Link
 							href="/dashboard"
 							className="inline-flex items-center gap-2 rounded-lg bg-foreground px-3.5 py-2 text-sm font-semibold text-background transition-opacity hover:opacity-90 sm:px-4"
@@ -51,8 +55,8 @@ export default function LandingPage() {
 			<section className="relative flex min-h-dvh items-center justify-center overflow-hidden pt-16">
 				{/* Gradient orbs */}
 				<div className="pointer-events-none absolute inset-0 overflow-hidden">
-					<div className="absolute -top-1/4 left-1/4 h-[600px] w-[600px] rounded-full bg-[#10a37f]/10 blur-[120px] dark:bg-[#10a37f]/5" />
-					<div className="absolute -bottom-1/4 right-1/4 h-[600px] w-[600px] rounded-full bg-[#D97757]/10 blur-[120px] dark:bg-[#D97757]/5" />
+					<div className="absolute -top-1/4 left-1/4 h-[600px] w-[600px] rounded-full bg-gpt/10 blur-[120px]" />
+					<div className="absolute -bottom-1/4 right-1/4 h-[600px] w-[600px] rounded-full bg-claude/10 blur-[120px]" />
 					<div className="absolute top-1/2 left-1/2 h-[400px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/5 blur-[100px]" />
 				</div>
 
@@ -66,7 +70,7 @@ export default function LandingPage() {
 					}}
 				/>
 
-				<div className="relative z-10 mx-auto max-w-4xl px-6 text-center">
+				<div className="relative z-10 mx-auto max-w-4xl px-5 text-center sm:px-6">
 					{/* Badge */}
 					<div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur-sm sm:mb-8 sm:px-4 sm:py-2 sm:text-sm">
 						<span className="relative flex h-2 w-2">
@@ -80,7 +84,7 @@ export default function LandingPage() {
 					<h1 className="mb-5 text-4xl font-extrabold leading-[1.1] tracking-tight sm:mb-6 sm:text-6xl lg:text-7xl">
 						Two AIs.
 						<br />
-						<span className="bg-gradient-to-r from-[#10a37f] to-[#D97757] bg-clip-text text-transparent">
+						<span className="text-gradient-brand">
 							One Trade List.
 						</span>
 					</h1>
@@ -93,7 +97,7 @@ export default function LandingPage() {
 					</p>
 
 					{/* CTAs */}
-					<div className="flex w-full flex-col gap-3 px-4 sm:w-auto sm:flex-row sm:justify-center sm:gap-4 sm:px-0">
+					<div className="flex w-full flex-col gap-3 px-2 sm:w-auto sm:flex-row sm:justify-center sm:gap-4 sm:px-0">
 						<Link
 							href="/dashboard"
 							className="inline-flex items-center justify-center gap-2 rounded-xl bg-foreground px-8 py-3.5 text-base font-semibold text-background shadow-lg transition-all hover:opacity-90 hover:shadow-xl"
@@ -101,12 +105,10 @@ export default function LandingPage() {
 							View Live Dashboard
 							<ArrowRight className="h-4 w-4" />
 						</Link>
-						<a
-							href="#how-it-works"
-							className="inline-flex items-center justify-center gap-2 rounded-xl border border-border px-8 py-3.5 text-base font-semibold text-foreground transition-colors hover:bg-muted"
-						>
-							See How It Works
-						</a>
+						<SubscribeCTA className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand px-8 py-3.5 text-base font-semibold text-white shadow-lg transition-all hover:opacity-90 hover:shadow-xl">
+							<Mail className="h-4 w-4" />
+							Subscribe Free
+						</SubscribeCTA>
 					</div>
 
 					{/* Model badges */}
@@ -129,7 +131,7 @@ export default function LandingPage() {
 				<div className="mx-auto max-w-6xl px-5 sm:px-6">
 					<div className="mb-10 text-center sm:mb-16">
 						<h2 className="mb-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
-							Built Different
+							Built <span className="text-gradient-brand">Different</span>
 						</h2>
 						<p className="mx-auto max-w-2xl text-muted-foreground">
 							Not another signal bot. Two frontier AI models run the
@@ -142,7 +144,10 @@ export default function LandingPage() {
 						{features.map((f) => (
 							<div
 								key={f.title}
-								className="group rounded-2xl border border-border bg-background p-5 transition-all hover:border-primary/30 hover:shadow-md sm:p-6"
+								className="group rounded-2xl border border-border bg-background p-5 transition-all hover:shadow-md sm:p-6"
+								style={{
+									["--hover-border" as string]: "transparent",
+								}}
 							>
 								<div className="mb-4 inline-flex rounded-xl bg-muted p-3">
 									{f.icon}
@@ -173,8 +178,13 @@ export default function LandingPage() {
 					</div>
 
 					<div className="relative">
-						{/* Vertical line */}
-						<div className="absolute left-6 top-0 bottom-0 hidden w-px bg-border sm:block" />
+						{/* Vertical gradient line */}
+						<div
+							className="absolute left-6 top-0 bottom-0 hidden w-px sm:block"
+							style={{
+								background: "linear-gradient(180deg, var(--gpt), var(--claude))",
+							}}
+						/>
 
 						<div className="space-y-8 sm:space-y-12">
 							{steps.map((step, i) => (
@@ -183,13 +193,13 @@ export default function LandingPage() {
 									className="relative flex gap-6"
 								>
 									<div className="relative z-10 hidden flex-shrink-0 sm:block">
-										<div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-border bg-card text-sm font-bold text-primary">
+										<div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-border bg-card text-sm font-bold text-foreground">
 											{i + 1}
 										</div>
 									</div>
-									<div className="flex-1 rounded-2xl border border-border bg-card p-6">
+									<div className="flex-1 rounded-2xl border border-border bg-card p-5 sm:p-6">
 										<div className="mb-1 flex items-center gap-3">
-											<span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-bold text-primary sm:hidden">
+											<span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-bold text-foreground sm:hidden">
 												{i + 1}
 											</span>
 											<span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -215,7 +225,7 @@ export default function LandingPage() {
 				<div className="mx-auto max-w-5xl px-5 sm:px-6">
 					<div className="mb-10 text-center sm:mb-16">
 						<h2 className="mb-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
-							Dual-Model Conviction
+							Dual-Model <span className="text-gradient-brand">Conviction</span>
 						</h2>
 						<p className="mx-auto max-w-2xl text-muted-foreground">
 							Each model scores every trade 1&ndash;10 with a written
@@ -225,7 +235,7 @@ export default function LandingPage() {
 
 					<div className="grid gap-4 sm:gap-6 md:grid-cols-2">
 						{/* OpenAI card */}
-						<div className="rounded-2xl border border-[#10a37f]/20 bg-background p-6 sm:p-8">
+						<div className="rounded-2xl border border-gpt-border bg-background p-6 sm:p-8">
 							<div className="mb-6 flex items-center gap-3">
 								<OpenAILogo className="h-8 w-8" />
 								<div>
@@ -239,22 +249,22 @@ export default function LandingPage() {
 							</div>
 							<ul className="space-y-3 text-sm text-muted-foreground">
 								<li className="flex items-start gap-2">
-									<Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#10a37f]" />
+									<Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-gpt" />
 									Generates 10 ranked trade ideas from sentiment + live market data
 								</li>
 								<li className="flex items-start gap-2">
-									<Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#10a37f]" />
+									<Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-gpt" />
 									Multi-turn tool use with Schwab quotes and option chains
 								</li>
 								<li className="flex items-start gap-2">
-									<Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#10a37f]" />
+									<Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-gpt" />
 									Web search for real-time catalysts and news
 								</li>
 							</ul>
 						</div>
 
 						{/* Claude card */}
-						<div className="rounded-2xl border border-[#D97757]/20 bg-background p-6 sm:p-8">
+						<div className="rounded-2xl border border-claude-border bg-background p-6 sm:p-8">
 							<div className="mb-6 flex items-center gap-3">
 								<ClaudeLogo className="h-8 w-8" />
 								<div>
@@ -268,22 +278,22 @@ export default function LandingPage() {
 							</div>
 							<ul className="space-y-3 text-sm text-muted-foreground">
 								<li className="flex items-start gap-2">
-									<Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#D97757]" />
+									<Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-claude" />
 									Independently picks its own top 10 from the same raw data
 								</li>
 								<li className="flex items-start gap-2">
-									<Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#D97757]" />
+									<Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-claude" />
 									Same Schwab + web search tool access as GPT
 								</li>
 								<li className="flex items-start gap-2">
-									<Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#D97757]" />
+									<Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-claude" />
 									Flags concerns and red flags GPT may have missed
 								</li>
 							</ul>
 						</div>
 					</div>
 
-					<div className="mt-8 rounded-2xl border border-border bg-background p-6 text-center">
+					<div className="mt-6 rounded-2xl border border-border bg-background p-5 text-center sm:mt-8 sm:p-6">
 						<p className="text-sm font-semibold text-foreground">
 							Combined Score = (GPT Score + Claude Score) / 2
 						</p>
@@ -296,30 +306,28 @@ export default function LandingPage() {
 				</div>
 			</section>
 
-			{/* ── CTA ── */}
+			{/* ── Subscribe CTA ── */}
 			<section className="border-t py-16 sm:py-24">
 				<div className="mx-auto max-w-3xl px-5 text-center sm:px-6">
 					<h2 className="mb-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
-						Start Getting Picks
+						Start Getting <span className="text-gradient-brand">Picks</span>
 					</h2>
-					<p className="mb-8 text-muted-foreground">
+					<p className="mx-auto mb-8 max-w-xl text-muted-foreground">
 						Completely free. No credit card. Unsubscribe any time.
 						Picks arrive before every market open with end-of-day
 						results tracked automatically.
 					</p>
-					<div className="flex w-full flex-col gap-3 px-4 sm:w-auto sm:flex-row sm:justify-center sm:gap-4 sm:px-0">
+					<div className="flex w-full flex-col gap-3 px-2 sm:w-auto sm:flex-row sm:justify-center sm:gap-4 sm:px-0">
+						<SubscribeCTA className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand px-8 py-3.5 text-base font-semibold text-white shadow-lg transition-all hover:opacity-90 hover:shadow-xl">
+							<Mail className="h-4 w-4" />
+							Subscribe Free
+						</SubscribeCTA>
 						<Link
 							href="/dashboard"
-							className="inline-flex items-center justify-center gap-2 rounded-xl bg-foreground px-8 py-3.5 text-base font-semibold text-background shadow-lg transition-all hover:opacity-90"
+							className="inline-flex items-center justify-center gap-2 rounded-xl border border-border px-8 py-3.5 text-base font-semibold text-foreground transition-colors hover:bg-muted"
 						>
 							Open Dashboard
 							<ArrowRight className="h-4 w-4" />
-						</Link>
-						<Link
-							href="/faq"
-							className="inline-flex items-center justify-center gap-2 rounded-xl border border-border px-8 py-3.5 text-base font-semibold text-foreground transition-colors hover:bg-muted"
-						>
-							Read the FAQ
 						</Link>
 					</div>
 				</div>
@@ -327,10 +335,10 @@ export default function LandingPage() {
 
 			{/* ── Footer ── */}
 			<footer className="border-t bg-card">
-				<div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-8 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+				<div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-8 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
 					<div className="flex items-center gap-2">
 						<span className="font-extrabold text-foreground">
-							Vibe<span className="text-primary">Tradez</span>
+							Vibe<span className="text-gradient-brand">Tradez</span>
 						</span>
 						<span>&copy; {new Date().getFullYear()}</span>
 					</div>
@@ -369,37 +377,37 @@ export default function LandingPage() {
 
 const features = [
 	{
-		icon: <Brain className="h-6 w-6 text-primary" />,
+		icon: <Brain className="h-6 w-6 text-gpt" />,
 		title: "Dual-Model Analysis",
 		description:
 			"Two frontier AI models analyze independently. No groupthink. GPT-5.4 picks, Claude Opus 4.6 picks, and you get the combined ranking.",
 	},
 	{
-		icon: <TrendingUp className="h-6 w-6 text-primary" />,
+		icon: <TrendingUp className="h-6 w-6 text-claude" />,
 		title: "Live Market Data",
 		description:
 			"Real-time quotes and full option chains from Schwab's API. Both models use multi-turn tool calling to research before they pick.",
 	},
 	{
-		icon: <BarChart3 className="h-6 w-6 text-primary" />,
+		icon: <BarChart3 className="h-6 w-6 text-gpt" />,
 		title: "Full Transparency",
 		description:
 			"Every trade shows both models' scores, rationales, and any red flags. Historical performance, equity curves, and model comparison all tracked.",
 	},
 	{
-		icon: <Mail className="h-6 w-6 text-primary" />,
+		icon: <Mail className="h-6 w-6 text-claude" />,
 		title: "Pre-Market Email",
 		description:
 			"Ranked picks in your inbox before 9:30 AM ET every trading day. End-of-day results follow at market close. Weekly digest on Fridays.",
 	},
 	{
-		icon: <Shield className="h-6 w-6 text-primary" />,
+		icon: <Shield className="h-6 w-6 text-gpt" />,
 		title: "Completely Free",
 		description:
 			"No paywalls, no premium tiers, no credit card. This is a live experiment in dual-model trading, open for anyone to follow along.",
 	},
 	{
-		icon: <Clock className="h-6 w-6 text-primary" />,
+		icon: <Clock className="h-6 w-6 text-claude" />,
 		title: "End-of-Day Tracking",
 		description:
 			"Every pick is tracked to close. Win rates, P&L, Sharpe ratio, max drawdown, and profit factor are computed automatically. No cherry-picking.",

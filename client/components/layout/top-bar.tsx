@@ -14,7 +14,7 @@ export function TopBar({ onSubscribe }: TopBarProps) {
 				className="text-[22px] font-extrabold tracking-tight"
 			>
 				<span className="text-foreground">Vibe</span>
-				<span className="text-primary">Tradez</span>
+				<span className="text-gradient-brand">Tradez</span>
 			</Link>
 			{onSubscribe && (
 				<Button variant="outline" size="sm" onClick={onSubscribe}>
