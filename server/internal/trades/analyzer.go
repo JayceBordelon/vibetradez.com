@@ -196,7 +196,9 @@ func (a *Analyzer) GetEndOfDayAnalysis(ctx context.Context, morningTrades []Trad
 
 func (a *Analyzer) buildTools() []responses.ToolUnionParam {
 	tools := []responses.ToolUnionParam{
-		{OfWebSearchPreview: &responses.WebSearchPreviewToolParam{}},
+		{OfWebSearchPreview: &responses.WebSearchPreviewToolParam{
+			Type: responses.WebSearchPreviewToolTypeWebSearchPreview,
+		}},
 	}
 
 	if a.schwab != nil && a.schwab.IsConnected() {
