@@ -1,0 +1,262 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #fafafa;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #475569;
+  --primary-foreground: #ffffff;
+  --secondary: #4b5563;
+  --secondary-foreground: #ffffff;
+  --muted: #f1f5f9;
+  --muted-foreground: #4b5563;
+  --accent: #94a3b8;
+  --accent-foreground: #0f172a;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #475569;
+  --chart-1: #475569;
+  --chart-2: #64748b;
+  --chart-3: #94a3b8;
+  --chart-4: #334155;
+  --chart-5: #1e293b;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #475569;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #94a3b8;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #475569;
+  --font-sans: Plus Jakarta Sans, sans-serif;
+  --font-mono: JetBrains Mono, monospace;
+  --radius: 0.5rem;
+  --shadow-2xs: 0 1px 2px 0 rgb(15 23 42 / 0.03);
+  --shadow-xs: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+  --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.04);
+  --shadow: 0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.04);
+  --shadow-md: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.04);
+  --shadow-lg: 0 12px 24px -6px rgb(15 23 42 / 0.10), 0 4px 8px -4px rgb(15 23 42 / 0.06);
+  --shadow-xl: 0 20px 40px -10px rgb(15 23 42 / 0.14), 0 8px 16px -8px rgb(15 23 42 / 0.08);
+  --shadow-2xl: 0 32px 64px -16px rgb(15 23 42 / 0.22);
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
+
+  /* Trading-specific colors */
+  --green: #059669;
+  --green-bg: #ecfdf5;
+  --green-light: #f0fdf4;
+  --green-border: #6ee7b7;
+  --red: #dc2626;
+  --red-bg: #fef2f2;
+  --red-light: #fef2f2;
+  --red-border: #fca5a5;
+  --amber: #b45309;
+  --amber-bg: #fef3c7;
+  --card-elevated: #f8fafc;
+  --card-hover: #ffffff;
+  --accent-subtle: #f8fafc;
+  --ring-subtle: rgba(71, 85, 105, 0.12);
+  --surface: #f1f5f9;
+  --chart-grid: #e2e8f0;
+  --chart-text: #4b5563;
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --card: #1e293b;
+  --card-foreground: #f1f5f9;
+  --popover: #1e293b;
+  --popover-foreground: #f1f5f9;
+  --primary: #94a3b8;
+  --primary-foreground: #0f172a;
+  --secondary: #64748b;
+  --secondary-foreground: #f1f5f9;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #cbd5e1;
+  --accent-foreground: #0f172a;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #334155;
+  --input: #334155;
+  --ring: #94a3b8;
+  --chart-1: #94a3b8;
+  --chart-2: #64748b;
+  --chart-3: #cbd5e1;
+  --chart-4: #475569;
+  --chart-5: #334155;
+  --sidebar: #0f172a;
+  --sidebar-foreground: #f1f5f9;
+  --sidebar-primary: #94a3b8;
+  --sidebar-primary-foreground: #0f172a;
+  --sidebar-accent: #cbd5e1;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #334155;
+  --sidebar-ring: #94a3b8;
+  --font-sans: Plus Jakarta Sans, sans-serif;
+  --font-mono: JetBrains Mono, monospace;
+  --radius: 0.5rem;
+  --shadow-2xs: 0 1px 2px 0 rgb(0 0 0 / 0.20);
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.25);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.25), 0 1px 3px 0 rgb(0 0 0 / 0.20);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.30), 0 1px 2px -1px rgb(0 0 0 / 0.20);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.35), 0 2px 4px -2px rgb(0 0 0 / 0.20);
+  --shadow-lg: 0 12px 24px -6px rgb(0 0 0 / 0.40), 0 4px 8px -4px rgb(0 0 0 / 0.25);
+  --shadow-xl: 0 20px 40px -10px rgb(0 0 0 / 0.50), 0 8px 16px -8px rgb(0 0 0 / 0.30);
+  --shadow-2xl: 0 32px 64px -16px rgb(0 0 0 / 0.60);
+
+  /* Trading-specific dark mode */
+  --green: #34d399;
+  --green-bg: rgba(52, 211, 153, 0.15);
+  --green-light: rgba(52, 211, 153, 0.08);
+  --green-border: rgba(52, 211, 153, 0.3);
+  --red: #f87171;
+  --red-bg: rgba(248, 113, 113, 0.15);
+  --red-light: rgba(248, 113, 113, 0.08);
+  --red-border: rgba(248, 113, 113, 0.3);
+  --amber: #fbbf24;
+  --amber-bg: rgba(251, 191, 36, 0.15);
+  --card-elevated: #283548;
+  --card-hover: #223049;
+  --accent-subtle: #1a2438;
+  --ring-subtle: rgba(148, 163, 184, 0.18);
+  --surface: #1e293b;
+  --chart-grid: #334155;
+  --chart-text: #94a3b8;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Trading colors */
+  --color-green: var(--green);
+  --color-green-bg: var(--green-bg);
+  --color-green-light: var(--green-light);
+  --color-green-border: var(--green-border);
+  --color-red: var(--red);
+  --color-red-bg: var(--red-bg);
+  --color-red-light: var(--red-light);
+  --color-red-border: var(--red-border);
+  --color-amber: var(--amber);
+  --color-amber-bg: var(--amber-bg);
+  --color-card-elevated: var(--card-elevated);
+  --color-surface: var(--surface);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-text: var(--chart-text);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --shadow-2xs: var(--shadow-2xs);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow: var(--shadow);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-2xl: var(--shadow-2xl);
+}
+
+body {
+  letter-spacing: var(--tracking-normal);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html,
+  body {
+    overscroll-behavior: none;
+  }
+
+  /* Selection */
+  ::selection {
+    background-color: color-mix(in srgb, var(--primary) 20%, transparent);
+  }
+
+  /* Focus visible */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+}
+
+@layer utilities {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Prose styling for Terms / long-form text */
+  .prose-terms p {
+    margin-bottom: 1rem;
+    line-height: 1.7;
+    color: var(--muted-foreground);
+    font-size: 15px;
+  }
+  .prose-terms p:last-child {
+    margin-bottom: 0;
+  }
+  .prose-terms strong {
+    color: var(--foreground);
+    font-weight: 600;
+  }
+  .prose-terms a {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .prose-terms a:hover {
+    color: var(--foreground);
+  }
+}

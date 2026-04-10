@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>{{.Subject}}</title>
+  <style>
+    :root { color-scheme: light dark; }
+    @media (prefers-color-scheme: dark) {
+      .body-bg { background-color: #0f172a !important; }
+      .header-bg { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important; }
+      .content-bg { background-color: #1e293b !important; }
+      .footer-bg { background-color: #1e293b !important; border-color: #334155 !important; }
+      .text-primary { color: #f1f5f9 !important; }
+      .text-secondary { color: #cbd5e1 !important; }
+      .error-bg { background-color: #3b1c1c !important; border-color: #7f1d1d !important; }
+      .error-label { color: #fca5a5 !important; }
+      .error-text { color: #fecaca !important; }
+    }
+  </style>
+</head>
+<body class="body-bg" style="margin: 0; padding: 0; background-color: #fafafa; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="body-bg" style="background-color: #fafafa;">
+    <tr>
+      <td align="center" style="padding: 32px 16px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" style="width: 100%; max-width: 580px;">
+
+          <!-- Header -->
+          <tr>
+            <td class="header-bg" style="padding: 24px 28px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 12px 12px 0 0;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td>
+                    <span style="font-size: 24px; font-weight: 800; color: #f1f5f9; letter-spacing: -0.5px;">Vibe</span><span style="font-size: 24px; font-weight: 800; color: #a78bfa; letter-spacing: -0.5px;">Tradez</span>
+                  </td>
+                  <td align="right">
+                    <span style="color: #94a3b8; font-size: 13px; font-weight: 500; background: rgba(255,255,255,0.08); padding: 5px 11px; border-radius: 6px;">{{.Date}}</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Content -->
+          <tr>
+            <td class="content-bg" style="background-color: #ffffff; padding: 32px 28px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td align="center" style="padding: 12px 0 20px 0;">
+                    <table role="presentation" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td style="width: 56px; height: 56px; border-radius: 50%; background: #fee2e2; text-align: center; vertical-align: middle; font-size: 24px; color: #dc2626;">!</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center">
+                    <h1 class="text-primary" style="margin: 0 0 8px 0; font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;">System Alert</h1>
+                    <p class="text-secondary" style="margin: 0 0 24px 0; font-size: 14px; color: #64748b; line-height: 1.6;">
+                      An error occurred while preparing today's trade recommendations. The scheduled email could not be delivered.
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="error-bg" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;">
+                      <tr>
+                        <td style="padding: 16px 20px;">
+                          <p class="error-label" style="margin: 0 0 6px 0; font-size: 11px; font-weight: 700; color: #dc2626; text-transform: uppercase; letter-spacing: 0.5px;">Root Cause</p>
+                          <p class="error-text" style="margin: 0; font-size: 13px; color: #1e293b; line-height: 1.6; font-family: 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace; word-break: break-word;">{{.Error}}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding-top: 20px;" align="center">
+                    <p class="text-secondary" style="margin: 0; font-size: 12px; color: #94a3b8;">
+                      This issue has been logged. Normal delivery will resume once the error is resolved.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="footer-bg" style="padding: 20px 28px; background-color: #f1f5f9; border-radius: 0 0 12px 12px; border-top: 1px solid #e2e8f0;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td align="center">
+                    <p style="margin: 0;">
+                      <span class="text-primary" style="font-size: 14px; font-weight: 700; color: #0f172a;">Vibe</span><span style="font-size: 14px; font-weight: 700; color: #a78bfa;">Tradez</span>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

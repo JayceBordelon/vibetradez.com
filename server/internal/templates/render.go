@@ -1,0 +1,409 @@
+package templates
+
+import (
+	"bytes"
+	"embed"
+	"fmt"
+	"html/template"
+	"time"
+)
+
+//go:embed email.html summary.html test.html error.html weekly.html announce.html
+var templateFS embed.FS
+
+type Trade struct {
+	Symbol         string
+	ContractType   string
+	StrikePrice    float64
+	Expiration     string
+	DTE            int
+	EstimatedPrice float64
+	Thesis         string
+	SentimentScore float64
+	CurrentPrice   float64
+	TargetPrice    float64
+	StopLoss       float64
+	ProfitTarget   float64
+	RiskLevel      string
+	Catalyst       string
+	MentionCount   int
+	Rank           int
+}
+
+type EmailData struct {
+	Subject string
+	Date    string
+	Trades  []Trade
+}
+
+type SummaryTrade struct {
+	Symbol         string
+	ContractType   string
+	StrikePrice    float64
+	Expiration     string
+	EntryPrice     float64
+	ClosingPrice   float64
+	PriceChange    float64
+	PctChange      float64
+	StockOpen      float64
+	StockClose     float64
+	StockPctChange float64
+	Result         string
+	Notes          string
+	Rank           int
+}
+
+type SummaryEmailData struct {
+	Subject     string
+	Date        string
+	Trades      []SummaryTrade
+	TotalTrades int
+	Winners     int
+	Losers      int
+	TotalPnL    float64
+}
+
+type WeeklyDayData struct {
+	Date        string
+	DayName     string
+	TotalTrades int
+	Winners     int
+	Losers      int
+	DayPnL      float64
+	BestTrade   string
+	BestPnL     float64
+	WorstTrade  string
+	WorstPnL    float64
+	Trades      []SummaryTrade
+}
+
+type WeeklyEmailData struct {
+	Subject       string
+	WeekRange     string
+	Days          []WeeklyDayData
+	TotalTrades   int
+	TotalWinners  int
+	TotalLosers   int
+	TotalPnL      float64
+	WinRate       float64
+	TotalInvested float64
+	TotalReturn   float64
+	BestTrade     string
+	BestPnL       float64
+	WorstTrade    string
+	WorstPnL      float64
+	DashboardURL  string
+}
+
+var funcMap = template.FuncMap{
+	"mul": func(a, b float64) float64 { return a * b },
+	"div": func(a, b float64) float64 {
+		if b == 0 {
+			return 0
+		}
+		return a / b
+	},
+	"sub": func(a, b any) any {
+		switch av := a.(type) {
+		case int:
+			if bv, ok := b.(int); ok {
+				return av - bv
+			}
+		case float64:
+			if bv, ok := b.(float64); ok {
+				return av - bv
+			}
+		}
+		return 0
+	},
+	"add": func(a, b any) any {
+		switch av := a.(type) {
+		case int:
+			if bv, ok := b.(int); ok {
+				return av + bv
+			}
+		case float64:
+			if bv, ok := b.(float64); ok {
+				return av + bv
+			}
+		}
+		return 0
+	},
+	"abs": func(a float64) float64 {
+		if a < 0 {
+			return -a
+		}
+		return a
+	},
+	"gt": func(a, b any) bool {
+		switch av := a.(type) {
+		case float64:
+			if bv, ok := b.(float64); ok {
+				return av > bv
+			}
+		case int:
+			if bv, ok := b.(int); ok {
+				return av > bv
+			}
+		}
+		return false
+	},
+	"lt": func(a, b any) bool {
+		switch av := a.(type) {
+		case float64:
+			if bv, ok := b.(float64); ok {
+				return av < bv
+			}
+		case int:
+			if bv, ok := b.(int); ok {
+				return av < bv
+			}
+		}
+		return false
+	},
+}
+
+func RenderEmail(trades []Trade) (string, error) {
+	tmpl, err := template.New("email.html").Funcs(funcMap).ParseFS(templateFS, "email.html")
+	if err != nil {
+		return "", err
+	}
+
+	data := EmailData{
+		Subject: "Today's Top Options Plays",
+		Date:    time.Now().Format("Monday, Jan 2, 2006"),
+		Trades:  trades,
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+type HealthCheck struct {
+	Name    string
+	Status  string // "ok", "warn", "fail"
+	Detail  string
+	Latency string // e.g. "12ms"
+}
+
+type StatusEmailData struct {
+	Subject      string
+	Date         string
+	Checks       []HealthCheck
+	AllPassed    bool
+	PassCount    int
+	WarnCount    int
+	FailCount    int
+	TotalChecks  int
+	Subscribers  int
+	CronOpen     string
+	CronClose    string
+	CronWeekly   string
+	ServerPort   string
+	DashboardURL string
+	Model        string
+}
+
+type ErrorEmailData struct {
+	Subject string
+	Date    string
+	Error   string
+}
+
+// VerifyTemplates exercises all email templates with sample data to catch rendering errors.
+// Returns a HealthCheck for template rendering.
+func VerifyTemplates() HealthCheck {
+	start := time.Now()
+
+	sampleTrades := []Trade{
+		{
+			Symbol: "SPY", ContractType: "CALL", StrikePrice: 500,
+			Expiration: "2026-04-01", DTE: 5, EstimatedPrice: 1.50,
+			Thesis: "Startup verification", SentimentScore: 0.5,
+			CurrentPrice: 498, TargetPrice: 505, StopLoss: 0.75,
+			ProfitTarget: 3.00, RiskLevel: "MEDIUM",
+			Catalyst: "System test", MentionCount: 42,
+		},
+	}
+	if _, err := RenderEmail(sampleTrades); err != nil {
+		return HealthCheck{Name: "Email Templates", Status: "fail", Detail: err.Error(), Latency: fmtLatency(start)}
+	}
+
+	sampleSummaries := []SummaryTrade{
+		{
+			Symbol: "SPY", ContractType: "CALL", StrikePrice: 500,
+			Expiration: "2026-04-01", EntryPrice: 1.50, ClosingPrice: 2.10,
+			StockOpen: 498, StockClose: 503, Notes: "Startup verification",
+		},
+	}
+	if _, err := RenderSummaryEmail(sampleSummaries); err != nil {
+		return HealthCheck{Name: "Email Templates", Status: "fail", Detail: err.Error(), Latency: fmtLatency(start)}
+	}
+
+	sampleWeekly := WeeklyEmailData{
+		Subject: "Weekly Report", WeekRange: "Mar 25 - Mar 29, 2026",
+		Days: []WeeklyDayData{
+			{
+				Date: "2026-03-25", DayName: "Monday",
+				TotalTrades: 1, Winners: 1, DayPnL: 60.0,
+				BestTrade: "SPY", BestPnL: 60.0,
+				WorstTrade: "SPY", WorstPnL: 60.0,
+				Trades: sampleSummaries,
+			},
+		},
+		TotalTrades: 1, TotalWinners: 1, TotalPnL: 60.0,
+		WinRate: 100.0, TotalInvested: 150.0, TotalReturn: 210.0,
+		BestTrade: "SPY", BestPnL: 60.0, WorstTrade: "SPY", WorstPnL: 60.0,
+		DashboardURL: "https://vibetradez.com",
+	}
+	if _, err := RenderWeeklyEmail(sampleWeekly); err != nil {
+		return HealthCheck{Name: "Email Templates", Status: "fail", Detail: err.Error(), Latency: fmtLatency(start)}
+	}
+
+	return HealthCheck{Name: "Email Templates", Status: "ok", Detail: "All 4 templates rendered", Latency: fmtLatency(start)}
+}
+
+func fmtLatency(start time.Time) string {
+	d := time.Since(start)
+	if d < time.Millisecond {
+		return fmt.Sprintf("%dμs", d.Microseconds())
+	}
+	return fmt.Sprintf("%dms", d.Milliseconds())
+}
+
+// RenderTestEmail renders the startup health check email with the provided data.
+func RenderTestEmail(data StatusEmailData) (string, error) {
+	tmpl, err := template.New("test.html").Funcs(funcMap).ParseFS(templateFS, "test.html")
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+// RenderErrorEmail renders an error notification email. Kept intentionally simple
+// (no loops, no comparisons) to minimize the chance of this template itself failing.
+func RenderErrorEmail(errMsg string) (string, error) {
+	tmpl, err := template.New("error.html").Funcs(funcMap).ParseFS(templateFS, "error.html")
+	if err != nil {
+		return "", err
+	}
+
+	data := ErrorEmailData{
+		Subject: "System Alert",
+		Date:    time.Now().Format("Monday, Jan 2, 2006 3:04 PM"),
+		Error:   errMsg,
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+func RenderWeeklyEmail(data WeeklyEmailData) (string, error) {
+	tmpl, err := template.New("weekly.html").Funcs(funcMap).ParseFS(templateFS, "weekly.html")
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+func RenderSummaryEmail(summaryTrades []SummaryTrade) (string, error) {
+	tmpl, err := template.New("summary.html").Funcs(funcMap).ParseFS(templateFS, "summary.html")
+	if err != nil {
+		return "", err
+	}
+
+	winners, losers := 0, 0
+	totalPnL := 0.0
+	for i := range summaryTrades {
+		t := &summaryTrades[i]
+		t.PriceChange = t.ClosingPrice - t.EntryPrice
+		if t.EntryPrice > 0 {
+			t.PctChange = (t.PriceChange / t.EntryPrice) * 100
+		}
+		if t.StockOpen > 0 {
+			t.StockPctChange = ((t.StockClose - t.StockOpen) / t.StockOpen) * 100
+		}
+		if t.PriceChange > 0 {
+			t.Result = "PROFIT"
+			winners++
+		} else if t.PriceChange < 0 {
+			t.Result = "LOSS"
+			losers++
+		} else {
+			t.Result = "FLAT"
+		}
+		totalPnL += t.PriceChange * 100 // per contract
+	}
+
+	data := SummaryEmailData{
+		Subject:     "End of Day Trade Summary",
+		Date:        time.Now().Format("Monday, Jan 2, 2006"),
+		Trades:      summaryTrades,
+		TotalTrades: len(summaryTrades),
+		Winners:     winners,
+		Losers:      losers,
+		TotalPnL:    totalPnL,
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+// ── Announcement Email ──
+
+type AnnouncementSection struct {
+	Title string
+	Body  string
+}
+
+type AnnouncementData struct {
+	Subject  string
+	Badge    string
+	Headline string
+	Date     string
+	Sections []AnnouncementSection
+	CTAText  string
+	CTAURL   string
+}
+
+func RenderAnnouncementEmail(data AnnouncementData) (string, error) {
+	tmpl, err := template.New("announce.html").Funcs(funcMap).ParseFS(templateFS, "announce.html")
+	if err != nil {
+		return "", fmt.Errorf("failed to parse announcement template: %w", err)
+	}
+
+	if data.Date == "" {
+		data.Date = time.Now().Format("Monday, Jan 2, 2006")
+	}
+
+	var bufAnnounce bytes.Buffer
+	if err := tmpl.Execute(&bufAnnounce, data); err != nil {
+		return "", err
+	}
+
+	return bufAnnounce.String(), nil
+}

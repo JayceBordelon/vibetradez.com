@@ -1,0 +1,85 @@
+"use client";
+
+import { useState } from "react";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from "@/components/ui/dialog";
+import { SubscribeForm, UnsubscribeForm } from "./subscribe-form";
+
+export function SubscribeModal({
+	children,
+	open,
+	onOpenChange,
+}: {
+	children?: React.ReactNode;
+	open?: boolean;
+	onOpenChange?: (open: boolean) => void;
+}) {
+	const [showUnsub, setShowUnsub] = useState(false);
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			{children && <DialogTrigger asChild>{children}</DialogTrigger>}
+			<DialogContent className="max-w-md">
+				<DialogHeader>
+					<DialogTitle className="text-lg font-extrabold">
+						Get free daily trade picks
+					</DialogTitle>
+					<DialogDescription>
+						AI-powered options picks delivered to your inbox every
+						morning before market open.
+					</DialogDescription>
+				</DialogHeader>
+
+				<div className="flex gap-2">
+					<div className="flex-1 rounded-lg border bg-muted p-2.5 text-center">
+						<div className="font-mono text-lg font-extrabold text-primary">
+							10
+						</div>
+						<div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+							Ranked Picks
+						</div>
+					</div>
+					<div className="flex-1 rounded-lg border bg-muted p-2.5 text-center">
+						<div className="font-mono text-lg font-extrabold text-primary">
+							2x
+						</div>
+						<div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+							AM + EOD
+						</div>
+					</div>
+					<div className="flex-1 rounded-lg border bg-muted p-2.5 text-center">
+						<div className="font-mono text-lg font-extrabold text-primary">
+							$0
+						</div>
+						<div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+							Always Free
+						</div>
+					</div>
+				</div>
+
+				<SubscribeForm />
+
+				<div className="border-t pt-4 text-center">
+					<button
+						type="button"
+						onClick={() => setShowUnsub(!showUnsub)}
+						className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+					>
+						Need to unsubscribe?
+					</button>
+					{showUnsub && (
+						<div className="mt-3">
+							<UnsubscribeForm />
+						</div>
+					)}
+				</div>
+			</DialogContent>
+		</Dialog>
+	);
+}

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>{{.Subject}}</title>
+  <!--[if mso]>
+  <style type="text/css">
+    table { border-collapse: collapse; }
+    td { padding: 0; }
+  </style>
+  <![endif]-->
+  <style>
+    :root {
+      color-scheme: light dark;
+      supported-color-schemes: light dark;
+    }
+    @media (prefers-color-scheme: dark) {
+      .body-bg { background-color: #0f172a !important; }
+      .header-bg { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important; }
+      .content-bg { background-color: #1e293b !important; }
+      .card-bg { background-color: #334155 !important; border-color: #475569 !important; }
+      .card-header-bg { background-color: #1e293b !important; border-color: #334155 !important; }
+      .detail-row { background-color: #1e293b !important; border-color: #334155 !important; }
+      .summary-box { background-color: #334155 !important; border-color: #475569 !important; }
+      .footer-bg { background-color: #1e293b !important; border-color: #334155 !important; }
+      .day-header { background-color: #0f172a !important; border-color: #334155 !important; }
+      .hypo-bg { background-color: #334155 !important; border-color: #475569 !important; }
+      .text-primary { color: #f1f5f9 !important; }
+      .text-secondary { color: #cbd5e1 !important; }
+      .text-muted { color: #94a3b8 !important; }
+      .text-label { color: #cbd5e1 !important; }
+      .stat-border { border-color: #334155 !important; }
+      .profit-bg { background-color: #0a2e1a !important; border-color: #1a4a2e !important; }
+      .loss-bg { background-color: #2e0a0a !important; border-color: #4a1a1a !important; }
+    }
+  </style>
+</head>
+<body class="body-bg" style="margin: 0; padding: 0; background-color: #fafafa; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="body-bg" style="background-color: #fafafa;">
+    <tr>
+      <td align="center" style="padding: 32px 16px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" style="width: 100%; max-width: 580px;">
+
+          <!-- Header -->
+          <tr>
+            <td class="header-bg" style="padding: 24px 28px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 12px 12px 0 0;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td>
+                    <span style="font-size: 24px; font-weight: 800; color: #f1f5f9; letter-spacing: -0.5px;">Vibe</span><span style="font-size: 24px; font-weight: 800; color: #a78bfa; letter-spacing: -0.5px;">Tradez</span>
+                  </td>
+                  <td align="right">
+                    <span style="color: #94a3b8; font-size: 13px; font-weight: 500; background: rgba(255,255,255,0.08); padding: 5px 11px; border-radius: 6px;">{{.WeekRange}}</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Main Content -->
+          <tr>
+            <td class="content-bg" style="background-color: #ffffff; padding: 0;">
+
+              <!-- Title -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding: 24px 28px 0 28px;">
+                <tr>
+                  <td>
+                    <h1 class="text-primary" style="margin: 0 0 4px 0; font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;">
+                      Weekly Performance Report
+                    </h1>
+                    <p class="text-muted" style="margin: 0; font-size: 13px; color: #64748b;">
+                      {{.TotalTrades}} trades across {{len .Days}} trading days
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Week Stats -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding: 16px 28px 8px 28px;">
+                <tr>
+                  <td>
+                    <table role="presentation" class="summary-box" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9; border-radius: 8px; border: 1px solid #e2e8f0;">
+                      <tr>
+                        <td width="25%" align="center" style="padding: 14px 6px;">
+                          <div style="font-size: 24px; font-weight: 800; color: {{if gt .TotalPnL 0.0}}#16a34a{{else if lt .TotalPnL 0.0}}#dc2626{{else}}#64748b{{end}};">{{if gt .TotalPnL 0.0}}+{{end}}${{printf "%.0f" .TotalPnL}}</div>
+                          <div class="text-muted" style="font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Net P&amp;L</div>
+                        </td>
+                        <td width="25%" align="center" class="stat-border" style="padding: 14px 6px; border-left: 1px solid #e2e8f0;">
+                          <div class="text-primary" style="font-size: 24px; font-weight: 800; color: #0f172a;">{{printf "%.0f" .WinRate}}%</div>
+                          <div class="text-muted" style="font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Win Rate</div>
+                        </td>
+                        <td width="25%" align="center" class="stat-border" style="padding: 14px 6px; border-left: 1px solid #e2e8f0;">
+                          <div style="font-size: 24px; font-weight: 800; color: #16a34a;">{{.TotalWinners}}</div>
+                          <div class="text-muted" style="font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Winners</div>
+                        </td>
+                        <td width="25%" align="center" class="stat-border" style="padding: 14px 6px; border-left: 1px solid #e2e8f0;">
+                          <div style="font-size: 24px; font-weight: 800; color: #dc2626;">{{.TotalLosers}}</div>
+                          <div class="text-muted" style="font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Losers</div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Hypothetical Performance Box -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding: 8px 28px 20px 28px;">
+                <tr>
+                  <td>
+                    <table role="presentation" class="hypo-bg" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                      <tr>
+                        <td style="padding: 16px 20px;">
+                          <p class="text-primary" style="margin: 0 0 8px 0; font-size: 14px; font-weight: 700; color: #0f172a;">Hypothetical Buy-at-Open, Sell-at-Close</p>
+                          <p class="text-muted" style="margin: 0 0 12px 0; font-size: 12px; color: #64748b; line-height: 1.5;">If you bought every recommended contract at market open and sold right before close each day:</p>
+                          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                            <tr>
+                              <td width="33%">
+                                <div class="text-label" style="color: #94a3b8; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Invested</div>
+                                <div class="text-primary" style="color: #0f172a; font-size: 16px; font-weight: 800;">${{printf "%.0f" .TotalInvested}}</div>
+                              </td>
+                              <td width="34%">
+                                <div class="text-label" style="color: #94a3b8; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Returned</div>
+                                <div class="text-primary" style="color: #0f172a; font-size: 16px; font-weight: 800;">${{printf "%.0f" .TotalReturn}}</div>
+                              </td>
+                              <td width="33%">
+                                <div class="text-label" style="color: #94a3b8; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Net P&amp;L</div>
+                                <div style="font-size: 16px; font-weight: 800; color: {{if gt .TotalPnL 0.0}}#16a34a{{else if lt .TotalPnL 0.0}}#dc2626{{else}}#64748b{{end}};">{{if gt .TotalPnL 0.0}}+{{end}}${{printf "%.0f" .TotalPnL}}</div>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Daily Breakdown -->
+              {{range $dayIdx, $day := .Days}}
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding: 0 28px 16px 28px;">
+                <tr>
+                  <td>
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="card-bg" style="background-color: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; overflow: hidden;">
+
+                      <!-- Day Header -->
+                      <tr>
+                        <td class="day-header" style="padding: 14px 18px; background-color: #f1f5f9; border-bottom: 1px solid #e2e8f0;">
+                          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                            <tr>
+                              <td valign="middle">
+                                <span class="text-primary" style="font-size: 16px; font-weight: 800; color: #0f172a;">{{$day.DayName}}</span>
+                                <span class="text-muted" style="margin-left: 8px; color: #64748b; font-size: 12px;">{{$day.Date}}</span>
+                              </td>
+                              <td align="right" valign="middle">
+                                <span style="font-size: 18px; font-weight: 800; color: {{if gt $day.DayPnL 0.0}}#16a34a{{else if lt $day.DayPnL 0.0}}#dc2626{{else}}#64748b{{end}};">{{if gt $day.DayPnL 0.0}}+{{end}}${{printf "%.0f" $day.DayPnL}}</span>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+
+                      <!-- Day Summary -->
+                      <tr>
+                        <td style="padding: 12px 18px;">
+                          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                            <tr>
+                              <td>
+                                <span class="text-muted" style="color: #64748b; font-size: 12px;">{{$day.TotalTrades}} trades</span>
+                                <span class="text-muted" style="color: #94a3b8; padding: 0 6px;">&middot;</span>
+                                <span style="color: #16a34a; font-size: 12px; font-weight: 600;">{{$day.Winners}}W</span>
+                                <span class="text-muted" style="color: #94a3b8; padding: 0 2px;">/</span>
+                                <span style="color: #dc2626; font-size: 12px; font-weight: 600;">{{$day.Losers}}L</span>
+                                <span class="text-muted" style="color: #94a3b8; padding: 0 6px;">&middot;</span>
+                                <span class="text-muted" style="color: #64748b; font-size: 12px;">Best: <strong style="color: #16a34a;">${{$day.BestTrade}} +${{printf "%.0f" $day.BestPnL}}</strong></span>
+                                <span class="text-muted" style="color: #94a3b8; padding: 0 6px;">&middot;</span>
+                                <span class="text-muted" style="color: #64748b; font-size: 12px;">Worst: <strong style="color: #dc2626;">${{$day.WorstTrade}} ${{printf "%.0f" $day.WorstPnL}}</strong></span>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+
+                      <!-- Individual Trade Results -->
+                      {{range $i, $trade := $day.Trades}}
+                      <tr>
+                        <td style="padding: 0 18px {{if eq $i (sub (len $day.Trades) 1)}}14{{else}}0{{end}}px 18px;">
+                          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="detail-row {{if eq $trade.Result "PROFIT"}}profit-bg{{else if eq $trade.Result "LOSS"}}loss-bg{{end}}" style="background-color: {{if eq $trade.Result "PROFIT"}}#f0fdf4{{else if eq $trade.Result "LOSS"}}#fef2f2{{else}}#f1f5f9{{end}}; border-radius: 6px; border: 1px solid {{if eq $trade.Result "PROFIT"}}#bbf7d0{{else if eq $trade.Result "LOSS"}}#fecaca{{else}}#e2e8f0{{end}}; margin-bottom: 6px;">
+                            <tr>
+                              <td style="padding: 8px 12px;">
+                                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                  <tr>
+                                    <td valign="middle">
+                                      {{if gt $trade.Rank 0}}<span style="display: inline-block; vertical-align: middle; background: #475569; color: #ffffff; font-size: 9px; font-weight: 800; width: 18px; height: 18px; line-height: 18px; text-align: center; border-radius: 4px; margin-right: 3px;">#{{$trade.Rank}}</span>{{end}}
+                                      <span class="text-primary" style="font-size: 14px; font-weight: 700; color: #0f172a;">${{$trade.Symbol}}</span>
+                                      <span style="display: inline-block; margin-left: 4px; vertical-align: middle; background: {{if eq $trade.ContractType "CALL"}}#dcfce7{{else}}#fee2e2{{end}}; color: {{if eq $trade.ContractType "CALL"}}#16a34a{{else}}#dc2626{{end}}; font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 3px; text-transform: uppercase;">{{$trade.ContractType}}</span>
+                                      <span class="text-muted" style="margin-left: 4px; color: #64748b; font-size: 11px;">${{printf "%.0f" $trade.StrikePrice}}</span>
+                                    </td>
+                                    <td align="center" valign="middle">
+                                      <span class="text-muted" style="color: #64748b; font-size: 11px;">${{printf "%.2f" $trade.EntryPrice}}</span>
+                                      <span style="color: #94a3b8; padding: 0 2px; font-size: 10px;">&#8594;</span>
+                                      <span class="text-primary" style="color: #0f172a; font-size: 12px; font-weight: 600;">${{printf "%.2f" $trade.ClosingPrice}}</span>
+                                    </td>
+                                    <td align="right" valign="middle">
+                                      <span style="font-size: 14px; font-weight: 800; color: {{if eq $trade.Result "PROFIT"}}#16a34a{{else if eq $trade.Result "LOSS"}}#dc2626{{else}}#64748b{{end}};">
+                                        {{if gt .PriceChange 0.0}}+{{end}}${{printf "%.0f" (mul $trade.PriceChange 100)}}
+                                      </span>
+                                      <span style="margin-left: 2px; font-size: 10px; font-weight: 600; color: {{if gt $trade.PctChange 0.0}}#16a34a{{else if lt $trade.PctChange 0.0}}#dc2626{{else}}#64748b{{end}};">{{if gt $trade.PctChange 0.0}}+{{end}}{{printf "%.0f" $trade.PctChange}}%</span>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      {{end}}
+
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              {{end}}
+
+              <!-- Best/Worst of Week -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding: 0 28px 20px 28px;">
+                <tr>
+                  <td>
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td width="50%" style="padding-right: 6px;">
+                          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+                            <tr>
+                              <td style="padding: 12px 14px;">
+                                <div style="color: #16a34a; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">Best Trade</div>
+                                <div style="font-size: 16px; font-weight: 800; color: #0f172a; margin-top: 2px;">${{.BestTrade}}</div>
+                                <div style="font-size: 14px; font-weight: 700; color: #16a34a;">+${{printf "%.0f" .BestPnL}}</div>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                        <td width="50%" style="padding-left: 6px;">
+                          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;">
+                            <tr>
+                              <td style="padding: 12px 14px;">
+                                <div style="color: #dc2626; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">Worst Trade</div>
+                                <div style="font-size: 16px; font-weight: 800; color: #0f172a; margin-top: 2px;">${{.WorstTrade}}</div>
+                                <div style="font-size: 14px; font-weight: 700; color: #dc2626;">${{printf "%.0f" .WorstPnL}}</div>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="footer-bg" style="padding: 20px 28px; background-color: #f1f5f9; border-radius: 0 0 12px 12px; border-top: 1px solid #e2e8f0;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td align="center">
+                    <p style="margin: 0 0 12px 0;">
+                      <a href="{{.DashboardURL}}" style="display: inline-block; padding: 8px 20px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #f1f5f9; font-size: 13px; font-weight: 600; text-decoration: none; border-radius: 6px;">View Live Dashboard</a>
+                    </p>
+                    <p class="text-muted" style="margin: 0 0 8px 0; color: #64748b; font-size: 11px; line-height: 1.5;">
+                      <strong>Disclaimer:</strong> Not financial advice. P&amp;L figures are hypothetical estimates based on estimated contract prices at open and close.
+                    </p>
+                    <p style="margin: 0;">
+                      <span class="text-primary" style="font-size: 14px; font-weight: 700; color: #0f172a;">Vibe</span><span style="font-size: 14px; font-weight: 700; color: #a78bfa;">Tradez</span>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

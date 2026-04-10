@@ -1,0 +1,133 @@
+import { BookOpen } from "lucide-react";
+
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Card } from "@/components/ui/card";
+
+export function MethodologySection() {
+	return (
+		<Card className="p-6">
+			<div className="flex items-center gap-2">
+				<BookOpen className="h-5 w-5 text-muted-foreground" aria-hidden />
+				<h2 className="text-base font-semibold">
+					Methodology &amp; Disclaimers
+				</h2>
+			</div>
+
+			<Accordion type="single" collapsible className="mt-2 w-full">
+				<AccordionItem value="pipeline">
+					<AccordionTrigger className="text-base font-semibold text-left">
+						Trade Selection Pipeline
+					</AccordionTrigger>
+					<AccordionContent>
+						<p className="text-[15px] leading-relaxed text-muted-foreground">
+							Every trading day follows a fixed automated pipeline. At 9:25
+							AM ET, the system scrapes social-media sentiment from multiple
+							sources, identifies the most-discussed tickers, and feeds them
+							into a GPT-5.4 analysis layer. GPT-5.4 has proven to be
+							particularly effective at sentiment analysis and market context
+							synthesis. The model scores each ticker on sentiment strength,
+							catalyst quality, and risk profile, then selects the top-ranked
+							option contracts for the day. All positions are opened at the
+							market open and closed at 4:05 PM ET&mdash;no trades are held
+							overnight. A migration to Anthropic&apos;s Claude is planned
+							for the analysis layer to further improve reasoning and trade
+							selection quality.
+						</p>
+					</AccordionContent>
+				</AccordionItem>
+
+				<AccordionItem value="metrics">
+					<AccordionTrigger className="text-base font-semibold text-left">
+						Performance Metrics
+					</AccordionTrigger>
+					<AccordionContent>
+						<ul className="space-y-2 text-[15px] leading-relaxed text-muted-foreground">
+							<li>
+								<strong className="text-foreground">Profit Factor</strong>{" "}
+								&mdash; ratio of gross winning P&amp;L to gross losing
+								P&amp;L. A value above 1.0 means the system is net
+								profitable.
+							</li>
+							<li>
+								<strong className="text-foreground">Expectancy</strong>{" "}
+								&mdash; average dollar P&amp;L per trade, accounting for
+								both win rate and average win/loss size. Positive
+								expectancy implies long-run profitability.
+							</li>
+							<li>
+								<strong className="text-foreground">Sharpe Ratio</strong>{" "}
+								&mdash; risk-adjusted return calculated as the mean daily
+								P&amp;L divided by its standard deviation. Higher values
+								indicate more consistent returns.
+							</li>
+							<li>
+								<strong className="text-foreground">Max Drawdown</strong>{" "}
+								&mdash; largest peak-to-trough decline in cumulative
+								P&amp;L. Reflects the worst observed losing streak.
+							</li>
+							<li>
+								<strong className="text-foreground">
+									Return on Capital (ROC)
+								</strong>{" "}
+								&mdash; net P&amp;L divided by total capital deployed.
+								Measures how efficiently invested capital generates
+								returns.
+							</li>
+						</ul>
+					</AccordionContent>
+				</AccordionItem>
+
+				<AccordionItem value="pricing">
+					<AccordionTrigger className="text-base font-semibold text-left">
+						Options Pricing Context
+					</AccordionTrigger>
+					<AccordionContent>
+						<p className="text-[15px] leading-relaxed text-muted-foreground">
+							Entry prices are estimated at 9:30 AM using the
+							contract&rsquo;s mark price (midpoint of bid/ask). Closing
+							prices are recorded at 4:05 PM ET using the same mark-price
+							methodology. All P&amp;L figures assume single-contract
+							positions (100 shares notional) and do not include commissions
+							or slippage.
+						</p>
+					</AccordionContent>
+				</AccordionItem>
+
+				<AccordionItem value="sources">
+					<AccordionTrigger className="text-base font-semibold text-left">
+						Data Sources
+					</AccordionTrigger>
+					<AccordionContent>
+						<p className="text-[15px] leading-relaxed text-muted-foreground">
+							Stock and option prices are sourced from the Schwab Market
+							Data API. Sentiment data is aggregated from public social-media
+							posts, financial news feeds, and community forums. All data
+							is processed server-side and cached for historical lookup.
+						</p>
+					</AccordionContent>
+				</AccordionItem>
+
+				<AccordionItem value="disclaimers">
+					<AccordionTrigger className="text-base font-semibold text-left">
+						Disclaimers
+					</AccordionTrigger>
+					<AccordionContent>
+						<p className="text-[15px] leading-relaxed text-muted-foreground">
+							This dashboard is for informational and educational purposes
+							only. Past performance does not guarantee future results. The
+							trades shown are generated by an automated system and do not
+							constitute financial advice. Options trading involves
+							substantial risk and is not suitable for all investors. Always
+							do your own research before making investment decisions.
+						</p>
+					</AccordionContent>
+				</AccordionItem>
+			</Accordion>
+		</Card>
+	);
+}
