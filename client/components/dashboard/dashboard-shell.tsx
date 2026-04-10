@@ -127,24 +127,28 @@ export function DashboardShell() {
 		} catch {}
 	}, [topFilter, dayIndex, dates]);
 
-	// Load dates
+	// Load dates. If the API returns an empty list (fresh deploy with
+	// no historical trades yet), we still kick off loadDay() so the
+	// shell renders the EmptyState instead of an infinite skeleton.
+	const [datesFetched, setDatesFetched] = useState(false);
 	useEffect(() => {
-		api.getTradeDates().then((res) => {
-			if (res.dates?.length) {
-				setDates(res.dates);
-				// Restore saved date
-				try {
-					const raw = localStorage.getItem(STORAGE_KEY);
-					if (raw) {
-						const saved = JSON.parse(raw);
-						if (saved.date) {
-							const idx = res.dates.indexOf(saved.date);
-							if (idx >= 0) setDayIndex(idx);
+		api.getTradeDates()
+			.then((res) => {
+				if (res.dates?.length) {
+					setDates(res.dates);
+					try {
+						const raw = localStorage.getItem(STORAGE_KEY);
+						if (raw) {
+							const saved = JSON.parse(raw);
+							if (saved.date) {
+								const idx = res.dates.indexOf(saved.date);
+								if (idx >= 0) setDayIndex(idx);
+							}
 						}
-					}
-				} catch {}
-			}
-		});
+					} catch {}
+				}
+			})
+			.finally(() => setDatesFetched(true));
 	}, []);
 
 	// Load day data
@@ -154,8 +158,13 @@ export function DashboardShell() {
 	}, [dates, dayIndex, picker]);
 
 	useEffect(() => {
-		if (dates.length > 0) loadDay();
-	}, [loadDay, dates]);
+		// Fire loadDay on every dates change OR once dates have been
+		// fetched (even if the result was empty). The empty-dates branch
+		// still calls api.getTrades(undefined) which the server handles
+		// by returning an empty dashboardResponse{}, letting the shell
+		// render its EmptyState branch instead of the loading skeleton.
+		if (dates.length > 0 || datesFetched) loadDay();
+	}, [loadDay, dates, datesFetched]);
 
 	// Auto-refresh
 	useEffect(() => {
