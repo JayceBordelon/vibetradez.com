@@ -522,19 +522,21 @@ func unionPicks(openaiTrades, claudeTrades []trades.Trade) []trades.Trade {
 	}
 
 	sort.SliceStable(out, func(i, j int) bool {
-		// Primary: combined score desc.
-		if out[i].CombinedScore != out[j].CombinedScore {
-			return out[i].CombinedScore > out[j].CombinedScore
-		}
-		// Tiebreak 1: consensus picks (both models picked it) ahead of
-		// single-model picks at the same score, so the agreed-upon trades
-		// rank higher in the all-trades view.
+		// Primary: consensus picks (both models independently chose the
+		// same ticker) ALWAYS rank above single-model-only picks. If two
+		// models agree on a trade it carries more conviction than any
+		// single model acting alone.
 		ci := out[i].PickedByOpenAI && out[i].PickedByClaude
 		cj := out[j].PickedByOpenAI && out[j].PickedByClaude
 		if ci != cj {
 			return ci
 		}
-		// Tiebreak 2: stable order — symbol alphabetical.
+		// Secondary: within the same consensus tier, sort by combined
+		// score descending.
+		if out[i].CombinedScore != out[j].CombinedScore {
+			return out[i].CombinedScore > out[j].CombinedScore
+		}
+		// Tiebreak: stable order — symbol alphabetical.
 		return out[i].Symbol < out[j].Symbol
 	})
 
