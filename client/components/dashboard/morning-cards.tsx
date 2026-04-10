@@ -119,10 +119,10 @@ function MorningCard({ dt, liveQuotes }: MorningCardProps) {
 					<Badge variant={riskBadgeVariant}>{trade.risk_level}</Badge>
 					{hasDualScore && (
 						<div className="ml-auto flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-0.5 text-[11px] font-semibold tabular-nums">
-							<OpenAILogo className="h-3 w-3 text-muted-foreground" />
+							<OpenAILogo className="h-3 w-3" />
 							<span>{trade.gpt_score}</span>
 							<span className="text-muted-foreground">·</span>
-							<ClaudeLogo className="h-3 w-3 text-muted-foreground" />
+							<ClaudeLogo className="h-3 w-3" />
 							<span>{trade.claude_score}</span>
 						</div>
 					)}

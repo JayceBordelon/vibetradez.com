@@ -250,10 +250,10 @@ function ScorePill({ gpt, claude }: { gpt: number; claude: number }) {
 	}
 	return (
 		<span className="inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-1.5 py-0.5 font-semibold">
-			<OpenAILogo className="h-3 w-3 text-muted-foreground" />
+			<OpenAILogo className="h-3 w-3" />
 			<span>{gpt || "—"}</span>
 			<span className="text-muted-foreground">·</span>
-			<ClaudeLogo className="h-3 w-3 text-muted-foreground" />
+			<ClaudeLogo className="h-3 w-3" />
 			<span>{claude || "—"}</span>
 		</span>
 	);

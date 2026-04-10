@@ -350,7 +350,7 @@ function ModelCard({
 			<CardContent className="space-y-4 p-5">
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-3">
-						<Logo className="h-7 w-7 text-foreground" />
+						<Logo className="h-7 w-7" />
 						<div>
 							<div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
 								{label}

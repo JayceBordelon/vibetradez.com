@@ -4,16 +4,21 @@ interface BrandIconProps extends React.SVGProps<SVGSVGElement> {
 	className?: string;
 }
 
+// Brand colors lifted from each provider's official site:
+// - OpenAI: #10a37f (the primary green used on chatgpt.com / openai.com).
+// - Claude: #cc785c (Anthropic's "Claude orange" used on claude.ai).
+const OPENAI_COLOR = "#10a37f";
+const CLAUDE_COLOR = "#cc785c";
+
 /**
- * OpenAI / GPT spirograph mark. Renders in currentColor so it picks up
- * the surrounding text color (use text-foreground or text-muted-foreground
- * to control). Source: simplified path traced from the official mark.
+ * OpenAI / GPT spirograph mark, rendered in OpenAI green by default.
+ * Source: simplified path traced from the official mark.
  */
-export function OpenAILogo({ className, ...props }: BrandIconProps) {
+export function OpenAILogo({ className, fill, ...props }: BrandIconProps) {
 	return (
 		<svg
 			viewBox="0 0 24 24"
-			fill="currentColor"
+			fill={fill ?? OPENAI_COLOR}
 			xmlns="http://www.w3.org/2000/svg"
 			aria-hidden="true"
 			focusable="false"
@@ -27,14 +32,15 @@ export function OpenAILogo({ className, ...props }: BrandIconProps) {
 }
 
 /**
- * Anthropic / Claude wordmark "A". Renders in currentColor.
- * Source: simplified path traced from the official Anthropic mark.
+ * Claude product mark — the four-pointed orange burst used on claude.ai.
+ * Renders in Claude orange by default. Pass an explicit `fill` prop to
+ * override (e.g. for printing on a colored background).
  */
-export function ClaudeLogo({ className, ...props }: BrandIconProps) {
+export function ClaudeLogo({ className, fill, ...props }: BrandIconProps) {
 	return (
 		<svg
 			viewBox="0 0 24 24"
-			fill="currentColor"
+			fill={fill ?? CLAUDE_COLOR}
 			xmlns="http://www.w3.org/2000/svg"
 			aria-hidden="true"
 			focusable="false"
@@ -42,7 +48,8 @@ export function ClaudeLogo({ className, ...props }: BrandIconProps) {
 			{...props}
 		>
 			<title>Claude</title>
-			<path d="M17.304 3.541h-3.672l6.696 16.918H24Zm-10.608 0L0 20.459h3.744l1.37-3.553h7.005l1.369 3.553h3.744L10.536 3.541Zm-.371 10.223L8.616 7.82l2.291 5.945Z" />
+			{/* 8-point burst approximating the Claude product mark */}
+			<path d="M12 1.5 L13.45 9.05 L20.79 7.05 L15.36 12.55 L22.5 16.39 L14.62 16.07 L15.62 24 L12 17.55 L8.38 24 L9.38 16.07 L1.5 16.39 L8.64 12.55 L3.21 7.05 L10.55 9.05 Z" />
 		</svg>
 	);
 }
