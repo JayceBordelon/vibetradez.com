@@ -156,7 +156,7 @@ export function HistoryStats({
 					label="Best Trade"
 					value={fmtPnlInt(bestPnl)}
 					sub={`$${bestSym}`}
-					tone="positive"
+					tone={signTone(bestPnl)}
 					icon={Trophy}
 				/>
 				<StatCard
@@ -164,7 +164,7 @@ export function HistoryStats({
 					label="Worst Trade"
 					value={fmtPnlInt(worstPnl)}
 					sub={`$${worstSym}`}
-					tone="negative"
+					tone={signTone(worstPnl)}
 					icon={TrendingDown}
 				/>
 			</div>
