@@ -202,11 +202,14 @@ BEGIN
                 sentiment := round((-0.5 + ((pick_idx * 11 + weekday_count * 7) % 150) / 100.0)::numeric, 2);
                 mentions := 50 + ((pick_idx * 23 + weekday_count * 11) % 800);
 
-                -- Dual-model scoring: roughly correlated with rank (rank 1
-                -- gets highest scores), with a small amount of deterministic
-                -- noise so the two models occasionally disagree.
-                gpt_s := GREATEST(1, LEAST(10, (11 - pick_idx) + (((pick_idx * 7 + weekday_count * 3) % 3) - 1)));
-                claude_s := GREATEST(1, LEAST(10, (11 - pick_idx) + (((pick_idx * 11 + weekday_count * 5) % 5) - 2)));
+                -- Dual-model scoring: each model has its own deterministic
+                -- hash-based score that is loosely correlated with the rank
+                -- but uses orthogonal multipliers, so GPT and Claude
+                -- frequently disagree by several points and end up picking
+                -- different trades. This is what makes the /models comparison
+                -- page cumulative P&L curves actually diverge.
+                gpt_s := GREATEST(1, LEAST(10, (11 - pick_idx) + (((pick_idx * 13 + weekday_count * 7 + ascii(substr(sym, 1, 1))) % 9) - 4)));
+                claude_s := GREATEST(1, LEAST(10, (11 - pick_idx) + (((pick_idx * 17 + weekday_count * 11 + ascii(substr(sym, 1, 1)) * 3) % 9) - 4)));
                 combined := (gpt_s + claude_s) / 2.0;
                 gpt_rat := gpt_rationales[pick_idx];
                 claude_rat := claude_rationales[pick_idx];
@@ -246,8 +249,14 @@ BEGIN
                 -- so the dashboard shows a "morning mode" picks view for the latest date.
                 IF NOT is_today THEN
                     entry_p := estimated;
-                    -- Vary win/loss outcome based on a deterministic mix
-                    pnl_pct := -0.4 + (((pick_idx * 19 + weekday_count * 23) % 200) / 100.0); -- range -0.4 to +1.6
+                    -- Realistic P&L distribution skewed to roughly 50/50
+                    -- winners and losers, with a long right tail. Some
+                    -- trades wipe out completely (closing floor 0.05),
+                    -- some double, some flatline. This produces visible
+                    -- negative cumulative-P&L stretches on the equity
+                    -- curve and a meaningful spread between models when
+                    -- they pick different trades.
+                    pnl_pct := -1.0 + (((pick_idx * 23 + weekday_count * 31 + ascii(substr(sym, 1, 1))) % 280) / 100.0); -- range -1.00 to +1.80
                     closing_p := round(GREATEST(0.05, entry_p * (1 + pnl_pct))::numeric, 2);
                     stock_open := round(stock_price::numeric, 2);
                     stock_close := round((stock_price * (1 + pnl_pct * 0.05))::numeric, 2);
