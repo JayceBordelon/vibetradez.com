@@ -41,7 +41,7 @@ export const metadata: Metadata = {
 			"Free daily ranked options picks powered by AI with real-time charts and performance analytics.",
 		images: [
 			{
-				url: "https://i.pinimg.com/originals/a8/1c/3b/a81c3b8dd88a4a5e34a9a601c53da921.jpg",
+				url: "https://preview.redd.it/whats-your-favorite-trading-memes-v0-b7d4e8wf41td1.jpeg?width=640&format=pjpg&auto=webp&s=18ba5b8bb0f8dcbed9764434a54b3e5f5143486f",
 				width: 1200,
 				height: 630,
 				alt: "VibeTradez",
@@ -54,7 +54,7 @@ export const metadata: Metadata = {
 		description:
 			"Free daily ranked options picks powered by AI with real-time charts and performance analytics.",
 		creator: "@JayceBordelon",
-		images: ["https://i.pinimg.com/originals/a8/1c/3b/a81c3b8dd88a4a5e34a9a601c53da921.jpg"],
+		images: ["https://preview.redd.it/whats-your-favorite-trading-memes-v0-b7d4e8wf41td1.jpeg?width=640&format=pjpg&auto=webp&s=18ba5b8bb0f8dcbed9764434a54b3e5f5143486f"],
 	},
 	robots: {
 		index: true,
