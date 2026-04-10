@@ -481,7 +481,21 @@ func RenderSummaryEmail(summaryTrades []SummaryTrade) (string, error) {
 
 type AnnouncementSection struct {
 	Title string
-	Body  string
+	// Body is rendered as raw HTML so callers can include inline
+	// markup like <strong>, <em>, <a href="...">, and <ul><li>...
+	// for richer formatting. The admin/announce endpoint is gated
+	// behind X-Admin-Key so the input is trusted.
+	Body template.HTML
+}
+
+// AnnouncementCTA represents one button in the row at the bottom of
+// the email. Multiple CTAs render side-by-side; the first one uses the
+// dark "primary" gradient and the rest use a lighter "secondary"
+// outline style by default. Set Style explicitly to override.
+type AnnouncementCTA struct {
+	Text  string
+	URL   string
+	Style string // "" / "primary" / "secondary"
 }
 
 type AnnouncementData struct {
@@ -495,8 +509,9 @@ type AnnouncementData struct {
 	// email clients block protocol-relative or http resources.
 	HeroImageURL string
 	Sections     []AnnouncementSection
-	CTAText      string
-	CTAURL       string
+	// CTAs renders 1-N buttons in a row at the bottom of the content.
+	// Empty slice = no buttons.
+	CTAs []AnnouncementCTA
 }
 
 func RenderAnnouncementEmail(data AnnouncementData) (string, error) {
