@@ -7,7 +7,7 @@ import { ModelPickerFilter } from "@/components/layout/model-picker-filter";
 import { cn } from "@/lib/utils";
 
 const tabs = [
-	{ href: "/", label: "Live Dashboard", short: "Live" },
+	{ href: "/dashboard", label: "Live Dashboard", short: "Live" },
 	{ href: "/history", label: "Historical Analytics", short: "History" },
 	{ href: "/models", label: "Models", short: "Models" },
 ] as const;
