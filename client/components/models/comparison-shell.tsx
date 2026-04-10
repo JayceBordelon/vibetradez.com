@@ -62,12 +62,16 @@ export function ModelComparisonShell() {
 	}, [range]);
 
 	const chartSeries = useMemo(() => {
-		if (!data) return [];
+		// Defensive: every data.<side> field is optional in the wire
+		// shape (the server returns an empty model stats object when
+		// there are no trades yet, and a future API change could drop
+		// a field). Coalesce missing arrays to [] so this never throws.
+		if (!data?.openai || !data?.anthropic || !data?.combined) return [];
 		const merged = new Map<
 			string,
 			{ date: string; openai: number; anthropic: number; combined: number }
 		>();
-		for (const p of data.openai.cumulative_pnl) {
+		for (const p of data.openai.cumulative_pnl ?? []) {
 			merged.set(p.date, {
 				date: p.date,
 				openai: p.pnl,
@@ -75,7 +79,7 @@ export function ModelComparisonShell() {
 				combined: 0,
 			});
 		}
-		for (const p of data.anthropic.cumulative_pnl) {
+		for (const p of data.anthropic.cumulative_pnl ?? []) {
 			const row = merged.get(p.date) ?? {
 				date: p.date,
 				openai: 0,
@@ -85,7 +89,7 @@ export function ModelComparisonShell() {
 			row.anthropic = p.pnl;
 			merged.set(p.date, row);
 		}
-		for (const p of data.combined.cumulative_pnl) {
+		for (const p of data.combined.cumulative_pnl ?? []) {
 			const row = merged.get(p.date) ?? {
 				date: p.date,
 				openai: 0,
@@ -100,13 +104,19 @@ export function ModelComparisonShell() {
 		);
 	}, [data]);
 
+	const hasData =
+		!!data &&
+		!!data.openai &&
+		!!data.anthropic &&
+		(data.openai.trades_evaluated > 0 || data.anthropic.trades_evaluated > 0);
+
 	const winner = useMemo(() => {
-		if (!data) return null;
+		if (!hasData || !data) return null;
 		const a = data.openai.total_pnl;
 		const b = data.anthropic.total_pnl;
 		if (a === b) return "tie" as const;
 		return a > b ? "openai" : "anthropic";
-	}, [data]);
+	}, [data, hasData]);
 
 	return (
 		<div className="mx-auto max-w-[1200px]">
@@ -155,7 +165,17 @@ export function ModelComparisonShell() {
 					</Section>
 				)}
 
-				{data && (
+				{data && !hasData && (
+					<Section>
+						<p className="py-12 text-center text-sm text-muted-foreground">
+							No trade history yet. The comparison will populate
+							once the morning cron has produced its first day of
+							picks.
+						</p>
+					</Section>
+				)}
+
+				{data && hasData && (
 					<>
 						<Section
 							title="Headline metrics"

@@ -68,6 +68,17 @@ type comparisonResponse struct {
 	TotalDaysCovered int        `json:"total_days_covered"`
 }
 
+// emptyModelStats returns a modelStats with non-nil empty slices so a
+// JSON response shape is always renderable on the frontend, even when
+// the database has no trades yet (fresh deploy, pre-cron, etc).
+func emptyModelStats(model string) modelStats {
+	return modelStats{
+		Model:          model,
+		Cumulative:     []dayPnlPoint{},
+		DailyBreakdown: []dayBreakdown{},
+	}
+}
+
 func (s *Server) handleModelComparison(w http.ResponseWriter, r *http.Request) {
 	rangeParam := r.URL.Query().Get("range")
 	if rangeParam == "" {
@@ -76,7 +87,16 @@ func (s *Server) handleModelComparison(w http.ResponseWriter, r *http.Request) {
 
 	start, end := s.computeRange(rangeParam)
 	if start == "" || end == "" {
-		writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Message: "no trade data available"})
+		// No trade data yet (fresh deploy, pre-cron). Return a 200 with
+		// an empty but well-formed response so the frontend can render
+		// an empty state instead of crashing on undefined.cumulative_pnl.
+		writeJSON(w, http.StatusOK, comparisonResponse{
+			Range:     rangeParam,
+			TopN:      comparisonTopN,
+			OpenAI:    emptyModelStats(s.openaiModel),
+			Anthropic: emptyModelStats(s.anthropicModel),
+			Combined:  emptyModelStats("combined"),
+		})
 		return
 	}
 
