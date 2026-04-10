@@ -34,6 +34,8 @@ type Trade struct {
 	ClaudeScore     int
 	ClaudeRationale string
 	CombinedScore   float64
+	PickedByOpenAI  bool
+	PickedByClaude  bool
 }
 
 type EmailData struct {

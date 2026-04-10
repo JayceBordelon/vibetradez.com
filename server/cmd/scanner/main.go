@@ -628,6 +628,8 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 			ClaudeScore:     t.ClaudeScore,
 			ClaudeRationale: t.ClaudeRationale,
 			CombinedScore:   t.CombinedScore,
+			PickedByOpenAI:  t.PickedByOpenAI,
+			PickedByClaude:  t.PickedByClaude,
 		}
 	}
 

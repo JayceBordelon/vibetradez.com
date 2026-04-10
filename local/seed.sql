@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS trades (
     claude_score INTEGER NOT NULL DEFAULT 0,
     claude_rationale TEXT NOT NULL DEFAULT '',
     combined_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    picked_by_openai BOOLEAN NOT NULL DEFAULT false,
+    picked_by_claude BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_trades_date ON trades(date);
@@ -179,22 +181,28 @@ DECLARE
         'Marginal pick. Liquidity is thin enough that even a small fill could move the mark; would not take this in size.'
     ];
 BEGIN
-    -- Walk back from today, picking weekdays
+    -- Walk back from today, picking weekdays. For each day we generate
+    -- 14 unique union picks: 4 only OpenAI picked, 6 BOTH picked
+    -- (consensus), 4 only Claude picked. picked_by_openai / picked_by_claude
+    -- flags are set accordingly so the All / OpenAI / Claude filter in
+    -- the nav bar visibly slices the data.
     d := today_date;
     WHILE weekday_count < 10 LOOP
         IF EXTRACT(DOW FROM d) NOT IN (0, 6) THEN
             weekday_count := weekday_count + 1;
             is_today := (weekday_count = 1);
 
-            FOR pick_idx IN 1..10 LOOP
-                -- Deterministic but varied selection
-                sym := symbols[1 + ((pick_idx * 7 + weekday_count * 3) % array_length(symbols, 1))];
+            FOR pick_idx IN 1..14 LOOP
+                -- Deterministic but varied selection. Different
+                -- multipliers per pick_idx slot guarantee 14 distinct
+                -- tickers per day from a 30-symbol pool.
+                sym := symbols[1 + ((pick_idx * 11 + weekday_count * 5) % array_length(symbols, 1))];
                 ctype := contract_types[1 + ((pick_idx + weekday_count) % 10)];
                 rlevel := risk_levels[1 + ((pick_idx + weekday_count * 2) % 10)];
                 cat := catalysts[1 + ((pick_idx + weekday_count) % 10)];
-                thesis := theses[1 + ((pick_idx * 3 + weekday_count) % 10)];
+                thesis := theses[1 + (((pick_idx - 1) % 10))];
 
-                -- Pseudo-random but stable price levels
+                -- Pseudo-random but stable price levels.
                 stock_price := 50 + ((ascii(substr(sym, 1, 1)) * 7 + pick_idx * 13) % 350);
                 strike := round((stock_price + (CASE WHEN ctype = 'CALL' THEN 5 ELSE -5 END) + ((pick_idx * 3) % 15) - 7)::numeric, 0);
                 estimated := round((0.50 + ((pick_idx * 17 + weekday_count * 5) % 175) / 100.0)::numeric, 2);
@@ -202,24 +210,41 @@ BEGIN
                 sentiment := round((-0.5 + ((pick_idx * 11 + weekday_count * 7) % 150) / 100.0)::numeric, 2);
                 mentions := 50 + ((pick_idx * 23 + weekday_count * 11) % 800);
 
-                -- Dual-model scoring: each model has its own deterministic
-                -- hash-based score that is loosely correlated with the rank
-                -- but uses orthogonal multipliers, so GPT and Claude
-                -- frequently disagree by several points and end up picking
-                -- different trades. This is what makes the /models comparison
-                -- page cumulative P&L curves actually diverge.
-                gpt_s := GREATEST(1, LEAST(10, (11 - pick_idx) + (((pick_idx * 13 + weekday_count * 7 + ascii(substr(sym, 1, 1))) % 9) - 4)));
-                claude_s := GREATEST(1, LEAST(10, (11 - pick_idx) + (((pick_idx * 17 + weekday_count * 11 + ascii(substr(sym, 1, 1)) * 3) % 9) - 4)));
-                combined := (gpt_s + claude_s) / 2.0;
-                gpt_rat := gpt_rationales[pick_idx];
-                claude_rat := claude_rationales[pick_idx];
+                -- Picker attribution:
+                --   pick_idx 1..4   → only OpenAI (claude_score = 0)
+                --   pick_idx 5..10  → both (consensus picks, both real scores)
+                --   pick_idx 11..14 → only Claude (gpt_score = 0)
+                IF pick_idx <= 10 THEN
+                    gpt_s := GREATEST(1, LEAST(10, (11 - pick_idx) + (((pick_idx * 13 + weekday_count * 7 + ascii(substr(sym, 1, 1))) % 7) - 3)));
+                ELSE
+                    gpt_s := 0;
+                END IF;
+
+                IF pick_idx >= 5 THEN
+                    claude_s := GREATEST(1, LEAST(10, (15 - pick_idx) + (((pick_idx * 17 + weekday_count * 11 + ascii(substr(sym, 1, 1)) * 3) % 7) - 3)));
+                ELSE
+                    claude_s := 0;
+                END IF;
+
+                -- Combined score is the average of the non-zero model scores.
+                IF gpt_s > 0 AND claude_s > 0 THEN
+                    combined := (gpt_s + claude_s) / 2.0;
+                ELSIF gpt_s > 0 THEN
+                    combined := gpt_s;
+                ELSE
+                    combined := claude_s;
+                END IF;
+
+                gpt_rat := CASE WHEN gpt_s > 0 THEN gpt_rationales[1 + ((pick_idx - 1) % 10)] ELSE '' END;
+                claude_rat := CASE WHEN claude_s > 0 THEN claude_rationales[1 + ((pick_idx - 1) % 10)] ELSE '' END;
 
                 INSERT INTO trades (
                     date, symbol, contract_type, strike_price, expiration, dte,
                     estimated_price, thesis, sentiment_score, current_price,
                     target_price, stop_loss, profit_target, risk_level,
                     catalyst, mention_count, rank,
-                    gpt_score, gpt_rationale, claude_score, claude_rationale, combined_score
+                    gpt_score, gpt_rationale, claude_score, claude_rationale, combined_score,
+                    picked_by_openai, picked_by_claude
                 ) VALUES (
                     to_char(d, 'YYYY-MM-DD'),
                     sym,
@@ -242,7 +267,9 @@ BEGIN
                     gpt_rat,
                     claude_s,
                     claude_rat,
-                    combined
+                    combined,
+                    (gpt_s > 0),
+                    (claude_s > 0)
                 );
 
                 -- Generate EOD summaries for all days EXCEPT today (the most recent)
