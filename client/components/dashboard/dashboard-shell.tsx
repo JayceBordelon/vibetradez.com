@@ -35,10 +35,14 @@ function filterByRank(
 	data: DashboardResponse,
 	topFilter: number,
 ): DashboardResponse {
-	if (topFilter >= 10) return data;
+	// Server should always return an empty array, but be defensive in
+	// case any deployment regresses to nil-slice → JSON null. Mirrors
+	// the same defensive coalescing the history page already does.
+	const trades = data.trades ?? [];
+	if (topFilter >= 10) return { ...data, trades };
 	return {
 		...data,
-		trades: data.trades.filter(
+		trades: trades.filter(
 			(t) => t.trade.rank >= 1 && t.trade.rank <= topFilter,
 		),
 	};
@@ -54,7 +58,7 @@ function computeStats(trades: DashboardTrade[]) {
 	let grossLosses = 0;
 	let hasSummaries = false;
 
-	for (const { trade, summary } of trades) {
+	for (const { trade, summary } of trades ?? []) {
 		if (summary) {
 			hasSummaries = true;
 			const pnl = (summary.closing_price - summary.entry_price) * 100;

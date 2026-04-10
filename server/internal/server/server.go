@@ -211,14 +211,18 @@ func (s *Server) handleTradesToday(w http.ResponseWriter, r *http.Request) {
 	} else {
 		date, err = s.db.GetLatestTradeDate()
 		if err != nil {
-			writeJSON(w, http.StatusOK, dashboardResponse{})
+			// No trade data yet (fresh DB, pre-cron). Return an empty
+			// trades slice (NEVER nil) so the frontend can safely call
+			// .filter / .map without a null guard and falls through to
+			// the EmptyState branch.
+			writeJSON(w, http.StatusOK, dashboardResponse{Trades: []dashboardTrade{}})
 			return
 		}
 	}
 
 	morningTrades, err := s.db.GetMorningTrades(date)
 	if err != nil {
-		writeJSON(w, http.StatusOK, dashboardResponse{Date: date})
+		writeJSON(w, http.StatusOK, dashboardResponse{Date: date, Trades: []dashboardTrade{}})
 		return
 	}
 
