@@ -25,18 +25,48 @@ export function MethodologySection() {
 					</AccordionTrigger>
 					<AccordionContent>
 						<p className="text-[15px] leading-relaxed text-muted-foreground">
-							Every trading day follows a fixed automated pipeline. At 9:25
-							AM ET, the system scrapes social-media sentiment from multiple
-							sources, identifies the most-discussed tickers, and feeds them
-							into a GPT-5.4 analysis layer. GPT-5.4 has proven to be
-							particularly effective at sentiment analysis and market context
-							synthesis. The model scores each ticker on sentiment strength,
-							catalyst quality, and risk profile, then selects the top-ranked
-							option contracts for the day. All positions are opened at the
-							market open and closed at 4:05 PM ET&mdash;no trades are held
-							overnight. A migration to Anthropic&apos;s Claude is planned
-							for the analysis layer to further improve reasoning and trade
-							selection quality.
+							Every trading day follows a fixed automated pipeline. At
+							9:25 AM ET, the system scrapes social-media sentiment from
+							r/wallstreetbets and adjacent communities, identifies the
+							most-discussed tickers, and pulls live market data from the
+							Schwab API.
+						</p>
+						<p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
+							The same raw sentiment payload is then sent independently to
+							two LLMs:{" "}
+							<strong className="text-foreground">OpenAI GPT-5.4</strong>{" "}
+							and{" "}
+							<strong className="text-foreground">
+								Anthropic Claude Opus 4.6
+							</strong>
+							. Both models run the identical analysis prompt and have
+							access to the same toolset &mdash; live Schwab quotes, the
+							full options chain with greeks, and a built-in web search
+							for catalyst verification. Each model independently produces
+							its own ranked top 10 picks for the day; neither sees the
+							other&apos;s output. This is a true head-to-head comparison
+							of two independent strategists working from the same source
+							material.
+						</p>
+						<p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
+							Both pick sets are then unioned into a single list. When
+							both models picked the same ticker (a consensus pick) the
+							row carries both models&apos; scores and rationales and the
+							combined score is the average. When only one model picked a
+							ticker the other side&apos;s score is left at zero. Final
+							rank is by combined score with consensus picks tie-breaking
+							ahead of single-model picks. The All / OpenAI / Claude
+							filter in the nav bar lets you slice the day either as the
+							merged consensus view or as exactly what one model would
+							have produced on its own.
+						</p>
+						<p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
+							All positions are opened at the market open and closed at
+							4:05 PM ET &mdash; no trades are held overnight. The model
+							identifiers used in production are configurable via the
+							OPENAI_MODEL and ANTHROPIC_MODEL environment variables and
+							default to the latest production model in each
+							provider&apos;s official Go SDK.
 						</p>
 					</AccordionContent>
 				</AccordionItem>
@@ -104,10 +134,35 @@ export function MethodologySection() {
 					</AccordionTrigger>
 					<AccordionContent>
 						<p className="text-[15px] leading-relaxed text-muted-foreground">
-							Stock and option prices are sourced from the Schwab Market
-							Data API. Sentiment data is aggregated from public social-media
-							posts, financial news feeds, and community forums. All data
-							is processed server-side and cached for historical lookup.
+							Stock and option prices &mdash; bid, ask, mark, greeks, open
+							interest, volume &mdash; are sourced live from the Schwab
+							Market Data API via authenticated OAuth. Sentiment data is
+							scraped from Reddit&apos;s public JSON feeds. Both LLMs can
+							additionally use a built-in web search tool to verify
+							catalysts, earnings dates, and recent news. Every price you
+							see in a pick comes from real market data &mdash; the models
+							are explicitly instructed never to guess prices.
+						</p>
+					</AccordionContent>
+				</AccordionItem>
+
+				<AccordionItem value="comparison">
+					<AccordionTrigger className="text-base font-semibold text-left">
+						Model Comparison
+					</AccordionTrigger>
+					<AccordionContent>
+						<p className="text-[15px] leading-relaxed text-muted-foreground">
+							The Models page replays the trade history under each
+							model&apos;s ranking in isolation. For each day in the
+							selected range we take the picks the model originally chose,
+							compute their realised P&amp;L from the EOD summaries, and
+							aggregate by model. The line chart shows the cumulative P&amp;L
+							you would have made by following only OpenAI, only Claude, or
+							the combined consensus ranking. The agreement-rate stat shows
+							the fraction of dual-scored trades where the two models were
+							within one point of each other &mdash; a rough gauge of how
+							much the models actually disagree on what looks like a good
+							setup.
 						</p>
 					</AccordionContent>
 				</AccordionItem>
