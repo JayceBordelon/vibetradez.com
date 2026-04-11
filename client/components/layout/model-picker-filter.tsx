@@ -24,7 +24,6 @@ export function ModelPickerFilter() {
       {OPTIONS.map((opt) => {
         const active = picker === opt.value;
         return (
-          // biome-ignore lint/a11y/useSemanticElements: custom segmented control
           <button
             key={opt.value}
             type="button"
