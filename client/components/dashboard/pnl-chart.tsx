@@ -21,8 +21,8 @@ export function PnlChart({ trades }: PnlChartProps) {
     return trades
       .filter((dt) => dt.summary)
       .map((dt) => {
-        const entry = dt.summary?.entry_price;
-        const close = dt.summary?.closing_price;
+        const entry = dt.summary!.entry_price;
+        const close = dt.summary!.closing_price;
         const pnl = (close - entry) * 100;
         return {
           name: `$${dt.trade.symbol} ${dt.trade.contract_type}`,
