@@ -222,7 +222,6 @@ func main() {
 	c.Stop()
 }
 
-
 func sendErrorNotification(cfg *config.Config, db *store.Store, emailClient *email.Client, errMsg string) {
 	htmlContent, err := templates.RenderErrorEmail(errMsg)
 	if err != nil {
