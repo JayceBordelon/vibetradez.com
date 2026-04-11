@@ -1,33 +1,33 @@
 export function fmt(n: number, d = 2): string {
-	return Number(n).toFixed(d);
+  return Number(n).toFixed(d);
 }
 
 export function fmtPct(n: number): string {
-	return `${n > 0 ? "+" : ""}${fmt(n, 0)}%`;
+  return `${n > 0 ? "+" : ""}${fmt(n, 0)}%`;
 }
 
 export function fmtPctDec(n: number): string {
-	return `${n > 0 ? "+" : ""}${fmt(n, 1)}%`;
+  return `${n > 0 ? "+" : ""}${fmt(n, 1)}%`;
 }
 
 export function fmtMoney(n: number): string {
-	return `$${fmt(n)}`;
+  return `$${fmt(n)}`;
 }
 
 export function fmtMoneyInt(n: number): string {
-	return `$${fmt(Math.abs(n), 0)}`;
+  return `$${fmt(Math.abs(n), 0)}`;
 }
 
 export function fmtPnlInt(n: number): string {
-	if (n > 0) return `+$${fmt(n, 0)}`;
-	if (n < 0) return `-$${fmt(Math.abs(n), 0)}`;
-	return "$0";
+  if (n > 0) return `+$${fmt(n, 0)}`;
+  if (n < 0) return `-$${fmt(Math.abs(n), 0)}`;
+  return "$0";
 }
 
 export function pnlColor(v: number): string {
-	if (v > 0) return "text-green";
-	if (v < 0) return "text-red";
-	return "text-muted-foreground";
+  if (v > 0) return "text-green";
+  if (v < 0) return "text-red";
+  return "text-muted-foreground";
 }
 
 /**
@@ -37,8 +37,8 @@ export function pnlColor(v: number): string {
  * tone buckets. Pass the result to a StatCard's `valueColor` prop.
  */
 export function percentHueColor(pct: number): string {
-	const clamped = Math.max(0, Math.min(100, pct));
-	// Hue 0 = red, 145 ≈ project's green hue. Linear in between.
-	const hue = (clamped / 100) * 145;
-	return `hsl(${hue.toFixed(0)}, 70%, 38%)`;
+  const clamped = Math.max(0, Math.min(100, pct));
+  // Hue 0 = red, 145 ≈ project's green hue. Linear in between.
+  const hue = (clamped / 100) * 145;
+  return `hsl(${hue.toFixed(0)}, 70%, 38%)`;
 }

@@ -8,17 +8,17 @@ import { SubscribeModal } from "@/components/subscribe/subscribe-modal";
 import { PickerProvider } from "@/lib/picker-context";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-	const [modalOpen, setModalOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
 
-	return (
-		<PickerProvider>
-			<div className="flex min-h-dvh flex-col">
-				<TopBar onSubscribe={() => setModalOpen(true)} />
-				<NavBar />
-				<main className="flex-1">{children}</main>
-				<Footer />
-				<SubscribeModal open={modalOpen} onOpenChange={setModalOpen} />
-			</div>
-		</PickerProvider>
-	);
+  return (
+    <PickerProvider>
+      <div className="flex min-h-dvh flex-col">
+        <TopBar onSubscribe={() => setModalOpen(true)} />
+        <NavBar />
+        <main className="flex-1">{children}</main>
+        <Footer />
+        <SubscribeModal open={modalOpen} onOpenChange={setModalOpen} />
+      </div>
+    </PickerProvider>
+  );
 }

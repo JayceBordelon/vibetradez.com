@@ -1,86 +1,57 @@
-import type {
-	ApiResponse,
-	ChartParams,
-	ChartResponse,
-	DashboardResponse,
-	LiveQuotesResponse,
-	ModelComparisonResponse,
-	ModelPicker,
-	WeekResponse,
-} from "@/types/trade";
+import type { ApiResponse, ChartParams, ChartResponse, DashboardResponse, LiveQuotesResponse, ModelComparisonResponse, ModelPicker, WeekResponse } from "@/types/trade";
 
 function pickerSuffix(picker?: ModelPicker, prefix: "?" | "&" = "&") {
-	if (!picker || picker === "all") return "";
-	return `${prefix}picker=${picker}`;
+  if (!picker || picker === "all") return "";
+  return `${prefix}picker=${picker}`;
 }
 
 const HEADERS: Record<string, string> = {
-	"X-VT-Source": "dashboard",
+  "X-VT-Source": "dashboard",
 };
 
 const SERVER_API_BASE = process.env.API_URL || "http://trading-server:8080";
 
-export async function serverFetch<T>(
-	path: string,
-	options?: RequestInit,
-): Promise<T> {
-	const res = await fetch(`${SERVER_API_BASE}${path}`, {
-		...options,
-		headers: { ...HEADERS, ...options?.headers },
-	});
-	return res.json();
+export async function serverFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${SERVER_API_BASE}${path}`, {
+    ...options,
+    headers: { ...HEADERS, ...options?.headers },
+  });
+  return res.json();
 }
 
-export async function clientFetch<T>(
-	path: string,
-	options?: RequestInit,
-): Promise<T> {
-	const res = await fetch(path, {
-		...options,
-		headers: { ...HEADERS, ...options?.headers },
-	});
-	return res.json();
+export async function clientFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    ...options,
+    headers: { ...HEADERS, ...options?.headers },
+  });
+  return res.json();
 }
 
 export const api = {
-	getTradeDates: (limit = 30) =>
-		clientFetch<{ dates: string[] }>(`/api/trades/dates?limit=${limit}`),
+  getTradeDates: (limit = 30) => clientFetch<{ dates: string[] }>(`/api/trades/dates?limit=${limit}`),
 
-	getTrades: (date?: string, picker?: ModelPicker) =>
-		clientFetch<DashboardResponse>(
-			date
-				? `/api/trades/today?date=${date}${pickerSuffix(picker)}`
-				: `/api/trades/today${pickerSuffix(picker, "?")}`,
-		),
+  getTrades: (date?: string, picker?: ModelPicker) => clientFetch<DashboardResponse>(date ? `/api/trades/today?date=${date}${pickerSuffix(picker)}` : `/api/trades/today${pickerSuffix(picker, "?")}`),
 
-	getWeekTrades: (start: string, end: string, picker?: ModelPicker) =>
-		clientFetch<WeekResponse>(
-			`/api/trades/week?start=${start}&end=${end}${pickerSuffix(picker)}`,
-		),
+  getWeekTrades: (start: string, end: string, picker?: ModelPicker) => clientFetch<WeekResponse>(`/api/trades/week?start=${start}&end=${end}${pickerSuffix(picker)}`),
 
-	getLiveQuotes: () => clientFetch<LiveQuotesResponse>("/api/quotes/live"),
+  getLiveQuotes: () => clientFetch<LiveQuotesResponse>("/api/quotes/live"),
 
-	getModelComparison: (range: "week" | "month" | "year" | "all" = "all") =>
-		clientFetch<ModelComparisonResponse>(
-			`/api/model-comparison?range=${range}`,
-		),
+  getModelComparison: (range: "week" | "month" | "year" | "all" = "all") => clientFetch<ModelComparisonResponse>(`/api/model-comparison?range=${range}`),
 
-	getChartData: (symbol: string, params: ChartParams) =>
-		clientFetch<ChartResponse>(
-			`/api/chart/${symbol}?periodType=${params.ptype}&period=${params.period}&frequencyType=${params.ftype}&frequency=${params.freq}`,
-		),
+  getChartData: (symbol: string, params: ChartParams) =>
+    clientFetch<ChartResponse>(`/api/chart/${symbol}?periodType=${params.ptype}&period=${params.period}&frequencyType=${params.ftype}&frequency=${params.freq}`),
 
-	subscribe: (email: string, name: string) =>
-		clientFetch<ApiResponse>("/api/subscribe", {
-			method: "POST",
-			headers: { "Content-Type": "application/json", ...HEADERS },
-			body: JSON.stringify({ email, name }),
-		}),
+  subscribe: (email: string, name: string) =>
+    clientFetch<ApiResponse>("/api/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...HEADERS },
+      body: JSON.stringify({ email, name }),
+    }),
 
-	unsubscribe: (email: string) =>
-		clientFetch<ApiResponse>("/api/unsubscribe", {
-			method: "POST",
-			headers: { "Content-Type": "application/json", ...HEADERS },
-			body: JSON.stringify({ email }),
-		}),
+  unsubscribe: (email: string) =>
+    clientFetch<ApiResponse>("/api/unsubscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...HEADERS },
+      body: JSON.stringify({ email }),
+    }),
 };
