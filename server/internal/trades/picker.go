@@ -31,7 +31,7 @@ func NewClaudePicker(apiKey, model string, schwabClient *schwab.Client) *ClaudeP
 	return &ClaudePicker{
 		client: anthropic.NewClient(
 			option.WithAPIKey(apiKey),
-			option.WithRequestTimeout(120*time.Second),
+			option.WithRequestTimeout(10*time.Minute),
 		),
 		model:  model,
 		schwab: schwabClient,
@@ -115,7 +115,7 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentime
 
 func (p *ClaudePicker) buildTools() []anthropic.ToolUnionParam {
 	tools := []anthropic.ToolUnionParam{
-		{OfWebSearchTool20250305: &anthropic.WebSearchTool20250305Param{
+		{OfWebSearchTool20260209: &anthropic.WebSearchTool20260209Param{
 			MaxUses: anthropic.Int(8),
 		}},
 	}
