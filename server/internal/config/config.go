@@ -35,6 +35,25 @@ const (
 	DefaultAnthropicModel = "claude-opus-4-6"
 )
 
+// modelDisplayNames maps API model identifiers to human-friendly labels
+// used in emails and log output. Update this map whenever a new default
+// model is added above.
+var modelDisplayNames = map[string]string{
+	"gpt-5.4":           "GPT-5.4",
+	"gpt-4o":            "GPT-4o",
+	"claude-opus-4-6":   "Claude Opus 4.6",
+	"claude-sonnet-4-6": "Claude Sonnet 4.6",
+}
+
+// ModelDisplayName returns a human-friendly label for the given API model
+// identifier. Falls back to the raw identifier for unknown models.
+func ModelDisplayName(model string) string {
+	if name, ok := modelDisplayNames[model]; ok {
+		return name
+	}
+	return model
+}
+
 func getEnvOrDefault(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v

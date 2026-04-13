@@ -39,9 +39,11 @@ type Trade struct {
 }
 
 type EmailData struct {
-	Subject string
-	Date    string
-	Trades  []Trade
+	Subject         string
+	Date            string
+	Trades          []Trade
+	GPTModelName    string
+	ClaudeModelName string
 }
 
 type SummaryTrade struct {
@@ -195,16 +197,18 @@ var funcMap = template.FuncMap{
 	},
 }
 
-func RenderEmail(trades []Trade) (string, error) {
+func RenderEmail(trades []Trade, gptModelName, claudeModelName string) (string, error) {
 	tmpl, err := template.New("email.html").Funcs(funcMap).ParseFS(templateFS, "email.html")
 	if err != nil {
 		return "", err
 	}
 
 	data := EmailData{
-		Subject: "Today's Top Options Plays",
-		Date:    time.Now().Format("Monday, Jan 2, 2006"),
-		Trades:  trades,
+		Subject:         "Today's Top Options Plays",
+		Date:            time.Now().Format("Monday, Jan 2, 2006"),
+		Trades:          trades,
+		GPTModelName:    gptModelName,
+		ClaudeModelName: claudeModelName,
 	}
 
 	var buf bytes.Buffer
@@ -261,7 +265,7 @@ func VerifyTemplates() HealthCheck {
 			Catalyst: "System test", MentionCount: 42,
 		},
 	}
-	if _, err := RenderEmail(sampleTrades); err != nil {
+	if _, err := RenderEmail(sampleTrades, "GPT-5.4", "Claude Opus 4.6"); err != nil {
 		return HealthCheck{Name: "Email Templates", Status: "fail", Detail: err.Error(), Latency: fmtLatency(start)}
 	}
 

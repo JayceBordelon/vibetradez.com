@@ -14,7 +14,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-dvh bg-background text-foreground">
       {/* ── Nav ── */}
-      <nav className="fixed top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl">
+      <nav className="fixed top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur-md will-change-transform">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:px-6">
           <span className="text-xl font-extrabold tracking-tight">
             <span className="text-foreground">Vibe</span>
@@ -33,10 +33,10 @@ export default function LandingPage() {
       {/* ── Hero ── */}
       <section className="relative flex min-h-dvh items-center justify-center overflow-hidden pt-16">
         {/* Gradient orbs */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-1/4 left-1/4 h-[600px] w-[600px] rounded-full bg-gpt/10 blur-[120px]" />
-          <div className="absolute -bottom-1/4 right-1/4 h-[600px] w-[600px] rounded-full bg-claude/10 blur-[120px]" />
-          <div className="absolute top-1/2 left-1/2 h-[400px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/5 blur-[100px]" />
+        <div className="pointer-events-none absolute inset-0 overflow-hidden will-change-transform">
+          <div className="absolute -top-1/4 left-1/4 h-[600px] w-[600px] rounded-full bg-gpt/10 blur-[80px] sm:blur-[120px]" />
+          <div className="absolute -bottom-1/4 right-1/4 h-[600px] w-[600px] rounded-full bg-claude/10 blur-[80px] sm:blur-[120px]" />
+          <div className="absolute top-1/2 left-1/2 h-[400px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/5 blur-[60px] sm:blur-[100px]" />
         </div>
 
         {/* Grid pattern */}
@@ -45,6 +45,7 @@ export default function LandingPage() {
           style={{
             backgroundImage: "linear-gradient(var(--foreground) 1px, transparent 1px), linear-gradient(90deg, var(--foreground) 1px, transparent 1px)",
             backgroundSize: "60px 60px",
+            contain: "strict",
           }}
         />
 
@@ -74,12 +75,12 @@ export default function LandingPage() {
           <div className="flex w-full flex-col gap-3 px-2 sm:w-auto sm:flex-row sm:justify-center sm:gap-4 sm:px-0">
             <Link
               href="/dashboard"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-foreground px-8 py-3.5 text-base font-semibold text-background shadow-lg transition-all hover:opacity-90 hover:shadow-xl"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-foreground px-8 py-3.5 text-base font-semibold text-background shadow-lg transition-opacity hover:opacity-90"
             >
               View Live Dashboard
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <SubscribeCTA className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand px-8 py-3.5 text-base font-semibold text-white shadow-lg transition-all hover:opacity-90 hover:shadow-xl">
+            <SubscribeCTA className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand px-8 py-3.5 text-base font-semibold text-white shadow-lg transition-opacity hover:opacity-90">
               <Mail className="h-4 w-4" />
               Subscribe Free
             </SubscribeCTA>
@@ -255,7 +256,7 @@ export default function LandingPage() {
             Completely free. No credit card. No premium tier. Just two AIs doing their best and one human hoping they know what they&apos;re doing. Unsubscribe any time, no hard feelings.
           </p>
           <div className="flex w-full flex-col gap-3 px-2 sm:w-auto sm:flex-row sm:justify-center sm:gap-4 sm:px-0">
-            <SubscribeCTA className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand px-8 py-3.5 text-base font-semibold text-white shadow-lg transition-all hover:opacity-90 hover:shadow-xl">
+            <SubscribeCTA className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand px-8 py-3.5 text-base font-semibold text-white shadow-lg transition-opacity hover:opacity-90">
               <Mail className="h-4 w-4" />
               Subscribe Free
             </SubscribeCTA>

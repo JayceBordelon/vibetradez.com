@@ -130,7 +130,9 @@ func main() {
 	scraper := sentiment.NewScraper()
 	analyzer := trades.NewAnalyzer(cfg.OpenAIAPIKey, cfg.OpenAIModel, schwabClient)
 	emailClient := email.NewClient(cfg.ResendAPIKey)
-	log.Printf("OpenAI: model=%s", cfg.OpenAIModel)
+	gptDisplayName := config.ModelDisplayName(cfg.OpenAIModel)
+	claudeDisplayName := config.ModelDisplayName(cfg.AnthropicModel)
+	log.Printf("%s: model=%s", gptDisplayName, cfg.OpenAIModel)
 
 	// Claude picker is optional. When ANTHROPIC_API_KEY is missing or
 	// set to a local stub the cron pipeline degenerates to OpenAI-only:
@@ -139,12 +141,12 @@ func main() {
 	var claudePicker *trades.ClaudePicker
 	switch {
 	case cfg.AnthropicAPIKey == "":
-		log.Println("Anthropic: not configured (ANTHROPIC_API_KEY not set) — Claude picking disabled")
+		log.Printf("%s: not configured (ANTHROPIC_API_KEY not set) - picking disabled", claudeDisplayName)
 	case isLocalStubKey(cfg.AnthropicAPIKey):
-		log.Println("Anthropic: local stub key detected — Claude picking disabled")
+		log.Printf("%s: local stub key detected - picking disabled", claudeDisplayName)
 	default:
 		claudePicker = trades.NewClaudePicker(cfg.AnthropicAPIKey, cfg.AnthropicModel, schwabClient)
-		log.Printf("Anthropic: configured — Claude picking enabled (model=%s)", cfg.AnthropicModel)
+		log.Printf("%s: configured - picking enabled (model=%s)", claudeDisplayName, cfg.AnthropicModel)
 	}
 
 	openJob := func() {
@@ -152,7 +154,7 @@ func main() {
 			log.Printf("Skipping morning analysis: Market closed (%s)", reason)
 			return
 		}
-		runTradeAnalysis(cfg, db, scraper, analyzer, claudePicker, emailClient)
+		runTradeAnalysis(cfg, db, scraper, analyzer, claudePicker, emailClient, gptDisplayName, claudeDisplayName)
 	}
 
 	closeJob := func() {
@@ -354,7 +356,7 @@ func unionPicks(openaiTrades, claudeTrades []trades.Trade) []trades.Trade {
 	return out
 }
 
-func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Scraper, analyzer *trades.Analyzer, claudePicker *trades.ClaudePicker, emailClient *email.Client) {
+func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Scraper, analyzer *trades.Analyzer, claudePicker *trades.ClaudePicker, emailClient *email.Client, gptDisplayName, claudeDisplayName string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
@@ -374,24 +376,24 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 	// 10 ranked trades. The cron then unions both pick sets so the
 	// dashboard can show every trade either model picked, with per-pick
 	// attribution to whichever model(s) actually picked it.
-	log.Println("Analyzing trades with OpenAI...")
+	log.Printf("Analyzing trades with %s...", gptDisplayName)
 	openaiTrades, err := analyzer.GetTopTrades(ctx, sentimentData)
 	if err != nil {
-		log.Printf("Error analyzing trades with OpenAI: %v", err)
-		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("OpenAI analysis failed: %v", err))
+		log.Printf("Error analyzing trades with %s: %v", gptDisplayName, err)
+		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("%s analysis failed: %v", gptDisplayName, err))
 		return
 	}
-	log.Printf("OpenAI produced %d picks", len(openaiTrades))
+	log.Printf("%s produced %d picks", gptDisplayName, len(openaiTrades))
 
 	var claudeTrades []trades.Trade
 	if claudePicker != nil {
-		log.Println("Analyzing trades with Claude...")
+		log.Printf("Analyzing trades with %s...", claudeDisplayName)
 		ct, cErr := claudePicker.GetTopTrades(ctx, sentimentData)
 		if cErr != nil {
-			log.Printf("Warning: Claude picking failed: %v — falling back to OpenAI-only", cErr)
+			log.Printf("Warning: %s picking failed: %v - falling back to %s-only", claudeDisplayName, cErr, gptDisplayName)
 		} else {
 			claudeTrades = ct
-			log.Printf("Claude produced %d picks", len(claudeTrades))
+			log.Printf("%s produced %d picks", claudeDisplayName, len(claudeTrades))
 		}
 	}
 
@@ -400,8 +402,8 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 		log.Println("No trades generated, skipping email")
 		return
 	}
-	log.Printf("Union pick set: %d unique trades (openai=%d, claude=%d)",
-		len(topTrades), len(openaiTrades), len(claudeTrades))
+	log.Printf("Union pick set: %d unique trades (%s=%d, %s=%d)",
+		len(topTrades), gptDisplayName, len(openaiTrades), claudeDisplayName, len(claudeTrades))
 
 	// Persist to database
 	date := todayDate()
@@ -444,7 +446,7 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 	}
 
 	// Render email template
-	htmlContent, err := templates.RenderEmail(templateTrades)
+	htmlContent, err := templates.RenderEmail(templateTrades, gptDisplayName, claudeDisplayName)
 	if err != nil {
 		log.Printf("Error rendering email: %v", err)
 		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("Email template rendering failed: %v", err))
