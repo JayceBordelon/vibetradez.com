@@ -10,6 +10,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/anthropics/anthropic-sdk-go/packages/param"
 
 	"vibetradez.com/internal/schwab"
 	"vibetradez.com/internal/sentiment"
@@ -190,7 +191,7 @@ func (p *ClaudePicker) runConversation(ctx context.Context, prompt string) (stri
 		}
 
 		if len(toolResults) > 0 {
-			messages = append(messages, msg.ToParam())
+			messages = append(messages, assistantEchoFromRaw(msg))
 			messages = append(messages, anthropic.NewUserMessage(toolResults...))
 			continue
 		}
@@ -203,6 +204,24 @@ func (p *ClaudePicker) runConversation(ctx context.Context, prompt string) (stri
 	}
 
 	return "", fmt.Errorf("exceeded max claude tool rounds (%d)", maxRounds)
+}
+
+// assistantEchoFromRaw rebuilds an assistant MessageParam by round-tripping
+// each content block's raw server JSON through param.Override. We avoid
+// msg.ToParam() because anthropic-sdk-go v1.35.1 drops the required `type`
+// field on code_execution_tool_result error content (and the same pattern
+// affects other server-tool result errors), which causes a 400 from
+// /v1/messages on the next round.
+func assistantEchoFromRaw(msg *anthropic.Message) anthropic.MessageParam {
+	blocks := make([]anthropic.ContentBlockParamUnion, 0, len(msg.Content))
+	for _, b := range msg.Content {
+		raw := b.RawJSON()
+		if raw == "" {
+			continue
+		}
+		blocks = append(blocks, param.Override[anthropic.ContentBlockParamUnion](json.RawMessage(raw)))
+	}
+	return anthropic.NewAssistantMessage(blocks...)
 }
 
 func (p *ClaudePicker) executeTool(_ context.Context, name string, input json.RawMessage) string {
