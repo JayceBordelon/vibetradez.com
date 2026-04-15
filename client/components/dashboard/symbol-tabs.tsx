@@ -1,6 +1,6 @@
 "use client";
 
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fmtPnlInt, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { DashboardTrade } from "@/types/trade";
@@ -30,15 +30,30 @@ export function SymbolTabs({ trades, activeSymbol, onSelect }: SymbolTabsProps) 
   }
 
   const uniqueSymbols = Array.from(symbolMap.values());
+  const active = symbolMap.get(activeSymbol);
 
   return (
-    <ToggleGroup type="single" value={activeSymbol} onValueChange={(v) => v && onSelect(v)} variant="outline" className="flex-wrap justify-start gap-1.5">
-      {uniqueSymbols.map(({ symbol, pnl }) => (
-        <ToggleGroupItem key={symbol} value={symbol} className="h-9 px-3 font-mono text-sm font-semibold">
-          ${symbol}
-          {pnl != null && <span className={cn("ml-1.5 text-xs", pnlColor(pnl))}>{fmtPnlInt(pnl)}</span>}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
+    <Select value={activeSymbol} onValueChange={onSelect}>
+      <SelectTrigger className="w-full min-w-[160px] sm:w-[220px]" aria-label="Select ticker">
+        <SelectValue placeholder="Select ticker">
+          {active && (
+            <span className="flex w-full items-center justify-between gap-3">
+              <span className="font-mono text-sm font-semibold">${active.symbol}</span>
+              {active.pnl != null && <span className={cn("text-xs tabular-nums", pnlColor(active.pnl))}>{fmtPnlInt(active.pnl)}</span>}
+            </span>
+          )}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {uniqueSymbols.map(({ symbol, pnl }) => (
+          <SelectItem key={symbol} value={symbol}>
+            <span className="flex w-full items-center justify-between gap-4">
+              <span className="font-mono text-sm font-semibold">${symbol}</span>
+              {pnl != null && <span className={cn("text-xs tabular-nums", pnlColor(pnl))}>{fmtPnlInt(pnl)}</span>}
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
