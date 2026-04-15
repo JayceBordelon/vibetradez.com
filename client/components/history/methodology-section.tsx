@@ -8,22 +8,22 @@ export function MethodologySection() {
     <Card className="p-6">
       <div className="flex items-center gap-2">
         <BookOpen className="h-5 w-5 text-muted-foreground" aria-hidden />
-        <h2 className="text-base font-semibold">Methodology &amp; Disclaimers</h2>
+        <h2 className="text-base font-semibold">How this works</h2>
       </div>
 
       <Accordion type="single" collapsible className="mt-2 w-full">
         <AccordionItem value="pipeline">
-          <AccordionTrigger className="text-base font-semibold text-left">Trade Selection Pipeline</AccordionTrigger>
+          <AccordionTrigger className="text-base font-semibold text-left">How picks get made</AccordionTrigger>
           <AccordionContent>
             <p className="text-[15px] leading-relaxed text-muted-foreground">
-              Every trading day follows a fixed automated pipeline. At 9:25 AM ET, the system scrapes social-media sentiment from r/wallstreetbets and adjacent communities, identifies the
-              most-discussed tickers, and pulls live market data from the Schwab API.
+              Every trading day the system wakes up, scrapes sentiment from r/wallstreetbets and nearby communities at 9:25 AM ET, figures out which tickers people won&apos;t shut up about, and pulls
+              live market data from the Schwab API.
             </p>
             <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
               The same raw sentiment payload is then sent independently to two LLMs: <strong className="text-foreground">OpenAI GPT-5.4</strong> and{" "}
-              <strong className="text-foreground">Anthropic Claude Opus 4.6</strong>. Both models run the identical analysis prompt and have access to the same toolset, including live Schwab quotes,
-              the full options chain with greeks, and a built-in web search for catalyst verification. Each model independently produces its own ranked top 10 picks for the day; neither sees the
-              other&apos;s output. This is a true head-to-head comparison of two independent strategists working from the same source material.
+              <strong className="text-foreground">Anthropic Claude Opus 4.6</strong>. Both get the same prompt and the same toolset — live Schwab quotes, the full options chain with greeks, and a
+              built-in web search for catalyst checks. Each model picks its own ranked top 10 for the day without seeing what the other did. It&apos;s basically two opinionated robots doing the same
+              homework alone and turning in separate answers.
             </p>
             <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
               Both pick sets are then unioned into a single list. When both models picked the same ticker (a consensus pick) the row carries both models&apos; scores and rationales and the combined
@@ -39,7 +39,7 @@ export function MethodologySection() {
         </AccordionItem>
 
         <AccordionItem value="metrics">
-          <AccordionTrigger className="text-base font-semibold text-left">Performance Metrics</AccordionTrigger>
+          <AccordionTrigger className="text-base font-semibold text-left">What the numbers mean</AccordionTrigger>
           <AccordionContent>
             <ul className="space-y-2 text-[15px] leading-relaxed text-muted-foreground">
               <li>
@@ -64,7 +64,7 @@ export function MethodologySection() {
         </AccordionItem>
 
         <AccordionItem value="pricing">
-          <AccordionTrigger className="text-base font-semibold text-left">Options Pricing Context</AccordionTrigger>
+          <AccordionTrigger className="text-base font-semibold text-left">How pricing is tracked</AccordionTrigger>
           <AccordionContent>
             <p className="text-[15px] leading-relaxed text-muted-foreground">
               Entry prices are estimated at 9:30 AM using the contract&rsquo;s mark price (midpoint of bid/ask). Closing prices are recorded at 4:05 PM ET using the same mark-price methodology. All
@@ -74,7 +74,7 @@ export function MethodologySection() {
         </AccordionItem>
 
         <AccordionItem value="sources">
-          <AccordionTrigger className="text-base font-semibold text-left">Data Sources</AccordionTrigger>
+          <AccordionTrigger className="text-base font-semibold text-left">Where the data comes from</AccordionTrigger>
           <AccordionContent>
             <p className="text-[15px] leading-relaxed text-muted-foreground">
               Stock and option prices (bid, ask, mark, greeks, open interest, volume) are sourced live from the Schwab Market Data API via authenticated OAuth. Sentiment data is scraped from
@@ -85,7 +85,7 @@ export function MethodologySection() {
         </AccordionItem>
 
         <AccordionItem value="comparison">
-          <AccordionTrigger className="text-base font-semibold text-left">Model Comparison</AccordionTrigger>
+          <AccordionTrigger className="text-base font-semibold text-left">How the models page works</AccordionTrigger>
           <AccordionContent>
             <p className="text-[15px] leading-relaxed text-muted-foreground">
               The Models page replays the trade history under each model&apos;s ranking in isolation. For each day in the selected range we take the picks the model originally chose, compute their
@@ -97,7 +97,7 @@ export function MethodologySection() {
         </AccordionItem>
 
         <AccordionItem value="disclaimers">
-          <AccordionTrigger className="text-base font-semibold text-left">Disclaimers</AccordionTrigger>
+          <AccordionTrigger className="text-base font-semibold text-left">The fine print</AccordionTrigger>
           <AccordionContent>
             <p className="text-[15px] leading-relaxed text-muted-foreground">
               This dashboard is for informational and educational purposes only. Past performance does not guarantee future results. The trades shown are generated by an automated system and do not

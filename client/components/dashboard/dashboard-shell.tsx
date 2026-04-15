@@ -193,11 +193,17 @@ export function DashboardShell() {
 
   return (
     <div className="animate-in fade-in duration-300">
-      <PageToolbar leftControls={<DateNavigator dates={dates} index={dayIndex} onChange={setDayIndex} />} rightSlot={<DataFreshness state={freshnessState} asOf={liveQuotes?.as_of} />} />
+      <div className="hidden sm:block">
+        <PageToolbar leftControls={<DateNavigator dates={dates} index={dayIndex} onChange={setDayIndex} />} rightSlot={<DataFreshness state={freshnessState} asOf={liveQuotes?.as_of} />} />
+      </div>
 
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-7">
+        <div className="mb-4 flex items-center justify-between gap-2 sm:hidden">
+          <DateNavigator dates={dates} index={dayIndex} onChange={setDayIndex} />
+          {filtered?.trades?.length ? <TopNFilter value={topFilter} onChange={setTopFilter} /> : null}
+        </div>
         {filtered?.trades?.length ? (
-          <div className="mb-4 flex items-center justify-end">
+          <div className="mb-4 hidden items-center justify-end sm:flex">
             <TopNFilter value={topFilter} onChange={setTopFilter} />
           </div>
         ) : null}

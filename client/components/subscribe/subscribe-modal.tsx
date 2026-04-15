@@ -10,12 +10,12 @@ export function SubscribeModal({ children, open, onOpenChange }: { children?: Re
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {children && <DialogTrigger asChild>{children}</DialogTrigger>}
-      <DialogContent className="max-w-md">
+      <DialogContent className="top-[8%] max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-[calc(100%-1.5rem)] translate-y-0 overflow-y-auto sm:top-[50%] sm:w-auto sm:max-w-md sm:translate-y-[-50%]">
         <DialogHeader>
           <DialogTitle className="text-lg font-extrabold">
             Get free daily <span className="text-gradient-brand">trade picks</span>
           </DialogTitle>
-          <DialogDescription>Dual-model options picks delivered to your inbox every morning before market open.</DialogDescription>
+          <DialogDescription>Two robots, ranked options picks, your inbox before the opening bell.</DialogDescription>
         </DialogHeader>
 
         <div className="flex gap-2">
