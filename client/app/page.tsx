@@ -1,13 +1,14 @@
 import { ArrowRight, BarChart3, Brain, Clock, Mail, Shield, TrendingUp, Zap } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Reveal } from "@/components/landing/reveal";
 import { SubscribeCTA } from "@/components/landing/subscribe-cta";
 import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
 
 export const metadata: Metadata = {
   title: "VibeTradez | AI-Powered Options Picks",
   description:
-    "Free daily ranked options picks powered by two independent AI models. OpenAI GPT-5.4 and Claude Opus 4.6 each analyze sentiment and market data, then deliver ranked trade ideas before market open.",
+    "Free daily ranked options picks from two silly models that refuse to agree. GPT-5.4 and Claude Opus 4.6 each scan sentiment, pull live option chains, and deliver ranked trade ideas before market open.",
 };
 
 export default function LandingPage() {
@@ -49,30 +50,39 @@ export default function LandingPage() {
           }}
         />
 
-        <div className="relative z-10 mx-auto max-w-4xl px-5 text-center sm:px-6">
+        <div className="relative z-10 mx-auto max-w-4xl px-5 py-20 text-center sm:px-6 sm:py-24">
           {/* Badge */}
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur-sm sm:mb-8 sm:px-4 sm:py-2 sm:text-sm">
+          <Reveal
+            effect="fall"
+            duration={600}
+            className="mb-8 inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur-sm sm:mb-8 sm:px-4 sm:py-2 sm:text-sm"
+          >
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
             </span>
             Free daily picks before market open
-          </div>
+          </Reveal>
 
           {/* Headline */}
-          <h1 className="mb-5 text-4xl font-extrabold leading-[1.1] tracking-tight sm:mb-6 sm:text-6xl lg:text-7xl">
-            Two AIs.
-            <br />
-            <span className="text-gradient-brand">Zero Humans.</span>
-          </h1>
+          <Reveal effect="blur" delay={120} duration={1100} as="header">
+            <h1 className="mb-6 text-4xl font-extrabold leading-[1.1] tracking-tight sm:mb-6 sm:text-6xl lg:text-7xl">
+              Two silly models.
+              <br />
+              <span className="text-gradient-brand">Zero humans.</span>
+            </h1>
+          </Reveal>
 
-          <p className="mx-auto mb-8 max-w-2xl text-base leading-relaxed text-muted-foreground sm:mb-10 sm:text-xl">
-            I got tired of losing money on my own, so I let GPT-5.4 and Claude Opus 4.6 do it instead. Every morning they independently scan sentiment, pull live option chains, and each pick their top
-            10. You get the union, ranked by combined conviction and delivered before market open. Will they beat the market? Honestly, no idea. But at least the rationale will be well-written.
-          </p>
+          <Reveal effect="rise" delay={280} duration={900}>
+            <p className="mx-auto mb-10 max-w-2xl text-base leading-relaxed text-muted-foreground sm:mb-10 sm:text-xl">
+              I got tired of losing money on my own, so I let two silly models (GPT-5.4 and Claude Opus 4.6) do it instead. Every morning they independently scan sentiment, pull live option chains,
+              and each pick their top 10. You get the union, ranked by combined conviction and delivered before market open. Will they beat the market? Honestly, no idea. But at least the rationales
+              are well-written.
+            </p>
+          </Reveal>
 
           {/* CTAs */}
-          <div className="flex w-full flex-col gap-3 px-2 sm:w-auto sm:flex-row sm:justify-center sm:gap-4 sm:px-0">
+          <Reveal effect="scale" delay={420} duration={700} className="flex w-full flex-col gap-4 px-2 sm:w-auto sm:flex-row sm:justify-center sm:gap-4 sm:px-0">
             <Link
               href="/dashboard"
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-foreground px-8 py-3.5 text-base font-semibold text-background shadow-lg transition-opacity hover:opacity-90"
@@ -84,61 +94,65 @@ export default function LandingPage() {
               <Mail className="h-4 w-4" />
               Subscribe Free
             </SubscribeCTA>
-          </div>
+          </Reveal>
 
-          {/* Model badges */}
-          <div className="mt-10 flex items-center justify-center gap-6 sm:mt-12 sm:gap-8">
-            <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
+          {/* Model badges: opposing slide-ins meeting at the divider */}
+          <div className="mt-12 flex items-center justify-center gap-6 sm:mt-12 sm:gap-8">
+            <Reveal effect="left" delay={560} duration={700} className="flex items-center gap-2.5 text-sm text-muted-foreground">
               <OpenAILogo className="h-5 w-5" />
               <span className="font-medium">GPT-5.4</span>
-            </div>
-            <div className="h-4 w-px bg-border" />
-            <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
+            </Reveal>
+            <Reveal effect="scale" delay={680} duration={500} className="h-4 w-px bg-border" />
+            <Reveal effect="right" delay={560} duration={700} className="flex items-center gap-2.5 text-sm text-muted-foreground">
               <ClaudeLogo className="h-5 w-5" />
               <span className="font-medium">Claude Opus 4.6</span>
-            </div>
+            </Reveal>
           </div>
         </div>
       </section>
 
       {/* ── Features ── */}
-      <section className="border-t bg-card py-16 sm:py-24">
+      <section className="border-t bg-card py-20 sm:py-24">
         <div className="mx-auto max-w-6xl px-5 sm:px-6">
-          <div className="mb-10 text-center sm:mb-16">
+          <Reveal effect="blur" duration={1000} className="mb-14 text-center sm:mb-16">
             <h2 className="mb-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
-              Engineered to <span className="text-gradient-brand">Disagree</span>
+              Built to <span className="text-gradient-brand">disagree</span>
             </h2>
             <p className="mx-auto max-w-2xl text-muted-foreground">
-              Not another signal bot. Two frontier AI models run the same pipeline independently, argue with each other&apos;s picks, and let you watch the results in real time. Think of it as a very
-              expensive experiment.
+              Not another signal bot. Two silly models run the same pipeline independently, side-eye each other&apos;s picks, and let you watch the drama in real time. It&apos;s a very expensive
+              experiment.
             </p>
-          </div>
+          </Reveal>
 
-          <div className="grid gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
-            {features.map((f) => (
-              <div
-                key={f.title}
-                className="group rounded-2xl border border-border bg-background p-5 transition-all hover:shadow-md sm:p-6"
-                style={{
-                  ["--hover-border" as string]: "transparent",
-                }}
-              >
-                <div className="mb-4 inline-flex rounded-xl bg-muted p-3">{f.icon}</div>
-                <h3 className="mb-2 text-lg font-bold">{f.title}</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">{f.description}</p>
-              </div>
-            ))}
+          <div className="grid gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
+            {features.map((f, i) => {
+              // Diagonal stagger across the 3-col grid (row + col), with a
+              // gentle alternating tilt so adjacent cards never animate the
+              // same direction. Mobile collapses to one col which still
+              // staggers nicely top-to-bottom.
+              const col = i % 3;
+              const row = Math.floor(i / 3);
+              const stagger = (col + row) * 90;
+              const effect = i % 2 === 0 ? "rise" : "tilt";
+              return (
+                <Reveal key={f.title} effect={effect} delay={stagger} duration={750} className="group rounded-2xl border border-border bg-background p-6 transition-all hover:shadow-md sm:p-6">
+                  <div className="mb-4 inline-flex rounded-xl bg-muted p-3">{f.icon}</div>
+                  <h3 className="mb-2 text-lg font-bold">{f.title}</h3>
+                  <p className="text-sm leading-relaxed text-muted-foreground">{f.description}</p>
+                </Reveal>
+              );
+            })}
           </div>
         </div>
       </section>
 
       {/* ── How It Works ── */}
-      <section id="how-it-works" className="scroll-mt-16 border-t py-16 sm:py-24">
+      <section id="how-it-works" className="scroll-mt-16 border-t py-20 sm:py-24">
         <div className="mx-auto max-w-5xl px-5 sm:px-6">
-          <div className="mb-10 text-center sm:mb-16">
-            <h2 className="mb-4 text-3xl font-extrabold tracking-tight sm:text-4xl">How It Works</h2>
+          <Reveal effect="blur" duration={1000} className="mb-14 text-center sm:mb-16">
+            <h2 className="mb-4 text-3xl font-extrabold tracking-tight sm:text-4xl">How it works</h2>
             <p className="mx-auto max-w-2xl text-muted-foreground">The whole pipeline runs automatically. I mostly just watch and try not to intervene.</p>
-          </div>
+          </Reveal>
 
           <div className="relative">
             {/* Vertical gradient line */}
@@ -149,9 +163,12 @@ export default function LandingPage() {
               }}
             />
 
-            <div className="space-y-8 sm:space-y-12">
+            <div className="space-y-10 sm:space-y-12">
               {steps.map((step, i) => (
-                <div key={step.title} className="relative flex gap-6">
+                // Each step slides in from the left, walking down the
+                // gradient timeline. Slight delay growth as you scroll
+                // creates a stairstep cadence.
+                <Reveal key={step.title} effect="left" delay={i * 110} duration={750} className="relative flex gap-6">
                   <div className="relative z-10 hidden flex-shrink-0 sm:block">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-border bg-card text-sm font-bold text-foreground">{i + 1}</div>
                   </div>
@@ -163,7 +180,7 @@ export default function LandingPage() {
                     <h3 className="mb-2 text-lg font-bold">{step.title}</h3>
                     <p className="text-sm leading-relaxed text-muted-foreground">{step.description}</p>
                   </div>
-                </div>
+                </Reveal>
               ))}
             </div>
           </div>
@@ -171,26 +188,26 @@ export default function LandingPage() {
       </section>
 
       {/* ── Dual Model Breakdown ── */}
-      <section className="border-t bg-card py-16 sm:py-24">
+      <section className="border-t bg-card py-20 sm:py-24">
         <div className="mx-auto max-w-5xl px-5 sm:px-6">
-          <div className="mb-10 text-center sm:mb-16">
+          <Reveal effect="blur" duration={1000} className="mb-14 text-center sm:mb-16">
             <h2 className="mb-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
-              Dual-Model <span className="text-gradient-brand">Conviction</span>
+              Dual-model <span className="text-gradient-brand">conviction</span>
             </h2>
             <p className="mx-auto max-w-2xl text-muted-foreground">
-              Each model scores every trade 1&ndash;10 and writes a rationale defending its score. When they both pick the same ticker, that trade automatically ranks first. When they disagree? Well,
-              that&apos;s where it gets interesting.
+              Each model scores every trade 1 to 10 and writes a rationale defending its score. When they both pick the same ticker, it gets bumped to the top automatically. When they disagree? Well,
+              that&apos;s where it gets spicy.
             </p>
-          </div>
+          </Reveal>
 
-          <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
-            {/* OpenAI card */}
-            <div className="rounded-2xl border border-gpt-border bg-background p-6 sm:p-8">
+          <div className="grid gap-5 sm:gap-6 md:grid-cols-2">
+            {/* OpenAI card slides from left, Claude from right; they meet in the middle */}
+            <Reveal effect="left" duration={850} className="rounded-2xl border border-gpt-border bg-background p-6 sm:p-8">
               <div className="mb-6 flex items-center gap-3">
                 <OpenAILogo className="h-8 w-8" />
                 <div>
                   <h3 className="text-lg font-bold">OpenAI GPT-5.4</h3>
-                  <p className="text-sm text-muted-foreground">Primary Analyst</p>
+                  <p className="text-sm text-muted-foreground">The analyst</p>
                 </div>
               </div>
               <ul className="space-y-3 text-sm text-muted-foreground">
@@ -207,15 +224,15 @@ export default function LandingPage() {
                   Web search for real-time catalysts and news
                 </li>
               </ul>
-            </div>
+            </Reveal>
 
             {/* Claude card */}
-            <div className="rounded-2xl border border-claude-border bg-background p-6 sm:p-8">
+            <Reveal effect="right" delay={140} duration={850} className="rounded-2xl border border-claude-border bg-background p-6 sm:p-8">
               <div className="mb-6 flex items-center gap-3">
                 <ClaudeLogo className="h-8 w-8" />
                 <div>
                   <h3 className="text-lg font-bold">Claude Opus 4.6</h3>
-                  <p className="text-sm text-muted-foreground">Independent Validator</p>
+                  <p className="text-sm text-muted-foreground">The skeptic</p>
                 </div>
               </div>
               <ul className="space-y-3 text-sm text-muted-foreground">
@@ -232,30 +249,32 @@ export default function LandingPage() {
                   Flags concerns and red flags GPT may have missed
                 </li>
               </ul>
-            </div>
+            </Reveal>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-border bg-background p-5 text-center sm:mt-8 sm:p-6">
+          <Reveal effect="scale" delay={320} duration={750} className="mt-8 rounded-2xl border border-border bg-background p-6 text-center sm:mt-8 sm:p-6">
             <p className="text-sm font-semibold text-foreground">Combined Score = (GPT Score + Claude Score) / 2</p>
             <p className="mt-1 text-xs text-muted-foreground">Trades are re-ranked by combined conviction. Claude breaks ties. Both rationales are visible on the dashboard.</p>
             <p className="mt-3 text-[11px] italic text-muted-foreground/70">
-              * This formula is by no means empirical or derived from something meaningful in quantitative finance. It just felt like it made sense. If two AIs agree, that&apos;s probably worth
-              something. Probably.
+              * This formula is not derived from anything meaningful in quantitative finance. It just felt like it made sense. If two silly models agree, that&apos;s probably worth something.
+              Probably.
             </p>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       {/* ── Subscribe CTA ── */}
-      <section className="border-t py-16 sm:py-24">
+      <section className="border-t py-20 sm:py-24">
         <div className="mx-auto max-w-3xl px-5 text-center sm:px-6">
-          <h2 className="mb-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
-            Start Getting <span className="text-gradient-brand">Picks</span>
-          </h2>
-          <p className="mx-auto mb-8 max-w-xl text-muted-foreground">
-            Completely free. No credit card. No premium tier. Just two AIs doing their best and one human hoping they know what they&apos;re doing. Unsubscribe any time, no hard feelings.
-          </p>
-          <div className="flex w-full flex-col gap-3 px-2 sm:w-auto sm:flex-row sm:justify-center sm:gap-4 sm:px-0">
+          <Reveal effect="blur" duration={1000}>
+            <h2 className="mb-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
+              Start getting <span className="text-gradient-brand">picks</span>
+            </h2>
+            <p className="mx-auto mb-10 max-w-xl text-muted-foreground sm:mb-8">
+              Completely free. No credit card. No premium tier. Just two silly models doing their best and one human hoping they know what they&apos;re doing. Unsubscribe any time, no hard feelings.
+            </p>
+          </Reveal>
+          <Reveal effect="scale" delay={200} duration={650} className="flex w-full flex-col gap-4 px-2 sm:w-auto sm:flex-row sm:justify-center sm:gap-4 sm:px-0">
             <SubscribeCTA className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand px-8 py-3.5 text-base font-semibold text-white shadow-lg transition-opacity hover:opacity-90">
               <Mail className="h-4 w-4" />
               Subscribe Free
@@ -267,7 +286,7 @@ export default function LandingPage() {
               Open Dashboard
               <ArrowRight className="h-4 w-4" />
             </Link>
-          </div>
+          </Reveal>
         </div>
       </section>
 
@@ -303,32 +322,32 @@ export default function LandingPage() {
 const features = [
   {
     icon: <Brain className="h-6 w-6 text-gpt" />,
-    title: "Dual-Model Analysis",
-    description: "Two frontier AI models analyze independently. No groupthink, no peeking at each other's homework. When they agree, you probably want to pay attention.",
+    title: "Two-model analysis",
+    description: "Two silly models analyze independently. No groupthink, no peeking at each other's homework. When they agree, you probably want to pay attention.",
   },
   {
     icon: <TrendingUp className="h-6 w-6 text-claude" />,
-    title: "Live Market Data",
+    title: "Live market data",
     description: "Real-time quotes and full option chains from Schwab. Both models call tools mid-analysis to look up actual prices instead of hallucinating them. Progress.",
   },
   {
     icon: <BarChart3 className="h-6 w-6 text-gpt" />,
-    title: "Full Transparency",
+    title: "Full transparency",
     description: "Every trade shows both scores, both rationales, and any red flags. Nothing is hidden. If the picks are bad, you'll know exactly whose fault it is.",
   },
   {
     icon: <Mail className="h-6 w-6 text-claude" />,
-    title: "Pre-Market Email",
+    title: "Pre-market email",
     description: "Ranked picks in your inbox before the opening bell. EOD results at close. Weekly digest on Fridays. You can also just watch the dashboard and judge silently.",
   },
   {
     icon: <Shield className="h-6 w-6 text-gpt" />,
-    title: "Completely Free",
-    description: "No paywalls, no premium tiers, no credit card. This is a live experiment in letting AI trade. You're welcome to follow along and see how it goes.",
+    title: "Completely free",
+    description: "No paywalls, no premium tiers, no credit card. A live experiment in letting silly models trade. Follow along and see how it goes.",
   },
   {
     icon: <Clock className="h-6 w-6 text-claude" />,
-    title: "End-of-Day Tracking",
+    title: "End-of-day tracking",
     description: 'Every pick is tracked to close. Win rates, P&L, Sharpe, and drawdown are all computed automatically. No cherry-picking, no "trust me bro" screenshots.',
   },
 ];
@@ -336,23 +355,23 @@ const features = [
 const steps = [
   {
     time: "9:00 AM ET",
-    title: "Sentiment Scan",
-    description: "The system scrapes Reddit (r/wallstreetbets, r/options) for trending tickers and sentiment signals. This raw data feeds both AI models.",
+    title: "Sentiment scan",
+    description: "The system scrapes Reddit (r/wallstreetbets, r/options) for trending tickers and sentiment signals. This raw data feeds both models.",
   },
   {
     time: "9:15 AM ET",
-    title: "Dual-Model Analysis",
+    title: "Dual-model analysis",
     description:
       "GPT-5.4 and Claude Opus 4.6 each receive the sentiment data and independently call Schwab for live quotes and option chains. Each produces 10 ranked picks with conviction scores and written rationales.",
   },
   {
     time: "9:25 AM ET",
-    title: "Merge, Rank & Deliver",
+    title: "Merge, rank & deliver",
     description: "Picks from both models are unioned, scored by combined conviction (average of both scores), and re-ranked. The final list is emailed to all subscribers before the opening bell.",
   },
   {
     time: "4:05 PM ET",
-    title: "End-of-Day Results",
+    title: "End-of-day results",
     description: "After close, the system fetches closing prices, computes hypothetical P&L for every pick, and emails results. Everything is saved to the database and surfaces on the dashboard.",
   },
 ];

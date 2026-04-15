@@ -61,7 +61,7 @@ export function getRangeBounds(mode: string, offset: number): { start: string; e
 export function getRangeLabel(mode: string, offset: number): string {
   if (mode === "week") {
     const b = getRangeBounds("week", offset);
-    return `${formatMonthDay(b.start)} – ${formatMonthDay(b.end)}`;
+    return `${formatMonthDay(b.start)} to ${formatMonthDay(b.end)}`;
   }
   if (mode === "month") {
     const d = new Date();

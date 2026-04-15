@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
 import { Metric } from "@/components/ui/metric";
-import { StatCard } from "@/components/ui/stat-card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { fmtPctDec, fmtPnlInt, percentHueColor, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -104,21 +104,16 @@ export function ModelComparisonShell() {
   return (
     <div className="mx-auto max-w-[1200px]">
       <PageToolbar
-        title="Model Comparison"
-        subtitle={data ? `${data.openai.model} vs ${data.anthropic.model} · ${data.total_dual_scored} dual-scored trades` : "Loading…"}
-        primaryControls={
-          <div className="flex items-center gap-1 rounded-md border bg-card p-1">
-            {RANGE_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setRange(opt.value)}
-                className={cn("rounded px-3 py-1 text-xs font-semibold transition-colors", range === opt.value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+        leftControls={
+          <Tabs value={range} onValueChange={(v) => setRange(v as Range)}>
+            <TabsList className="h-8 gap-1 p-1">
+              {RANGE_OPTIONS.map((opt) => (
+                <TabsTrigger key={opt.value} value={opt.value} className="h-6 px-3 text-xs font-semibold">
+                  {opt.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         }
       />
 
@@ -143,47 +138,38 @@ export function ModelComparisonShell() {
 
         {data && hasData && (
           <>
-            <Section title="Headline metrics" subtitle={`Top ${data.top_n} picks per day, replayed under each model's ranking`}>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <StatCard
-                  label="OpenAI net P&L"
-                  value={fmtPnlInt(data.openai.total_pnl)}
-                  tone={data.openai.total_pnl > 0 ? "positive" : data.openai.total_pnl < 0 ? "negative" : "neutral"}
-                  icon={OpenAILogo}
-                  sub={`${data.openai.trades_evaluated} trades`}
-                />
-                <StatCard
-                  label="Anthropic net P&L"
-                  value={fmtPnlInt(data.anthropic.total_pnl)}
-                  tone={data.anthropic.total_pnl > 0 ? "positive" : data.anthropic.total_pnl < 0 ? "negative" : "neutral"}
-                  icon={ClaudeLogo}
-                  sub={`${data.anthropic.trades_evaluated} trades`}
-                />
-                <StatCard
-                  label="Combined net P&L"
-                  value={fmtPnlInt(data.combined.total_pnl)}
-                  tone={data.combined.total_pnl > 0 ? "positive" : data.combined.total_pnl < 0 ? "negative" : "neutral"}
-                  icon={Sparkle}
-                  sub={`${data.combined.trades_evaluated} trades`}
-                />
-                <StatCard
-                  label="Agreement rate"
-                  value={`${Math.round(data.agreement_rate * 100)}%`}
-                  valueColor={percentHueColor(data.agreement_rate * 100)}
-                  sub={`${data.total_dual_scored} dual-scored trades within ±1`}
-                />
-              </div>
-
-              {winner && winner !== "tie" && (
-                <div className="mt-4 flex items-center justify-center gap-2 rounded-md border bg-muted/30 px-4 py-3 text-sm">
-                  <Sparkle className="h-4 w-4 text-amber" />
-                  <span className="font-semibold">{winner === "openai" ? data.openai.model : data.anthropic.model}</span>
-                  <span className="text-muted-foreground">leads by </span>
-                  <span className={cn("font-semibold", pnlColor(Math.abs(data.openai.total_pnl - data.anthropic.total_pnl)))}>
-                    {fmtPnlInt(Math.abs(data.openai.total_pnl - data.anthropic.total_pnl))}
-                  </span>
-                </div>
-              )}
+            <Section title="Head-to-head" subtitle={`Top ${data.top_n} picks per day, replayed under each model's ranking`}>
+              <Card className="overflow-hidden p-0">
+                <CardContent className="p-0">
+                  <div className="grid grid-cols-[1fr_auto_1fr] items-stretch">
+                    <SideStat Logo={OpenAILogo} model={data.openai.model} pnl={data.openai.total_pnl} trades={data.openai.trades_evaluated} align="left" leading={winner === "openai"} />
+                    <div className="flex flex-col items-center justify-center border-x px-3 py-4 sm:px-5">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Agree</span>
+                      <span className="mt-1 text-lg font-semibold tabular-nums sm:text-xl" style={{ color: percentHueColor(data.agreement_rate * 100) }}>
+                        {Math.round(data.agreement_rate * 100)}%
+                      </span>
+                      <span className="mt-0.5 whitespace-nowrap text-[10px] text-muted-foreground">n={data.total_dual_scored}</span>
+                    </div>
+                    <SideStat Logo={ClaudeLogo} model={data.anthropic.model} pnl={data.anthropic.total_pnl} trades={data.anthropic.trades_evaluated} align="right" leading={winner === "anthropic"} />
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t bg-muted/30 px-4 py-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <Sparkle className="h-3.5 w-3.5 text-amber" />
+                      <span className="font-semibold uppercase tracking-wider text-muted-foreground">Combined</span>
+                      <span className={cn("font-semibold tabular-nums", pnlColor(data.combined.total_pnl))}>{fmtPnlInt(data.combined.total_pnl)}</span>
+                      <span className="text-muted-foreground">· {data.combined.trades_evaluated} trades</span>
+                    </div>
+                    {winner && winner !== "tie" && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-muted-foreground">Lead:</span>
+                        <span className={cn("font-semibold tabular-nums", pnlColor(Math.abs(data.openai.total_pnl - data.anthropic.total_pnl)))}>
+                          +{fmtPnlInt(Math.abs(data.openai.total_pnl - data.anthropic.total_pnl))}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             </Section>
 
             <Section title="Cumulative P&L">
@@ -223,6 +209,34 @@ export function ModelComparisonShell() {
             </Section>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function SideStat({
+  Logo,
+  model,
+  pnl,
+  trades,
+  align,
+  leading,
+}: {
+  Logo: React.ComponentType<{ className?: string }>;
+  model: string;
+  pnl: number;
+  trades: number;
+  align: "left" | "right";
+  leading: boolean;
+}) {
+  return (
+    <div className={cn("relative flex min-w-0 items-center gap-2 p-3 sm:gap-3 sm:p-5", align === "right" && "flex-row-reverse text-right")}>
+      {leading && <span className="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wider text-amber sm:top-3 sm:right-3">Lead</span>}
+      <Logo className="h-7 w-7 shrink-0 sm:h-10 sm:w-10" />
+      <div className={cn("flex min-w-0 flex-col", align === "right" && "items-end")}>
+        <span className="w-full truncate font-mono text-[10px] font-medium text-muted-foreground sm:text-[11px]">{model}</span>
+        <span className={cn("mt-0.5 text-lg font-semibold tabular-nums sm:text-3xl", pnlColor(pnl))}>{fmtPnlInt(pnl)}</span>
+        <span className="mt-0.5 text-[10px] text-muted-foreground sm:text-[11px]">{trades} trades</span>
       </div>
     </div>
   );

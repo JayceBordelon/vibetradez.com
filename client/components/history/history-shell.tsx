@@ -3,25 +3,19 @@
 import { BarChart3 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { TopNFilter } from "@/components/dashboard/top-n-filter";
 import { HistorySkeleton } from "@/components/layout/dashboard-skeleton";
-import { DataFreshness } from "@/components/layout/data-freshness";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { Section } from "@/components/layout/section";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
 import { getRangeBounds, getRangeLabel, maxRangeOffset } from "@/lib/date-utils";
-import { usePicker } from "@/lib/picker-context";
 import type { WeekResponse } from "@/types/trade";
 
-import { CapitalEfficiency } from "./capital-efficiency";
 import { DailyBreakdown } from "./daily-breakdown";
 import { DailyPnlChart } from "./daily-pnl-chart";
 import { DateRangeNav } from "./date-range-nav";
 import { EquityCurveChart } from "./equity-curve-chart";
-import { ExposureReturnsChart } from "./exposure-returns-chart";
 import { HistoryStats } from "./history-stats";
-import { MethodologySection } from "./methodology-section";
 import { ModeToggle } from "./mode-toggle";
 
 const STORAGE_KEY = "jt_hist_v2";
@@ -247,21 +241,6 @@ function buildMultiEquityPoints(data: WeekResponse): {
   return Array.from(merged.values()).sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function modeToLabel(mode: string): string {
-  switch (mode) {
-    case "week":
-      return "Weekly";
-    case "month":
-      return "Monthly";
-    case "year":
-      return "Yearly";
-    case "all":
-      return "All-Time";
-    default:
-      return "Performance";
-  }
-}
-
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -273,7 +252,6 @@ function EmptyState() {
 }
 
 export function HistoryShell() {
-  const { picker } = usePicker();
   const [mode, setMode] = useState("week");
   const [rangeOffset, setRangeOffset] = useState(0);
   const [topFilter, setTopFilter] = useState(10);
@@ -310,8 +288,8 @@ export function HistoryShell() {
   // Load range data
   const loadRange = useCallback(() => {
     const b = getRangeBounds(mode, rangeOffset);
-    api.getWeekTrades(b.start, b.end, picker).then(setRawData);
-  }, [mode, rangeOffset, picker]);
+    api.getWeekTrades(b.start, b.end).then(setRawData);
+  }, [mode, rangeOffset]);
 
   useEffect(() => {
     loadRange();
@@ -328,20 +306,14 @@ export function HistoryShell() {
 
   const maxOffset = maxRangeOffset(mode, availableDates);
   const label = getRangeLabel(mode, rangeOffset);
-  const modeLabel = modeToLabel(mode);
 
   const daysWithPnl = agg?.dayStats.filter((d) => d.hasSummaries) ?? [];
-
-  const subtitle = filtered?.days?.length && agg ? `${agg.totalTrades} trades across ${filtered.days.length} trading days${topFilter < 10 ? ` \u00B7 Top ${topFilter}` : ""}` : "Loading\u2026";
 
   return (
     <div className="animate-in fade-in duration-300">
       <PageToolbar
-        title={`${modeLabel} Performance`}
-        subtitle={subtitle}
-        primaryControls={<TopNFilter value={topFilter} onChange={setTopFilter} />}
-        secondaryControls={
-          <div className="flex flex-wrap items-center gap-2">
+        leftControls={
+          <>
             <ModeToggle
               mode={mode}
               onChange={(m) => {
@@ -356,9 +328,8 @@ export function HistoryShell() {
               onPrev={() => setRangeOffset((o) => o + 1)}
               onNext={() => setRangeOffset((o) => o - 1)}
             />
-          </div>
+          </>
         }
-        rightSlot={<DataFreshness state="market-closed" asOf={undefined} />}
       />
 
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-7">
@@ -370,7 +341,7 @@ export function HistoryShell() {
           <>
             {agg.totalWinners + agg.totalLosers > 0 && (
               <>
-                <HistoryStats {...agg} />
+                <HistoryStats {...agg} topN={topFilter} onTopNChange={setTopFilter} />
 
                 {multiEquityPoints.length > 1 && (
                   <Section title="Equity Curve" subtitle="Cumulative P&L over time" className="mt-8">
@@ -383,16 +354,6 @@ export function HistoryShell() {
                     <DailyPnlChart data={daysWithPnl} />
                   </Section>
                 )}
-
-                {daysWithPnl.length > 1 && (
-                  <Section title="Capital Deployment" subtitle="Invested vs returned per day">
-                    <ExposureReturnsChart data={daysWithPnl} />
-                  </Section>
-                )}
-
-                <Section title="Capital Efficiency" subtitle="Period summary">
-                  <CapitalEfficiency totalInvested={agg.totalInvested} totalReturn={agg.totalReturn} totalPnl={agg.totalPnl} roc={agg.roc} />
-                </Section>
               </>
             )}
 
@@ -400,10 +361,6 @@ export function HistoryShell() {
 
             <Section title="Daily Breakdown" subtitle="Click any day to see individual trades">
               <DailyBreakdown dayStats={agg.dayStats} />
-            </Section>
-
-            <Section title="Methodology" className="mt-8">
-              <MethodologySection />
             </Section>
           </>
         ) : null}

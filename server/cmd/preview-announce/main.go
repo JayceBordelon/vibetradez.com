@@ -104,7 +104,7 @@ var launchAnnouncement = templates.AnnouncementData{
 		},
 	},
 	CTAs: []templates.AnnouncementCTA{
-		{Text: "Open the dashboard", URL: "https://vibetradez.com", Style: "primary"},
+		{Text: "Open the dashboard", URL: "https://vibetradez.com/dashboard", Style: "primary"},
 		{Text: "Compare the models", URL: "https://vibetradez.com/models", Style: "secondary"},
 		{Text: "View on GitHub", URL: "https://github.com/JayceBordelon/personal-monorepo", Style: "secondary"},
 	},

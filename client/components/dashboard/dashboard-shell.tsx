@@ -5,12 +5,10 @@ import { CalendarX } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { DashboardSkeleton } from "@/components/layout/dashboard-skeleton";
-import { DataFreshness } from "@/components/layout/data-freshness";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { Section } from "@/components/layout/section";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
-import { usePicker } from "@/lib/picker-context";
 import type { DashboardResponse, DashboardTrade, LiveQuotesResponse } from "@/types/trade";
 
 import { DateNavigator } from "./date-navigator";
@@ -75,7 +73,6 @@ function computeStats(trades: DashboardTrade[]) {
 }
 
 export function DashboardShell() {
-  const { picker } = usePicker();
   const [dates, setDates] = useState<string[]>([]);
   const [dayIndex, setDayIndex] = useState(0);
   const [topFilter, setTopFilter] = useState(10);
@@ -141,8 +138,8 @@ export function DashboardShell() {
   // Load day data
   const loadDay = useCallback(() => {
     const date = dates[dayIndex];
-    api.getTrades(date, picker).then(setRawData);
-  }, [dates, dayIndex, picker]);
+    api.getTrades(date).then(setRawData);
+  }, [dates, dayIndex]);
 
   useEffect(() => {
     // Fire loadDay on every dates change OR once dates have been
@@ -181,32 +178,20 @@ export function DashboardShell() {
     }
   }, [filtered, activeSymbol]);
 
-  const freshnessState: "loading" | "live" | "market-closed" | "pre-market" = !rawData
-    ? "loading"
-    : !liveQuotes
-      ? stats?.hasSummaries
-        ? "market-closed"
-        : "pre-market"
-      : liveQuotes.market_open
-        ? "live"
-        : "market-closed";
-
-  const title = stats?.hasSummaries ? "End of Day Results" : "Today's Plays";
-  const subtitle = filtered?.trades?.length
-    ? `${filtered.trades.length} options picks${topFilter < 10 ? ` · Top ${topFilter}` : ""}${stats?.hasSummaries ? "" : " · 0–7 DTE · Under $200/contract"}`
-    : "Loading…";
-
   return (
     <div className="animate-in fade-in duration-300">
-      <PageToolbar
-        title={title}
-        subtitle={subtitle}
-        primaryControls={<TopNFilter value={topFilter} onChange={setTopFilter} />}
-        secondaryControls={<DateNavigator dates={dates} index={dayIndex} onChange={setDayIndex} />}
-        rightSlot={<DataFreshness state={freshnessState} asOf={liveQuotes?.as_of} />}
-      />
+      <div className="hidden sm:block">
+        <PageToolbar
+          leftControls={<DateNavigator dates={dates} index={dayIndex} onChange={setDayIndex} />}
+          rightSlot={filtered?.trades?.length ? <TopNFilter value={topFilter} onChange={setTopFilter} /> : null}
+        />
+      </div>
 
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-7">
+        <div className="mb-4 flex items-center justify-between gap-2 sm:hidden">
+          <DateNavigator dates={dates} index={dayIndex} onChange={setDayIndex} />
+          {filtered?.trades?.length ? <TopNFilter value={topFilter} onChange={setTopFilter} /> : null}
+        </div>
         {!rawData ? (
           <DashboardSkeleton />
         ) : !filtered?.trades?.length ? (

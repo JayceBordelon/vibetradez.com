@@ -294,7 +294,7 @@ func VerifyTemplates() HealthCheck {
 		TotalTrades: 1, TotalWinners: 1, TotalPnL: 60.0,
 		WinRate: 100.0, TotalInvested: 150.0, TotalReturn: 210.0,
 		BestTrade: "SPY", BestPnL: 60.0, WorstTrade: "SPY", WorstPnL: 60.0,
-		DashboardURL: "https://vibetradez.com",
+		DashboardURL: "https://vibetradez.com/dashboard",
 	}
 	if _, err := RenderWeeklyEmail(sampleWeekly); err != nil {
 		return HealthCheck{Name: "Email Templates", Status: "fail", Detail: err.Error(), Latency: fmtLatency(start)}

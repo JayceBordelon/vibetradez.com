@@ -24,8 +24,6 @@ export interface Trade {
   picked_by_claude: boolean;
 }
 
-export type ModelPicker = "all" | "openai" | "claude";
-
 export interface TradeSummary {
   symbol: string;
   contract_type: string;

@@ -87,8 +87,8 @@ export default function TermsPage() {
 
           <Section id="risk" num={3} title="Significant Risk Disclosure">
             <p>
-              <strong>Options trading involves substantial risk of loss and is not suitable for all investors.</strong> You can lose your entire investment -and in some cases, losses can exceed your
-              initial investment. Short-dated options (0–7 DTE), which are the focus of this platform, are especially volatile and carry elevated risk of total loss.
+              <strong>Options trading involves substantial risk of loss and is not suitable for all investors.</strong> You can lose your entire investment, and in some cases, losses can exceed your
+              initial investment. Short-dated options (0 to 7 DTE), which are the focus of this platform, are especially volatile and carry elevated risk of total loss.
             </p>
             <p>
               Past performance displayed on this platform, whether hypothetical, simulated, or based on actual market data, does not guarantee future results. The P&amp;L figures shown are estimates
