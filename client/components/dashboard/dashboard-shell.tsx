@@ -5,7 +5,6 @@ import { CalendarX } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { DashboardSkeleton } from "@/components/layout/dashboard-skeleton";
-import { DataFreshness } from "@/components/layout/data-freshness";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { Section } from "@/components/layout/section";
 import { Separator } from "@/components/ui/separator";
@@ -181,20 +180,10 @@ export function DashboardShell() {
     }
   }, [filtered, activeSymbol]);
 
-  const freshnessState: "loading" | "live" | "market-closed" | "pre-market" = !rawData
-    ? "loading"
-    : !liveQuotes
-      ? stats?.hasSummaries
-        ? "market-closed"
-        : "pre-market"
-      : liveQuotes.market_open
-        ? "live"
-        : "market-closed";
-
   return (
     <div className="animate-in fade-in duration-300">
       <div className="hidden sm:block">
-        <PageToolbar leftControls={<DateNavigator dates={dates} index={dayIndex} onChange={setDayIndex} />} rightSlot={<DataFreshness state={freshnessState} asOf={liveQuotes?.as_of} />} />
+        <PageToolbar leftControls={<DateNavigator dates={dates} index={dayIndex} onChange={setDayIndex} />} />
       </div>
 
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-7">

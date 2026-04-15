@@ -1,8 +1,8 @@
 "use client";
 
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const OPTIONS = ["1", "3", "5", "10"] as const;
+const OPTIONS = [1, 3, 5, 10] as const;
 
 interface TopNFilterProps {
   value: number;
@@ -11,15 +11,17 @@ interface TopNFilterProps {
 
 export function TopNFilter({ value, onChange }: TopNFilterProps) {
   return (
-    <div className="flex shrink-0 items-center gap-2">
-      <span className="hidden text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:inline">Top</span>
-      <ToggleGroup type="single" value={String(value)} onValueChange={(v) => v && onChange(Number(v))} variant="outline" size="sm">
+    <Select value={String(value)} onValueChange={(v) => onChange(Number(v))}>
+      <SelectTrigger size="sm" className="h-8 w-[104px] text-xs font-semibold" aria-label="Show top N picks">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent align="end">
         {OPTIONS.map((n) => (
-          <ToggleGroupItem key={n} value={n} className="h-8 px-2 text-xs font-semibold sm:px-3 sm:text-sm">
-            {n}
-          </ToggleGroupItem>
+          <SelectItem key={n} value={String(n)} className="text-xs">
+            Top {n}
+          </SelectItem>
         ))}
-      </ToggleGroup>
-    </div>
+      </SelectContent>
+    </Select>
   );
 }

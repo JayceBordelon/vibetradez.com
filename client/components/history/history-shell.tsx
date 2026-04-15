@@ -4,7 +4,6 @@ import { BarChart3 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { HistorySkeleton } from "@/components/layout/dashboard-skeleton";
-import { DataFreshness } from "@/components/layout/data-freshness";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { Section } from "@/components/layout/section";
 import { Separator } from "@/components/ui/separator";
@@ -335,7 +334,6 @@ export function HistoryShell() {
             />
           </>
         }
-        rightSlot={<DataFreshness state="market-closed" asOf={undefined} />}
       />
 
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-7">
