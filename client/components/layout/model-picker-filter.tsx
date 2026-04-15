@@ -42,7 +42,7 @@ export function ModelPickerFilter() {
             )}
           >
             {opt.Icon && <opt.Icon className="h-3.5 w-3.5" />}
-            <span>{opt.label}</span>
+            <span className={cn(opt.Icon && "hidden sm:inline")}>{opt.label}</span>
           </button>
         );
       })}

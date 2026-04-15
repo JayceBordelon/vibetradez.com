@@ -1,5 +1,6 @@
 "use client";
 
+import { Mail } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -51,8 +52,9 @@ export function NavBar({ onSubscribe }: NavBarProps) {
         <div className="ml-auto flex items-center gap-2">
           {pathname !== "/models" && <ModelPickerFilter />}
           {onSubscribe && (
-            <Button variant="outline" size="sm" onClick={onSubscribe} className="h-8 px-3 text-xs sm:text-sm">
-              Subscribe
+            <Button variant="outline" size="sm" onClick={onSubscribe} className="h-8 gap-1.5 px-2 text-xs sm:px-3 sm:text-sm" aria-label="Subscribe">
+              <Mail className="h-3.5 w-3.5 sm:hidden" />
+              <span className="hidden sm:inline">Subscribe</span>
             </Button>
           )}
         </div>
