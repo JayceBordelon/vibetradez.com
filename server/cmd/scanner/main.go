@@ -645,7 +645,7 @@ func runWeeklyEmail(cfg *config.Config, db *store.Store, emailClient *email.Clie
 		BestPnL:       bestPnL,
 		WorstTrade:    worstTrade,
 		WorstPnL:      worstPnL,
-		DashboardURL:  "https://vibetradez.com",
+		DashboardURL:  "https://vibetradez.com/dashboard",
 	}
 
 	htmlContent, err := templates.RenderWeeklyEmail(data)
