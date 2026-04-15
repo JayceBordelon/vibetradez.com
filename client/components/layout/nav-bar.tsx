@@ -4,7 +4,6 @@ import { Mail } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { ModelPickerFilter } from "@/components/layout/model-picker-filter";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +49,6 @@ export function NavBar({ onSubscribe }: NavBarProps) {
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
-          {pathname !== "/models" && <ModelPickerFilter />}
           {onSubscribe && (
             <Button variant="outline" size="sm" onClick={onSubscribe} className="h-8 gap-1.5 px-2 text-xs sm:px-3 sm:text-sm" aria-label="Subscribe">
               <Mail className="h-3.5 w-3.5 sm:hidden" />

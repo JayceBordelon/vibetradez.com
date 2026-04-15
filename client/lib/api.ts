@@ -1,9 +1,4 @@
-import type { ApiResponse, ChartParams, ChartResponse, DashboardResponse, LiveQuotesResponse, ModelComparisonResponse, ModelPicker, WeekResponse } from "@/types/trade";
-
-function pickerSuffix(picker?: ModelPicker, prefix: "?" | "&" = "&") {
-  if (!picker || picker === "all") return "";
-  return `${prefix}picker=${picker}`;
-}
+import type { ApiResponse, ChartParams, ChartResponse, DashboardResponse, LiveQuotesResponse, ModelComparisonResponse, WeekResponse } from "@/types/trade";
 
 const HEADERS: Record<string, string> = {
   "X-VT-Source": "dashboard",
@@ -30,9 +25,9 @@ export async function clientFetch<T>(path: string, options?: RequestInit): Promi
 export const api = {
   getTradeDates: (limit = 30) => clientFetch<{ dates: string[] }>(`/api/trades/dates?limit=${limit}`),
 
-  getTrades: (date?: string, picker?: ModelPicker) => clientFetch<DashboardResponse>(date ? `/api/trades/today?date=${date}${pickerSuffix(picker)}` : `/api/trades/today${pickerSuffix(picker, "?")}`),
+  getTrades: (date?: string) => clientFetch<DashboardResponse>(date ? `/api/trades/today?date=${date}` : "/api/trades/today"),
 
-  getWeekTrades: (start: string, end: string, picker?: ModelPicker) => clientFetch<WeekResponse>(`/api/trades/week?start=${start}&end=${end}${pickerSuffix(picker)}`),
+  getWeekTrades: (start: string, end: string) => clientFetch<WeekResponse>(`/api/trades/week?start=${start}&end=${end}`),
 
   getLiveQuotes: () => clientFetch<LiveQuotesResponse>("/api/quotes/live"),
 

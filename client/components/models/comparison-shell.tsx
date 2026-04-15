@@ -230,13 +230,13 @@ function SideStat({
   leading: boolean;
 }) {
   return (
-    <div className={cn("relative flex items-center gap-3 p-4 sm:p-5", align === "right" && "flex-row-reverse text-right")}>
+    <div className={cn("relative flex min-w-0 items-center gap-2 p-3 sm:gap-3 sm:p-5", align === "right" && "flex-row-reverse text-right")}>
       {leading && <span className="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wider text-amber sm:top-3 sm:right-3">Lead</span>}
-      <Logo className="h-8 w-8 shrink-0 sm:h-10 sm:w-10" />
+      <Logo className="h-7 w-7 shrink-0 sm:h-10 sm:w-10" />
       <div className={cn("flex min-w-0 flex-col", align === "right" && "items-end")}>
-        <span className="max-w-[120px] truncate font-mono text-[11px] font-medium text-muted-foreground sm:max-w-[200px]">{model}</span>
-        <span className={cn("mt-0.5 text-xl font-semibold tabular-nums sm:text-3xl", pnlColor(pnl))}>{fmtPnlInt(pnl)}</span>
-        <span className="mt-0.5 text-[11px] text-muted-foreground">{trades} trades</span>
+        <span className="w-full truncate font-mono text-[10px] font-medium text-muted-foreground sm:text-[11px]">{model}</span>
+        <span className={cn("mt-0.5 text-lg font-semibold tabular-nums sm:text-3xl", pnlColor(pnl))}>{fmtPnlInt(pnl)}</span>
+        <span className="mt-0.5 text-[10px] text-muted-foreground sm:text-[11px]">{trades} trades</span>
       </div>
     </div>
   );

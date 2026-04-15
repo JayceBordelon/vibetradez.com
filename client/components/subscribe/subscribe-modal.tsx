@@ -15,7 +15,7 @@ export function SubscribeModal({ children, open, onOpenChange }: { children?: Re
           <DialogTitle className="text-lg font-extrabold">
             Get free daily <span className="text-gradient-brand">trade picks</span>
           </DialogTitle>
-          <DialogDescription>Two robots, ranked options picks, your inbox before the opening bell.</DialogDescription>
+          <DialogDescription>Two models, ranked options picks, your inbox before the opening bell.</DialogDescription>
         </DialogHeader>
 
         <div className="flex gap-2">

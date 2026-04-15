@@ -57,13 +57,13 @@ export function SymbolTabs({ trades, activeSymbol, onSelect }: SymbolTabsProps) 
   const active = symbolMap.get(activeSymbol);
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+      <div className="flex shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         <Sparkles className="h-3 w-3" />
         <span>AI Pick</span>
       </div>
       <Select value={activeSymbol} onValueChange={onSelect}>
-        <SelectTrigger className="h-auto w-full min-w-[200px] py-2 sm:w-[320px]" aria-label="Select an AI-picked trade to chart">
+        <SelectTrigger className="h-auto w-full min-w-0 flex-1 py-2 sm:w-[320px] sm:flex-none" aria-label="Select an AI-picked trade to chart">
           <SelectValue placeholder="Select a pick">{active && <PickSummary entry={active} />}</SelectValue>
         </SelectTrigger>
         <SelectContent className="min-w-[260px]">

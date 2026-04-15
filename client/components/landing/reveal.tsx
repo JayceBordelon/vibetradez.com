@@ -4,14 +4,31 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
+type Effect = "rise" | "fall" | "left" | "right" | "scale" | "tilt" | "blur" | "fade";
+
 interface RevealProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   className?: string;
   delay?: number;
+  duration?: number;
+  effect?: Effect;
   as?: "div" | "section" | "li" | "article" | "header" | "span";
 }
 
-export function Reveal({ children, className, delay = 0, as = "div" }: RevealProps) {
+const HIDDEN: Record<Effect, string> = {
+  rise: "translate-y-8 opacity-0 blur-[2px]",
+  fall: "-translate-y-6 opacity-0",
+  left: "-translate-x-10 opacity-0",
+  right: "translate-x-10 opacity-0",
+  scale: "scale-90 opacity-0 blur-[3px]",
+  tilt: "translate-y-6 -rotate-2 opacity-0",
+  blur: "scale-[1.04] opacity-0 blur-[6px]",
+  fade: "opacity-0",
+};
+
+const SHOWN = "translate-x-0 translate-y-0 rotate-0 scale-100 opacity-100 blur-0";
+
+export function Reveal({ children, className, delay = 0, duration = 800, effect = "rise", as = "div" }: RevealProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
 
@@ -41,10 +58,15 @@ export function Reveal({ children, className, delay = 0, as = "div" }: RevealPro
   return (
     <Tag
       ref={ref}
-      style={delay ? { transitionDelay: `${delay}ms` } : undefined}
+      style={{
+        transitionDelay: delay ? `${delay}ms` : undefined,
+        transitionDuration: `${duration}ms`,
+        // Slight overshoot for a springy settle on transform-based effects.
+        transitionTimingFunction: effect === "fade" || effect === "blur" ? "cubic-bezier(0.22, 1, 0.36, 1)" : "cubic-bezier(0.16, 1.16, 0.3, 1)",
+      }}
       className={cn(
-        "transition-[opacity,transform,filter] duration-[800ms] ease-out will-change-transform motion-reduce:transition-none",
-        visible ? "translate-y-0 opacity-100 blur-0" : "translate-y-6 opacity-0 blur-[2px]",
+        "transition-[opacity,transform,filter] will-change-transform motion-reduce:transition-none motion-reduce:transform-none motion-reduce:blur-0",
+        visible ? SHOWN : HIDDEN[effect],
         className
       )}
     >

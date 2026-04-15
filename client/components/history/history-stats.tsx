@@ -57,7 +57,7 @@ export function HistoryStats({
 
   return (
     <div>
-      {/* Inline filter row — Top-N applies to the stats and breakdown
+      {/* Inline filter row: Top-N applies to the stats and breakdown
           beneath it. Equity curve still overlays all four overlaid. */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Performance Snapshot</div>
@@ -93,8 +93,8 @@ export function HistoryStats({
         />
         <DualMetricCard
           label="Best / Worst Trade"
-          left={{ value: fmtPnlInt(bestPnl), hint: bestSym ? `$${bestSym}` : "—", positive: bestPnl >= 0 }}
-          right={{ value: fmtPnlInt(worstPnl), hint: worstSym ? `$${worstSym}` : "—", positive: worstPnl >= 0 }}
+          left={{ value: fmtPnlInt(bestPnl), hint: bestSym ? `$${bestSym}` : "·", positive: bestPnl >= 0 }}
+          right={{ value: fmtPnlInt(worstPnl), hint: worstSym ? `$${worstSym}` : "·", positive: worstPnl >= 0 }}
         />
       </div>
     </div>

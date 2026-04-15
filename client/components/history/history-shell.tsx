@@ -9,16 +9,13 @@ import { Section } from "@/components/layout/section";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
 import { getRangeBounds, getRangeLabel, maxRangeOffset } from "@/lib/date-utils";
-import { usePicker } from "@/lib/picker-context";
 import type { WeekResponse } from "@/types/trade";
 
 import { DailyBreakdown } from "./daily-breakdown";
 import { DailyPnlChart } from "./daily-pnl-chart";
 import { DateRangeNav } from "./date-range-nav";
 import { EquityCurveChart } from "./equity-curve-chart";
-import { ExposureReturnsChart } from "./exposure-returns-chart";
 import { HistoryStats } from "./history-stats";
-import { MethodologySection } from "./methodology-section";
 import { ModeToggle } from "./mode-toggle";
 
 const STORAGE_KEY = "jt_hist_v2";
@@ -255,7 +252,6 @@ function EmptyState() {
 }
 
 export function HistoryShell() {
-  const { picker } = usePicker();
   const [mode, setMode] = useState("week");
   const [rangeOffset, setRangeOffset] = useState(0);
   const [topFilter, setTopFilter] = useState(10);
@@ -292,8 +288,8 @@ export function HistoryShell() {
   // Load range data
   const loadRange = useCallback(() => {
     const b = getRangeBounds(mode, rangeOffset);
-    api.getWeekTrades(b.start, b.end, picker).then(setRawData);
-  }, [mode, rangeOffset, picker]);
+    api.getWeekTrades(b.start, b.end).then(setRawData);
+  }, [mode, rangeOffset]);
 
   useEffect(() => {
     loadRange();
@@ -358,12 +354,6 @@ export function HistoryShell() {
                     <DailyPnlChart data={daysWithPnl} />
                   </Section>
                 )}
-
-                {daysWithPnl.length > 1 && (
-                  <Section title="Capital Deployment" subtitle="Invested vs returned per day">
-                    <ExposureReturnsChart data={daysWithPnl} />
-                  </Section>
-                )}
               </>
             )}
 
@@ -371,10 +361,6 @@ export function HistoryShell() {
 
             <Section title="Daily Breakdown" subtitle="Click any day to see individual trades">
               <DailyBreakdown dayStats={agg.dayStats} />
-            </Section>
-
-            <Section title="Methodology" className="mt-8">
-              <MethodologySection />
             </Section>
           </>
         ) : null}
