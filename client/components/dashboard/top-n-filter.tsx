@@ -11,11 +11,11 @@ interface TopNFilterProps {
 
 export function TopNFilter({ value, onChange }: TopNFilterProps) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Top</span>
+    <div className="flex shrink-0 items-center gap-2">
+      <span className="hidden text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:inline">Top</span>
       <ToggleGroup type="single" value={String(value)} onValueChange={(v) => v && onChange(Number(v))} variant="outline" size="sm">
         {OPTIONS.map((n) => (
-          <ToggleGroupItem key={n} value={n} className="h-8 px-2.5 text-xs font-semibold sm:px-3 sm:text-sm">
+          <ToggleGroupItem key={n} value={n} className="h-8 px-2 text-xs font-semibold sm:px-3 sm:text-sm">
             {n}
           </ToggleGroupItem>
         ))}
