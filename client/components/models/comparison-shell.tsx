@@ -11,6 +11,7 @@ import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
 import { Metric } from "@/components/ui/metric";
 import { StatCard } from "@/components/ui/stat-card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { fmtPctDec, fmtPnlInt, percentHueColor, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -104,21 +105,16 @@ export function ModelComparisonShell() {
   return (
     <div className="mx-auto max-w-[1200px]">
       <PageToolbar
-        title="Model Comparison"
-        subtitle={data ? `${data.openai.model} vs ${data.anthropic.model} · ${data.total_dual_scored} dual-scored trades` : "Loading…"}
-        primaryControls={
-          <div className="flex items-center gap-1 rounded-md border bg-card p-1">
-            {RANGE_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setRange(opt.value)}
-                className={cn("rounded px-3 py-1 text-xs font-semibold transition-colors", range === opt.value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+        leftControls={
+          <Tabs value={range} onValueChange={(v) => setRange(v as Range)}>
+            <TabsList className="h-8 gap-1 p-1">
+              {RANGE_OPTIONS.map((opt) => (
+                <TabsTrigger key={opt.value} value={opt.value} className="h-6 px-3 text-xs font-semibold">
+                  {opt.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         }
       />
 

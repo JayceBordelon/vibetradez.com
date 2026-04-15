@@ -191,18 +191,15 @@ export function DashboardShell() {
         ? "live"
         : "market-closed";
 
-  const title = stats?.hasSummaries ? "End of Day Results" : "Today's Plays";
-  const subtitle = filtered?.trades?.length
-    ? `${filtered.trades.length} options picks${topFilter < 10 ? ` · Top ${topFilter}` : ""}${stats?.hasSummaries ? "" : " · 0–7 DTE · Under $200/contract"}`
-    : "Loading…";
-
   return (
     <div className="animate-in fade-in duration-300">
       <PageToolbar
-        title={title}
-        subtitle={subtitle}
-        primaryControls={<TopNFilter value={topFilter} onChange={setTopFilter} />}
-        secondaryControls={<DateNavigator dates={dates} index={dayIndex} onChange={setDayIndex} />}
+        leftControls={
+          <>
+            <DateNavigator dates={dates} index={dayIndex} onChange={setDayIndex} />
+            <TopNFilter value={topFilter} onChange={setTopFilter} />
+          </>
+        }
         rightSlot={<DataFreshness state={freshnessState} asOf={liveQuotes?.as_of} />}
       />
 
