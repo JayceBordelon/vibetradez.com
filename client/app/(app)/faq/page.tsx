@@ -47,8 +47,8 @@ const faqs = [
     answer: `Subscribers receive up to three emails per market day. The morning email (before 9:30 AM ET) contains every union pick with full contract details, thesis, catalyst, sentiment, risk level, both models' conviction scores and rationales, and the cross-examination verdict each model wrote on the other's pick. The end-of-day email (after 4:05 PM ET) shows how each pick performed: entry vs closing price, stock movement, per-trade P&L, and a leaderboard noting which model's top picks made the most money that day. On Fridays the weekly digest aggregates everything across the week. All emails are free and always will be.`,
   },
   {
-    question: "How do I subscribe?",
-    answer: `Click Subscribe in the nav bar and sign in with Google. That creates your account and drops you on the daily picks list in one step. You can sign out or unsubscribe at any time.`,
+    question: "How do I sign up?",
+    answer: `Click Sign in in the nav bar and continue with Google. That creates your account and signs you up for the daily picks email in one step. You can sign out or unsubscribe at any time.`,
   },
 ];
 

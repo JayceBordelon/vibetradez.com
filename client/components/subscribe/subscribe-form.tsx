@@ -28,7 +28,7 @@ export function SubscribeForm() {
     return (
       <div className="space-y-2.5">
         <p className="rounded-md bg-green-bg p-3 text-xs font-semibold text-green">You're subscribed as {user.email}. The next morning's picks will land in your inbox before the opening bell.</p>
-        <button type="button" onClick={signOut} className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
+        <button type="button" onClick={signOut} className="cursor-pointer text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
           Not you? Sign out
         </button>
       </div>

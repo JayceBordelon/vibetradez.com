@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, Mail } from "lucide-react";
+import { LogIn, LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -59,9 +59,9 @@ export function NavBar({ onSubscribe }: NavBarProps) {
             <AccountMenu user={user} />
           ) : (
             onSubscribe && (
-              <Button variant="outline" size="sm" onClick={onSubscribe} className="h-8 gap-1.5 px-2 text-xs sm:px-3 sm:text-sm" aria-label="Subscribe">
-                <Mail className="h-3.5 w-3.5 sm:hidden" />
-                <span className="hidden sm:inline">Subscribe</span>
+              <Button variant="outline" size="sm" onClick={onSubscribe} className="h-8 gap-1.5 px-2 text-xs sm:px-3 sm:text-sm" aria-label="Sign in or sign up">
+                <LogIn className="h-3.5 w-3.5 sm:hidden" />
+                <span className="hidden sm:inline">Sign in</span>
               </Button>
             )
           )}
@@ -93,20 +93,25 @@ function AccountMenu({ user }: { user: SessionUser }) {
   }, [open]);
 
   const initials = (user.name || user.email).trim().charAt(0).toUpperCase() || "?";
+  const [pictureFailed, setPictureFailed] = useState(false);
+  // Google returns a =s96-c suffix; we display at 24-32px so a smaller
+  // variant is plenty and avoids the bigger images' stricter rate limits.
+  const avatarSrc = user.picture_url ? user.picture_url.replace(/=s\d+(-c)?$/, "=s64-c") : "";
+  const showImage = Boolean(avatarSrc) && !pictureFailed;
 
   return (
     <div ref={rootRef} className="relative">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex h-8 items-center gap-2 rounded-full border bg-background px-1 pr-3 text-xs font-semibold transition-colors hover:bg-muted"
+        className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border bg-background text-xs font-semibold transition-colors hover:bg-muted sm:w-auto sm:justify-start sm:gap-2 sm:overflow-visible sm:pl-1 sm:pr-3"
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <span className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-muted">
-          {user.picture_url ? (
+        <span className="flex size-full shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted sm:size-6">
+          {showImage ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={user.picture_url} alt="" className="h-full w-full object-cover" />
+            <img src={avatarSrc} alt="" referrerPolicy="no-referrer" onError={() => setPictureFailed(true)} className="h-full w-full object-cover" />
           ) : (
             <span className="text-[10px] font-extrabold">{initials}</span>
           )}
@@ -126,7 +131,7 @@ function AccountMenu({ user }: { user: SessionUser }) {
               setOpen(false);
               void signOut();
             }}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold hover:bg-muted"
+            className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-xs font-semibold hover:bg-muted"
           >
             <LogOut className="h-3.5 w-3.5" />
             Sign out
