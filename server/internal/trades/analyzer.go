@@ -51,6 +51,16 @@ type Trade struct {
 	// flag is true.
 	PickedByOpenAI bool `json:"picked_by_openai"`
 	PickedByClaude bool `json:"picked_by_claude"`
+
+	// Cross-examination verdicts. Once both pickers finish their
+	// independent runs, each model is shown the other's full pick list
+	// and writes a one-sentence verdict on every trade in it. GPTVerdict
+	// is what GPT wrote about this trade (only populated when Claude
+	// picked it); ClaudeVerdict is what Claude wrote about this trade
+	// (only populated when GPT picked it). Consensus picks may carry
+	// both verdicts.
+	GPTVerdict    string `json:"gpt_verdict"`
+	ClaudeVerdict string `json:"claude_verdict"`
 }
 
 type TradeSummary struct {
@@ -167,6 +177,49 @@ func (a *Analyzer) GetTopTrades(ctx context.Context, sentimentData []sentiment.T
 	}
 
 	return trades, nil
+}
+
+// WriteVerdicts runs the cross-examination pass: given the other model's
+// pick list (and this model's own picks for context), it returns a
+// one-sentence verdict per symbol. Errors are non-fatal at the caller
+// level — the cron treats verdicts as best-effort enrichment and ships
+// the trades regardless.
+func (a *Analyzer) WriteVerdicts(ctx context.Context, ownTrades, otherTrades []Trade, ownModelName, otherModelName string) (map[string]string, error) {
+	if len(otherTrades) == 0 {
+		return map[string]string{}, nil
+	}
+
+	ownJSON, err := json.Marshal(verdictTradeView(ownTrades))
+	if err != nil {
+		return nil, fmt.Errorf("marshal own trades: %w", err)
+	}
+	otherJSON, err := json.Marshal(verdictTradeView(otherTrades))
+	if err != nil {
+		return nil, fmt.Errorf("marshal other trades: %w", err)
+	}
+
+	today := time.Now().Format("2006-01-02")
+	weekday := time.Now().Weekday().String()
+	prompt := fmt.Sprintf(CrossExaminationPrompt, today, weekday, ownModelName, otherModelName, string(ownJSON), otherModelName, string(otherJSON))
+
+	resp, err := a.client.Responses.New(ctx, responses.ResponseNewParams{
+		Model:       shared.ResponsesModel(a.model),
+		Input:       responses.ResponseNewParamsInputUnion{OfString: openai.String(prompt)},
+		Temperature: openai.Float(0.4),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("openai verdicts responses.new: %w", err)
+	}
+	text := strings.TrimSpace(resp.OutputText())
+	if text == "" {
+		return nil, fmt.Errorf("empty verdict response from OpenAI")
+	}
+
+	var verdicts map[string]string
+	if err := json.Unmarshal([]byte(stripMarkdownCodeBlock(text)), &verdicts); err != nil {
+		return nil, fmt.Errorf("parse verdict json: %w", err)
+	}
+	return verdicts, nil
 }
 
 func (a *Analyzer) GetEndOfDayAnalysis(ctx context.Context, morningTrades []Trade) ([]TradeSummary, error) {

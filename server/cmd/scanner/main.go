@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"sync"
 	"syscall"
 	"time"
 
@@ -128,6 +129,20 @@ func main() {
 	}
 
 	scraper := sentiment.NewScraper()
+
+	// Probe all market signal sources on startup so broken scrapers are
+	// caught immediately after deploy, not hours later at the morning cron.
+	log.Println("Probing market signal sources...")
+	probeCtx, probeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	for _, src := range scraper.ProbeAll(probeCtx) {
+		if src.OK {
+			log.Printf("  %s: OK (%d tickers, %s)", src.Name, src.Tickers, src.Latency.Truncate(time.Millisecond))
+		} else {
+			log.Printf("  %s: FAIL (%s, %s)", src.Name, src.Err, src.Latency.Truncate(time.Millisecond))
+		}
+	}
+	probeCancel()
+
 	analyzer := trades.NewAnalyzer(cfg.OpenAIAPIKey, cfg.OpenAIModel, schwabClient)
 	emailClient := email.NewClient(cfg.ResendAPIKey)
 	gptDisplayName := config.ModelDisplayName(cfg.OpenAIModel)
@@ -194,7 +209,7 @@ func main() {
 	c.Start()
 
 	// Start HTTP API server in background
-	srv := server.New(db, schwabClient, emailClient, cfg.EmailFrom, cfg.OpenAIAPIKey, cfg.OpenAIModel, cfg.AnthropicAPIKey, cfg.AnthropicModel, cfg.AdminKey, cfg.ServerPort)
+	srv := server.New(db, schwabClient, scraper, emailClient, cfg.EmailFrom, cfg.OpenAIAPIKey, cfg.OpenAIModel, cfg.AnthropicAPIKey, cfg.AnthropicModel, cfg.AdminKey, cfg.ServerPort)
 	go srv.Start()
 
 	log.Printf("Options trade scanner started")
@@ -279,6 +294,15 @@ func unionPicks(openaiTrades, claudeTrades []trades.Trade) []trades.Trade {
 				existing.ClaudeScore = t.ClaudeScore
 				existing.ClaudeRationale = t.ClaudeRationale
 			}
+			// Verdicts attach to a trade as part of the OTHER model's
+			// list, so each side may carry one. Preserve both when both
+			// sides supplied non-empty verdicts (consensus picks).
+			if t.GPTVerdict != "" {
+				existing.GPTVerdict = t.GPTVerdict
+			}
+			if t.ClaudeVerdict != "" {
+				existing.ClaudeVerdict = t.ClaudeVerdict
+			}
 			// Prefer the more detailed contract data from whichever side
 			// supplied non-zero values, falling through to existing.
 			if existing.EstimatedPrice == 0 && t.EstimatedPrice != 0 {
@@ -362,8 +386,8 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 
 	log.Println("Starting trade analysis...")
 
-	// Get sentiment data from WSB
-	log.Println("Scraping WSB sentiment...")
+	// Gather market signals from Yahoo Finance, Finviz, and SEC EDGAR
+	log.Println("Scraping market signals...")
 	sentimentData, err := scraper.GetTrendingTickers(ctx, 20)
 	if err != nil {
 		log.Printf("Warning: error getting sentiment data: %v", err)
@@ -394,6 +418,61 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 		} else {
 			claudeTrades = ct
 			log.Printf("%s produced %d picks", claudeDisplayName, len(claudeTrades))
+		}
+	}
+
+	// Cross-examination pass: once both models have independently picked,
+	// each reads the other's full pick list and writes a one-sentence
+	// verdict per trade. Verdicts are best-effort enrichment — if either
+	// call fails we ship the trades without commentary rather than block
+	// the morning email. Run in parallel since neither call depends on
+	// the other.
+	if len(openaiTrades) > 0 && len(claudeTrades) > 0 {
+		log.Println("Running cross-examination pass...")
+		var (
+			gptVerdicts    map[string]string
+			claudeVerdicts map[string]string
+			vWG            sync.WaitGroup
+		)
+		vCtx, vCancel := context.WithTimeout(ctx, 5*time.Minute)
+		defer vCancel()
+
+		vWG.Add(2)
+		go func() {
+			defer vWG.Done()
+			v, vErr := analyzer.WriteVerdicts(vCtx, openaiTrades, claudeTrades, gptDisplayName, claudeDisplayName)
+			if vErr != nil {
+				log.Printf("Warning: %s cross-examination failed: %v", gptDisplayName, vErr)
+				return
+			}
+			gptVerdicts = v
+			log.Printf("%s wrote %d verdicts on %s picks", gptDisplayName, len(v), claudeDisplayName)
+		}()
+		go func() {
+			defer vWG.Done()
+			v, vErr := claudePicker.WriteVerdicts(vCtx, claudeTrades, openaiTrades, claudeDisplayName, gptDisplayName)
+			if vErr != nil {
+				log.Printf("Warning: %s cross-examination failed: %v", claudeDisplayName, vErr)
+				return
+			}
+			claudeVerdicts = v
+			log.Printf("%s wrote %d verdicts on %s picks", claudeDisplayName, len(v), gptDisplayName)
+		}()
+		vWG.Wait()
+
+		// Verdicts attach to the trade in the OTHER model's list: GPT's
+		// verdict on a Claude pick rides with that Claude trade, and
+		// vice versa. Union below dedupes by symbol so consensus picks
+		// end up carrying both verdicts.
+		for i := range claudeTrades {
+			if v, ok := gptVerdicts[claudeTrades[i].Symbol]; ok {
+				claudeTrades[i].GPTVerdict = v
+			}
+		}
+		for i := range openaiTrades {
+			if v, ok := claudeVerdicts[openaiTrades[i].Symbol]; ok {
+				openaiTrades[i].ClaudeVerdict = v
+			}
 		}
 	}
 
@@ -442,6 +521,8 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 			CombinedScore:   t.CombinedScore,
 			PickedByOpenAI:  t.PickedByOpenAI,
 			PickedByClaude:  t.PickedByClaude,
+			GPTVerdict:      t.GPTVerdict,
+			ClaudeVerdict:   t.ClaudeVerdict,
 		}
 	}
 

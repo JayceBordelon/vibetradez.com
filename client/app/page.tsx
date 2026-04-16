@@ -8,7 +8,7 @@ import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
 export const metadata: Metadata = {
   title: "VibeTradez | AI-Powered Options Picks",
   description:
-    "Free daily ranked options picks from two silly models that refuse to agree. GPT-5.4 and Claude Opus 4.6 each scan sentiment, pull live option chains, and deliver ranked trade ideas before market open.",
+    "A controlled experiment between two silly models. GPT-5.4 and Claude Opus 4.6 get the exact same market signals, the exact same prompt, and the exact same tools, then independently pick their top 10 and roast each other's picks. Delivered before market open.",
 };
 
 export default function LandingPage() {
@@ -75,9 +75,9 @@ export default function LandingPage() {
 
           <Reveal effect="rise" delay={280} duration={900}>
             <p className="mx-auto mb-10 max-w-2xl text-base leading-relaxed text-muted-foreground sm:mb-10 sm:text-xl">
-              I got tired of losing money on my own, so I let two silly models (GPT-5.4 and Claude Opus 4.6) do it instead. Every morning they independently scan sentiment, pull live option chains,
-              and each pick their top 10. You get the union, ranked by combined conviction and delivered before market open. Will they beat the market? Honestly, no idea. But at least the rationales
-              are well-written.
+              A controlled experiment between two silly models. Every morning, GPT-5.4 and Claude Opus 4.6 get the exact same market signals, the exact same prompt, and the exact same tools, then go
+              off alone and each pick their top 10. After they finish, each model reads the other&apos;s picks and writes a one-sentence roast (or grudging nod) on every trade. You get the union
+              before market open, both rationales attached, and a live argument in your inbox.
             </p>
           </Reveal>
 
@@ -119,8 +119,8 @@ export default function LandingPage() {
               Built to <span className="text-gradient-brand">disagree</span>
             </h2>
             <p className="mx-auto max-w-2xl text-muted-foreground">
-              Not another signal bot. Two silly models run the same pipeline independently, side-eye each other&apos;s picks, and let you watch the drama in real time. It&apos;s a very expensive
-              experiment.
+              Not another signal bot. Same data, same prompt, same tools: the only thing that changes is which model is reasoning. Then they cross-examine each other&apos;s picks and you get to watch
+              the drama in real time. It&apos;s a very expensive A/B test.
             </p>
           </Reveal>
 
@@ -187,77 +187,78 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Dual Model Breakdown ── */}
+      {/* Independent Models Breakdown */}
       <section className="border-t bg-card py-20 sm:py-24">
         <div className="mx-auto max-w-5xl px-5 sm:px-6">
           <Reveal effect="blur" duration={1000} className="mb-14 text-center sm:mb-16">
             <h2 className="mb-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
-              Dual-model <span className="text-gradient-brand">conviction</span>
+              Independent picks, then <span className="text-gradient-brand">cross-examined</span>
             </h2>
             <p className="mx-auto max-w-2xl text-muted-foreground">
-              Each model scores every trade 1 to 10 and writes a rationale defending its score. When they both pick the same ticker, it gets bumped to the top automatically. When they disagree? Well,
-              that&apos;s where it gets spicy.
+              Both models start from the exact same data, prompt, and toolset, then go off alone and pick their top 10. Once they&apos;re done, each one reads the other&apos;s picks and writes a
+              one-sentence verdict on every trade. You see both sides on every contract.
             </p>
           </Reveal>
 
           <div className="grid gap-5 sm:gap-6 md:grid-cols-2">
-            {/* OpenAI card slides from left, Claude from right; they meet in the middle */}
+            {/* Two identical setups, only the model varies. Slide-in from
+                opposing sides reinforces the symmetry of the experiment. */}
             <Reveal effect="left" duration={850} className="rounded-2xl border border-gpt-border bg-background p-6 sm:p-8">
               <div className="mb-6 flex items-center gap-3">
                 <OpenAILogo className="h-8 w-8" />
                 <div>
                   <h3 className="text-lg font-bold">OpenAI GPT-5.4</h3>
-                  <p className="text-sm text-muted-foreground">The analyst</p>
+                  <p className="text-sm text-muted-foreground">Independent contestant</p>
                 </div>
               </div>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2">
                   <Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-gpt" />
-                  Generates 10 ranked trade ideas from sentiment + live market data
+                  Picks 10 ranked contracts from the shared market signals, alone
                 </li>
                 <li className="flex items-start gap-2">
                   <Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-gpt" />
-                  Multi-turn tool use with Schwab quotes and option chains
+                  Same Schwab quotes, options chain, and web search as Claude
                 </li>
                 <li className="flex items-start gap-2">
                   <Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-gpt" />
-                  Web search for real-time catalysts and news
+                  Then writes a one-sentence verdict on every Claude pick
                 </li>
               </ul>
             </Reveal>
 
-            {/* Claude card */}
             <Reveal effect="right" delay={140} duration={850} className="rounded-2xl border border-claude-border bg-background p-6 sm:p-8">
               <div className="mb-6 flex items-center gap-3">
                 <ClaudeLogo className="h-8 w-8" />
                 <div>
                   <h3 className="text-lg font-bold">Claude Opus 4.6</h3>
-                  <p className="text-sm text-muted-foreground">The skeptic</p>
+                  <p className="text-sm text-muted-foreground">Independent contestant</p>
                 </div>
               </div>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2">
                   <Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-claude" />
-                  Independently picks its own top 10 from the same raw data
+                  Picks 10 ranked contracts from the shared market signals, alone
                 </li>
                 <li className="flex items-start gap-2">
                   <Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-claude" />
-                  Same Schwab + web search tool access as GPT
+                  Same Schwab quotes, options chain, and web search as GPT
                 </li>
                 <li className="flex items-start gap-2">
                   <Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-claude" />
-                  Flags concerns and red flags GPT may have missed
+                  Then writes a one-sentence verdict on every GPT pick
                 </li>
               </ul>
             </Reveal>
           </div>
 
           <Reveal effect="scale" delay={320} duration={750} className="mt-8 rounded-2xl border border-border bg-background p-6 text-center sm:mt-8 sm:p-6">
-            <p className="text-sm font-semibold text-foreground">Combined Score = (GPT Score + Claude Score) / 2</p>
-            <p className="mt-1 text-xs text-muted-foreground">Trades are re-ranked by combined conviction. Claude breaks ties. Both rationales are visible on the dashboard.</p>
+            <p className="text-sm font-semibold text-foreground">Two pick lists, four scores per consensus trade, one big argument</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Picks get unioned. Trades both models picked rank ahead of solo picks. Every trade carries the original rationale plus the other model&apos;s one-line verdict.
+            </p>
             <p className="mt-3 text-[11px] italic text-muted-foreground/70">
-              * This formula is not derived from anything meaningful in quantitative finance. It just felt like it made sense. If two silly models agree, that&apos;s probably worth something.
-              Probably.
+              * Nothing here is derived from quantitative finance. It just felt fair to let both sides talk. If both silly models agree, that&apos;s probably worth something. Probably.
             </p>
           </Reveal>
         </div>
@@ -322,8 +323,8 @@ export default function LandingPage() {
 const features = [
   {
     icon: <Brain className="h-6 w-6 text-gpt" />,
-    title: "Two-model analysis",
-    description: "Two silly models analyze independently. No groupthink, no peeking at each other's homework. When they agree, you probably want to pay attention.",
+    title: "Independent picks",
+    description: "Same data, same prompt, same tools. Each model goes off alone and ranks its top 10. No groupthink, no peeking, no shared scratchpad. The only variable is the model itself.",
   },
   {
     icon: <TrendingUp className="h-6 w-6 text-claude" />,
@@ -331,9 +332,14 @@ const features = [
     description: "Real-time quotes and full option chains from Schwab. Both models call tools mid-analysis to look up actual prices instead of hallucinating them. Progress.",
   },
   {
+    icon: <Brain className="h-6 w-6 text-claude" />,
+    title: "Cross-examination pass",
+    description: "Once both lists are locked, each model reads the other's picks and writes a one-sentence verdict on every trade. Roasts, grudging respect, and the occasional cosign.",
+  },
+  {
     icon: <BarChart3 className="h-6 w-6 text-gpt" />,
     title: "Full transparency",
-    description: "Every trade shows both scores, both rationales, and any red flags. Nothing is hidden. If the picks are bad, you'll know exactly whose fault it is.",
+    description: "Every trade shows both scores, the original rationale, and the other model's verdict. Nothing is hidden. If a pick is bad, you'll know exactly whose fault it is.",
   },
   {
     icon: <Mail className="h-6 w-6 text-claude" />,
@@ -355,19 +361,26 @@ const features = [
 const steps = [
   {
     time: "9:00 AM ET",
-    title: "Sentiment scan",
-    description: "The system scrapes Reddit (r/wallstreetbets, r/options) for trending tickers and sentiment signals. This raw data feeds both models.",
+    title: "Market signal scan",
+    description: "The system aggregates trending tickers and market signals from StockTwits, Yahoo Finance, Finviz, and SEC EDGAR filings. The exact same payload is handed to both models.",
   },
   {
     time: "9:15 AM ET",
-    title: "Dual-model analysis",
+    title: "Independent picks",
     description:
-      "GPT-5.4 and Claude Opus 4.6 each receive the sentiment data and independently call Schwab for live quotes and option chains. Each produces 10 ranked picks with conviction scores and written rationales.",
+      "GPT-5.4 and Claude Opus 4.6 are run in parallel, alone, with the same prompt and the same Schwab + web search tools. Each produces 10 ranked contracts with conviction scores and written rationales. Neither model sees the other's work yet.",
+  },
+  {
+    time: "9:20 AM ET",
+    title: "Cross-examination",
+    description:
+      "Once both pick lists are locked, each model reads the other's 10 trades and writes a one-sentence verdict on every single one. Roasts, grudging respect, the occasional cosign. Verdicts are stored on the trade and shown next to the original rationale.",
   },
   {
     time: "9:25 AM ET",
-    title: "Merge, rank & deliver",
-    description: "Picks from both models are unioned, scored by combined conviction (average of both scores), and re-ranked. The final list is emailed to all subscribers before the opening bell.",
+    title: "Merge & deliver",
+    description:
+      "Picks are unioned. Trades both models picked rank ahead of solo picks, ties broken by combined conviction. The final list, both rationales, and both verdicts are emailed to subscribers before the opening bell.",
   },
   {
     time: "4:05 PM ET",

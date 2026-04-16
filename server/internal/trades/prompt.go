@@ -2,7 +2,7 @@ package trades
 
 const AnalysisPrompt = `You are an expert options trader. Today is %s (%s).
 
-SENTIMENT DATA FROM WALLSTREETBETS:
+MARKET SIGNALS (trending tickers, unusual volume, insider buys):
 %s
 
 TOOLS AVAILABLE:
@@ -11,13 +11,13 @@ TOOLS AVAILABLE:
 - web_search: Use ONLY for news, earnings dates, catalysts, and market context. Do NOT use web search for stock prices or option prices — use the Schwab tools instead.
 
 WORKFLOW:
-1. Identify 12-15 candidate tickers from the sentiment data and your market knowledge.
+1. Identify 12-15 candidate tickers from the market signals above and your own market knowledge.
 2. Call get_stock_quotes for all candidates to get current prices.
 3. Use web search for news/catalysts/earnings context on the top candidates.
 4. Call get_option_chain for your top 10 picks to get real bid/ask/mark on specific contracts.
 5. Build your final 10 recommendations using ACTUAL option prices from the chain data.
 
-If the sentiment data is empty, use web search to find trending stocks and market movers, then follow the same workflow.
+If the market signals are empty, use web search to find trending stocks and market movers, then follow the same workflow.
 
 REQUIREMENTS:
 - Each trade MUST be a DIFFERENT ticker symbol — no duplicate tickers allowed
@@ -116,3 +116,41 @@ Only respond with the JSON array, no other text.`
 // directly. The previous ClaudeValidationPrompt was removed when the
 // pipeline switched from a proposer/validator model to two independent
 // pickers running the same workflow on the same raw sentiment data.
+
+// CrossExaminationPrompt is the second-pass prompt each model runs after
+// both have produced their independent top-10. The model is shown the
+// OTHER model's pick list and asked to write one short, specific
+// sentence per pick: a critique, a cosign, or a flag. No tools are
+// granted; this is a pure reasoning pass over the rationales already
+// produced. Verdicts persist on the trade row and surface beside the
+// original rationale on the dashboard and in the morning email.
+//
+// Format args (in order): today's date, weekday, your model name, your
+// own picks JSON, the other model's name, the other model's picks JSON.
+const CrossExaminationPrompt = `You are an expert options trader. Today is %s (%s).
+
+Earlier this morning, you (%s) and another model (%s) each independently produced your own top-10 options picks for today. You both received the EXACT same sentiment data, the EXACT same prompt, and the EXACT same toolset (Schwab quotes, options chain, web search). Now that both pick lists are locked, you are being shown the OTHER model's picks and asked for your honest take.
+
+YOUR OWN PICKS (for context, what YOU concluded was best today):
+%s
+
+THE OTHER MODEL'S PICKS (%s) — write ONE SENTENCE on EACH:
+%s
+
+INSTRUCTIONS:
+- For EVERY pick in the other model's list, write ONE concise sentence (max ~30 words). No more, no less.
+- The sentence should reflect YOUR honest analytical take on that pick, given the analysis you just did. Critique, flag, cosign, or grudging respect are all fair.
+- Be specific. Reference the actual ticker, catalyst, sentiment, contract structure, or risk. Generic praise or generic dismissal is useless.
+- If the other model picked a trade you ALSO picked, acknowledge the agreement and add what you specifically liked about the setup.
+- If the other model picked a trade you considered and rejected, say why you rejected it.
+- If the other model picked a trade you didn't consider, give your honest reaction.
+- No hedging filler. No "interesting choice but". Get to the point.
+
+RESPOND WITH ONLY A JSON OBJECT mapping each ticker symbol to your one-sentence verdict on that pick:
+
+{
+  "AAPL": "Reasonable bull setup but the 3 DTE call is too tight given Friday's macro print risk.",
+  "TSLA": "Cosign — earnings sentiment is one-sided and the ATM call is the cleanest expression."
+}
+
+Include EVERY ticker from the other model's pick list. Symbols are case-sensitive and must match exactly. Only respond with the JSON object, no other text.`

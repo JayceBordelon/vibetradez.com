@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     template: "%s | VibeTradez",
   },
   description:
-    "Free daily ranked options picks powered by two LLMs running independently. OpenAI GPT-5.4 and Anthropic Claude Opus 4.6 each pick from the same raw sentiment, then the union is delivered before market open with end-of-day results.",
+    "A controlled experiment between two silly models. GPT-5.4 and Claude Opus 4.6 get the exact same market signals, prompt, and tools, independently pick their top 10, then write a one-sentence verdict on every one of the other model's picks. Delivered before market open.",
   keywords: ["options trading", "AI trading", "daily options picks", "trade alerts", "options analytics", "stock options", "day trading"],
   authors: [{ name: "Jayce Bordelon", url: "https://jaycebordelon.com" }],
   openGraph: {
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     url: "https://vibetradez.com",
     siteName: "VibeTradez",
     title: "VibeTradez | AI-Powered Options Picks",
-    description: "Free daily ranked options picks powered by AI with real-time charts and performance analytics.",
+    description: "Two silly models, same data, same prompt, same tools. Independent picks plus cross-examination, delivered free before the opening bell.",
     images: [
       {
         url: "/og",
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "VibeTradez | AI-Powered Options Picks",
-    description: "Free daily ranked options picks powered by AI with real-time charts and performance analytics.",
+    description: "Two silly models, same data, same prompt, same tools. Independent picks plus cross-examination, delivered free before the opening bell.",
     creator: "@JayceBordelon",
     images: ["/og"],
   },

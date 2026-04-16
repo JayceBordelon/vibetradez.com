@@ -57,7 +57,7 @@ var launchAnnouncement = templates.AnnouncementData{
 		},
 		{
 			Title: "What changed under the hood",
-			Body: template.HTML(`The biggest difference: instead of one AI generating your daily picks, <strong>two different AI models now run the exact same workflow independently</strong> every morning at 9:25 AM ET. <strong>OpenAI GPT-5.4</strong> and <strong>Anthropic Claude Opus 4.6</strong> each get the same Reddit sentiment, the same live Schwab market data, the same options chain, the same web search for catalysts — and each one picks its own ranked top 10 trades for the day.<br><br>
+			Body: template.HTML(`The biggest difference: instead of one AI generating your daily picks, <strong>two different AI models now run the exact same workflow independently</strong> every morning at 9:25 AM ET. <strong>OpenAI GPT-5.4</strong> and <strong>Anthropic Claude Opus 4.6</strong> each get the same market signals, the same live Schwab market data, the same options chain, the same web search for catalysts — and each one picks its own ranked top 10 trades for the day.<br><br>
 			Neither AI sees what the other one picked. When both models happen to pick the same ticker, we call it a <strong>consensus pick</strong> and bubble it to the top of your dashboard. When only one model picked a ticker, you still see it in the list, tagged with whichever AI made the call.`),
 		},
 		{
@@ -97,7 +97,7 @@ var launchAnnouncement = templates.AnnouncementData{
 		{
 			Title: "One thing to remember",
 			Body: template.HTML(`<strong>This is still hypothetical P&amp;L.</strong> I do not actually trade these picks with real money. They are an experiment in whether two AI models picking independently from the same raw sentiment data can outperform one — and you get to watch the experiment run live, every market day, for free.<br><br>
-			The morning pipeline is at the mercy of Reddit's API, Schwab's API, two LLM provider APIs, and my own bugs. If something breaks I will fix it. Bear with me.<br><br>
+			The morning pipeline is at the mercy of Schwab's API, two LLM provider APIs, four market signal sources, and my own bugs. If something breaks I will fix it. Bear with me.<br><br>
 			Sincerely,<br>
 			your favorite idiot,<br>
 			<strong>Jayce</strong>`),

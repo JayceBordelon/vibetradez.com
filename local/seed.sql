@@ -119,7 +119,7 @@ DECLARE
     ];
     theses TEXT[] := ARRAY[
         'Strong technical setup with clean breakout above 50-day MA. Volume confirms momentum and the implied volatility is reasonably priced relative to historical levels.',
-        'Bullish flag forming on the daily chart. Sentiment data shows accelerating mention count on r/wallstreetbets with positive bias.',
+        'Bullish flag forming on the daily chart. Market signals show accelerating mention count on StockTwits with positive bias.',
         'Mean-reversion play targeting the lower bollinger band. Stock is oversold on RSI and the catalyst risk is well-defined into the close.',
         'Directional bet on weekly options to capture the post-event move. Greeks favor the buyer with theta risk minimized over the holding period.',
         'High-conviction sentiment shift detected. Multiple bullish posts in the last 24 hours with elevated comment engagement.',
@@ -159,19 +159,19 @@ DECLARE
     gpt_rationales TEXT[] := ARRAY[
         'Highest conviction pick of the day. Sentiment is leaning hard into this name and the option chain shows favorable bid/ask spreads with healthy open interest.',
         'Strong setup but the catalyst window is tight. Sized smaller because the move could happen pre-market and reduce our edge.',
-        'Multiple confirming signals: WSB mention velocity is up 3x, technicals are clean, and IV is reasonable for the move we expect.',
+        'Multiple confirming signals: StockTwits trending score is up 3x, technicals are clean, and IV is reasonable for the move we expect.',
         'Decent risk/reward but not a top-tier setup. Including in the list because the broader sector tailwind supports the thesis.',
         'Speculative tail-risk play. Cheap premium and the upside scenario is asymmetric — comfortable losing the entire premium here.',
         'Mean-reversion candidate. The stock is oversold on RSI and the option premium prices in more downside than I think will materialize.',
         'Earnings volatility play. The expected move priced in is smaller than the historical move on similar setups for this name.',
-        'Sentiment-driven momentum. WSB is loud on this name and the contract benefits from short-dated gamma into the catalyst.',
+        'Sentiment-driven momentum. StockTwits is loud on this name and the contract benefits from short-dated gamma into the catalyst.',
         'Hedge against broader exposure. Negative beta to SPY makes this useful as a portfolio protection layer for the day.',
         'Lowest-ranked pick. Including for diversification but conviction is the weakest of the day; would skip if forced to take fewer.'
     ];
     claude_rationales TEXT[] := ARRAY[
         'Confirmed: option chain pricing and underlying technical setup match GPT thesis. Greeks favor the direction with theta risk well managed.',
         'Agree on direction but flag IV percentile at 88th — there is real vega risk if the catalyst lands soft. Score reflects that downside.',
-        'Strong technical case is real, but I cannot independently verify the WSB mention velocity claim without the raw data. Discounting slightly.',
+        'Strong technical case is real, but I cannot independently verify the StockTwits trending velocity claim without the raw data. Discounting slightly.',
         'Moderate conviction. Sector tailwind argument is sound but the specific name has weaker relative strength than peers cited.',
         'Cheap premium claim verified, but the asymmetric upside is conditioned on a specific catalyst date I could not confirm via search.',
         'RSI oversold confirmed. However, mean reversion in trending markets is a frequent trap — would rate higher if there were a clearer reversal signal.',

@@ -11,7 +11,7 @@ export async function generateMetadata(): Promise<Metadata> {
     const count = data.trades?.length ?? 0;
     const hasSummaries = data.trades?.some((t) => t.summary) ?? false;
 
-    let description = "Live options trade dashboard with dual-model daily picks (OpenAI + Claude) and real-time analytics.";
+    let description = "Live options trade dashboard. Independent picks from GPT-5.4 and Claude Opus 4.6 with cross-examination verdicts and real-time analytics.";
 
     if (count > 0 && hasSummaries) {
       let totalPnl = 0;
@@ -26,13 +26,13 @@ export async function generateMetadata(): Promise<Metadata> {
         }
       }
       const sign = totalPnl > 0 ? "+" : "";
-      description = `Today: ${count} union picks, ${winners}W/${losers}L, ${sign}$${Math.round(totalPnl)} P&L. Dual-model options dashboard with real-time charts.`;
+      description = `Today: ${count} union picks, ${winners}W/${losers}L, ${sign}$${Math.round(totalPnl)} P&L. Independent picks from GPT and Claude with cross-examination verdicts.`;
     } else if (count > 0) {
       const topSymbols = data.trades
         .slice(0, 3)
         .map((t) => t.trade.symbol)
         .join(", ");
-      description = `Today's ${count} union picks: ${topSymbols} and more. OpenAI + Claude dual-model dashboard.`;
+      description = `Today's ${count} union picks: ${topSymbols} and more. Independent picks from GPT-5.4 and Claude Opus 4.6 with cross-examination verdicts.`;
     }
 
     return {
@@ -53,7 +53,7 @@ export async function generateMetadata(): Promise<Metadata> {
   } catch {
     return {
       title: "Live Dashboard",
-      description: "Live options trade dashboard with dual-model daily picks (OpenAI + Claude) and real-time analytics.",
+      description: "Live options trade dashboard. Independent picks from GPT-5.4 and Claude Opus 4.6 with cross-examination verdicts and real-time analytics.",
       openGraph: {
         title: "VibeTradez | Live Options Dashboard",
         images: [{ url: OG_IMAGE, width: 1200, height: 630 }],

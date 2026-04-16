@@ -43,7 +43,7 @@ func NewClaudePicker(apiKey, model string, schwabClient *schwab.Client) *ClaudeP
 func (p *ClaudePicker) Model() string { return p.model }
 
 // GetTopTrades runs the same workflow the OpenAI Analyzer does — pull in
-// the WSB sentiment, do its own Schwab tool calls and web search, then
+// market signals, do its own Schwab tool calls and web search, then
 // emit 10 ranked trades. Crucially, Claude is not given GPT's picks; it
 // generates its own from scratch. The returned trades have ClaudeScore /
 // ClaudeRationale populated (because Claude is the model that produced
@@ -114,6 +114,96 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentime
 	return trades, nil
 }
 
+// WriteVerdicts runs the cross-examination pass for Claude: given the
+// other model's pick list (and Claude's own picks for context), returns
+// a one-sentence verdict per symbol. No tools are granted; this is a
+// pure reasoning pass over the rationales already produced. Errors are
+// non-fatal at the caller level.
+func (p *ClaudePicker) WriteVerdicts(ctx context.Context, ownTrades, otherTrades []Trade, ownModelName, otherModelName string) (map[string]string, error) {
+	if len(otherTrades) == 0 {
+		return map[string]string{}, nil
+	}
+
+	ownJSON, err := json.Marshal(verdictTradeView(ownTrades))
+	if err != nil {
+		return nil, fmt.Errorf("marshal own trades: %w", err)
+	}
+	otherJSON, err := json.Marshal(verdictTradeView(otherTrades))
+	if err != nil {
+		return nil, fmt.Errorf("marshal other trades: %w", err)
+	}
+
+	today := time.Now().Format("2006-01-02")
+	weekday := time.Now().Weekday().String()
+	prompt := fmt.Sprintf(CrossExaminationPrompt, today, weekday, ownModelName, otherModelName, string(ownJSON), otherModelName, string(otherJSON))
+
+	msg, err := p.client.Messages.New(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.Model(p.model),
+		MaxTokens: 4096,
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("anthropic verdicts messages.new: %w", err)
+	}
+
+	var text strings.Builder
+	for _, block := range msg.Content {
+		if tb, ok := block.AsAny().(anthropic.TextBlock); ok {
+			text.WriteString(tb.Text)
+		}
+	}
+	out := strings.TrimSpace(text.String())
+	if out == "" {
+		return nil, fmt.Errorf("empty verdict response from claude")
+	}
+
+	var verdicts map[string]string
+	if err := json.Unmarshal([]byte(stripMarkdownCodeBlock(out)), &verdicts); err != nil {
+		return nil, fmt.Errorf("parse verdict json: %w", err)
+	}
+	return verdicts, nil
+}
+
+// verdictTradeView projects a Trade down to the fields a model needs to
+// reason about a pick during cross-examination. Strips out scoring
+// fields from the OTHER side so each model judges the trade on its
+// merits, not on the opposing model's confidence.
+type verdictTradeRow struct {
+	Rank         int     `json:"rank"`
+	Symbol       string  `json:"symbol"`
+	ContractType string  `json:"contract_type"`
+	StrikePrice  float64 `json:"strike_price"`
+	Expiration   string  `json:"expiration"`
+	DTE          int     `json:"dte"`
+	CurrentPrice float64 `json:"current_price"`
+	OptionPrice  float64 `json:"option_price"`
+	Catalyst     string  `json:"catalyst"`
+	Thesis       string  `json:"thesis"`
+	RiskLevel    string  `json:"risk_level"`
+}
+
+func verdictTradeView(ts []Trade) []verdictTradeRow {
+	out := make([]verdictTradeRow, len(ts))
+	for i, t := range ts {
+		out[i] = verdictTradeRow{
+			Rank:         t.Rank,
+			Symbol:       t.Symbol,
+			ContractType: t.ContractType,
+			StrikePrice:  t.StrikePrice,
+			Expiration:   t.Expiration,
+			DTE:          t.DTE,
+			CurrentPrice: t.CurrentPrice,
+			OptionPrice:  t.EstimatedPrice,
+			Catalyst:     t.Catalyst,
+			Thesis:       t.Thesis,
+			RiskLevel:    t.RiskLevel,
+		}
+	}
+	return out
+}
+
 func (p *ClaudePicker) buildTools() []anthropic.ToolUnionParam {
 	tools := []anthropic.ToolUnionParam{
 		{OfWebSearchTool20260209: &anthropic.WebSearchTool20260209Param{
@@ -163,17 +253,29 @@ func (p *ClaudePicker) runConversation(ctx context.Context, prompt string) (stri
 		anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
 	}
 
+	var containerID string
+
 	const maxRounds = 10
 	for round := 0; round < maxRounds; round++ {
 		_ = round
-		msg, err := p.client.Messages.New(ctx, anthropic.MessageNewParams{
+		params := anthropic.MessageNewParams{
 			Model:     anthropic.Model(p.model),
 			MaxTokens: 8192,
 			Messages:  messages,
 			Tools:     tools,
-		})
+		}
+		if containerID != "" {
+			params.Container = param.NewOpt(containerID)
+		}
+		msg, err := p.client.Messages.New(ctx, params)
 		if err != nil {
 			return "", fmt.Errorf("anthropic messages.new: %w", err)
+		}
+
+		// Track the code-execution container so follow-up requests can
+		// reattach to it (required when web_search triggers code execution).
+		if msg.Container.JSON.ID.Valid() {
+			containerID = msg.Container.ID
 		}
 
 		var toolResults []anthropic.ContentBlockParamUnion

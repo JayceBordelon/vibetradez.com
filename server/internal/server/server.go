@@ -21,6 +21,7 @@ import (
 
 	"vibetradez.com/internal/email"
 	"vibetradez.com/internal/schwab"
+	"vibetradez.com/internal/sentiment"
 	"vibetradez.com/internal/store"
 	"vibetradez.com/internal/templates"
 	"vibetradez.com/internal/trades"
@@ -31,6 +32,7 @@ var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-
 type Server struct {
 	db             *store.Store
 	schwab         *schwab.Client
+	scraper        *sentiment.Scraper
 	emailClient    *email.Client
 	emailFrom      string
 	openaiKey      string
@@ -56,10 +58,11 @@ type apiResponse struct {
 	Message string `json:"message"`
 }
 
-func New(db *store.Store, schwabClient *schwab.Client, emailClient *email.Client, emailFrom, openaiKey, openaiModel, anthropicKey, anthropicModel, adminKey, port string) *Server {
+func New(db *store.Store, schwabClient *schwab.Client, scraper *sentiment.Scraper, emailClient *email.Client, emailFrom, openaiKey, openaiModel, anthropicKey, anthropicModel, adminKey, port string) *Server {
 	s := &Server{
 		db:             db,
 		schwab:         schwabClient,
+		scraper:        scraper,
 		emailClient:    emailClient,
 		emailFrom:      emailFrom,
 		openaiKey:      openaiKey,
@@ -420,6 +423,43 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		services["schwab"] = serviceHealth{Status: "warn", Detail: "Not configured"}
+	}
+
+	// Market signal sources
+	signalCtx, signalCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer signalCancel()
+	probeResults := s.scraper.ProbeAll(signalCtx)
+	okCount := 0
+	sourceNames := make([]string, 0, len(probeResults))
+	for _, src := range probeResults {
+		if src.OK {
+			okCount++
+		}
+		sourceNames = append(sourceNames, src.Name)
+	}
+	switch {
+	case okCount == len(probeResults):
+		services["market_signals"] = serviceHealth{
+			Status: "ok",
+			Detail: fmt.Sprintf("%d/%d sources healthy (%s)", okCount, len(probeResults), strings.Join(sourceNames, ", ")),
+		}
+	case okCount > 0:
+		var failed []string
+		for _, src := range probeResults {
+			if !src.OK {
+				failed = append(failed, src.Name)
+			}
+		}
+		services["market_signals"] = serviceHealth{
+			Status: "warn",
+			Detail: fmt.Sprintf("%d/%d sources healthy (down: %s)", okCount, len(probeResults), strings.Join(failed, ", ")),
+		}
+	default:
+		services["market_signals"] = serviceHealth{
+			Status: "fail",
+			Detail: "All market signal sources unreachable",
+		}
+		allOK = false
 	}
 
 	// API (self-check)

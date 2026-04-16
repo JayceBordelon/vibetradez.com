@@ -152,6 +152,14 @@ function MorningCard({ dt, liveQuotes }: MorningCardProps) {
                         {trade.gpt_score > 0 && <span className="rounded bg-background px-1.5 py-0.5 tabular-nums text-foreground">{trade.gpt_score}/10</span>}
                       </div>
                       <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{trade.gpt_rationale}</p>
+                      {trade.claude_verdict && (
+                        <p className="mt-2 border-l-2 border-claude/40 pl-2 text-[13px] italic leading-relaxed text-muted-foreground">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase not-italic tracking-wider text-claude">
+                            <ClaudeLogo className="h-3 w-3" /> Claude's verdict
+                          </span>
+                          <span className="ml-2">{trade.claude_verdict}</span>
+                        </p>
+                      )}
                     </div>
                   )}
                   {trade.claude_rationale && (
@@ -162,6 +170,14 @@ function MorningCard({ dt, liveQuotes }: MorningCardProps) {
                         {trade.claude_score > 0 && <span className="rounded bg-background px-1.5 py-0.5 tabular-nums text-foreground">{trade.claude_score}/10</span>}
                       </div>
                       <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{trade.claude_rationale}</p>
+                      {trade.gpt_verdict && (
+                        <p className="mt-2 border-l-2 border-gpt/40 pl-2 text-[13px] italic leading-relaxed text-muted-foreground">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase not-italic tracking-wider text-gpt">
+                            <OpenAILogo className="h-3 w-3" /> OpenAI's verdict
+                          </span>
+                          <span className="ml-2">{trade.gpt_verdict}</span>
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

@@ -138,7 +138,7 @@ export function ModelComparisonShell() {
 
         {data && hasData && (
           <>
-            <Section title="Head-to-head" subtitle={`Top ${data.top_n} picks per day, replayed under each model's ranking`}>
+            <Section title="Head-to-head" subtitle={`Top ${data.top_n} independent picks per day from each model, scored side by side`}>
               <Card className="overflow-hidden p-0">
                 <CardContent className="p-0">
                   <div className="grid grid-cols-[1fr_auto_1fr] items-stretch">

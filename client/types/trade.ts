@@ -22,6 +22,8 @@ export interface Trade {
   combined_score: number;
   picked_by_openai: boolean;
   picked_by_claude: boolean;
+  gpt_verdict: string;
+  claude_verdict: string;
 }
 
 export interface TradeSummary {
