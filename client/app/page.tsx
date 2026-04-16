@@ -1,4 +1,4 @@
-import { ArrowRight, BarChart3, Brain, Clock, Mail, Shield, TrendingUp, Zap } from "lucide-react";
+import { ArrowRight, Brain, Clock, Mail, Shield, TrendingUp, Zap } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Reveal } from "@/components/landing/reveal";
@@ -335,11 +335,6 @@ const features = [
     icon: <Brain className="h-6 w-6 text-claude" />,
     title: "Cross-examination pass",
     description: "Once both lists are locked, each model reads the other's picks and writes a one-sentence verdict on every trade. Roasts, grudging respect, and the occasional cosign.",
-  },
-  {
-    icon: <BarChart3 className="h-6 w-6 text-gpt" />,
-    title: "Full transparency",
-    description: "Every trade shows both scores, the original rationale, and the other model's verdict. Nothing is hidden. If a pick is bad, you'll know exactly whose fault it is.",
   },
   {
     icon: <Mail className="h-6 w-6 text-claude" />,
