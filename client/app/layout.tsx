@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { SessionProvider } from "@/lib/session";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -57,7 +58,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <body className={`${jakarta.variable} ${jetbrains.variable} font-sans antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          {children}
+          <SessionProvider>{children}</SessionProvider>
         </ThemeProvider>
       </body>
     </html>
