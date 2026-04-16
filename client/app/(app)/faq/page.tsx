@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 const faqs = [
   {
     question: "How are the daily trade picks generated?",
-    answer: `Every market day at 9:25 AM ET the system aggregates trending tickers and market signals from four professional sources: StockTwits (social momentum and trending scores), Yahoo Finance (market movers and most active), Finviz (unusual volume screener), and SEC EDGAR (recent 8-K filings with catalyst keywords like mergers and material agreements). The same raw payload is handed independently to two large language models, OpenAI GPT-5.4 and Anthropic Claude Opus 4.6. Both models run the identical prompt with the identical toolset (live Schwab quotes, full options chain with greeks, and built-in web search) in parallel, alone. Each independently produces its own ranked top 10 picks. Neither sees the other's output during this stage. Once both lists are locked, each model is shown the other's 10 trades and asked to write a one-sentence verdict on every single one (a critique, a cosign, or a flag). Those verdicts are stored on the trade alongside the original rationale. Finally the two pick sets are unioned: trades both models picked rank ahead of single-model picks, ties broken by combined conviction. Every price in every pick comes from real market data, and both models are explicitly instructed never to guess.`,
+    answer: `Every market day at 9:25 AM ET the system aggregates trending tickers from StockTwits, Yahoo Finance, Finviz, and SEC EDGAR. That same payload is handed to GPT-5.4 and Claude Opus 4.6 in parallel, each running the identical prompt with live Schwab quotes, full options chains, and web search. Each model independently produces 10 ranked picks without seeing the other's work. Once both lists are locked, each model writes a one-sentence verdict on every one of the other's trades. The two pick sets are then unioned: trades both models picked rank ahead of solo picks, ties broken by combined conviction.`,
   },
   {
     question: "What do the rankings (Top 1, Top 3, Top 5, Top 10) mean?",
@@ -40,7 +40,7 @@ const faqs = [
   },
   {
     question: "Where does the market data come from?",
-    answer: `Stock quotes and option chain data (bid, ask, mark, greeks, open interest, and volume) come from the Schwab Market Data API via an authenticated OAuth connection. Market signals are aggregated from StockTwits, Yahoo Finance, Finviz, and SEC EDGAR. Both LLMs run via the official Go SDKs (openai-go and anthropic-sdk-go) with function-calling against an identical Schwab tool surface plus a built-in web search tool for catalyst and news verification. The whole point is that both models get exactly the same data, exactly the same prompt, and exactly the same tools, so the comparison between them is purely about analytical reasoning.`,
+    answer: `Stock quotes and option chain data (bid, ask, mark, greeks, open interest, volume) come from the Schwab Market Data API via OAuth. Market signals are aggregated from StockTwits, Yahoo Finance, Finviz, and SEC EDGAR. Both models call into the same Schwab + web search tool surface via function-calling so the only variable between them is reasoning.`,
   },
   {
     question: "How often are emails sent, and what do they contain?",

@@ -1,4 +1,4 @@
-import { ArrowRight, Brain, Clock, Mail, Shield, TrendingUp, Zap } from "lucide-react";
+import { ArrowRight, Brain, Clock, Mail, Shield, TrendingUp } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Reveal } from "@/components/landing/reveal";
@@ -184,83 +184,6 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Independent Models Breakdown */}
-      <section className="border-t bg-card py-20 sm:py-24">
-        <div className="mx-auto max-w-5xl px-5 sm:px-6">
-          <Reveal effect="blur" duration={1000} className="mb-14 text-center sm:mb-16">
-            <h2 className="mb-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
-              Independent picks, then <span className="text-gradient-brand">cross-examined</span>
-            </h2>
-            <p className="mx-auto max-w-2xl text-muted-foreground">
-              Both models start from the exact same data, prompt, and toolset, then go off alone and pick their top 10. Once they&apos;re done, each one reads the other&apos;s picks and writes a
-              one-sentence verdict on every trade. You see both sides on every contract.
-            </p>
-          </Reveal>
-
-          <div className="grid gap-5 sm:gap-6 md:grid-cols-2">
-            {/* Two identical setups, only the model varies. Slide-in from
-                opposing sides reinforces the symmetry of the experiment. */}
-            <Reveal effect="left" duration={850} className="rounded-2xl border border-gpt-border bg-background p-6 sm:p-8">
-              <div className="mb-6 flex items-center gap-3">
-                <OpenAILogo className="h-8 w-8" />
-                <div>
-                  <h3 className="text-lg font-bold">OpenAI GPT-5.4</h3>
-                  <p className="text-sm text-muted-foreground">Independent contestant</p>
-                </div>
-              </div>
-              <ul className="space-y-3 text-sm text-muted-foreground">
-                <li className="flex items-start gap-2">
-                  <Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-gpt" />
-                  Picks 10 ranked contracts from the shared market signals, alone
-                </li>
-                <li className="flex items-start gap-2">
-                  <Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-gpt" />
-                  Same Schwab quotes, options chain, and web search as Claude
-                </li>
-                <li className="flex items-start gap-2">
-                  <Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-gpt" />
-                  Then writes a one-sentence verdict on every Claude pick
-                </li>
-              </ul>
-            </Reveal>
-
-            <Reveal effect="right" delay={140} duration={850} className="rounded-2xl border border-claude-border bg-background p-6 sm:p-8">
-              <div className="mb-6 flex items-center gap-3">
-                <ClaudeLogo className="h-8 w-8" />
-                <div>
-                  <h3 className="text-lg font-bold">Claude Opus 4.6</h3>
-                  <p className="text-sm text-muted-foreground">Independent contestant</p>
-                </div>
-              </div>
-              <ul className="space-y-3 text-sm text-muted-foreground">
-                <li className="flex items-start gap-2">
-                  <Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-claude" />
-                  Picks 10 ranked contracts from the shared market signals, alone
-                </li>
-                <li className="flex items-start gap-2">
-                  <Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-claude" />
-                  Same Schwab quotes, options chain, and web search as GPT
-                </li>
-                <li className="flex items-start gap-2">
-                  <Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-claude" />
-                  Then writes a one-sentence verdict on every GPT pick
-                </li>
-              </ul>
-            </Reveal>
-          </div>
-
-          <Reveal effect="scale" delay={320} duration={750} className="mt-8 rounded-2xl border border-border bg-background p-6 text-center sm:mt-8 sm:p-6">
-            <p className="text-sm font-semibold text-foreground">Two pick lists, four scores per consensus trade, one big argument</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Picks get unioned. Trades both models picked rank ahead of solo picks. Every trade carries the original rationale plus the other model&apos;s one-line verdict.
-            </p>
-            <p className="mt-3 text-[11px] italic text-muted-foreground/70">
-              * Nothing here is derived from quantitative finance. It just felt fair to let both sides talk. If both silly models agree, that&apos;s probably worth something. Probably.
-            </p>
-          </Reveal>
         </div>
       </section>
 
