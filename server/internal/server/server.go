@@ -20,6 +20,7 @@ import (
 	openaioption "github.com/openai/openai-go/v3/option"
 
 	"vibetradez.com/internal/email"
+	"vibetradez.com/internal/google"
 	"vibetradez.com/internal/schwab"
 	"vibetradez.com/internal/sentiment"
 	"vibetradez.com/internal/store"
@@ -32,6 +33,7 @@ var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-
 type Server struct {
 	db             *store.Store
 	schwab         *schwab.Client
+	google         *google.Client
 	scraper        *sentiment.Scraper
 	emailClient    *email.Client
 	emailFrom      string
@@ -40,6 +42,8 @@ type Server struct {
 	anthropicKey   string
 	anthropicModel string
 	adminKey       string
+	sessionCookie  string
+	sessionTTL     time.Duration
 	mux            *http.ServeMux
 	port           string
 }
@@ -58,10 +62,11 @@ type apiResponse struct {
 	Message string `json:"message"`
 }
 
-func New(db *store.Store, schwabClient *schwab.Client, scraper *sentiment.Scraper, emailClient *email.Client, emailFrom, openaiKey, openaiModel, anthropicKey, anthropicModel, adminKey, port string) *Server {
+func New(db *store.Store, schwabClient *schwab.Client, googleClient *google.Client, scraper *sentiment.Scraper, emailClient *email.Client, emailFrom, openaiKey, openaiModel, anthropicKey, anthropicModel, adminKey, sessionCookie string, sessionTTL time.Duration, port string) *Server {
 	s := &Server{
 		db:             db,
 		schwab:         schwabClient,
+		google:         googleClient,
 		scraper:        scraper,
 		emailClient:    emailClient,
 		emailFrom:      emailFrom,
@@ -70,6 +75,8 @@ func New(db *store.Store, schwabClient *schwab.Client, scraper *sentiment.Scrape
 		anthropicKey:   anthropicKey,
 		anthropicModel: anthropicModel,
 		adminKey:       adminKey,
+		sessionCookie:  sessionCookie,
+		sessionTTL:     sessionTTL,
 		mux:            http.NewServeMux(),
 		port:           port,
 	}
@@ -81,11 +88,15 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/health", s.handleHealth)
 	s.mux.HandleFunc("/auth/schwab", s.handleSchwabAuth)
 	s.mux.HandleFunc("/auth/callback", s.handleSchwabCallback)
+	s.mux.HandleFunc("/auth/google", s.handleGoogleLogin)
+	s.mux.HandleFunc("/auth/google/callback", s.handleGoogleCallback)
+	s.mux.HandleFunc("/auth/logout", s.handleLogout)
 	s.mux.HandleFunc("/admin/announce", s.handleAnnounce)
 
 	// API routes — require internal header (requests must come from the website)
 	s.mux.HandleFunc("/api/subscribe", requireInternal(s.handleSubscribe))
 	s.mux.HandleFunc("/api/unsubscribe", requireInternal(s.handleUnsubscribe))
+	s.mux.HandleFunc("/api/me", requireInternal(s.attachUser(s.handleMe)))
 	s.mux.HandleFunc("/api/trades/today", requireInternal(s.handleTradesToday))
 	s.mux.HandleFunc("/api/trades/dates", requireInternal(s.handleTradeDates))
 	s.mux.HandleFunc("/api/trades/week", requireInternal(s.handleTradesWeek))

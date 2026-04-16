@@ -59,6 +59,13 @@ services:
       CRON_SCHEDULE_CLOSE: "0 16 * * 0"
       CRON_SCHEDULE_WEEKLY: "0 17 * * 0"
       ADMIN_KEY: local-admin-key
+      # Google OAuth — stubs are syntactically valid but won't complete a real exchange.
+      # Replace locally if you want to test the sign-in flow end-to-end.
+      GOOGLE_CLIENT_ID: stub-google-client-id
+      GOOGLE_CLIENT_SECRET: stub-google-client-secret
+      GOOGLE_CALLBACK_URL: http://localhost:3001/auth/google/callback
+      SESSION_COOKIE_NAME: vt_session
+      SESSION_TTL_DAYS: "30"
     ports:
       - "8080:8080"
     depends_on:

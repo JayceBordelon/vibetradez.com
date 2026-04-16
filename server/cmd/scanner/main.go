@@ -13,6 +13,7 @@ import (
 
 	"vibetradez.com/internal/config"
 	"vibetradez.com/internal/email"
+	"vibetradez.com/internal/google"
 	"vibetradez.com/internal/schwab"
 	"vibetradez.com/internal/sentiment"
 	"vibetradez.com/internal/server"
@@ -128,6 +129,8 @@ func main() {
 		log.Println("Schwab: not configured (SCHWAB_APP_KEY / SCHWAB_SECRET not set)")
 	}
 
+	googleClient := google.NewClient(cfg.GoogleClientID, cfg.GoogleClientSecret, cfg.GoogleCallbackURL)
+
 	scraper := sentiment.NewScraper()
 
 	// Probe all market signal sources on startup so broken scrapers are
@@ -206,10 +209,19 @@ func main() {
 		log.Fatalf("Failed to add weekly email cron job: %v", err)
 	}
 
+	_, err = c.AddFunc("0 2 * * *", func() {
+		n, m, err := db.SweepExpired()
+		log.Printf("Session sweep: %d sessions, %d oauth_states, err=%v", n, m, err)
+	})
+	if err != nil {
+		log.Fatalf("Failed to add session sweep cron job: %v", err)
+	}
+
 	c.Start()
 
+	sessionTTL := time.Duration(cfg.SessionTTLDays) * 24 * time.Hour
 	// Start HTTP API server in background
-	srv := server.New(db, schwabClient, scraper, emailClient, cfg.EmailFrom, cfg.OpenAIAPIKey, cfg.OpenAIModel, cfg.AnthropicAPIKey, cfg.AnthropicModel, cfg.AdminKey, cfg.ServerPort)
+	srv := server.New(db, schwabClient, googleClient, scraper, emailClient, cfg.EmailFrom, cfg.OpenAIAPIKey, cfg.OpenAIModel, cfg.AnthropicAPIKey, cfg.AnthropicModel, cfg.AdminKey, cfg.SessionCookieName, sessionTTL, cfg.ServerPort)
 	go srv.Start()
 
 	log.Printf("Options trade scanner started")

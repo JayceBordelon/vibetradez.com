@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -23,6 +24,11 @@ type Config struct {
 	SchwabSecret       string
 	SchwabCallbackURL  string
 	AdminKey           string
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleCallbackURL  string
+	SessionCookieName  string
+	SessionTTLDays     int
 }
 
 // DefaultOpenAIModel and DefaultAnthropicModel must be refreshed from the
@@ -106,6 +112,22 @@ func Load() *Config {
 		schwabCallback = "https://vibetradez.com/auth/callback"
 	}
 
+	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
+	if googleClientID == "" {
+		log.Fatal("GOOGLE_CLIENT_ID is required")
+	}
+	googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
+	if googleClientSecret == "" {
+		log.Fatal("GOOGLE_CLIENT_SECRET is required")
+	}
+
+	sessionTTLDays := 30
+	if v := os.Getenv("SESSION_TTL_DAYS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			sessionTTLDays = n
+		}
+	}
+
 	return &Config{
 		CronScheduleOpen:   cronOpen,
 		CronScheduleClose:  cronClose,
@@ -123,5 +145,10 @@ func Load() *Config {
 		SchwabSecret:       os.Getenv("SCHWAB_SECRET"),
 		SchwabCallbackURL:  schwabCallback,
 		AdminKey:           os.Getenv("ADMIN_KEY"),
+		GoogleClientID:     googleClientID,
+		GoogleClientSecret: googleClientSecret,
+		GoogleCallbackURL:  getEnvOrDefault("GOOGLE_CALLBACK_URL", "https://vibetradez.com/auth/google/callback"),
+		SessionCookieName:  getEnvOrDefault("SESSION_COOKIE_NAME", "vt_session"),
+		SessionTTLDays:     sessionTTLDays,
 	}
 }
