@@ -13,9 +13,9 @@ export function SubscribeModal({ children, open, onOpenChange }: { children?: Re
       <DialogContent className="top-[8%] max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-[calc(100%-1.5rem)] translate-y-0 overflow-y-auto sm:top-[50%] sm:w-auto sm:max-w-md sm:translate-y-[-50%]">
         <DialogHeader>
           <DialogTitle className="text-lg font-extrabold">
-            Get free daily <span className="text-gradient-brand">trade picks</span>
+            Sign in or <span className="text-gradient-brand">sign up</span>
           </DialogTitle>
-          <DialogDescription>Two models, ranked options picks, your inbox before the opening bell.</DialogDescription>
+          <DialogDescription>One click with Google gets you the daily picks email, delivered before the opening bell.</DialogDescription>
         </DialogHeader>
 
         <div className="flex gap-2">
@@ -36,7 +36,7 @@ export function SubscribeModal({ children, open, onOpenChange }: { children?: Re
         <SubscribeForm />
 
         <div className="border-t pt-4 text-center">
-          <button type="button" onClick={() => setShowUnsub(!showUnsub)} className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
+          <button type="button" onClick={() => setShowUnsub(!showUnsub)} className="cursor-pointer text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
             Need to unsubscribe?
           </button>
           {showUnsub && (

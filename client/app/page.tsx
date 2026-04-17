@@ -1,4 +1,4 @@
-import { ArrowRight, Brain, Clock, Mail, Shield, TrendingUp } from "lucide-react";
+import { ArrowRight, Brain, Clock, LogIn, Mail, Shield, TrendingUp } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Reveal } from "@/components/landing/reveal";
@@ -22,7 +22,7 @@ export default function LandingPage() {
             <span className="text-gradient-brand">Tradez</span>
           </span>
           <div className="flex items-center gap-3">
-            <SubscribeCTA className="hidden rounded-lg border border-border px-3.5 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted sm:inline-flex">Subscribe</SubscribeCTA>
+            <SubscribeCTA className="hidden rounded-lg border border-border px-3.5 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted sm:inline-flex">Sign in</SubscribeCTA>
             <Link href="/dashboard" className="inline-flex items-center gap-2 rounded-lg bg-foreground px-3.5 py-2 text-sm font-semibold text-background transition-opacity hover:opacity-90 sm:px-4">
               Dashboard
               <ArrowRight className="h-4 w-4" />
@@ -91,8 +91,8 @@ export default function LandingPage() {
               <ArrowRight className="h-4 w-4" />
             </Link>
             <SubscribeCTA className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand px-8 py-3.5 text-base font-semibold text-white shadow-lg transition-opacity hover:opacity-90">
-              <Mail className="h-4 w-4" />
-              Subscribe Free
+              <LogIn className="h-4 w-4" />
+              Sign in or sign up
             </SubscribeCTA>
           </Reveal>
 
@@ -200,8 +200,8 @@ export default function LandingPage() {
           </Reveal>
           <Reveal effect="scale" delay={200} duration={650} className="flex w-full flex-col gap-4 px-2 sm:w-auto sm:flex-row sm:justify-center sm:gap-4 sm:px-0">
             <SubscribeCTA className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-brand px-8 py-3.5 text-base font-semibold text-white shadow-lg transition-opacity hover:opacity-90">
-              <Mail className="h-4 w-4" />
-              Subscribe Free
+              <LogIn className="h-4 w-4" />
+              Sign in or sign up
             </SubscribeCTA>
             <Link
               href="/dashboard"

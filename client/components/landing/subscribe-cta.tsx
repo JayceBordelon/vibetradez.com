@@ -8,7 +8,7 @@ export function SubscribeCTA({ className, children }: { className?: string; chil
 
   return (
     <>
-      <button type="button" className={className} onClick={() => setOpen(true)}>
+      <button type="button" className={`cursor-pointer ${className ?? ""}`} onClick={() => setOpen(true)}>
         {children}
       </button>
       <SubscribeModal open={open} onOpenChange={setOpen} />

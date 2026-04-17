@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"vibetradez.com/internal/authclient"
 	"vibetradez.com/internal/config"
 	"vibetradez.com/internal/email"
 	"vibetradez.com/internal/schwab"
@@ -92,13 +93,6 @@ func isLocalStubKey(k string) bool {
 func main() {
 	cfg := config.Load()
 
-	if cfg.ResendAPIKey == "" {
-		log.Fatal("RESEND_API_KEY is required")
-	}
-	if cfg.OpenAIAPIKey == "" {
-		log.Fatal("OPENAI_API_KEY is required")
-	}
-
 	db, err := store.New(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
@@ -127,6 +121,8 @@ func main() {
 	} else {
 		log.Println("Schwab: not configured (SCHWAB_APP_KEY / SCHWAB_SECRET not set)")
 	}
+
+	authClient := authclient.New(cfg.AuthBaseURL, cfg.AuthClientID, cfg.AuthClientSecret, cfg.AuthRedirectURI)
 
 	scraper := sentiment.NewScraper()
 
@@ -208,8 +204,9 @@ func main() {
 
 	c.Start()
 
+	sessionTTL := time.Duration(cfg.SessionTTLDays) * 24 * time.Hour
 	// Start HTTP API server in background
-	srv := server.New(db, schwabClient, scraper, emailClient, cfg.EmailFrom, cfg.OpenAIAPIKey, cfg.OpenAIModel, cfg.AnthropicAPIKey, cfg.AnthropicModel, cfg.AdminKey, cfg.ServerPort)
+	srv := server.New(db, schwabClient, authClient, scraper, emailClient, cfg.EmailFrom, cfg.OpenAIAPIKey, cfg.OpenAIModel, cfg.AnthropicAPIKey, cfg.AnthropicModel, cfg.SessionCookieName, sessionTTL, cfg.AuthPublicURL, cfg.AuthClientID, cfg.AuthRedirectURI, cfg.ServerPort)
 	go srv.Start()
 
 	log.Printf("Options trade scanner started")

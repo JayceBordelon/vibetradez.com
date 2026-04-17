@@ -1,5 +1,16 @@
 import type { ApiResponse, ChartParams, ChartResponse, DashboardResponse, LiveQuotesResponse, ModelComparisonResponse, WeekResponse } from "@/types/trade";
 
+export interface SessionUser {
+  id: number;
+  email: string;
+  name: string;
+  picture_url: string;
+}
+
+export interface MeResponse {
+  user: SessionUser | null;
+}
+
 const HEADERS: Record<string, string> = {
   "X-VT-Source": "dashboard",
 };
@@ -16,8 +27,17 @@ export async function serverFetch<T>(path: string, options?: RequestInit): Promi
 
 export async function clientFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(path, {
+    credentials: "include",
     ...options,
     headers: { ...HEADERS, ...options?.headers },
+  });
+  return res.json();
+}
+
+async function authFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    credentials: "include",
+    ...options,
   });
   return res.json();
 }
@@ -36,12 +56,10 @@ export const api = {
   getChartData: (symbol: string, params: ChartParams) =>
     clientFetch<ChartResponse>(`/api/chart/${symbol}?periodType=${params.ptype}&period=${params.period}&frequencyType=${params.ftype}&frequency=${params.freq}`),
 
-  subscribe: (email: string, name: string) =>
-    clientFetch<ApiResponse>("/api/subscribe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...HEADERS },
-      body: JSON.stringify({ email, name }),
-    }),
+  me: () => clientFetch<MeResponse>("/api/me"),
+
+  // Note: /auth/logout lives under /auth/*, not /api/*, so no X-VT-Source header.
+  logout: () => authFetch<ApiResponse>("/auth/logout", { method: "POST" }),
 
   unsubscribe: (email: string) =>
     clientFetch<ApiResponse>("/api/unsubscribe", {

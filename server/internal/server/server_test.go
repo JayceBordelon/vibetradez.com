@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"vibetradez.com/internal/sentiment"
 	"vibetradez.com/internal/store"
@@ -23,7 +24,7 @@ func setupTestServer(t *testing.T) *Server {
 
 	db.RemoveAllForTest()
 
-	return New(db, nil, sentiment.NewScraper(), nil, "", "", "", "", "", "", "0")
+	return New(db, nil, nil, sentiment.NewScraper(), nil, "", "", "", "", "", "vt_session", 30*24*time.Hour, "", "", "", "0")
 }
 
 func TestSubscribeEndpoint(t *testing.T) {

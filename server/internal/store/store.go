@@ -130,6 +130,20 @@ func migrate(db *sql.DB) error {
 			expires_at TIMESTAMPTZ NOT NULL,
 			updated_at TIMESTAMPTZ DEFAULT NOW()
 		);
+
+		-- auth_user_id points at the upstream auth.jaycebordelon.com users
+		-- table. No FK here — the auth service owns its own DB and can be
+		-- down without blocking subscriber operations.
+		ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS auth_user_id BIGINT;
+		CREATE INDEX IF NOT EXISTS idx_subscribers_auth_user_id ON subscribers(auth_user_id);
+
+		-- Clean up tables from the pre-split single-service auth. Safe to
+		-- drop on any env: the rows were only created locally and in the
+		-- pre-merge branch.
+		DROP TABLE IF EXISTS sessions;
+		DROP TABLE IF EXISTS oauth_states;
+		ALTER TABLE subscribers DROP COLUMN IF EXISTS user_id;
+		DROP TABLE IF EXISTS users;
 	`)
 	return err
 }
@@ -444,6 +458,21 @@ func (s *Store) GetOAuthToken(provider string) (accessToken, refreshToken string
 		FROM oauth_tokens WHERE provider = $1
 	`, provider).Scan(&accessToken, &refreshToken, &expiresAt)
 	return
+}
+
+// LinkSubscriberAuthUser attaches an upstream auth user id to any
+// subscriber row matching this email that isn't linked yet. Does NOT
+// touch active or unsubscribed_at — users who previously opted out
+// stay opted out.
+func (s *Store) LinkSubscriberAuthUser(authUserID int64, email string) error {
+	_, err := s.db.Exec(`
+		UPDATE subscribers SET auth_user_id = $1
+		WHERE email = $2 AND auth_user_id IS NULL
+	`, authUserID, email)
+	if err != nil {
+		return fmt.Errorf("failed to link subscriber auth_user_id: %w", err)
+	}
+	return nil
 }
 
 // --- EOD summary methods ---

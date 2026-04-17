@@ -19,11 +19,11 @@ import (
 	"github.com/openai/openai-go/v3"
 	openaioption "github.com/openai/openai-go/v3/option"
 
+	"vibetradez.com/internal/authclient"
 	"vibetradez.com/internal/email"
 	"vibetradez.com/internal/schwab"
 	"vibetradez.com/internal/sentiment"
 	"vibetradez.com/internal/store"
-	"vibetradez.com/internal/templates"
 	"vibetradez.com/internal/trades"
 )
 
@@ -32,6 +32,7 @@ var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-
 type Server struct {
 	db             *store.Store
 	schwab         *schwab.Client
+	auth           *authclient.Client
 	scraper        *sentiment.Scraper
 	emailClient    *email.Client
 	emailFrom      string
@@ -39,7 +40,12 @@ type Server struct {
 	openaiModel    string
 	anthropicKey   string
 	anthropicModel string
-	adminKey       string
+	sessionCookie  string
+	sessionTTL     time.Duration
+	// SSO consumer config — identifies this app to auth.jaycebordelon.com.
+	ssoPublicURL   string // https://auth.jaycebordelon.com (browser-facing)
+	ssoClientID    string
+	ssoRedirectURI string
 	mux            *http.ServeMux
 	port           string
 }
@@ -58,10 +64,11 @@ type apiResponse struct {
 	Message string `json:"message"`
 }
 
-func New(db *store.Store, schwabClient *schwab.Client, scraper *sentiment.Scraper, emailClient *email.Client, emailFrom, openaiKey, openaiModel, anthropicKey, anthropicModel, adminKey, port string) *Server {
+func New(db *store.Store, schwabClient *schwab.Client, authClient *authclient.Client, scraper *sentiment.Scraper, emailClient *email.Client, emailFrom, openaiKey, openaiModel, anthropicKey, anthropicModel, sessionCookie string, sessionTTL time.Duration, ssoPublicURL, ssoClientID, ssoRedirectURI, port string) *Server {
 	s := &Server{
 		db:             db,
 		schwab:         schwabClient,
+		auth:           authClient,
 		scraper:        scraper,
 		emailClient:    emailClient,
 		emailFrom:      emailFrom,
@@ -69,7 +76,11 @@ func New(db *store.Store, schwabClient *schwab.Client, scraper *sentiment.Scrape
 		openaiModel:    openaiModel,
 		anthropicKey:   anthropicKey,
 		anthropicModel: anthropicModel,
-		adminKey:       adminKey,
+		sessionCookie:  sessionCookie,
+		sessionTTL:     sessionTTL,
+		ssoPublicURL:   strings.TrimRight(ssoPublicURL, "/"),
+		ssoClientID:    ssoClientID,
+		ssoRedirectURI: ssoRedirectURI,
 		mux:            http.NewServeMux(),
 		port:           port,
 	}
@@ -81,11 +92,14 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/health", s.handleHealth)
 	s.mux.HandleFunc("/auth/schwab", s.handleSchwabAuth)
 	s.mux.HandleFunc("/auth/callback", s.handleSchwabCallback)
-	s.mux.HandleFunc("/admin/announce", s.handleAnnounce)
+	s.mux.HandleFunc("/auth/sso/start", s.handleSSOStart)
+	s.mux.HandleFunc("/auth/sso/callback", s.handleSSOCallback)
+	s.mux.HandleFunc("/auth/logout", s.handleLogout)
 
 	// API routes — require internal header (requests must come from the website)
 	s.mux.HandleFunc("/api/subscribe", requireInternal(s.handleSubscribe))
 	s.mux.HandleFunc("/api/unsubscribe", requireInternal(s.handleUnsubscribe))
+	s.mux.HandleFunc("/api/me", requireInternal(s.attachUser(s.handleMe)))
 	s.mux.HandleFunc("/api/trades/today", requireInternal(s.handleTradesToday))
 	s.mux.HandleFunc("/api/trades/dates", requireInternal(s.handleTradeDates))
 	s.mux.HandleFunc("/api/trades/week", requireInternal(s.handleTradesWeek))
@@ -851,74 +865,4 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
-}
-
-// ── Admin: Broadcast Announcement ──
-
-type announceRequest struct {
-	Subject      string                          `json:"subject"`
-	Badge        string                          `json:"badge"`
-	Headline     string                          `json:"headline"`
-	HeroImageURL string                          `json:"hero_image_url"`
-	Sections     []templates.AnnouncementSection `json:"sections"`
-	CTAs         []templates.AnnouncementCTA     `json:"ctas"`
-}
-
-func (s *Server) handleAnnounce(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, apiResponse{OK: false, Message: "method not allowed"})
-		return
-	}
-
-	// Require admin key
-	key := r.Header.Get("X-Admin-Key")
-	if s.adminKey == "" || key != s.adminKey {
-		writeJSON(w, http.StatusUnauthorized, apiResponse{OK: false, Message: "unauthorized"})
-		return
-	}
-
-	var req announceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Message: "invalid JSON"})
-		return
-	}
-
-	if req.Subject == "" || req.Headline == "" {
-		writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Message: "subject and headline are required"})
-		return
-	}
-
-	data := templates.AnnouncementData{
-		Subject:      req.Subject,
-		Badge:        req.Badge,
-		Headline:     req.Headline,
-		HeroImageURL: req.HeroImageURL,
-		Sections:     req.Sections,
-		CTAs:         req.CTAs,
-	}
-	if data.Badge == "" {
-		data.Badge = "Announcement"
-	}
-
-	htmlContent, err := templates.RenderAnnouncementEmail(data)
-	if err != nil {
-		log.Printf("Error rendering announcement: %v", err)
-		writeJSON(w, http.StatusInternalServerError, apiResponse{OK: false, Message: "template render failed"})
-		return
-	}
-
-	recipients, err := s.db.GetActiveEmails()
-	if err != nil || len(recipients) == 0 {
-		writeJSON(w, http.StatusInternalServerError, apiResponse{OK: false, Message: "no active subscribers"})
-		return
-	}
-
-	if err := s.emailClient.SendTradeEmail(s.emailFrom, recipients, req.Subject, htmlContent); err != nil {
-		log.Printf("Error sending announcement: %v", err)
-		writeJSON(w, http.StatusInternalServerError, apiResponse{OK: false, Message: "email delivery failed"})
-		return
-	}
-
-	log.Printf("Announcement sent to %d subscribers: %s", len(recipients), req.Subject)
-	writeJSON(w, http.StatusOK, apiResponse{OK: true, Message: fmt.Sprintf("sent to %d subscribers", len(recipients))})
 }
