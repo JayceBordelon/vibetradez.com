@@ -131,41 +131,19 @@ func migrate(db *sql.DB) error {
 			updated_at TIMESTAMPTZ DEFAULT NOW()
 		);
 
-		CREATE TABLE IF NOT EXISTS users (
-			id BIGSERIAL PRIMARY KEY,
-			google_sub TEXT UNIQUE NOT NULL,
-			email TEXT NOT NULL,
-			email_verified BOOLEAN NOT NULL DEFAULT false,
-			name TEXT NOT NULL DEFAULT '',
-			picture_url TEXT NOT NULL DEFAULT '',
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			last_login_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		);
-		CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+		-- auth_user_id points at the upstream auth.jaycebordelon.com users
+		-- table. No FK here — the auth service owns its own DB and can be
+		-- down without blocking subscriber operations.
+		ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS auth_user_id BIGINT;
+		CREATE INDEX IF NOT EXISTS idx_subscribers_auth_user_id ON subscribers(auth_user_id);
 
-		ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS user_id BIGINT
-			REFERENCES users(id) ON DELETE SET NULL;
-		CREATE INDEX IF NOT EXISTS idx_subscribers_user_id ON subscribers(user_id);
-
-		CREATE TABLE IF NOT EXISTS sessions (
-			id BIGSERIAL PRIMARY KEY,
-			user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			token_hash BYTEA UNIQUE NOT NULL,
-			user_agent TEXT NOT NULL DEFAULT '',
-			ip_addr INET,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			expires_at TIMESTAMPTZ NOT NULL,
-			revoked_at TIMESTAMPTZ
-		);
-		CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
-
-		CREATE TABLE IF NOT EXISTS oauth_states (
-			state TEXT PRIMARY KEY,
-			return_to TEXT NOT NULL DEFAULT '/',
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			expires_at TIMESTAMPTZ NOT NULL
-		);
+		-- Clean up tables from the pre-split single-service auth. Safe to
+		-- drop on any env: the rows were only created locally and in the
+		-- pre-merge branch.
+		DROP TABLE IF EXISTS sessions;
+		DROP TABLE IF EXISTS oauth_states;
+		ALTER TABLE subscribers DROP COLUMN IF EXISTS user_id;
+		DROP TABLE IF EXISTS users;
 	`)
 	return err
 }
@@ -482,177 +460,19 @@ func (s *Store) GetOAuthToken(provider string) (accessToken, refreshToken string
 	return
 }
 
-// --- User + session methods ---
-
-type User struct {
-	ID            int64
-	GoogleSub     string
-	Email         string
-	EmailVerified bool
-	Name          string
-	PictureURL    string
-	CreatedAt     time.Time
-	LastLoginAt   time.Time
-}
-
-type Session struct {
-	ID         int64
-	UserID     int64
-	CreatedAt  time.Time
-	LastUsedAt time.Time
-	ExpiresAt  time.Time
-	User       User
-}
-
-func (s *Store) UpsertUser(googleSub, email string, emailVerified bool, name, pictureURL string) (int64, error) {
-	var id int64
-	err := s.db.QueryRow(`
-		INSERT INTO users (google_sub, email, email_verified, name, picture_url, last_login_at)
-		VALUES ($1, $2, $3, $4, $5, NOW())
-		ON CONFLICT (google_sub) DO UPDATE SET
-			email = EXCLUDED.email,
-			email_verified = EXCLUDED.email_verified,
-			name = EXCLUDED.name,
-			picture_url = EXCLUDED.picture_url,
-			last_login_at = NOW()
-		RETURNING id
-	`, googleSub, email, emailVerified, name, pictureURL).Scan(&id)
-	if err != nil {
-		return 0, fmt.Errorf("failed to upsert user: %w", err)
-	}
-	return id, nil
-}
-
-// LinkSubscriber attaches user_id to any existing subscribers row that
-// matches the email and is currently unlinked. Does NOT touch active or
-// unsubscribed_at — users who previously opted out stay opted out.
-func (s *Store) LinkSubscriber(userID int64, email string) error {
+// LinkSubscriberAuthUser attaches an upstream auth user id to any
+// subscriber row matching this email that isn't linked yet. Does NOT
+// touch active or unsubscribed_at — users who previously opted out
+// stay opted out.
+func (s *Store) LinkSubscriberAuthUser(authUserID int64, email string) error {
 	_, err := s.db.Exec(`
-		UPDATE subscribers SET user_id = $1
-		WHERE email = $2 AND user_id IS NULL
-	`, userID, email)
+		UPDATE subscribers SET auth_user_id = $1
+		WHERE email = $2 AND auth_user_id IS NULL
+	`, authUserID, email)
 	if err != nil {
-		return fmt.Errorf("failed to link subscriber: %w", err)
+		return fmt.Errorf("failed to link subscriber auth_user_id: %w", err)
 	}
 	return nil
-}
-
-func (s *Store) CreateSession(userID int64, tokenHash []byte, userAgent, ipAddr string, ttl time.Duration) error {
-	var ipArg any
-	if ipAddr != "" {
-		ipArg = ipAddr
-	}
-	_, err := s.db.Exec(`
-		INSERT INTO sessions (user_id, token_hash, user_agent, ip_addr, expires_at)
-		VALUES ($1, $2, $3, $4, NOW() + ($5 || ' seconds')::interval)
-	`, userID, tokenHash, userAgent, ipArg, fmt.Sprintf("%d", int64(ttl.Seconds())))
-	if err != nil {
-		return fmt.Errorf("failed to create session: %w", err)
-	}
-	return nil
-}
-
-func (s *Store) LookupSession(tokenHash []byte) (*Session, error) {
-	var sess Session
-	err := s.db.QueryRow(`
-		SELECT s.id, s.user_id, s.created_at, s.last_used_at, s.expires_at,
-			u.id, u.google_sub, u.email, u.email_verified, u.name, u.picture_url, u.created_at, u.last_login_at
-		FROM sessions s JOIN users u ON u.id = s.user_id
-		WHERE s.token_hash = $1
-			AND s.revoked_at IS NULL
-			AND s.expires_at > NOW()
-	`, tokenHash).Scan(
-		&sess.ID, &sess.UserID, &sess.CreatedAt, &sess.LastUsedAt, &sess.ExpiresAt,
-		&sess.User.ID, &sess.User.GoogleSub, &sess.User.Email, &sess.User.EmailVerified,
-		&sess.User.Name, &sess.User.PictureURL, &sess.User.CreatedAt, &sess.User.LastLoginAt,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to lookup session: %w", err)
-	}
-	return &sess, nil
-}
-
-// TouchSession bumps last_used_at at most once per hour to avoid write
-// amplification on every request.
-func (s *Store) TouchSession(sessionID int64) error {
-	_, err := s.db.Exec(`
-		UPDATE sessions SET last_used_at = NOW()
-		WHERE id = $1 AND last_used_at < NOW() - INTERVAL '1 hour'
-	`, sessionID)
-	if err != nil {
-		return fmt.Errorf("failed to touch session: %w", err)
-	}
-	return nil
-}
-
-func (s *Store) RevokeSession(sessionID int64) error {
-	_, err := s.db.Exec(`UPDATE sessions SET revoked_at = NOW() WHERE id = $1 AND revoked_at IS NULL`, sessionID)
-	if err != nil {
-		return fmt.Errorf("failed to revoke session: %w", err)
-	}
-	return nil
-}
-
-func (s *Store) RevokeAllSessionsForUser(userID int64) error {
-	_, err := s.db.Exec(`UPDATE sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`, userID)
-	if err != nil {
-		return fmt.Errorf("failed to revoke user sessions: %w", err)
-	}
-	return nil
-}
-
-func (s *Store) CreateOAuthState(state, returnTo string, ttl time.Duration) error {
-	_, err := s.db.Exec(`
-		INSERT INTO oauth_states (state, return_to, expires_at)
-		VALUES ($1, $2, NOW() + ($3 || ' seconds')::interval)
-	`, state, returnTo, fmt.Sprintf("%d", int64(ttl.Seconds())))
-	if err != nil {
-		return fmt.Errorf("failed to create oauth state: %w", err)
-	}
-	return nil
-}
-
-// ConsumeOAuthState deletes and returns the return_to path for a given
-// state. Errors if the state is missing or expired. One-shot.
-func (s *Store) ConsumeOAuthState(state string) (string, error) {
-	var returnTo string
-	err := s.db.QueryRow(`
-		DELETE FROM oauth_states
-		WHERE state = $1 AND expires_at > NOW()
-		RETURNING return_to
-	`, state).Scan(&returnTo)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return "", fmt.Errorf("oauth state not found or expired")
-		}
-		return "", fmt.Errorf("failed to consume oauth state: %w", err)
-	}
-	return returnTo, nil
-}
-
-// SweepExpired deletes expired oauth_states and sessions that expired or
-// were revoked more than 7 days ago.
-func (s *Store) SweepExpired() (sessionsDeleted, statesDeleted int64, err error) {
-	res, err := s.db.Exec(`
-		DELETE FROM sessions
-		WHERE expires_at < NOW() - INTERVAL '7 days'
-			OR (revoked_at IS NOT NULL AND revoked_at < NOW() - INTERVAL '7 days')
-	`)
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to sweep sessions: %w", err)
-	}
-	sessionsDeleted, _ = res.RowsAffected()
-
-	res, err = s.db.Exec(`DELETE FROM oauth_states WHERE expires_at < NOW()`)
-	if err != nil {
-		return sessionsDeleted, 0, fmt.Errorf("failed to sweep oauth_states: %w", err)
-	}
-	statesDeleted, _ = res.RowsAffected()
-
-	return sessionsDeleted, statesDeleted, nil
 }
 
 // --- EOD summary methods ---

@@ -1,10 +1,10 @@
 name: vibetradez-local
 
-# Local development stack for VibeTradez.
+# Local development stack for VibeTradez + the centralized auth service.
 #
-# Spins up a Postgres database (auto-seeded with realistic test data),
-# the Go API server, and the Next.js frontend. No Traefik — the frontend
-# proxies API calls directly to the server via the Docker network.
+# Spins up Postgres (two databases: vibetradez + auth), the Go auth service,
+# the Go trading API server, and the Next.js frontend. No Traefik — services
+# talk directly over the Docker network.
 #
 # Usage:
 #   cd vibetradez.com/local
@@ -12,7 +12,8 @@ name: vibetradez-local
 #
 # Then visit:
 #   http://localhost:3001        — Next.js frontend
-#   http://localhost:8080/health — Go API health check
+#   http://localhost:8080/health — trading server health
+#   http://localhost:8081/health — auth service health
 #
 # Tear down (and clear seeded data):
 #   docker compose -f docker-compose.local.yml down -v
@@ -29,14 +30,43 @@ services:
       - "5433:5432"
     volumes:
       - vt_local_pgdata:/var/lib/postgresql/data
-      # Seed file is mounted into the docker-entrypoint-initdb.d directory.
-      # Postgres runs every .sql file in this directory on first boot only.
+      # Init scripts run in lexical order on first boot only. The auth DB
+      # must be created before vibetradez seed data references it (it doesn't,
+      # but keep the ordering predictable: 00 creates, 01 seeds).
+      - ./init-auth-db.sql:/docker-entrypoint-initdb.d/00-init-auth-db.sql:ro
       - ./seed.sql:/docker-entrypoint-initdb.d/01-seed.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U vibetradez -d vibetradez"]
       interval: 3s
       timeout: 3s
       retries: 10
+
+  auth-service:
+    container_name: vt-local-auth
+    build:
+      context: ../../auth.jaycebordelon.com
+      dockerfile: Dockerfile
+    environment:
+      AUTH_DATABASE_URL: postgresql://vibetradez:vibetradez@postgres:5432/auth?sslmode=disable
+      AUTH_SERVER_PORT: "8081"
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-stub-google-client-id}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-stub-google-client-secret}
+      GOOGLE_CALLBACK_URL: http://localhost:8081/auth/google/callback
+      IDP_COOKIE_NAME: aj_session
+      IDP_COOKIE_TTL_DAYS: "30"
+      ACCESS_TOKEN_TTL_DAYS: "30"
+      AUTH_CODE_TTL_SECONDS: "60"
+      # Registered consumer apps. Each entry is {id, secret, name,
+      # redirect_uris[]}. vibetradez is the only one for now. Matches
+      # VT_AUTH_CLIENT_ID / VT_AUTH_CLIENT_SECRET on trading-server below.
+      OAUTH_CLIENTS_JSON: >-
+        [{"id":"vibetradez","secret":"local-vibetradez-secret","name":"VibeTradez","redirect_uris":["http://localhost:3001/auth/sso/callback"]}]
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
 
   trading-server:
     container_name: vt-local-server
@@ -58,13 +88,13 @@ services:
       CRON_SCHEDULE_OPEN: "0 9 * * 0"
       CRON_SCHEDULE_CLOSE: "0 16 * * 0"
       CRON_SCHEDULE_WEEKLY: "0 17 * * 0"
-      ADMIN_KEY: local-admin-key
-      # Google OAuth. Real creds come from ./local.env (gitignored). Stubs are
-      # syntactically valid but won't complete a real exchange. Copy
-      # local.env.example to local.env and fill in to test end-to-end.
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-stub-google-client-id}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-stub-google-client-secret}
-      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-http://localhost:3001/auth/google/callback}
+      # Auth client credentials — trading-server registers as a consumer of
+      # the auth service. Secret must match OAUTH_CLIENTS_JSON above.
+      VT_AUTH_BASE_URL: http://auth-service:8081
+      VT_AUTH_PUBLIC_URL: http://localhost:8081
+      VT_AUTH_CLIENT_ID: vibetradez
+      VT_AUTH_CLIENT_SECRET: local-vibetradez-secret
+      VT_AUTH_REDIRECT_URI: http://localhost:3001/auth/sso/callback
       SESSION_COOKIE_NAME: vt_session
       SESSION_TTL_DAYS: "30"
     ports:
@@ -72,6 +102,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      auth-service:
+        condition: service_started
     restart: unless-stopped
 
   trading-frontend:

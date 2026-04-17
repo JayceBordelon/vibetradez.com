@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-//go:embed email.html summary.html test.html error.html weekly.html announce.html
+//go:embed email.html summary.html test.html error.html weekly.html
 var templateFS embed.FS
 
 type Trade struct {
@@ -481,59 +481,4 @@ func RenderSummaryEmail(summaryTrades []SummaryTrade) (string, error) {
 	}
 
 	return buf.String(), nil
-}
-
-// ── Announcement Email ──
-
-type AnnouncementSection struct {
-	Title string
-	// Body is rendered as raw HTML so callers can include inline
-	// markup like <strong>, <em>, <a href="...">, and <ul><li>...
-	// for richer formatting. The admin/announce endpoint is gated
-	// behind X-Admin-Key so the input is trusted.
-	Body template.HTML
-}
-
-// AnnouncementCTA represents one button in the row at the bottom of
-// the email. Multiple CTAs render side-by-side; the first one uses the
-// dark "primary" gradient and the rest use a lighter "secondary"
-// outline style by default. Set Style explicitly to override.
-type AnnouncementCTA struct {
-	Text  string
-	URL   string
-	Style string // "" / "primary" / "secondary"
-}
-
-type AnnouncementData struct {
-	Subject  string
-	Badge    string
-	Headline string
-	Date     string
-	// HeroImageURL renders an optional full-width image at the top of
-	// the content section (right under the badge, above the headline).
-	// Leave empty to omit. Use a fully-qualified https URL — most
-	// email clients block protocol-relative or http resources.
-	HeroImageURL string
-	Sections     []AnnouncementSection
-	// CTAs renders 1-N buttons in a row at the bottom of the content.
-	// Empty slice = no buttons.
-	CTAs []AnnouncementCTA
-}
-
-func RenderAnnouncementEmail(data AnnouncementData) (string, error) {
-	tmpl, err := template.New("announce.html").Funcs(funcMap).ParseFS(templateFS, "announce.html")
-	if err != nil {
-		return "", fmt.Errorf("failed to parse announcement template: %w", err)
-	}
-
-	if data.Date == "" {
-		data.Date = time.Now().Format("Monday, Jan 2, 2006")
-	}
-
-	var bufAnnounce bytes.Buffer
-	if err := tmpl.Execute(&bufAnnounce, data); err != nil {
-		return "", err
-	}
-
-	return bufAnnounce.String(), nil
 }
