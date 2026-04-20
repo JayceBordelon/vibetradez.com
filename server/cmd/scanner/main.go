@@ -378,7 +378,7 @@ func unionPicks(openaiTrades, claudeTrades []trades.Trade) []trades.Trade {
 }
 
 func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Scraper, analyzer *trades.Analyzer, claudePicker *trades.ClaudePicker, emailClient *email.Client, gptDisplayName, claudeDisplayName string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 
 	log.Println("Starting trade analysis...")
@@ -393,29 +393,50 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 	log.Printf("Found %d trending tickers", len(sentimentData))
 
 	// Both pickers run the SAME workflow with the same prompt against
-	// the same raw sentiment data. They each independently produce up to
-	// 10 ranked trades. The cron then unions both pick sets so the
-	// dashboard can show every trade either model picked, with per-pick
-	// attribution to whichever model(s) actually picked it.
-	log.Printf("Analyzing trades with %s...", gptDisplayName)
-	openaiTrades, err := analyzer.GetTopTrades(ctx, sentimentData)
-	if err != nil {
-		log.Printf("Error analyzing trades with %s: %v", gptDisplayName, err)
-		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("%s analysis failed: %v", gptDisplayName, err))
-		return
-	}
-	log.Printf("%s produced %d picks", gptDisplayName, len(openaiTrades))
-
-	var claudeTrades []trades.Trade
-	if claudePicker != nil {
-		log.Printf("Analyzing trades with %s...", claudeDisplayName)
-		ct, cErr := claudePicker.GetTopTrades(ctx, sentimentData)
-		if cErr != nil {
-			log.Printf("Warning: %s picking failed: %v - falling back to %s-only", claudeDisplayName, cErr, gptDisplayName)
+	// the same raw sentiment data in parallel. Each independently
+	// produces up to 10 ranked trades; the cron then unions both pick
+	// sets so the dashboard can show every trade either model picked.
+	// Running in parallel gives each model the full wall-clock budget
+	// instead of splitting it, and halves total runtime in the happy path.
+	log.Printf("Analyzing trades with %s and %s in parallel...", gptDisplayName, claudeDisplayName)
+	var (
+		openaiTrades []trades.Trade
+		claudeTrades []trades.Trade
+		gptErr       error
+		claudeErr    error
+		pWG          sync.WaitGroup
+	)
+	pWG.Add(1)
+	go func() {
+		defer pWG.Done()
+		openaiTrades, gptErr = analyzer.GetTopTrades(ctx, sentimentData)
+		if gptErr != nil {
+			log.Printf("Warning: %s picking failed: %v", gptDisplayName, gptErr)
 		} else {
-			claudeTrades = ct
-			log.Printf("%s produced %d picks", claudeDisplayName, len(claudeTrades))
+			log.Printf("%s produced %d picks", gptDisplayName, len(openaiTrades))
 		}
+	}()
+	if claudePicker != nil {
+		pWG.Add(1)
+		go func() {
+			defer pWG.Done()
+			claudeTrades, claudeErr = claudePicker.GetTopTrades(ctx, sentimentData)
+			if claudeErr != nil {
+				log.Printf("Warning: %s picking failed: %v", claudeDisplayName, claudeErr)
+			} else {
+				log.Printf("%s produced %d picks", claudeDisplayName, len(claudeTrades))
+			}
+		}()
+	}
+	pWG.Wait()
+
+	// Only bail if BOTH pickers failed. A single-model run is still a
+	// valid morning email (the dual-model design is for redundancy).
+	bothFailed := gptErr != nil && (claudePicker == nil || claudeErr != nil)
+	if bothFailed {
+		log.Printf("Both pickers failed: %s=%v %s=%v", gptDisplayName, gptErr, claudeDisplayName, claudeErr)
+		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("Both pickers failed: %s=%v %s=%v", gptDisplayName, gptErr, claudeDisplayName, claudeErr))
+		return
 	}
 
 	// Cross-examination pass: once both models have independently picked,
