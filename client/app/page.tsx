@@ -1,6 +1,7 @@
 import { ArrowRight, Brain, Clock, LogIn, Mail, Shield, TrendingUp } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { LandingNavAccount } from "@/components/landing/nav-account";
 import { Reveal } from "@/components/landing/reveal";
 import { SubscribeCTA } from "@/components/landing/subscribe-cta";
 import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
@@ -27,6 +28,7 @@ export default function LandingPage() {
               Dashboard
               <ArrowRight className="h-4 w-4" />
             </Link>
+            <LandingNavAccount />
           </div>
         </div>
       </nav>

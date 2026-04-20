@@ -151,7 +151,7 @@ func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if !isSafeReturnTo(returnTo) {
-		returnTo = "/"
+		returnTo = "/dashboard"
 	}
 	log.Printf("SSO sign-in: auth_user_id=%d email=%s", tok.User.ID, email)
 	http.Redirect(w, r, returnTo, http.StatusFound)
