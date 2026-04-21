@@ -267,7 +267,7 @@ func VerifyTemplates() HealthCheck {
 			Catalyst: "System test", MentionCount: 42,
 		},
 	}
-	if _, err := RenderEmail(sampleTrades, "GPT-5.4", "Claude Opus 4.6"); err != nil {
+	if _, err := RenderEmail(sampleTrades, "GPT-5.4", "Claude Opus 4.7"); err != nil {
 		return HealthCheck{Name: "Email Templates", Status: "fail", Detail: err.Error(), Latency: fmtLatency(start)}
 	}
 
