@@ -66,7 +66,7 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentime
 	}
 
 	var raw []gptTradeOutput
-	if err := json.Unmarshal([]byte(stripMarkdownCodeBlock(content)), &raw); err != nil {
+	if err := parseJSONResponse(content, &raw, "Claude trades"); err != nil {
 		return nil, fmt.Errorf("failed to parse trades from claude response: %w", err)
 	}
 
@@ -160,7 +160,7 @@ func (p *ClaudePicker) WriteVerdicts(ctx context.Context, ownTrades, otherTrades
 	}
 
 	var verdicts map[string]string
-	if err := json.Unmarshal([]byte(stripMarkdownCodeBlock(out)), &verdicts); err != nil {
+	if err := parseJSONResponse(out, &verdicts, "Claude verdicts"); err != nil {
 		return nil, fmt.Errorf("parse verdict json: %w", err)
 	}
 	return verdicts, nil
