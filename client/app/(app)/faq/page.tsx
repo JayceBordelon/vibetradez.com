@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 const faqs = [
   {
     question: "How are the daily trade picks generated?",
-    answer: `Every market day at 9:25 AM ET the system aggregates trending tickers from StockTwits, Yahoo Finance, Finviz, and SEC EDGAR. That same payload is handed to GPT-5.4 and Claude Opus 4.6 in parallel, each running the identical prompt with live Schwab quotes, full options chains, and web search. Each model independently produces 10 ranked picks without seeing the other's work. Once both lists are locked, each model writes a one-sentence verdict on every one of the other's trades. The two pick sets are then unioned: trades both models picked rank ahead of solo picks, ties broken by combined conviction.`,
+    answer: `Every market day at 9:25 AM ET the system aggregates trending tickers from StockTwits, Yahoo Finance, Finviz, and SEC EDGAR. That same payload is handed to GPT-5.4 and Claude Opus 4.7 in parallel, each running the identical prompt with live Schwab quotes, full options chains, and web search. Each model independently produces 10 ranked picks without seeing the other's work. Once both lists are locked, each model writes a one-sentence verdict on every one of the other's trades. The two pick sets are then unioned: trades both models picked rank ahead of solo picks, ties broken by combined conviction.`,
   },
   {
     question: "What do the rankings (Top 1, Top 3, Top 5, Top 10) mean?",

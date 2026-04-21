@@ -11,7 +11,7 @@ export async function generateMetadata(): Promise<Metadata> {
     const count = data.trades?.length ?? 0;
     const hasSummaries = data.trades?.some((t) => t.summary) ?? false;
 
-    let description = "Live options trade dashboard. Independent picks from GPT-5.4 and Claude Opus 4.6 with cross-examination verdicts and real-time analytics.";
+    let description = "Live options trade dashboard. Independent picks from GPT-5.4 and Claude Opus 4.7 with cross-examination verdicts and real-time analytics.";
 
     if (count > 0 && hasSummaries) {
       let totalPnl = 0;
@@ -32,7 +32,7 @@ export async function generateMetadata(): Promise<Metadata> {
         .slice(0, 3)
         .map((t) => t.trade.symbol)
         .join(", ");
-      description = `Today's ${count} union picks: ${topSymbols} and more. Independent picks from GPT-5.4 and Claude Opus 4.6 with cross-examination verdicts.`;
+      description = `Today's ${count} union picks: ${topSymbols} and more. Independent picks from GPT-5.4 and Claude Opus 4.7 with cross-examination verdicts.`;
     }
 
     return {
@@ -53,7 +53,7 @@ export async function generateMetadata(): Promise<Metadata> {
   } catch {
     return {
       title: "Live Dashboard",
-      description: "Live options trade dashboard. Independent picks from GPT-5.4 and Claude Opus 4.6 with cross-examination verdicts and real-time analytics.",
+      description: "Live options trade dashboard. Independent picks from GPT-5.4 and Claude Opus 4.7 with cross-examination verdicts and real-time analytics.",
       openGraph: {
         title: "VibeTradez | Live Options Dashboard",
         images: [{ url: OG_IMAGE, width: 1200, height: 630 }],

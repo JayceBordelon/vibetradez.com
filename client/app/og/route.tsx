@@ -113,7 +113,7 @@ export async function GET() {
           maxWidth: 800,
         }}
       >
-        Free daily ranked options picks powered by GPT-5.4 + Claude Opus 4.6
+        Free daily ranked options picks powered by GPT-5.4 + Claude Opus 4.7
       </div>
 
       {/* Model badges */}
@@ -164,7 +164,7 @@ export async function GET() {
               background: "#D97757",
             }}
           />
-          <span style={{ color: "#94a3b8", fontSize: 20 }}>Claude Opus 4.6</span>
+          <span style={{ color: "#94a3b8", fontSize: 20 }}>Claude Opus 4.7</span>
         </div>
       </div>
     </div>,

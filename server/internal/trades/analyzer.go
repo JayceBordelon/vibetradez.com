@@ -133,7 +133,7 @@ func (a *Analyzer) GetTopTrades(ctx context.Context, sentimentData []sentiment.T
 	}
 
 	var raw []gptTradeOutput
-	if err := json.Unmarshal([]byte(stripMarkdownCodeBlock(content)), &raw); err != nil {
+	if err := parseJSONResponse(content, &raw, "OpenAI trades"); err != nil {
 		return nil, fmt.Errorf("failed to parse trades from OpenAI response: %w", err)
 	}
 
@@ -216,7 +216,7 @@ func (a *Analyzer) WriteVerdicts(ctx context.Context, ownTrades, otherTrades []T
 	}
 
 	var verdicts map[string]string
-	if err := json.Unmarshal([]byte(stripMarkdownCodeBlock(text)), &verdicts); err != nil {
+	if err := parseJSONResponse(text, &verdicts, "OpenAI verdicts"); err != nil {
 		return nil, fmt.Errorf("parse verdict json: %w", err)
 	}
 	return verdicts, nil
@@ -239,7 +239,7 @@ func (a *Analyzer) GetEndOfDayAnalysis(ctx context.Context, morningTrades []Trad
 	}
 
 	var summaries []TradeSummary
-	if err := json.Unmarshal([]byte(stripMarkdownCodeBlock(content)), &summaries); err != nil {
+	if err := parseJSONResponse(content, &summaries, "OpenAI EOD summaries"); err != nil {
 		return nil, fmt.Errorf("failed to parse summaries from OpenAI response: %w", err)
 	}
 	return summaries, nil
@@ -431,16 +431,87 @@ func (a *Analyzer) execGetOptionChain(_ context.Context, arguments string) strin
 	return string(result)
 }
 
-// stripMarkdownCodeBlock removes ```json fences if a model wraps its JSON.
-func stripMarkdownCodeBlock(s string) string {
+// extractJSON pulls the first balanced JSON object or array out of a
+// model response, tolerating ```json fences and free-form prose on
+// either side of the payload. Returns the original (trimmed) string if
+// no JSON-like block is found so json.Unmarshal reports a useful error.
+func extractJSON(s string) string {
 	s = strings.TrimSpace(s)
-	if strings.HasPrefix(s, "```") {
-		if idx := strings.Index(s, "\n"); idx != -1 {
-			s = s[idx+1:]
+
+	if i := strings.Index(s, "```"); i >= 0 {
+		rest := s[i+3:]
+		if nl := strings.Index(rest, "\n"); nl >= 0 {
+			rest = rest[nl+1:]
 		}
-		if idx := strings.LastIndex(s, "```"); idx != -1 {
-			s = s[:idx]
+		if end := strings.Index(rest, "```"); end >= 0 {
+			s = strings.TrimSpace(rest[:end])
 		}
 	}
-	return strings.TrimSpace(s)
+
+	start := -1
+	var open byte
+	for i := 0; i < len(s); i++ {
+		if s[i] == '{' || s[i] == '[' {
+			start = i
+			open = s[i]
+			break
+		}
+	}
+	if start < 0 {
+		return s
+	}
+	closeB := byte('}')
+	if open == '[' {
+		closeB = ']'
+	}
+
+	depth := 0
+	inStr := false
+	escape := false
+	for i := start; i < len(s); i++ {
+		c := s[i]
+		if escape {
+			escape = false
+			continue
+		}
+		if inStr {
+			switch c {
+			case '\\':
+				escape = true
+			case '"':
+				inStr = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			inStr = true
+		case open:
+			depth++
+		case closeB:
+			depth--
+			if depth == 0 {
+				return s[start : i+1]
+			}
+		}
+	}
+	return s[start:]
+}
+
+// parseJSONResponse extracts JSON from a model's free-form output and
+// unmarshals it into dst. On failure it logs the raw response (truncated)
+// tagged with source so the next parse failure is diagnosable from logs.
+func parseJSONResponse(raw string, dst any, source string) error {
+	if err := json.Unmarshal([]byte(extractJSON(raw)), dst); err != nil {
+		log.Printf("Failed to parse %s JSON (%d bytes raw): %s", source, len(raw), truncateForLog(raw, 2000))
+		return err
+	}
+	return nil
+}
+
+func truncateForLog(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "...[truncated]"
 }

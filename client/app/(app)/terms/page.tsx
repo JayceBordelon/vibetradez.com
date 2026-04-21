@@ -69,7 +69,7 @@ export default function TermsPage() {
             </p>
             <p>
               All trade ideas presented on this platform are machine-generated suggestions, not recommendations. They are produced by two large language models, OpenAI GPT-5.4 and Anthropic Claude
-              Opus 4.6, running independently with the same prompt and the same toolset over publicly available sentiment data and live market information. After both models produce their picks, each
+              Opus 4.7, running independently with the same prompt and the same toolset over publicly available sentiment data and live market information. After both models produce their picks, each
               also writes a one-sentence verdict on the other's trades. None of these outputs (picks or verdicts) have been reviewed, verified, or endorsed by any licensed financial professional.
             </p>
           </Section>

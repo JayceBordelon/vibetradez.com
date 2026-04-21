@@ -42,7 +42,7 @@ type Config struct {
 // "Model version refresh" for the policy.
 const (
 	DefaultOpenAIModel    = "gpt-5.4"
-	DefaultAnthropicModel = "claude-opus-4-6"
+	DefaultAnthropicModel = "claude-opus-4-7"
 )
 
 // modelDisplayNames maps API model identifiers to human-friendly labels
@@ -51,6 +51,7 @@ const (
 var modelDisplayNames = map[string]string{
 	"gpt-5.4":           "GPT-5.4",
 	"gpt-4o":            "GPT-4o",
+	"claude-opus-4-7":   "Claude Opus 4.7",
 	"claude-opus-4-6":   "Claude Opus 4.6",
 	"claude-sonnet-4-6": "Claude Sonnet 4.6",
 }
