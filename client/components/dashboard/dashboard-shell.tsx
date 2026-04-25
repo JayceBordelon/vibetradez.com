@@ -216,8 +216,8 @@ export function DashboardShell() {
               <PnlChart trades={filtered.trades} />
             </Section>
             <Separator />
-            <Section title="Trade Details" subtitle="Click any row to expand">
-              <TradeTable trades={filtered.trades} />
+            <Section title="Trade Details" subtitle="Click any row to view the single-contract page">
+              <TradeTable trades={filtered.trades} date={filtered.date} />
             </Section>
           </>
         ) : (
