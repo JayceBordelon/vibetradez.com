@@ -229,13 +229,13 @@ export default function LandingPage() {
             Not financial advice. Options trading involves substantial risk. All P&amp;L figures are hypothetical. Past performance does not guarantee future results.
           </p>
           <div className="flex gap-4">
-            <Link href="/terms" className="underline underline-offset-2 hover:text-foreground">
+            <Link href="/terms" className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-foreground sm:min-h-0">
               Terms
             </Link>
-            <Link href="/faq" className="underline underline-offset-2 hover:text-foreground">
+            <Link href="/faq" className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-foreground sm:min-h-0">
               FAQ
             </Link>
-            <a href="https://jaycebordelon.com" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">
+            <a href="https://jaycebordelon.com" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-foreground sm:min-h-0">
               Built by Jayce
             </a>
           </div>

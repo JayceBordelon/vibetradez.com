@@ -106,9 +106,9 @@ export function ModelComparisonShell() {
       <PageToolbar
         leftControls={
           <Tabs value={range} onValueChange={(v) => setRange(v as Range)}>
-            <TabsList className="h-8 gap-1 p-1">
+            <TabsList className="h-11 gap-1 p-1 sm:h-8">
               {RANGE_OPTIONS.map((opt) => (
-                <TabsTrigger key={opt.value} value={opt.value} className="h-6 px-3 text-xs font-semibold">
+                <TabsTrigger key={opt.value} value={opt.value} className="h-9 px-3 text-xs font-semibold sm:h-6">
                   {opt.label}
                 </TabsTrigger>
               ))}

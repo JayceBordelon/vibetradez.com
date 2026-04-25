@@ -51,7 +51,19 @@ export function EquityCurveChart({ data, activeTopN = 10 }: { data: EquityPoint[
             <ChartLegend content={<ChartLegendContent />} />
             {SERIES.map((s) => {
               const isActive = s.n === activeTopN;
-              return <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={s.color} strokeWidth={isActive ? 2.5 : 1.5} strokeOpacity={isActive ? 1 : 0.25} dot={false} />;
+              return (
+                <Line
+                  key={s.key}
+                  type="monotone"
+                  dataKey={s.key}
+                  name={s.label}
+                  stroke={s.color}
+                  strokeWidth={isActive ? 2.5 : 1.25}
+                  strokeOpacity={isActive ? 1 : 0.55}
+                  strokeDasharray={isActive ? undefined : "4 4"}
+                  dot={false}
+                />
+              );
             })}
           </LineChart>
         </ChartContainer>

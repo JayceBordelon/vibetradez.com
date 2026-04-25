@@ -135,7 +135,7 @@ export default function TermsPage() {
           </Section>
 
           <div className="mt-12">
-            <a href="#top" className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground">
+            <a href="#top" className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground sm:min-h-0">
               ↑ Back to top
             </a>
           </div>

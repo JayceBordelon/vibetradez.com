@@ -26,7 +26,7 @@ export function NavBar({ onSubscribe }: NavBarProps) {
   return (
     <header className="sticky top-0 z-20 border-b bg-background/85 backdrop-blur-md">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2 sm:px-7 sm:py-2.5">
-        <Link href="/" className="shrink-0 text-[19px] font-extrabold tracking-tight sm:text-[22px]">
+        <Link href="/" className="inline-flex min-h-11 shrink-0 items-center text-[19px] font-extrabold tracking-tight sm:min-h-0 sm:text-[22px]">
           <span className="text-foreground">Vibe</span>
           <span className="text-gradient-brand">Tradez</span>
         </Link>
@@ -39,7 +39,7 @@ export function NavBar({ onSubscribe }: NavBarProps) {
                 key={tab.href}
                 href={tab.href}
                 className={cn(
-                  "flex items-center border-b-2 px-3 py-1.5 text-sm font-semibold tracking-wide transition-colors sm:px-4",
+                  "flex min-h-11 items-center border-b-2 px-3 py-1.5 text-sm font-semibold tracking-wide transition-colors sm:min-h-0 sm:px-4",
                   isActive ? "border-transparent text-foreground" : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
                   isActive && "nav-tab-active"
                 )}
