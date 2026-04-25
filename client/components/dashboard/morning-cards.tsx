@@ -41,11 +41,13 @@ function MorningCard({ dt, liveQuotes, date }: MorningCardProps) {
   const { trade } = dt;
   const moneyness = calcMoneyness(trade);
 
-  // Live option mark for "current contract price" — Schwab returns options
-  // keyed like "SPY  240517C00500000"; the dashboard hashes them by symbol
-  // prefix so a simple startsWith lookup matches today's pick.
-  const optionKey = Object.keys(liveQuotes?.options ?? {}).find((k) => k.startsWith(trade.symbol));
-  const liveOption = optionKey ? liveQuotes?.options?.[optionKey] : null;
+  // Live option mark for "current contract price". Backend keys are
+  // "<SYMBOL>|<CALL|PUT>|<strike formatted to 2dp>|<expiration>" — see
+  // server.go:846 — so reconstruct the same key here. Falls back to
+  // null (em-dash) when Schwab isn't connected or the contract dropped
+  // off the chain.
+  const optionKey = `${trade.symbol}|${trade.contract_type}|${trade.strike_price.toFixed(2)}|${trade.expiration}`;
+  const liveOption = liveQuotes?.options?.[optionKey] ?? null;
   const currentContractPrice = liveOption?.mark ?? null;
   const contractDelta = currentContractPrice !== null ? currentContractPrice - trade.estimated_price : null;
   const contractDeltaPct = contractDelta !== null && trade.estimated_price > 0 ? (contractDelta / trade.estimated_price) * 100 : null;
