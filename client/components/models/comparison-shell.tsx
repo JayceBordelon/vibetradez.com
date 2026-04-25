@@ -142,7 +142,7 @@ export function ModelComparisonShell() {
               <Card className="overflow-hidden p-0">
                 <CardContent className="p-0">
                   <div className="grid grid-cols-[1fr_auto_1fr] items-stretch">
-                    <SideStat Logo={OpenAILogo} model={data.openai.model} pnl={data.openai.total_pnl} trades={data.openai.trades_evaluated} align="left" leading={winner === "openai"} />
+                    <SideStat Logo={OpenAILogo} label="ChatGPT" pnl={data.openai.total_pnl} trades={data.openai.trades_evaluated} align="left" leading={winner === "openai"} />
                     <div className="flex flex-col items-center justify-center border-x px-3 py-4 sm:px-5">
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Agree</span>
                       <span className="mt-1 text-lg font-semibold tabular-nums sm:text-xl" style={{ color: percentHueColor(data.agreement_rate * 100) }}>
@@ -150,7 +150,7 @@ export function ModelComparisonShell() {
                       </span>
                       <span className="mt-0.5 whitespace-nowrap text-[10px] text-muted-foreground">n={data.total_dual_scored}</span>
                     </div>
-                    <SideStat Logo={ClaudeLogo} model={data.anthropic.model} pnl={data.anthropic.total_pnl} trades={data.anthropic.trades_evaluated} align="right" leading={winner === "anthropic"} />
+                    <SideStat Logo={ClaudeLogo} label="Claude" pnl={data.anthropic.total_pnl} trades={data.anthropic.trades_evaluated} align="right" leading={winner === "anthropic"} />
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t bg-muted/30 px-4 py-2 text-xs">
                     <div className="flex items-center gap-2">
@@ -191,9 +191,9 @@ export function ModelComparisonShell() {
                           }}
                         />
                         <Legend wrapperStyle={{ fontSize: 12 }} />
-                        <Line type="monotone" dataKey="openai" name={data.openai.model} stroke="var(--gpt)" strokeWidth={2} dot={false} />
-                        <Line type="monotone" dataKey="anthropic" name={data.anthropic.model} stroke="var(--claude)" strokeWidth={2} dot={false} />
-                        <Line type="monotone" dataKey="combined" name="combined" stroke="var(--amber)" strokeWidth={2} strokeDasharray="4 2" dot={false} />
+                        <Line type="monotone" dataKey="openai" name="ChatGPT" stroke="var(--gpt)" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="anthropic" name="Claude" stroke="var(--claude)" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="combined" name="Combined" stroke="var(--amber)" strokeWidth={2} strokeDasharray="4 2" dot={false} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -203,8 +203,8 @@ export function ModelComparisonShell() {
 
             <Section title="Side-by-side">
               <div className="grid gap-4 lg:grid-cols-2">
-                <ModelCard label="OpenAI" stats={data.openai} Logo={OpenAILogo} />
-                <ModelCard label="Anthropic" stats={data.anthropic} Logo={ClaudeLogo} />
+                <ModelCard label="ChatGPT" stats={data.openai} Logo={OpenAILogo} />
+                <ModelCard label="Claude" stats={data.anthropic} Logo={ClaudeLogo} />
               </div>
             </Section>
           </>
@@ -216,14 +216,14 @@ export function ModelComparisonShell() {
 
 function SideStat({
   Logo,
-  model,
+  label,
   pnl,
   trades,
   align,
   leading,
 }: {
   Logo: React.ComponentType<{ className?: string }>;
-  model: string;
+  label: string;
   pnl: number;
   trades: number;
   align: "left" | "right";
@@ -234,7 +234,7 @@ function SideStat({
       {leading && <span className="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wider text-amber sm:top-3 sm:right-3">Lead</span>}
       <Logo className="h-7 w-7 shrink-0 sm:h-10 sm:w-10" />
       <div className={cn("flex min-w-0 flex-col", align === "right" && "items-end")}>
-        <span className="w-full truncate font-mono text-[10px] font-medium text-muted-foreground sm:text-[11px]">{model}</span>
+        <span className="w-full truncate text-xs font-semibold text-muted-foreground sm:text-sm">{label}</span>
         <span className={cn("mt-0.5 text-lg font-semibold tabular-nums sm:text-3xl", pnlColor(pnl))}>{fmtPnlInt(pnl)}</span>
         <span className="mt-0.5 text-[10px] text-muted-foreground sm:text-[11px]">{trades} trades</span>
       </div>
@@ -248,11 +248,8 @@ function ModelCard({ label, stats, Logo }: { label: string; stats: ModelStats; L
       <CardContent className="space-y-4 p-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Logo className="h-7 w-7" />
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-              <div className="mt-0.5 font-mono text-base font-semibold">{stats.model}</div>
-            </div>
+            <Logo className="h-8 w-8" />
+            <div className="text-base font-semibold">{label}</div>
           </div>
           <Badge variant={stats.total_pnl > 0 ? "default" : stats.total_pnl < 0 ? "destructive" : "secondary"}>{fmtPnlInt(stats.total_pnl)}</Badge>
         </div>

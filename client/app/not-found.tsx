@@ -25,7 +25,7 @@ const SUGGESTIONS = [
   {
     href: "/models",
     label: "Model Comparison",
-    description: "Head-to-head OpenAI vs Claude backtest.",
+    description: "Head-to-head ChatGPT vs Claude backtest.",
     Icon: BookOpen,
   },
 ];

@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     template: "%s | VibeTradez",
   },
   description:
-    "A controlled experiment between two silly models. GPT Latest and Claude Latest get the exact same market signals, prompt, and tools, independently pick their top 10, then write a one-sentence verdict on every one of the other model's picks. Delivered before market open.",
+    "A controlled experiment between two silly models. ChatGPT and Claude get the exact same market signals, prompt, and tools, independently pick their top 10, then write a one-sentence verdict on every one of the other model's picks. Delivered before market open.",
   keywords: ["options trading", "AI trading", "daily options picks", "trade alerts", "options analytics", "stock options", "day trading"],
   authors: [{ name: "Jayce Bordelon", url: "https://jaycebordelon.com" }],
   openGraph: {

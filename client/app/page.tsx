@@ -9,7 +9,7 @@ import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
 export const metadata: Metadata = {
   title: "VibeTradez | AI-Powered Options Picks",
   description:
-    "A controlled experiment between two silly models. GPT Latest and Claude Latest get the exact same market signals, the exact same prompt, and the exact same tools, then independently pick their top 10 and roast each other's picks. Delivered before market open.",
+    "A controlled experiment between two silly models. ChatGPT and Claude get the exact same market signals, the exact same prompt, and the exact same tools, then independently pick their top 10 and roast each other's picks. Delivered before market open.",
 };
 
 export default function LandingPage() {
@@ -77,9 +77,9 @@ export default function LandingPage() {
 
           <Reveal effect="rise" delay={280} duration={900}>
             <p className="mx-auto mb-10 max-w-2xl text-base leading-relaxed text-muted-foreground sm:mb-10 sm:text-xl">
-              A controlled experiment between two silly models. Every morning, GPT Latest and Claude Latest get the exact same market signals, the exact same prompt, and the exact same tools, then go
-              off alone and each pick their top 10. After they finish, each model reads the other&apos;s picks and writes a one-sentence roast (or grudging nod) on every trade. You get the union
-              before market open, both rationales attached, and a live argument in your inbox.
+              A controlled experiment between two silly models. Every morning, ChatGPT and Claude get the exact same market signals, the exact same prompt, and the exact same tools, then go off alone
+              and each pick their top 10. After they finish, each model reads the other&apos;s picks and writes a one-sentence roast (or grudging nod) on every trade. You get the union before market
+              open, both rationales attached, and a live argument in your inbox.
             </p>
           </Reveal>
 
@@ -102,12 +102,12 @@ export default function LandingPage() {
           <div className="mt-12 flex items-center justify-center gap-6 sm:mt-12 sm:gap-8">
             <Reveal effect="left" delay={560} duration={700} className="flex items-center gap-2.5 text-sm text-muted-foreground">
               <OpenAILogo className="h-5 w-5" />
-              <span className="font-medium">GPT Latest</span>
+              <span className="font-medium">ChatGPT</span>
             </Reveal>
             <Reveal effect="scale" delay={680} duration={500} className="h-4 w-px bg-border" />
             <Reveal effect="right" delay={560} duration={700} className="flex items-center gap-2.5 text-sm text-muted-foreground">
               <ClaudeLogo className="h-5 w-5" />
-              <span className="font-medium">Claude Latest</span>
+              <span className="font-medium">Claude</span>
             </Reveal>
           </div>
         </div>
@@ -288,7 +288,7 @@ const steps = [
     time: "9:15 AM ET",
     title: "Independent picks",
     description:
-      "GPT Latest and Claude Latest are run in parallel, alone, with the same prompt and the same Schwab + web search tools. Each produces 10 ranked contracts with conviction scores and written rationales. Neither model sees the other's work yet.",
+      "ChatGPT and Claude are run in parallel, alone, with the same prompt and the same Schwab + web search tools. Each produces 10 ranked contracts with conviction scores and written rationales. Neither model sees the other's work yet.",
   },
   {
     time: "9:20 AM ET",
