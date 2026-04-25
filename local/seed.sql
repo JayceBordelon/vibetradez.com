@@ -22,7 +22,6 @@ CREATE TABLE IF NOT EXISTS trades (
     current_price DOUBLE PRECISION NOT NULL DEFAULT 0,
     target_price DOUBLE PRECISION NOT NULL DEFAULT 0,
     stop_loss DOUBLE PRECISION NOT NULL DEFAULT 0,
-    profit_target DOUBLE PRECISION NOT NULL DEFAULT 0,
     risk_level TEXT NOT NULL DEFAULT '',
     catalyst TEXT NOT NULL DEFAULT '',
     mention_count INTEGER NOT NULL DEFAULT 0,
@@ -243,7 +242,7 @@ BEGIN
                 INSERT INTO trades (
                     date, symbol, contract_type, strike_price, expiration, dte,
                     estimated_price, thesis, sentiment_score, current_price,
-                    target_price, stop_loss, profit_target, risk_level,
+                    target_price, stop_loss, risk_level,
                     catalyst, mention_count, rank,
                     gpt_score, gpt_rationale, claude_score, claude_rationale, combined_score,
                     picked_by_openai, picked_by_claude
@@ -260,7 +259,6 @@ BEGIN
                     stock_price,
                     target,
                     round((estimated * 0.5)::numeric, 2),
-                    round((estimated * 2.0)::numeric, 2),
                     rlevel,
                     cat,
                     mentions,

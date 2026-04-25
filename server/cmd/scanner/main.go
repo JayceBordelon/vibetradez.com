@@ -529,7 +529,6 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 			CurrentPrice:    t.CurrentPrice,
 			TargetPrice:     t.TargetPrice,
 			StopLoss:        t.StopLoss,
-			ProfitTarget:    t.ProfitTarget,
 			RiskLevel:       t.RiskLevel,
 			Catalyst:        t.Catalyst,
 			MentionCount:    t.MentionCount,
@@ -546,8 +545,10 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 		}
 	}
 
-	// Render email template
-	htmlContent, err := templates.RenderEmail(templateTrades, gptDisplayName, claudeDisplayName)
+	// Render email template — including yesterday's results recap if the
+	// EOD cron from the prior trading day saved any summaries we can read.
+	yesterdayRecap := buildYesterdayRecap(db, date)
+	htmlContent, err := templates.RenderEmail(templateTrades, gptDisplayName, claudeDisplayName, yesterdayRecap)
 	if err != nil {
 		log.Printf("Error rendering email: %v", err)
 		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("Email template rendering failed: %v", err))
@@ -570,6 +571,62 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 	}
 
 	log.Println("Trade analysis complete and email sent!")
+}
+
+// buildYesterdayRecap finds the most recent trading day before todayDate
+// that has EOD summaries and returns a digest for the morning email's
+// recap card. Returns nil if no prior summaries exist (first send,
+// EOD cron failed for the previous day, etc.).
+func buildYesterdayRecap(db *store.Store, todayDate string) *templates.YesterdayRecap {
+	dates, err := db.GetTradeDates(10)
+	if err != nil {
+		log.Printf("buildYesterdayRecap: GetTradeDates: %v", err)
+		return nil
+	}
+	for _, d := range dates {
+		if d == todayDate {
+			continue
+		}
+		summaries, err := db.GetEODSummaries(d)
+		if err != nil {
+			log.Printf("buildYesterdayRecap: GetEODSummaries(%s): %v", d, err)
+			continue
+		}
+		if len(summaries) == 0 {
+			continue
+		}
+		recap := &templates.YesterdayRecap{
+			TotalTrades: len(summaries),
+		}
+		if t, err := time.Parse("2006-01-02", d); err == nil {
+			recap.Date = t.Format("Jan 2")
+		} else {
+			recap.Date = d
+		}
+		bestPnL := -1e18
+		worstPnL := 1e18
+		for _, s := range summaries {
+			pnl := (s.ClosingPrice - s.EntryPrice) * 100
+			recap.TotalPnL += pnl
+			if pnl > 0 {
+				recap.Winners++
+			} else if pnl < 0 {
+				recap.Losers++
+			}
+			if pnl > bestPnL {
+				bestPnL = pnl
+				recap.BestSymbol = s.Symbol
+				recap.BestPnL = pnl
+			}
+			if pnl < worstPnL {
+				worstPnL = pnl
+				recap.WorstSymbol = s.Symbol
+				recap.WorstPnL = pnl
+			}
+		}
+		return recap
+	}
+	return nil
 }
 
 func currentWeekRange() (string, string) {

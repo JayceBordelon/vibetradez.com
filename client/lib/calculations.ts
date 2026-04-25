@@ -29,19 +29,6 @@ export function calcMaxLoss(trade: Trade): number {
   return trade.estimated_price * 100;
 }
 
-export function calcMaxGain(trade: Trade): number | null {
-  if (trade.profit_target <= 0) return null;
-  return (trade.profit_target - trade.estimated_price) * 100;
-}
-
-export function calcRiskReward(trade: Trade): number | null {
-  const maxGain = calcMaxGain(trade);
-  if (!maxGain || maxGain <= 0) return null;
-  const maxLoss = calcMaxLoss(trade);
-  if (maxLoss <= 0) return null;
-  return maxGain / maxLoss;
-}
-
 export function sentimentLabel(score: number): string {
   if (score > 0.3) return "Bullish";
   if (score < -0.3) return "Bearish";

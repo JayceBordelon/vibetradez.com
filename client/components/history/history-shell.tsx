@@ -351,7 +351,9 @@ export function HistoryShell() {
 
                 {daysWithPnl.length > 1 && (
                   <Section>
-                    <DailyPnlChart data={daysWithPnl} />
+                    {/* Year and all-time windows roll up into weekly bars so
+                        the chart isn't a forest of toothpicks. */}
+                    <DailyPnlChart data={daysWithPnl} granularity={mode === "year" || mode === "all" ? "weekly" : "daily"} />
                   </Section>
                 )}
               </>

@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"net/http"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -784,6 +785,15 @@ func (s *Server) handleLiveQuotes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.schwab == nil || !s.schwab.IsConnected() {
+		// Local-dev convenience: when LOCAL_MOCK_QUOTES=1 and Schwab is
+		// unauthorized, synthesize plausible live marks for today's picks
+		// so the dashboard's Buy/Current cards exercise the live-data
+		// path without needing a real Schwab account. Production never
+		// sets this env var, so the empty-response branch still wins
+		// there.
+		if os.Getenv("LOCAL_MOCK_QUOTES") == "1" {
+			s.fillMockLiveQuotes(&resp)
+		}
 		w.Header().Set("Cache-Control", "public, max-age=5")
 		writeJSON(w, http.StatusOK, resp)
 		return
@@ -859,6 +869,65 @@ func (s *Server) handleLiveQuotes(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Cache-Control", "public, max-age=10")
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// fillMockLiveQuotes synthesizes plausible live marks for today's morning
+// picks so the dashboard's Buy/Current cards have data to render in local
+// dev (Schwab OAuth not set up). Each ticker gets a stable per-trade drift
+// derived from its symbol so refreshes don't flicker wildly, plus a small
+// time-based jitter so the numbers visibly tick. Never invoked in
+// production: gated behind the LOCAL_MOCK_QUOTES env var.
+func (s *Server) fillMockLiveQuotes(resp *liveQuotesResponse) {
+	date, err := s.db.GetLatestTradeDate()
+	if err != nil {
+		return
+	}
+	morningTrades, err := s.db.GetMorningTrades(date)
+	if err != nil || len(morningTrades) == 0 {
+		return
+	}
+	resp.Connected = true
+
+	// Slow time-based oscillator so the price visibly drifts every refresh.
+	tick := math.Sin(float64(time.Now().Unix()%600) / 600.0 * 2 * math.Pi)
+
+	for _, t := range morningTrades {
+		// Stable drift in [-0.35, +0.35] derived from the symbol so each
+		// ticker has its own personality across refreshes.
+		var hash uint64
+		for _, c := range t.Symbol {
+			hash = hash*31 + uint64(c)
+		}
+		drift := (float64(hash%1000)/1000.0)*0.7 - 0.35
+		// Stock price: nudge ~1% off entry, plus tick.
+		stockMove := t.CurrentPrice * (drift*0.01 + tick*0.005)
+		stockNow := t.CurrentPrice + stockMove
+		resp.Quotes[t.Symbol] = liveQuoteEntry{
+			LastPrice:    stockNow,
+			OpenPrice:    t.CurrentPrice,
+			NetChange:    stockMove,
+			NetChangePct: (stockMove / t.CurrentPrice) * 100,
+			BidPrice:     stockNow - 0.02,
+			AskPrice:     stockNow + 0.02,
+			Volume:       1_000_000 + int64(hash%500_000),
+		}
+		// Option mark: scale the move by a fake delta of ~0.5 for ATM,
+		// plus its own jitter so winners and losers diverge visibly.
+		optMove := stockMove*0.5 + t.EstimatedPrice*tick*0.04 + t.EstimatedPrice*drift*0.1
+		mark := math.Max(0.01, t.EstimatedPrice+optMove)
+		key := fmt.Sprintf("%s|%s|%.2f|%s", t.Symbol, t.ContractType, t.StrikePrice, t.Expiration)
+		resp.Options[key] = liveOptionEntry{
+			Bid:          math.Max(0.01, mark-0.05),
+			Ask:          mark + 0.05,
+			Last:         mark,
+			Mark:         mark,
+			Volume:       int(500 + hash%2000),
+			OpenInterest: int(2000 + hash%5000),
+			Delta:        0.5 + drift*0.2,
+			Theta:        -0.05 - math.Abs(drift)*0.05,
+			ImpliedVol:   0.35 + math.Abs(drift)*0.2,
+		}
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

@@ -18,7 +18,7 @@
   --muted-foreground: #52525b;
   --accent: #a1a1aa;
   --accent-foreground: #18181b;
-  --destructive: #ef4444;
+  --destructive: #b91c1c;
   --destructive-foreground: #ffffff;
   --border: #e4e4e7;
   --input: #e4e4e7;
@@ -50,16 +50,17 @@
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
-  /* Trading-specific colors */
-  --green: #059669;
+  /* Trading-specific colors. Hand-tuned for ≥4.5:1 contrast on the
+     light-mode body bg so PnL deltas pass WCAG AA. */
+  --green: #047857;
   --green-bg: #ecfdf5;
   --green-light: #f0fdf4;
   --green-border: #6ee7b7;
-  --red: #dc2626;
+  --red: #b91c1c;
   --red-bg: #fef2f2;
   --red-light: #fef2f2;
   --red-border: #fca5a5;
-  --amber: #b45309;
+  --amber: #92400e;
   --amber-bg: #fef3c7;
   --percent-hue-l: 38%;
   --card-elevated: #fafafa;
@@ -70,11 +71,12 @@
   --chart-grid: #e4e4e7;
   --chart-text: #52525b;
 
-  /* AI brand colors */
-  --gpt: #10a37f;
+  /* AI brand colors. Slightly darkened from the marketing pure brand
+     hex so headline text passes 4.5:1 on white in light mode. */
+  --gpt: #0a7a5e;
   --gpt-light: rgba(16, 163, 127, 0.10);
   --gpt-border: rgba(16, 163, 127, 0.25);
-  --claude: #D97757;
+  --claude: #b04a30;
   --claude-light: rgba(217, 119, 87, 0.10);
   --claude-border: rgba(217, 119, 87, 0.25);
 }

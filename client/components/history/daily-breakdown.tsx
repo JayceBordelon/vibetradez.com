@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
+import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -74,7 +75,7 @@ function DayRow({ ds, maxAbsPnl }: { ds: DayStat; maxAbsPnl: number }) {
           {ds.details.length > 0 ? (
             <div className="space-y-2">
               {ds.details.map((t, j) => (
-                <TradeRow key={`${ds.date}-${j}`} trade={t} />
+                <TradeRow key={`${ds.date}-${j}`} trade={t} date={ds.date} />
               ))}
             </div>
           ) : (
@@ -86,9 +87,14 @@ function DayRow({ ds, maxAbsPnl }: { ds: DayStat; maxAbsPnl: number }) {
   );
 }
 
-function TradeRow({ trade: t }: { trade: TradeDetail }) {
+function TradeRow({ trade: t, date }: { trade: TradeDetail; date: string }) {
+  const href = `/trade/${encodeURIComponent(t.symbol)}?date=${encodeURIComponent(date)}`;
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] sm:flex-nowrap">
+    <Link
+      href={href}
+      className="-mx-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 py-1.5 text-[13px] transition-colors hover:bg-muted/60 sm:flex-nowrap"
+      aria-label={`Open ${t.symbol} ${t.type} ${date} detail`}
+    >
       <span className="w-14 shrink-0 font-semibold">${t.symbol}</span>
 
       <Badge variant="outline" className={cn("w-11 justify-center text-[11px]", t.type === "CALL" ? "border-green/40 text-green" : "border-red/40 text-red")}>
@@ -104,6 +110,8 @@ function TradeRow({ trade: t }: { trade: TradeDetail }) {
       <span className={cn("ml-auto w-16 shrink-0 text-right text-[13px] tabular-nums", pnlColor(t.pnl))}>{fmtPctDec(t.pct)}</span>
 
       <span className={cn("w-20 shrink-0 text-right text-sm font-semibold tabular-nums", pnlColor(t.pnl))}>{fmtPnlInt(t.pnl)}</span>
-    </div>
+
+      <ChevronRight className="hidden h-3.5 w-3.5 shrink-0 text-muted-foreground sm:inline" aria-hidden />
+    </Link>
   );
 }

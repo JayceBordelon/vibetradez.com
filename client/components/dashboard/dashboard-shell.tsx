@@ -209,15 +209,15 @@ export function DashboardShell() {
                   })()}
               </div>
             </Section>
-            <Section title="Exposure Analysis" subtitle="How capital was deployed today">
+            <Section title="Exposure" subtitle="How capital was deployed today. For long options, max loss is the premium paid.">
               <ExposurePanel trades={filtered.trades} hasSummaries />
             </Section>
             <Section title="P&L by Trade" subtitle="Per-contract performance, sorted">
               <PnlChart trades={filtered.trades} />
             </Section>
             <Separator />
-            <Section title="Trade Details" subtitle="Click any row to expand">
-              <TradeTable trades={filtered.trades} />
+            <Section title="Trade Details" subtitle="Click any row to view the single-contract page">
+              <TradeTable trades={filtered.trades} date={filtered.date} />
             </Section>
           </>
         ) : (
@@ -232,11 +232,11 @@ export function DashboardShell() {
                   })()}
               </div>
             </Section>
-            <Section title="Exposure" subtitle="Capital at risk for today's picks">
+            <Section title="Exposure" subtitle="Capital at risk for today's picks. For long options, max loss is the premium paid.">
               <ExposurePanel trades={filtered.trades} hasSummaries={false} />
             </Section>
-            <Section title="Today's Picks" subtitle={`${filtered.trades.length} ranked plays`}>
-              <MorningCards trades={filtered.trades} liveQuotes={liveQuotes} />
+            <Section title="Today's Picks" subtitle={`${filtered.trades.length} ranked plays · click any pick for the full single-contract view`}>
+              <MorningCards trades={filtered.trades} liveQuotes={liveQuotes} date={filtered.date} />
             </Section>
           </>
         )}

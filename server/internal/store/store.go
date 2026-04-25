@@ -58,7 +58,6 @@ func migrate(db *sql.DB) error {
 			current_price DOUBLE PRECISION NOT NULL DEFAULT 0,
 			target_price DOUBLE PRECISION NOT NULL DEFAULT 0,
 			stop_loss DOUBLE PRECISION NOT NULL DEFAULT 0,
-			profit_target DOUBLE PRECISION NOT NULL DEFAULT 0,
 			risk_level TEXT NOT NULL DEFAULT '',
 			catalyst TEXT NOT NULL DEFAULT '',
 			mention_count INTEGER NOT NULL DEFAULT 0,
@@ -252,12 +251,12 @@ func (s *Store) SaveMorningTrades(date string, tradeList []trades.Trade) error {
 		INSERT INTO trades (
 			date, symbol, contract_type, strike_price, expiration, dte,
 			estimated_price, thesis, sentiment_score, current_price,
-			target_price, stop_loss, profit_target, risk_level,
+			target_price, stop_loss, risk_level,
 			catalyst, mention_count, rank,
 			gpt_score, gpt_rationale, claude_score, claude_rationale, combined_score,
 			picked_by_openai, picked_by_claude, gpt_verdict, claude_verdict,
 			gpt_model, claude_model
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -268,7 +267,7 @@ func (s *Store) SaveMorningTrades(date string, tradeList []trades.Trade) error {
 		_, err := stmt.Exec(
 			date, t.Symbol, t.ContractType, t.StrikePrice, t.Expiration, t.DTE,
 			t.EstimatedPrice, t.Thesis, t.SentimentScore, t.CurrentPrice,
-			t.TargetPrice, t.StopLoss, t.ProfitTarget, t.RiskLevel,
+			t.TargetPrice, t.StopLoss, t.RiskLevel,
 			t.Catalyst, t.MentionCount, t.Rank,
 			t.GPTScore, t.GPTRationale, t.ClaudeScore, t.ClaudeRationale, t.CombinedScore,
 			t.PickedByOpenAI, t.PickedByClaude, t.GPTVerdict, t.ClaudeVerdict,
@@ -286,7 +285,7 @@ func (s *Store) GetMorningTrades(date string) ([]trades.Trade, error) {
 	rows, err := s.db.Query(`
 		SELECT symbol, contract_type, strike_price, expiration, dte,
 			estimated_price, thesis, sentiment_score, current_price,
-			target_price, stop_loss, profit_target, risk_level,
+			target_price, stop_loss, risk_level,
 			catalyst, mention_count, rank,
 			gpt_score, gpt_rationale, claude_score, claude_rationale, combined_score,
 			picked_by_openai, picked_by_claude, gpt_verdict, claude_verdict,
@@ -304,7 +303,7 @@ func (s *Store) GetMorningTrades(date string) ([]trades.Trade, error) {
 		err := rows.Scan(
 			&t.Symbol, &t.ContractType, &t.StrikePrice, &t.Expiration, &t.DTE,
 			&t.EstimatedPrice, &t.Thesis, &t.SentimentScore, &t.CurrentPrice,
-			&t.TargetPrice, &t.StopLoss, &t.ProfitTarget, &t.RiskLevel,
+			&t.TargetPrice, &t.StopLoss, &t.RiskLevel,
 			&t.Catalyst, &t.MentionCount, &t.Rank,
 			&t.GPTScore, &t.GPTRationale, &t.ClaudeScore, &t.ClaudeRationale, &t.CombinedScore,
 			&t.PickedByOpenAI, &t.PickedByClaude, &t.GPTVerdict, &t.ClaudeVerdict,
@@ -387,7 +386,7 @@ func (s *Store) GetTradesForDateRange(startDate, endDate string) (map[string][]t
 	rows, err := s.db.Query(`
 		SELECT date, symbol, contract_type, strike_price, expiration, dte,
 			estimated_price, thesis, sentiment_score, current_price,
-			target_price, stop_loss, profit_target, risk_level,
+			target_price, stop_loss, risk_level,
 			catalyst, mention_count, rank,
 			gpt_score, gpt_rationale, claude_score, claude_rationale, combined_score,
 			picked_by_openai, picked_by_claude, gpt_verdict, claude_verdict,
@@ -406,7 +405,7 @@ func (s *Store) GetTradesForDateRange(startDate, endDate string) (map[string][]t
 		err := rows.Scan(
 			&date, &t.Symbol, &t.ContractType, &t.StrikePrice, &t.Expiration, &t.DTE,
 			&t.EstimatedPrice, &t.Thesis, &t.SentimentScore, &t.CurrentPrice,
-			&t.TargetPrice, &t.StopLoss, &t.ProfitTarget, &t.RiskLevel,
+			&t.TargetPrice, &t.StopLoss, &t.RiskLevel,
 			&t.Catalyst, &t.MentionCount, &t.Rank,
 			&t.GPTScore, &t.GPTRationale, &t.ClaudeScore, &t.ClaudeRationale, &t.CombinedScore,
 			&t.PickedByOpenAI, &t.PickedByClaude, &t.GPTVerdict, &t.ClaudeVerdict,

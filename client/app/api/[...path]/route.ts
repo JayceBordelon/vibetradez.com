@@ -18,17 +18,40 @@ async function proxy(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: false, message: "not found" }, { status: 404 });
   }
 
-  const url = new URL(req.url);
-  const target = `${apiUrl}${url.pathname}${url.search}`;
+  let target: string;
+  try {
+    const url = new URL(req.url);
+    target = `${apiUrl}${url.pathname}${url.search}`;
+  } catch (e) {
+    console.error("[api-proxy] bad request url", req.url, e);
+    return NextResponse.json({ ok: false, message: "bad request" }, { status: 400 });
+  }
 
-  const headers = new Headers(req.headers);
-  headers.delete("host");
-  headers.delete("connection");
-  headers.delete("content-length");
+  // Build a fresh, minimal header set. Forwarding the entire Headers object
+  // sometimes drags in hop-by-hop headers (`connection`, `transfer-encoding`)
+  // that the upstream fetch refuses to send and that cause the whole request
+  // to throw before it ever leaves the container.
+  const upstreamHeaders = new Headers();
+  for (const [k, v] of req.headers.entries()) {
+    const lower = k.toLowerCase();
+    if (
+      lower === "host" ||
+      lower === "connection" ||
+      lower === "content-length" ||
+      lower === "transfer-encoding" ||
+      lower === "keep-alive" ||
+      lower === "te" ||
+      lower === "upgrade" ||
+      lower === "proxy-connection"
+    ) {
+      continue;
+    }
+    upstreamHeaders.set(k, v);
+  }
 
   const init: RequestInit = {
     method: req.method,
-    headers,
+    headers: upstreamHeaders,
     redirect: "manual",
   };
 
@@ -36,12 +59,28 @@ async function proxy(req: NextRequest): Promise<NextResponse> {
     init.body = await req.arrayBuffer();
   }
 
-  const upstream = await fetch(target, init);
-  const responseHeaders = new Headers(upstream.headers);
-  responseHeaders.delete("content-encoding");
-  responseHeaders.delete("transfer-encoding");
+  let upstream: Response;
+  try {
+    upstream = await fetch(target, init);
+  } catch (e) {
+    console.error("[api-proxy] upstream fetch failed", target, e);
+    return NextResponse.json({ ok: false, message: "upstream fetch failed" }, { status: 502 });
+  }
 
-  return new NextResponse(upstream.body, {
+  // Read the body as bytes once so we can set an explicit Content-Length
+  // and avoid streaming-related quirks in the runtime's response writer.
+  const body = await upstream.arrayBuffer();
+  const responseHeaders = new Headers();
+  for (const [k, v] of upstream.headers.entries()) {
+    const lower = k.toLowerCase();
+    if (lower === "content-encoding" || lower === "transfer-encoding" || lower === "connection" || lower === "keep-alive") {
+      continue;
+    }
+    responseHeaders.set(k, v);
+  }
+  responseHeaders.set("content-length", String(body.byteLength));
+
+  return new NextResponse(body, {
     status: upstream.status,
     statusText: upstream.statusText,
     headers: responseHeaders,
