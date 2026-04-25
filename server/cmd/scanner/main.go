@@ -141,8 +141,8 @@ func main() {
 
 	analyzer := trades.NewAnalyzer(cfg.OpenAIAPIKey, cfg.OpenAIModel, schwabClient)
 	emailClient := email.NewClient(cfg.ResendAPIKey)
-	gptDisplayName := config.ModelDisplayName(cfg.OpenAIModel)
-	claudeDisplayName := config.ModelDisplayName(cfg.AnthropicModel)
+	gptDisplayName := config.CurrentOpenAILabel
+	claudeDisplayName := config.CurrentAnthropicLabel
 	log.Printf("%s: model=%s", gptDisplayName, cfg.OpenAIModel)
 
 	// Claude picker is optional. When ANTHROPIC_API_KEY is missing or
@@ -285,11 +285,13 @@ func unionPicks(openaiTrades, claudeTrades []trades.Trade) []trades.Trade {
 				existing.PickedByOpenAI = true
 				existing.GPTScore = t.GPTScore
 				existing.GPTRationale = t.GPTRationale
+				existing.GPTModel = t.GPTModel
 			}
 			if t.PickedByClaude {
 				existing.PickedByClaude = true
 				existing.ClaudeScore = t.ClaudeScore
 				existing.ClaudeRationale = t.ClaudeRationale
+				existing.ClaudeModel = t.ClaudeModel
 			}
 			// Verdicts attach to a trade as part of the OTHER model's
 			// list, so each side may carry one. Preserve both when both

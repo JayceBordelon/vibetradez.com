@@ -89,6 +89,7 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentime
 			Rank:            r.Rank,
 			ClaudeScore:     r.Score,
 			ClaudeRationale: r.Rationale,
+			ClaudeModel:     p.model,
 			PickedByClaude:  true,
 		})
 	}
@@ -139,7 +140,7 @@ func (p *ClaudePicker) WriteVerdicts(ctx context.Context, ownTrades, otherTrades
 
 	msg, err := p.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(p.model),
-		MaxTokens: 4096,
+		MaxTokens: maxOutputTokensVerdicts,
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
 		},
@@ -260,7 +261,7 @@ func (p *ClaudePicker) runConversation(ctx context.Context, prompt string) (stri
 		_ = round
 		params := anthropic.MessageNewParams{
 			Model:     anthropic.Model(p.model),
-			MaxTokens: 8192,
+			MaxTokens: maxOutputTokensPicks,
 			Messages:  messages,
 			Tools:     tools,
 		}

@@ -17,6 +17,15 @@ import (
 	"vibetradez.com/internal/sentiment"
 )
 
+// Output token caps shared across the OpenAI Analyzer and the Claude
+// picker so head-to-head comparisons aren't skewed by call config.
+// Picks need more headroom than verdicts because each pick carries a
+// multi-sentence rationale; verdicts are one sentence per trade.
+const (
+	maxOutputTokensPicks    = 16384
+	maxOutputTokensVerdicts = 8192
+)
+
 type Trade struct {
 	Symbol         string  `json:"symbol"`
 	ContractType   string  `json:"contract_type"` // CALL or PUT
@@ -42,6 +51,13 @@ type Trade struct {
 	ClaudeScore     int     `json:"claude_score"`
 	ClaudeRationale string  `json:"claude_rationale"`
 	CombinedScore   float64 `json:"combined_score"`
+
+	// Versioned model identifiers as sent to the OpenAI / Anthropic
+	// APIs at pick time (e.g. "gpt-5.5", "claude-opus-4-7"). Persisted
+	// per row so historical analysis can attribute picks to the exact
+	// model that produced them, even after the default is bumped.
+	GPTModel    string `json:"gpt_model"`
+	ClaudeModel string `json:"claude_model"`
 
 	// Picker attribution. Both models run the full AnalysisPrompt
 	// independently and each return their own 10 picks; the union of
@@ -127,7 +143,7 @@ func (a *Analyzer) GetTopTrades(ctx context.Context, sentimentData []sentiment.T
 
 	prompt := fmt.Sprintf(AnalysisPrompt, today, weekday, string(sentimentJSON))
 
-	content, err := a.callWithTools(ctx, prompt, 0.7)
+	content, err := a.callWithTools(ctx, prompt)
 	if err != nil {
 		return nil, err
 	}
@@ -156,6 +172,7 @@ func (a *Analyzer) GetTopTrades(ctx context.Context, sentimentData []sentiment.T
 			Rank:           r.Rank,
 			GPTScore:       r.Score,
 			GPTRationale:   r.Rationale,
+			GPTModel:       a.model,
 			PickedByOpenAI: true,
 		})
 	}
@@ -203,9 +220,9 @@ func (a *Analyzer) WriteVerdicts(ctx context.Context, ownTrades, otherTrades []T
 	prompt := fmt.Sprintf(CrossExaminationPrompt, today, weekday, ownModelName, otherModelName, string(ownJSON), otherModelName, string(otherJSON))
 
 	resp, err := a.client.Responses.New(ctx, responses.ResponseNewParams{
-		Model:       shared.ResponsesModel(a.model),
-		Input:       responses.ResponseNewParamsInputUnion{OfString: openai.String(prompt)},
-		Temperature: openai.Float(0.4),
+		Model:           shared.ResponsesModel(a.model),
+		Input:           responses.ResponseNewParamsInputUnion{OfString: openai.String(prompt)},
+		MaxOutputTokens: openai.Int(maxOutputTokensVerdicts),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("openai verdicts responses.new: %w", err)
@@ -233,7 +250,7 @@ func (a *Analyzer) GetEndOfDayAnalysis(ctx context.Context, morningTrades []Trad
 
 	prompt := fmt.Sprintf(EndOfDayPrompt, today, weekday, string(tradesJSON))
 
-	content, err := a.callWithTools(ctx, prompt, 0.3)
+	content, err := a.callWithTools(ctx, prompt)
 	if err != nil {
 		return nil, err
 	}
@@ -312,14 +329,14 @@ var schwabOptionChainSchema = map[string]any{
 	"additionalProperties": false,
 }
 
-func (a *Analyzer) callWithTools(ctx context.Context, prompt string, temp float64) (string, error) {
+func (a *Analyzer) callWithTools(ctx context.Context, prompt string) (string, error) {
 	tools := a.buildTools()
 
 	params := responses.ResponseNewParams{
-		Model:       shared.ResponsesModel(a.model),
-		Input:       responses.ResponseNewParamsInputUnion{OfString: openai.String(prompt)},
-		Tools:       tools,
-		Temperature: openai.Float(temp),
+		Model:           shared.ResponsesModel(a.model),
+		Input:           responses.ResponseNewParamsInputUnion{OfString: openai.String(prompt)},
+		Tools:           tools,
+		MaxOutputTokens: openai.Int(maxOutputTokensPicks),
 	}
 
 	const maxRounds = 10
@@ -362,7 +379,7 @@ func (a *Analyzer) callWithTools(ctx context.Context, prompt string, temp float6
 			Model:              shared.ResponsesModel(a.model),
 			Input:              responses.ResponseNewParamsInputUnion{OfInputItemList: outputs},
 			Tools:              tools,
-			Temperature:        openai.Float(temp),
+			MaxOutputTokens:    openai.Int(maxOutputTokensPicks),
 			PreviousResponseID: openai.String(resp.ID),
 		}
 	}

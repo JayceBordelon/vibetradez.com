@@ -85,16 +85,18 @@ INSERT INTO subscribers (email, name, active) VALUES
 
 -- ─── Trades + Summaries ────────────────────────────────────────────────────
 --
--- Two weeks of trade history (10 trading days) with 10 ranked picks each.
--- Mix of winners and losers across CALL/PUT, varied risk levels, varied
--- sentiment. The most recent date is fully populated WITHOUT summaries
--- (simulating a "morning picks" pre-EOD state). All other days have full
--- EOD summaries.
+-- ~1 year of trade history (252 weekdays) with 14 union picks each
+-- (4 OpenAI-only + 6 consensus + 4 Claude-only). Mix of winners and
+-- losers across CALL/PUT, varied risk levels, varied sentiment. The
+-- most recent date is fully populated WITHOUT summaries (simulating a
+-- "morning picks" pre-EOD state). All other days have full EOD
+-- summaries so /history and /models render rich cumulative-P&L curves.
 
 DO $$
 DECLARE
-    -- 10 trading days, ending today, skipping weekends.
-    -- We compute these in SQL so the seed always reflects "the last 10 weekdays".
+    -- 252 trading days (~1 year), ending today, skipping weekends.
+    -- We compute these in SQL so the seed always reflects "the last 252 weekdays"
+    -- relative to whenever the docker stack first boots.
     today_date DATE := CURRENT_DATE;
     d DATE;
     i INT;
@@ -187,7 +189,7 @@ BEGIN
     -- flags are set accordingly so the All / OpenAI / Claude filter in
     -- the nav bar visibly slices the data.
     d := today_date;
-    WHILE weekday_count < 10 LOOP
+    WHILE weekday_count < 252 LOOP
         IF EXTRACT(DOW FROM d) NOT IN (0, 6) THEN
             weekday_count := weekday_count + 1;
             is_today := (weekday_count = 1);
