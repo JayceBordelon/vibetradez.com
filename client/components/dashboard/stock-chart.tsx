@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Area, Bar, CartesianGrid, ComposedChart, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, Bar, CartesianGrid, ComposedChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "@/lib/api";
 import type { ChartParams } from "@/types/trade";
 
@@ -276,44 +276,42 @@ export function StockChart({ symbol, timeframe, strikePrice, trade, summary }: S
               />
             )}
 
-            {/* Buy marker at market open */}
+            {/* Buy/sell drawn as full-height vertical reference lines so the
+                entry/exit moments are unambiguous on the chart, instead of
+                tiny dots that floated above the price line. Strokes use the
+                model brand colors and the labels stay anchored at the top. */}
             {summary && buyTime !== undefined && (
-              <ReferenceDot
+              <ReferenceLine
                 yAxisId="price"
                 x={buyTime}
-                y={summary.stock_open}
-                r={5}
-                fill="var(--gpt)"
-                stroke="var(--card)"
+                stroke="var(--gpt)"
                 strokeWidth={2}
+                strokeDasharray="3 3"
                 label={{
                   value: "BUY",
-                  position: "top",
+                  position: "insideTopLeft",
                   fill: "var(--gpt)",
                   fontSize: 9,
                   fontWeight: 700,
-                  offset: 8,
+                  offset: 6,
                 }}
               />
             )}
 
-            {/* Sell marker at market close */}
             {summary && sellTime !== undefined && (
-              <ReferenceDot
+              <ReferenceLine
                 yAxisId="price"
                 x={sellTime}
-                y={summary.stock_close}
-                r={5}
-                fill="var(--red)"
-                stroke="var(--card)"
+                stroke="var(--red)"
                 strokeWidth={2}
+                strokeDasharray="3 3"
                 label={{
                   value: "SELL",
-                  position: "top",
+                  position: "insideTopRight",
                   fill: "var(--red)",
                   fontSize: 9,
                   fontWeight: 700,
-                  offset: 8,
+                  offset: 6,
                 }}
               />
             )}

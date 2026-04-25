@@ -40,9 +40,13 @@ export function ExposurePanel({ trades, hasSummaries }: ExposurePanelProps) {
 
   const rocColor = roc === null ? "" : roc > 0 ? "text-green" : roc < 0 ? "text-red" : "text-muted-foreground";
 
-  // For the deployed/returned bar: represent relative fill widths.
-  // Deployed bar is always full (100%), Returned bar is totalReturned / totalExposure.
-  const returnedPct = totalExposure > 0 ? Math.min(200, (totalReturned / totalExposure) * 100) : 0;
+  // Both bars share a common scale so they're visually comparable: whichever
+  // is larger fills 100%, the other fills proportionally less. Without this
+  // the deployed bar always pinned to 100% and a winning day pushed the
+  // returned bar past its container, making every day look identical.
+  const barMax = Math.max(totalExposure, totalReturned);
+  const deployedPct = barMax > 0 ? (totalExposure / barMax) * 100 : 0;
+  const returnedPct = barMax > 0 ? (totalReturned / barMax) * 100 : 0;
   const returnedBarColor = totalReturned >= totalExposure ? "bg-green" : "bg-red";
 
   return (
@@ -75,7 +79,7 @@ export function ExposurePanel({ trades, hasSummaries }: ExposurePanelProps) {
             </div>
             <div className="space-y-1.5">
               <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-amber" style={{ width: "100%" }} />
+                <div className="h-full rounded-full bg-amber transition-all" style={{ width: `${deployedPct}%` }} />
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                 <div className={cn("h-full rounded-full transition-all", returnedBarColor)} style={{ width: `${returnedPct}%` }} />
