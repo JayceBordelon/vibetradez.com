@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 const faqs = [
   {
     question: "How are the daily trade picks generated?",
-    answer: `Every market day at 9:25 AM ET the system aggregates trending tickers from StockTwits, Yahoo Finance, Finviz, and SEC EDGAR. That same payload is handed to GPT Latest and Claude Latest in parallel, each running the identical prompt with live Schwab quotes, full options chains, and web search. Each model independently produces 10 ranked picks without seeing the other's work. Once both lists are locked, each model writes a one-sentence verdict on every one of the other's trades. The two pick sets are then unioned: trades both models picked rank ahead of solo picks, ties broken by combined conviction.`,
+    answer: `Every market day at 9:25 AM ET the system aggregates trending tickers from StockTwits, Yahoo Finance, Finviz, and SEC EDGAR. That same payload is handed to ChatGPT and Claude in parallel, each running the identical prompt with live Schwab quotes, full options chains, and web search. Each model independently produces 10 ranked picks without seeing the other's work. Once both lists are locked, each model writes a one-sentence verdict on every one of the other's trades. The two pick sets are then unioned: trades both models picked rank ahead of solo picks, ties broken by combined conviction.`,
   },
   {
     question: "What do the rankings (Top 1, Top 3, Top 5, Top 10) mean?",
@@ -32,7 +32,7 @@ const faqs = [
   },
   {
     question: "What does the Models page show?",
-    answer: `The Models page replays the historical pick data under each model's individual ranking in isolation and shows a side-by-side cumulative P&L curve so you can see what you would have made by following only OpenAI, only Claude, or the combined consensus over the selected range (week, month, year, or all time). It also surfaces an "agreement rate" stat, the fraction of trades where both models picked the same ticker. Best and worst pick per model is shown too, along with each model's verdict on the other's calls so you can see who was right when they disagreed.`,
+    answer: `The Models page replays the historical pick data under each model's individual ranking in isolation and shows a side-by-side cumulative P&L curve so you can see what you would have made by following only ChatGPT, only Claude, or the combined consensus over the selected range (week, month, year, or all time). It also surfaces an "agreement rate" stat, the fraction of trades where both models picked the same ticker. Best and worst pick per model is shown too, along with each model's verdict on the other's calls so you can see who was right when they disagreed.`,
   },
   {
     question: "Is the P&L shown based on real trades?",

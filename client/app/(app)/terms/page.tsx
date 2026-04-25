@@ -68,9 +68,9 @@ export default function TermsPage() {
               informational and entertainment purposes only. It is not a registered investment advisory service, broker-dealer, or financial institution.
             </p>
             <p>
-              All trade ideas presented on this platform are machine-generated suggestions, not recommendations. They are produced by two large language models, OpenAI GPT Latest and Anthropic Claude
-              Latest, running independently with the same prompt and the same toolset over publicly available sentiment data and live market information. After both models produce their picks, each
-              also writes a one-sentence verdict on the other's trades. None of these outputs (picks or verdicts) have been reviewed, verified, or endorsed by any licensed financial professional.
+              All trade ideas presented on this platform are machine-generated suggestions, not recommendations. They are produced by two large language models, ChatGPT and Claude, running
+              independently with the same prompt and the same toolset over publicly available sentiment data and live market information. After both models produce their picks, each also writes a
+              one-sentence verdict on the other's trades. None of these outputs (picks or verdicts) have been reviewed, verified, or endorsed by any licensed financial professional.
             </p>
           </Section>
 
@@ -110,7 +110,7 @@ export default function TermsPage() {
 
           <Section id="data" num={5} title="Data Sources & Accuracy">
             <p>
-              Trade suggestions are generated using data from third-party sources including StockTwits, Yahoo Finance, Finviz, SEC EDGAR, the OpenAI and Anthropic language model APIs, and the Schwab
+              Trade suggestions are generated using data from third-party sources including StockTwits, Yahoo Finance, Finviz, SEC EDGAR, the ChatGPT and Claude language model APIs, and the Schwab
               Market Data API. While we strive for accuracy, we make no guarantees regarding the completeness, reliability, or timeliness of any data presented.
             </p>
             <p>Market data, option prices, and stock quotes may be delayed or inaccurate. Always verify prices with your broker before placing any trades.</p>
@@ -135,7 +135,7 @@ export default function TermsPage() {
           </Section>
 
           <div className="mt-12">
-            <a href="#top" className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground">
+            <a href="#top" className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground sm:min-h-0">
               ↑ Back to top
             </a>
           </div>

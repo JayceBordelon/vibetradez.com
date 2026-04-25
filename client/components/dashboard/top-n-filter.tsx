@@ -12,12 +12,12 @@ interface TopNFilterProps {
 export function TopNFilter({ value, onChange }: TopNFilterProps) {
   return (
     <Select value={String(value)} onValueChange={(v) => onChange(Number(v))}>
-      <SelectTrigger size="sm" className="h-8 w-[104px] text-xs font-semibold" aria-label="Show top N picks">
+      <SelectTrigger size="sm" className="h-11 w-[104px] text-xs font-semibold sm:h-8" aria-label="Show top N picks">
         <SelectValue />
       </SelectTrigger>
       <SelectContent align="end">
         {OPTIONS.map((n) => (
-          <SelectItem key={n} value={String(n)} className="text-xs">
+          <SelectItem key={n} value={String(n)} className="min-h-11 text-xs sm:min-h-0">
             Top {n}
           </SelectItem>
         ))}

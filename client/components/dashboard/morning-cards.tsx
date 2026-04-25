@@ -148,7 +148,7 @@ function MorningCard({ dt, liveQuotes }: MorningCardProps) {
                     <div>
                       <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         <OpenAILogo className="h-3.5 w-3.5" />
-                        <span>OpenAI analysis</span>
+                        <span>ChatGPT analysis</span>
                         {trade.gpt_score > 0 && <span className="rounded bg-background px-1.5 py-0.5 tabular-nums text-foreground">{trade.gpt_score}/10</span>}
                       </div>
                       <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{trade.gpt_rationale}</p>
@@ -173,7 +173,7 @@ function MorningCard({ dt, liveQuotes }: MorningCardProps) {
                       {trade.gpt_verdict && (
                         <p className="mt-2 border-l-2 border-gpt/40 pl-2 text-[13px] italic leading-relaxed text-muted-foreground">
                           <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase not-italic tracking-wider text-gpt">
-                            <OpenAILogo className="h-3 w-3" /> OpenAI's verdict
+                            <OpenAILogo className="h-3 w-3" /> ChatGPT's verdict
                           </span>
                           <span className="ml-2">{trade.gpt_verdict}</span>
                         </p>

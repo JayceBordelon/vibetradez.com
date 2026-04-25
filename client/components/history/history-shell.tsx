@@ -344,13 +344,13 @@ export function HistoryShell() {
                 <HistoryStats {...agg} topN={topFilter} onTopNChange={setTopFilter} />
 
                 {multiEquityPoints.length > 1 && (
-                  <Section title="Equity Curve" subtitle="Cumulative P&L over time" className="mt-8">
+                  <Section className="mt-8">
                     <EquityCurveChart data={multiEquityPoints} activeTopN={topFilter} />
                   </Section>
                 )}
 
                 {daysWithPnl.length > 1 && (
-                  <Section title="Daily P&L" subtitle="Net result per trading day">
+                  <Section>
                     <DailyPnlChart data={daysWithPnl} />
                   </Section>
                 )}

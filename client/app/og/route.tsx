@@ -113,7 +113,7 @@ export async function GET() {
           maxWidth: 800,
         }}
       >
-        Free daily ranked options picks powered by GPT Latest + Claude Latest
+        Free daily ranked options picks powered by ChatGPT + Claude
       </div>
 
       {/* Model badges */}
@@ -140,7 +140,7 @@ export async function GET() {
               background: "#10a37f",
             }}
           />
-          <span style={{ color: "#94a3b8", fontSize: 20 }}>OpenAI GPT Latest</span>
+          <span style={{ color: "#94a3b8", fontSize: 20 }}>ChatGPT</span>
         </div>
         <div
           style={{
@@ -164,7 +164,7 @@ export async function GET() {
               background: "#D97757",
             }}
           />
-          <span style={{ color: "#94a3b8", fontSize: 20 }}>Claude Latest</span>
+          <span style={{ color: "#94a3b8", fontSize: 20 }}>Claude</span>
         </div>
       </div>
     </div>,
