@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Area, Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, Bar, CartesianGrid, ComposedChart, Line, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "@/lib/api";
 import type { ChartParams } from "@/types/trade";
 
@@ -202,15 +202,25 @@ export function StockChart({ symbol, timeframe, strikePrice, trade, summary }: S
 
   // First/last candle of the most recent trading day. BUY anchors to the
   // entry candle whenever a trade exists (live or settled); SELL only
-  // shows once the trade has an EOD summary.
+  // shows once the trade has an EOD summary. We also pull the actual
+  // candle CLOSE at each anchor so we can drop a dot marker at the
+  // exact level the trade hit on the price line.
   let buyTime: number | undefined;
+  let buyPrice: number | undefined;
   let sellTime: number | undefined;
+  let sellPrice: number | undefined;
   if (trade) {
     const recentDate = formatDate(data[data.length - 1].time);
     const dayCandles = data.filter((d) => formatDate(d.time) === recentDate);
     if (dayCandles.length > 0) {
-      buyTime = dayCandles[0].time;
-      if (summary) sellTime = dayCandles[dayCandles.length - 1].time;
+      const first = dayCandles[0];
+      const last = dayCandles[dayCandles.length - 1];
+      buyTime = first.time;
+      buyPrice = summary?.stock_open ?? first.close;
+      if (summary) {
+        sellTime = last.time;
+        sellPrice = summary.stock_close ?? last.close;
+      }
     }
   }
 
@@ -414,14 +424,17 @@ export function StockChart({ symbol, timeframe, strikePrice, trade, summary }: S
                 strokeWidth={2}
                 strokeDasharray="3 3"
                 label={{
-                  value: "BUY",
+                  value: buyPrice !== undefined ? `BUY $${buyPrice.toFixed(2)}` : "BUY",
                   position: "insideTopLeft",
                   fill: "var(--gpt)",
-                  fontSize: 9,
+                  fontSize: 10,
                   fontWeight: 700,
                   offset: 6,
                 }}
               />
+            )}
+            {buyTime !== undefined && buyPrice !== undefined && (
+              <ReferenceDot yAxisId="price" x={buyTime} y={buyPrice} r={5} fill="var(--gpt)" stroke="var(--card)" strokeWidth={2} ifOverflow="extendDomain" />
             )}
 
             {sellTime !== undefined && (
@@ -432,14 +445,17 @@ export function StockChart({ symbol, timeframe, strikePrice, trade, summary }: S
                 strokeWidth={2}
                 strokeDasharray="3 3"
                 label={{
-                  value: "SELL",
+                  value: sellPrice !== undefined ? `SELL $${sellPrice.toFixed(2)}` : "SELL",
                   position: "insideTopRight",
                   fill: "var(--red)",
-                  fontSize: 9,
+                  fontSize: 10,
                   fontWeight: 700,
                   offset: 6,
                 }}
               />
+            )}
+            {sellTime !== undefined && sellPrice !== undefined && (
+              <ReferenceDot yAxisId="price" x={sellTime} y={sellPrice} r={5} fill="var(--red)" stroke="var(--card)" strokeWidth={2} ifOverflow="extendDomain" />
             )}
           </ComposedChart>
         </ResponsiveContainer>
