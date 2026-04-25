@@ -153,12 +153,6 @@ function TradeDetailBody({ dt, resolvedDate }: { dt: DashboardTrade; resolvedDat
               <span className="font-semibold text-amber">Catalyst:</span> {trade.catalyst}
             </div>
           )}
-
-          {trade.thesis && (
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              <span className="font-semibold text-foreground">Thesis:</span> {trade.thesis}
-            </p>
-          )}
         </CardContent>
       </Card>
 
