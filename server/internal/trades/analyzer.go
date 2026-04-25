@@ -17,6 +17,15 @@ import (
 	"vibetradez.com/internal/sentiment"
 )
 
+// Output token caps shared across the OpenAI Analyzer and the Claude
+// picker so head-to-head comparisons aren't skewed by call config.
+// Picks need more headroom than verdicts because each pick carries a
+// multi-sentence rationale; verdicts are one sentence per trade.
+const (
+	maxOutputTokensPicks    = 16384
+	maxOutputTokensVerdicts = 8192
+)
+
 type Trade struct {
 	Symbol         string  `json:"symbol"`
 	ContractType   string  `json:"contract_type"` // CALL or PUT
@@ -213,7 +222,7 @@ func (a *Analyzer) WriteVerdicts(ctx context.Context, ownTrades, otherTrades []T
 	resp, err := a.client.Responses.New(ctx, responses.ResponseNewParams{
 		Model:           shared.ResponsesModel(a.model),
 		Input:           responses.ResponseNewParamsInputUnion{OfString: openai.String(prompt)},
-		MaxOutputTokens: openai.Int(8192),
+		MaxOutputTokens: openai.Int(maxOutputTokensVerdicts),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("openai verdicts responses.new: %w", err)
@@ -327,7 +336,7 @@ func (a *Analyzer) callWithTools(ctx context.Context, prompt string) (string, er
 		Model:           shared.ResponsesModel(a.model),
 		Input:           responses.ResponseNewParamsInputUnion{OfString: openai.String(prompt)},
 		Tools:           tools,
-		MaxOutputTokens: openai.Int(16384),
+		MaxOutputTokens: openai.Int(maxOutputTokensPicks),
 	}
 
 	const maxRounds = 10
@@ -370,7 +379,7 @@ func (a *Analyzer) callWithTools(ctx context.Context, prompt string) (string, er
 			Model:              shared.ResponsesModel(a.model),
 			Input:              responses.ResponseNewParamsInputUnion{OfInputItemList: outputs},
 			Tools:              tools,
-			MaxOutputTokens:    openai.Int(16384),
+			MaxOutputTokens:    openai.Int(maxOutputTokensPicks),
 			PreviousResponseID: openai.String(resp.ID),
 		}
 	}
