@@ -40,12 +40,31 @@ type Trade struct {
 	ClaudeVerdict   string
 }
 
+// YesterdayRecap is a tiny digest of the previous trading day's results
+// surfaced at the top of the morning email so subscribers see how the
+// last batch performed before reading today's picks.
+type YesterdayRecap struct {
+	Date        string // formatted, e.g. "Apr 24"
+	TotalPnL    float64
+	Winners     int
+	Losers      int
+	TotalTrades int
+	BestSymbol  string
+	BestPnL     float64
+	WorstSymbol string
+	WorstPnL    float64
+}
+
 type EmailData struct {
 	Subject         string
 	Date            string
 	Trades          []Trade
 	GPTModelName    string
 	ClaudeModelName string
+	Yesterday       *YesterdayRecap // nil = no recap available (first send, EOD cron failed, etc.)
+	ClaudeTopPick   *Trade          // Claude's #1 by ClaudeScore; nil if Claude picked nothing
+	GPTTopPick      *Trade          // ChatGPT's #1 by GPTScore; nil if GPT picked nothing
+	DashboardURL    string
 }
 
 type SummaryTrade struct {
@@ -199,10 +218,26 @@ var funcMap = template.FuncMap{
 	},
 }
 
-func RenderEmail(trades []Trade, gptModelName, claudeModelName string) (string, error) {
+func RenderEmail(trades []Trade, gptModelName, claudeModelName string, yesterday *YesterdayRecap) (string, error) {
 	tmpl, err := template.New("email.html").Funcs(funcMap).ParseFS(templateFS, "email.html")
 	if err != nil {
 		return "", err
+	}
+
+	// Pick each model's #1 conviction trade independently — Claude's top is
+	// the highest-ClaudeScore trade Claude actually picked, ditto for GPT.
+	// They may resolve to the same underlying ticker on consensus days; the
+	// template renders both sections regardless so each model leads with its
+	// own rationale.
+	var claudeTop, gptTop *Trade
+	for i := range trades {
+		t := &trades[i]
+		if t.PickedByClaude && (claudeTop == nil || t.ClaudeScore > claudeTop.ClaudeScore) {
+			claudeTop = t
+		}
+		if t.PickedByOpenAI && (gptTop == nil || t.GPTScore > gptTop.GPTScore) {
+			gptTop = t
+		}
 	}
 
 	data := EmailData{
@@ -211,6 +246,10 @@ func RenderEmail(trades []Trade, gptModelName, claudeModelName string) (string, 
 		Trades:          trades,
 		GPTModelName:    gptModelName,
 		ClaudeModelName: claudeModelName,
+		Yesterday:       yesterday,
+		ClaudeTopPick:   claudeTop,
+		GPTTopPick:      gptTop,
+		DashboardURL:    "https://vibetradez.com/dashboard",
 	}
 
 	var buf bytes.Buffer
@@ -265,9 +304,24 @@ func VerifyTemplates() HealthCheck {
 			CurrentPrice: 498, TargetPrice: 505, StopLoss: 0.75,
 			ProfitTarget: 3.00, RiskLevel: "MEDIUM",
 			Catalyst: "System test", MentionCount: 42,
+			Rank: 1, GPTScore: 9, ClaudeScore: 8, CombinedScore: 8.5,
+			PickedByOpenAI: true, PickedByClaude: true,
+			GPTRationale: "Sample bullish rationale.", ClaudeRationale: "Sample bullish rationale.",
+			GPTVerdict: "Concur on direction.", ClaudeVerdict: "Aligned, slight strike concern.",
 		},
 	}
-	if _, err := RenderEmail(sampleTrades, "GPT Latest", "Claude Latest"); err != nil {
+	sampleYesterday := &YesterdayRecap{
+		Date:        "Apr 24",
+		TotalPnL:    142.50,
+		Winners:     3,
+		Losers:      2,
+		TotalTrades: 5,
+		BestSymbol:  "SPY",
+		BestPnL:     85.00,
+		WorstSymbol: "QQQ",
+		WorstPnL:    -22.00,
+	}
+	if _, err := RenderEmail(sampleTrades, "ChatGPT", "Claude", sampleYesterday); err != nil {
 		return HealthCheck{Name: "Email Templates", Status: "fail", Detail: err.Error(), Latency: fmtLatency(start)}
 	}
 
