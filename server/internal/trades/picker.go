@@ -140,7 +140,7 @@ func (p *ClaudePicker) WriteVerdicts(ctx context.Context, ownTrades, otherTrades
 
 	msg, err := p.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(p.model),
-		MaxTokens: 4096,
+		MaxTokens: 8192,
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
 		},
@@ -261,7 +261,7 @@ func (p *ClaudePicker) runConversation(ctx context.Context, prompt string) (stri
 		_ = round
 		params := anthropic.MessageNewParams{
 			Model:     anthropic.Model(p.model),
-			MaxTokens: 8192,
+			MaxTokens: 16384,
 			Messages:  messages,
 			Tools:     tools,
 		}

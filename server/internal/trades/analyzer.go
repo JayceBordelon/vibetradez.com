@@ -134,7 +134,7 @@ func (a *Analyzer) GetTopTrades(ctx context.Context, sentimentData []sentiment.T
 
 	prompt := fmt.Sprintf(AnalysisPrompt, today, weekday, string(sentimentJSON))
 
-	content, err := a.callWithTools(ctx, prompt, 0.7)
+	content, err := a.callWithTools(ctx, prompt)
 	if err != nil {
 		return nil, err
 	}
@@ -211,9 +211,9 @@ func (a *Analyzer) WriteVerdicts(ctx context.Context, ownTrades, otherTrades []T
 	prompt := fmt.Sprintf(CrossExaminationPrompt, today, weekday, ownModelName, otherModelName, string(ownJSON), otherModelName, string(otherJSON))
 
 	resp, err := a.client.Responses.New(ctx, responses.ResponseNewParams{
-		Model:       shared.ResponsesModel(a.model),
-		Input:       responses.ResponseNewParamsInputUnion{OfString: openai.String(prompt)},
-		Temperature: openai.Float(0.4),
+		Model:           shared.ResponsesModel(a.model),
+		Input:           responses.ResponseNewParamsInputUnion{OfString: openai.String(prompt)},
+		MaxOutputTokens: openai.Int(8192),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("openai verdicts responses.new: %w", err)
@@ -241,7 +241,7 @@ func (a *Analyzer) GetEndOfDayAnalysis(ctx context.Context, morningTrades []Trad
 
 	prompt := fmt.Sprintf(EndOfDayPrompt, today, weekday, string(tradesJSON))
 
-	content, err := a.callWithTools(ctx, prompt, 0.3)
+	content, err := a.callWithTools(ctx, prompt)
 	if err != nil {
 		return nil, err
 	}
@@ -320,14 +320,14 @@ var schwabOptionChainSchema = map[string]any{
 	"additionalProperties": false,
 }
 
-func (a *Analyzer) callWithTools(ctx context.Context, prompt string, temp float64) (string, error) {
+func (a *Analyzer) callWithTools(ctx context.Context, prompt string) (string, error) {
 	tools := a.buildTools()
 
 	params := responses.ResponseNewParams{
-		Model:       shared.ResponsesModel(a.model),
-		Input:       responses.ResponseNewParamsInputUnion{OfString: openai.String(prompt)},
-		Tools:       tools,
-		Temperature: openai.Float(temp),
+		Model:           shared.ResponsesModel(a.model),
+		Input:           responses.ResponseNewParamsInputUnion{OfString: openai.String(prompt)},
+		Tools:           tools,
+		MaxOutputTokens: openai.Int(16384),
 	}
 
 	const maxRounds = 10
@@ -370,7 +370,7 @@ func (a *Analyzer) callWithTools(ctx context.Context, prompt string, temp float6
 			Model:              shared.ResponsesModel(a.model),
 			Input:              responses.ResponseNewParamsInputUnion{OfInputItemList: outputs},
 			Tools:              tools,
-			Temperature:        openai.Float(temp),
+			MaxOutputTokens:    openai.Int(16384),
 			PreviousResponseID: openai.String(resp.ID),
 		}
 	}
