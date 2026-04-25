@@ -148,13 +148,23 @@ function ScorePill({ gpt, claude }: { gpt: number; claude: number }) {
   if (gpt === 0 && claude === 0) {
     return <span className="text-muted-foreground">-</span>;
   }
+  const showGpt = gpt > 0;
+  const showClaude = claude > 0;
   return (
     <span className="inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-1.5 py-0.5 font-semibold">
-      <OpenAILogo className="h-3 w-3" />
-      <span>{gpt || "-"}</span>
-      <span className="text-muted-foreground">·</span>
-      <ClaudeLogo className="h-3 w-3" />
-      <span>{claude || "-"}</span>
+      {showGpt && (
+        <span className="inline-flex items-center gap-1">
+          <OpenAILogo className="h-3 w-3" />
+          <span>{gpt}</span>
+        </span>
+      )}
+      {showGpt && showClaude && <span className="text-muted-foreground">·</span>}
+      {showClaude && (
+        <span className="inline-flex items-center gap-1">
+          <ClaudeLogo className="h-3 w-3" />
+          <span>{claude}</span>
+        </span>
+      )}
     </span>
   );
 }

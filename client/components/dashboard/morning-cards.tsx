@@ -6,9 +6,8 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
-import { Metric } from "@/components/ui/metric";
 import { calcMoneyness } from "@/lib/calculations";
-import { fmt, fmtMoney, fmtMoneyInt, pnlColor } from "@/lib/format";
+import { fmtMoney, fmtMoneyInt, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { DashboardTrade, LiveQuotesResponse } from "@/types/trade";
 
@@ -42,20 +41,34 @@ function MorningCard({ dt, liveQuotes, date }: MorningCardProps) {
   const { trade } = dt;
   const moneyness = calcMoneyness(trade);
 
-  const liveStock = liveQuotes?.quotes?.[trade.symbol];
-  const liveStockChangeColor = liveStock ? pnlColor(liveStock.net_change) : "";
+  // Live option mark for "current contract price" — Schwab returns options
+  // keyed like "SPY  240517C00500000"; the dashboard hashes them by symbol
+  // prefix so a simple startsWith lookup matches today's pick.
+  const optionKey = Object.keys(liveQuotes?.options ?? {}).find((k) => k.startsWith(trade.symbol));
+  const liveOption = optionKey ? liveQuotes?.options?.[optionKey] : null;
+  const currentContractPrice = liveOption?.mark ?? null;
+  const contractDelta = currentContractPrice !== null ? currentContractPrice - trade.estimated_price : null;
+  const contractDeltaPct = contractDelta !== null && trade.estimated_price > 0 ? (contractDelta / trade.estimated_price) * 100 : null;
 
-  const stockPriceValue = liveStock ? (
-    <span className={cn("text-sm font-semibold tabular-nums", liveStockChangeColor)}>
-      {fmtMoney(liveStock.last_price)}
-      {liveStock.net_change !== 0 && <span className="ml-1 text-xs">{liveStock.net_change > 0 ? "↑" : "↓"}</span>}
-    </span>
-  ) : (
-    fmtMoney(trade.current_price)
-  );
+  const currentValue =
+    currentContractPrice !== null ? (
+      <span className={cn("text-sm font-semibold tabular-nums", pnlColor(contractDelta ?? 0))}>
+        {fmtMoney(currentContractPrice)}
+        {contractDeltaPct !== null && (
+          <span className="ml-1 text-[11px]">
+            ({contractDeltaPct > 0 ? "+" : ""}
+            {contractDeltaPct.toFixed(1)}%)
+          </span>
+        )}
+      </span>
+    ) : (
+      <span className="text-sm font-medium text-muted-foreground">—</span>
+    );
 
   const riskBadgeVariant: "destructive" | "outline" | "secondary" = trade.risk_level === "HIGH" ? "destructive" : trade.risk_level === "MEDIUM" ? "outline" : "secondary";
-  const hasDualScore = trade.gpt_score > 0 && trade.claude_score > 0;
+  const showGpt = trade.gpt_score > 0;
+  const showClaude = trade.claude_score > 0;
+  const showAnyScore = showGpt || showClaude;
 
   return (
     <Link href={tradeHref(trade.symbol, date)} className="block">
@@ -69,28 +82,36 @@ function MorningCard({ dt, liveQuotes, date }: MorningCardProps) {
             </Badge>
             <Badge variant={moneyness.variant}>{moneyness.label}</Badge>
             <Badge variant={riskBadgeVariant}>{trade.risk_level}</Badge>
-            {hasDualScore && (
+            {showAnyScore && (
               <div className="ml-auto flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-0.5 text-[11px] font-semibold tabular-nums">
-                <OpenAILogo className="h-3 w-3" />
-                <span>{trade.gpt_score}</span>
-                <span className="text-muted-foreground">·</span>
-                <ClaudeLogo className="h-3 w-3" />
-                <span>{trade.claude_score}</span>
+                {showGpt && (
+                  <span className="inline-flex items-center gap-1">
+                    <OpenAILogo className="h-3 w-3" />
+                    <span>{trade.gpt_score}</span>
+                  </span>
+                )}
+                {showGpt && showClaude && <span className="text-muted-foreground">·</span>}
+                {showClaude && (
+                  <span className="inline-flex items-center gap-1">
+                    <ClaudeLogo className="h-3 w-3" />
+                    <span>{trade.claude_score}</span>
+                  </span>
+                )}
               </div>
             )}
           </div>
 
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Est. Premium</div>
-            <div className="mt-1 text-[32px] font-semibold leading-none tabular-nums">{fmtMoney(trade.estimated_price)}</div>
-            <div className="mt-1 text-xs text-muted-foreground">{fmtMoneyInt(trade.estimated_price * 100)} per contract</div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <Metric label="Strike" value={fmtMoney(trade.strike_price)} />
-            <Metric label="Expiration" value={`${trade.expiration} (${trade.dte}d)`} />
-            <Metric label="Stock Price" value={stockPriceValue} />
-            <Metric label="Target" value={fmtMoney(trade.target_price)} />
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Buy</div>
+              <div className="mt-0.5 text-2xl font-semibold leading-none tabular-nums">{fmtMoney(trade.estimated_price)}</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">{fmtMoneyInt(trade.estimated_price * 100)} / contract</div>
+            </div>
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Current</div>
+              <div className="mt-0.5 text-2xl font-semibold leading-none tabular-nums">{currentValue}</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">{currentContractPrice !== null ? fmtMoneyInt(currentContractPrice * 100) : "—"} / contract</div>
+            </div>
           </div>
 
           {trade.catalyst && (
