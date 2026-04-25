@@ -89,6 +89,7 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentime
 			Rank:            r.Rank,
 			ClaudeScore:     r.Score,
 			ClaudeRationale: r.Rationale,
+			ClaudeModel:     p.model,
 			PickedByClaude:  true,
 		})
 	}

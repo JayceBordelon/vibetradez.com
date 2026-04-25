@@ -43,6 +43,13 @@ type Trade struct {
 	ClaudeRationale string  `json:"claude_rationale"`
 	CombinedScore   float64 `json:"combined_score"`
 
+	// Versioned model identifiers as sent to the OpenAI / Anthropic
+	// APIs at pick time (e.g. "gpt-5.5", "claude-opus-4-7"). Persisted
+	// per row so historical analysis can attribute picks to the exact
+	// model that produced them, even after the default is bumped.
+	GPTModel    string `json:"gpt_model"`
+	ClaudeModel string `json:"claude_model"`
+
 	// Picker attribution. Both models run the full AnalysisPrompt
 	// independently and each return their own 10 picks; the union of
 	// both pick sets is persisted, and these flags record which model(s)
@@ -156,6 +163,7 @@ func (a *Analyzer) GetTopTrades(ctx context.Context, sentimentData []sentiment.T
 			Rank:           r.Rank,
 			GPTScore:       r.Score,
 			GPTRationale:   r.Rationale,
+			GPTModel:       a.model,
 			PickedByOpenAI: true,
 		})
 	}

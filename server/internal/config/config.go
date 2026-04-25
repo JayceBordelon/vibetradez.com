@@ -41,29 +41,19 @@ type Config struct {
 // available in their respective SDKs at the time of the edit. See CLAUDE.md
 // "Model version refresh" for the policy.
 const (
-	DefaultOpenAIModel    = "gpt-5.4"
+	DefaultOpenAIModel    = "gpt-5.5"
 	DefaultAnthropicModel = "claude-opus-4-7"
 )
 
-// modelDisplayNames maps API model identifiers to human-friendly labels
-// used in emails and log output. Update this map whenever a new default
-// model is added above.
-var modelDisplayNames = map[string]string{
-	"gpt-5.4":           "GPT-5.4",
-	"gpt-4o":            "GPT-4o",
-	"claude-opus-4-7":   "Claude Opus 4.7",
-	"claude-opus-4-6":   "Claude Opus 4.6",
-	"claude-sonnet-4-6": "Claude Sonnet 4.6",
-}
-
-// ModelDisplayName returns a human-friendly label for the given API model
-// identifier. Falls back to the raw identifier for unknown models.
-func ModelDisplayName(model string) string {
-	if name, ok := modelDisplayNames[model]; ok {
-		return name
-	}
-	return model
-}
+// User-facing labels for the current default models. Emails, logs, and
+// the React app reference these instead of the versioned identifier so
+// that bumping a default doesn't require a copy sweep across the UI.
+// The actual model id (e.g. "gpt-5.5") is still stamped onto each trade
+// row in the database for historical accuracy.
+const (
+	CurrentOpenAILabel    = "GPT Latest"
+	CurrentAnthropicLabel = "Claude Latest"
+)
 
 func getEnvOrDefault(key, def string) string {
 	if v := os.Getenv(key); v != "" {

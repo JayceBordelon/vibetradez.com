@@ -72,6 +72,8 @@ func migrate(db *sql.DB) error {
 			picked_by_claude BOOLEAN NOT NULL DEFAULT false,
 			gpt_verdict TEXT NOT NULL DEFAULT '',
 			claude_verdict TEXT NOT NULL DEFAULT '',
+			gpt_model TEXT NOT NULL DEFAULT '',
+			claude_model TEXT NOT NULL DEFAULT '',
 			created_at TIMESTAMPTZ DEFAULT NOW()
 		);
 
@@ -84,6 +86,8 @@ func migrate(db *sql.DB) error {
 		ALTER TABLE trades ADD COLUMN IF NOT EXISTS picked_by_claude BOOLEAN NOT NULL DEFAULT false;
 		ALTER TABLE trades ADD COLUMN IF NOT EXISTS gpt_verdict TEXT NOT NULL DEFAULT '';
 		ALTER TABLE trades ADD COLUMN IF NOT EXISTS claude_verdict TEXT NOT NULL DEFAULT '';
+		ALTER TABLE trades ADD COLUMN IF NOT EXISTS gpt_model TEXT NOT NULL DEFAULT '';
+		ALTER TABLE trades ADD COLUMN IF NOT EXISTS claude_model TEXT NOT NULL DEFAULT '';
 		-- Backfill existing rows: any pre-refactor trade had a non-zero
 		-- gpt_score (GPT generated the picks) so it counts as picked by
 		-- OpenAI. Pre-refactor Claude was a validator, not a picker, so
@@ -251,8 +255,9 @@ func (s *Store) SaveMorningTrades(date string, tradeList []trades.Trade) error {
 			target_price, stop_loss, profit_target, risk_level,
 			catalyst, mention_count, rank,
 			gpt_score, gpt_rationale, claude_score, claude_rationale, combined_score,
-			picked_by_openai, picked_by_claude, gpt_verdict, claude_verdict
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+			picked_by_openai, picked_by_claude, gpt_verdict, claude_verdict,
+			gpt_model, claude_model
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -267,6 +272,7 @@ func (s *Store) SaveMorningTrades(date string, tradeList []trades.Trade) error {
 			t.Catalyst, t.MentionCount, t.Rank,
 			t.GPTScore, t.GPTRationale, t.ClaudeScore, t.ClaudeRationale, t.CombinedScore,
 			t.PickedByOpenAI, t.PickedByClaude, t.GPTVerdict, t.ClaudeVerdict,
+			t.GPTModel, t.ClaudeModel,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert trade %s: %w", t.Symbol, err)
@@ -283,7 +289,8 @@ func (s *Store) GetMorningTrades(date string) ([]trades.Trade, error) {
 			target_price, stop_loss, profit_target, risk_level,
 			catalyst, mention_count, rank,
 			gpt_score, gpt_rationale, claude_score, claude_rationale, combined_score,
-			picked_by_openai, picked_by_claude, gpt_verdict, claude_verdict
+			picked_by_openai, picked_by_claude, gpt_verdict, claude_verdict,
+			gpt_model, claude_model
 		FROM trades WHERE date = $1 ORDER BY rank, id
 	`, date)
 	if err != nil {
@@ -301,6 +308,7 @@ func (s *Store) GetMorningTrades(date string) ([]trades.Trade, error) {
 			&t.Catalyst, &t.MentionCount, &t.Rank,
 			&t.GPTScore, &t.GPTRationale, &t.ClaudeScore, &t.ClaudeRationale, &t.CombinedScore,
 			&t.PickedByOpenAI, &t.PickedByClaude, &t.GPTVerdict, &t.ClaudeVerdict,
+			&t.GPTModel, &t.ClaudeModel,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan trade row: %w", err)
@@ -382,7 +390,8 @@ func (s *Store) GetTradesForDateRange(startDate, endDate string) (map[string][]t
 			target_price, stop_loss, profit_target, risk_level,
 			catalyst, mention_count, rank,
 			gpt_score, gpt_rationale, claude_score, claude_rationale, combined_score,
-			picked_by_openai, picked_by_claude, gpt_verdict, claude_verdict
+			picked_by_openai, picked_by_claude, gpt_verdict, claude_verdict,
+			gpt_model, claude_model
 		FROM trades WHERE date >= $1 AND date <= $2 ORDER BY date, rank, id
 	`, startDate, endDate)
 	if err != nil {
@@ -401,6 +410,7 @@ func (s *Store) GetTradesForDateRange(startDate, endDate string) (map[string][]t
 			&t.Catalyst, &t.MentionCount, &t.Rank,
 			&t.GPTScore, &t.GPTRationale, &t.ClaudeScore, &t.ClaudeRationale, &t.CombinedScore,
 			&t.PickedByOpenAI, &t.PickedByClaude, &t.GPTVerdict, &t.ClaudeVerdict,
+			&t.GPTModel, &t.ClaudeModel,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan trade row: %w", err)
