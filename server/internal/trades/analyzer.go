@@ -38,7 +38,6 @@ type Trade struct {
 	CurrentPrice   float64 `json:"current_price"`
 	TargetPrice    float64 `json:"target_price"`
 	StopLoss       float64 `json:"stop_loss"`
-	ProfitTarget   float64 `json:"profit_target"`
 	RiskLevel      string  `json:"risk_level"`
 	Catalyst       string  `json:"catalyst"`
 	MentionCount   int     `json:"mention_count"`
@@ -123,7 +122,6 @@ type gptTradeOutput struct {
 	CurrentPrice   float64 `json:"current_price"`
 	TargetPrice    float64 `json:"target_price"`
 	StopLoss       float64 `json:"stop_loss"`
-	ProfitTarget   float64 `json:"profit_target"`
 	RiskLevel      string  `json:"risk_level"`
 	Catalyst       string  `json:"catalyst"`
 	Thesis         string  `json:"thesis"`
@@ -166,7 +164,6 @@ func (a *Analyzer) GetTopTrades(ctx context.Context, sentimentData []sentiment.T
 			CurrentPrice:   r.CurrentPrice,
 			TargetPrice:    r.TargetPrice,
 			StopLoss:       r.StopLoss,
-			ProfitTarget:   r.ProfitTarget,
 			RiskLevel:      r.RiskLevel,
 			Catalyst:       r.Catalyst,
 			Rank:           r.Rank,

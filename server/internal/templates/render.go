@@ -24,7 +24,6 @@ type Trade struct {
 	CurrentPrice    float64
 	TargetPrice     float64
 	StopLoss        float64
-	ProfitTarget    float64
 	RiskLevel       string
 	Catalyst        string
 	MentionCount    int
@@ -302,8 +301,8 @@ func VerifyTemplates() HealthCheck {
 			Expiration: "2026-04-01", DTE: 5, EstimatedPrice: 1.50,
 			Thesis: "Startup verification", SentimentScore: 0.5,
 			CurrentPrice: 498, TargetPrice: 505, StopLoss: 0.75,
-			ProfitTarget: 3.00, RiskLevel: "MEDIUM",
-			Catalyst: "System test", MentionCount: 42,
+			RiskLevel: "MEDIUM",
+			Catalyst:  "System test", MentionCount: 42,
 			Rank: 1, GPTScore: 9, ClaudeScore: 8, CombinedScore: 8.5,
 			PickedByOpenAI: true, PickedByClaude: true,
 			GPTRationale: "Sample bullish rationale.", ClaudeRationale: "Sample bullish rationale.",

@@ -48,7 +48,6 @@ RESPOND WITH ONLY A JSON ARRAY containing exactly 10 trades:
     "current_price": 148.50,
     "target_price": 155.00,
     "stop_loss": 0.50,
-    "profit_target": 3.00,
     "risk_level": "MEDIUM",
     "catalyst": "Earnings report on Friday",
     "thesis": "Detailed explanation of why this trade makes sense, including sentiment analysis, technical factors, and any catalysts.",
@@ -63,7 +62,6 @@ FIELD EXPLANATIONS:
 - current_price: REAL current stock price from Schwab quotes
 - target_price: Your price target for the stock by expiration
 - stop_loss: Premium level to exit if trade goes against you (typically 50%% of entry)
-- profit_target: Premium level to take profits (typically 100-200%% gain)
 - risk_level: LOW (safe, high probability), MEDIUM (balanced), HIGH (speculative/yolo)
 - catalyst: The specific event or reason driving near-term price movement
 - thesis: The trade idea — what the trade is and why it should work

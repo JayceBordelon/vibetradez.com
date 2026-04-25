@@ -83,7 +83,6 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentime
 			CurrentPrice:    r.CurrentPrice,
 			TargetPrice:     r.TargetPrice,
 			StopLoss:        r.StopLoss,
-			ProfitTarget:    r.ProfitTarget,
 			RiskLevel:       r.RiskLevel,
 			Catalyst:        r.Catalyst,
 			Rank:            r.Rank,

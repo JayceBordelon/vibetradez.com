@@ -10,7 +10,6 @@ export interface Trade {
   current_price: number;
   target_price: number;
   stop_loss: number;
-  profit_target: number;
   risk_level: "LOW" | "MEDIUM" | "HIGH";
   catalyst: string;
   mention_count: number;

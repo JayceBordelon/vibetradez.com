@@ -8,17 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
 import { Metric } from "@/components/ui/metric";
-import { calcBreakeven, calcMaxLoss, calcMoneyness, calcRiskReward, sentimentColor, sentimentLabel } from "@/lib/calculations";
-import { fmt, fmtMoney, fmtPctDec, fmtPnlInt } from "@/lib/format";
 import { api } from "@/lib/api";
+import { calcBreakeven, calcMaxLoss, calcMoneyness, sentimentColor, sentimentLabel } from "@/lib/calculations";
+import { fmt, fmtMoney, fmtPctDec, fmtPnlInt } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { DashboardTrade } from "@/types/trade";
 
-type LoadState =
-  | { kind: "loading" }
-  | { kind: "found"; dt: DashboardTrade; resolvedDate: string }
-  | { kind: "not-found"; tried: string }
-  | { kind: "error"; message: string };
+type LoadState = { kind: "loading" } | { kind: "found"; dt: DashboardTrade; resolvedDate: string } | { kind: "not-found"; tried: string } | { kind: "error"; message: string };
 
 export function TradeDetailPage({ symbol, date }: { symbol: string; date?: string }) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
@@ -52,11 +48,7 @@ export function TradeDetailPage({ symbol, date }: { symbol: string; date?: strin
       {state.kind === "loading" && <LoadingPanel symbol={symbol} />}
       {state.kind === "error" && <Panel tone="error" title="Couldn't load that trade" body={state.message} />}
       {state.kind === "not-found" && (
-        <Panel
-          tone="muted"
-          title={`No $${symbol} pick on ${state.tried}`}
-          body="The dashboard only shows picks for trading days the system ran. Try a different date or head back to the dashboard."
-        />
+        <Panel tone="muted" title={`No $${symbol} pick on ${state.tried}`} body="The dashboard only shows picks for trading days the system ran. Try a different date or head back to the dashboard." />
       )}
       {state.kind === "found" && <TradeDetailBody dt={state.dt} resolvedDate={state.resolvedDate} />}
     </div>
@@ -65,10 +57,7 @@ export function TradeDetailPage({ symbol, date }: { symbol: string; date?: strin
 
 function BackLink() {
   return (
-    <Link
-      href="/dashboard"
-      className="mb-4 inline-flex min-h-9 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-    >
+    <Link href="/dashboard" className="mb-4 inline-flex min-h-9 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
       <ArrowLeft className="h-4 w-4" />
       Back to dashboard
     </Link>
@@ -103,7 +92,6 @@ function TradeDetailBody({ dt, resolvedDate }: { dt: DashboardTrade; resolvedDat
   const moneyness = calcMoneyness(trade);
   const breakeven = calcBreakeven(trade);
   const maxLoss = calcMaxLoss(trade);
-  const riskReward = calcRiskReward(trade);
 
   const pnl = summary ? (summary.closing_price - summary.entry_price) * 100 : 0;
   const pctChange = summary && summary.entry_price > 0 ? ((summary.closing_price - summary.entry_price) / summary.entry_price) * 100 : 0;
@@ -121,7 +109,9 @@ function TradeDetailBody({ dt, resolvedDate }: { dt: DashboardTrade; resolvedDat
             </Badge>
             <Badge variant={moneyness.variant}>{moneyness.label}</Badge>
             <Badge variant="secondary">Rank #{trade.rank}</Badge>
-            <Badge variant="secondary" className="text-xs">{trade.risk_level}</Badge>
+            <Badge variant="secondary" className="text-xs">
+              {trade.risk_level}
+            </Badge>
             {summary && <Badge variant={pnl > 0 ? "default" : pnl < 0 ? "destructive" : "secondary"}>EOD {fmtPnlInt(pnl)}</Badge>}
             <span className="ml-auto text-xs text-muted-foreground">{resolvedDate}</span>
           </div>
@@ -130,12 +120,13 @@ function TradeDetailBody({ dt, resolvedDate }: { dt: DashboardTrade; resolvedDat
             <Metric label="Strike" value={fmtMoney(trade.strike_price)} />
             <Metric label="Expiration" value={`${trade.expiration} (${trade.dte}d)`} />
             <Metric label="Entry" value={fmtMoney(trade.estimated_price)} />
-            <Metric label="Target" value={<span className={cn("text-sm font-semibold tabular-nums", trade.contract_type === "CALL" ? "text-green" : "text-red")}>{fmtMoney(trade.target_price)}</span>} />
+            <Metric
+              label="Target"
+              value={<span className={cn("text-sm font-semibold tabular-nums", trade.contract_type === "CALL" ? "text-green" : "text-red")}>{fmtMoney(trade.target_price)}</span>}
+            />
             <Metric label="Stop loss" value={fmtMoney(trade.stop_loss)} />
-            <Metric label="Profit target" value={fmtMoney(trade.profit_target)} />
             <Metric label="Breakeven" value={fmtMoney(breakeven)} />
             <Metric label="Max loss" value={<span className="text-sm font-semibold tabular-nums text-red">{fmtPnlInt(-maxLoss)}</span>} />
-            <Metric label="Risk / reward" value={riskReward ? `1:${riskReward.toFixed(1)}` : "N/A"} />
             <Metric
               label="Sentiment"
               value={
@@ -209,7 +200,10 @@ function TradeDetailBody({ dt, resolvedDate }: { dt: DashboardTrade; resolvedDat
 
             <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
               <Metric label="Contract entry" value={fmtMoney(summary.entry_price)} />
-              <Metric label="Contract close" value={<span className={cn("text-sm font-semibold tabular-nums", pnl > 0 ? "text-green" : pnl < 0 ? "text-red" : "")}>{fmtMoney(summary.closing_price)}</span>} />
+              <Metric
+                label="Contract close"
+                value={<span className={cn("text-sm font-semibold tabular-nums", pnl > 0 ? "text-green" : pnl < 0 ? "text-red" : "")}>{fmtMoney(summary.closing_price)}</span>}
+              />
               <Metric label="Stock open" value={fmtMoney(summary.stock_open)} />
               <Metric
                 label="Stock close"
@@ -222,11 +216,7 @@ function TradeDetailBody({ dt, resolvedDate }: { dt: DashboardTrade; resolvedDat
               />
             </div>
 
-            {summary.notes && (
-              <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-                {summary.notes}
-              </p>
-            )}
+            {summary.notes && <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">{summary.notes}</p>}
           </CardContent>
         </Card>
       )}
@@ -262,7 +252,11 @@ function ModelBlock({
       <div className="flex items-center gap-2">
         <Logo className="h-5 w-5" />
         <span className={cn("text-sm font-semibold", modelLabelClass)}>{modelLabel}</span>
-        {score > 0 && <Badge variant="secondary" className="tabular-nums">{score}/10</Badge>}
+        {score > 0 && (
+          <Badge variant="secondary" className="tabular-nums">
+            {score}/10
+          </Badge>
+        )}
       </div>
       <p className="text-sm leading-relaxed text-muted-foreground">{rationale}</p>
       {verdict && (

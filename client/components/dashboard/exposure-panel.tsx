@@ -1,6 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Metric } from "@/components/ui/metric";
-import { calcMaxGain } from "@/lib/calculations";
 import { fmt, fmtMoney, fmtMoneyInt, fmtPctDec } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { DashboardTrade } from "@/types/trade";
@@ -36,8 +35,6 @@ export function ExposurePanel({ trades, hasSummaries }: ExposurePanelProps) {
     roc = totalExposure > 0 ? (netPnl / totalExposure) * 100 : 0;
   }
 
-  const totalMaxGain = hasSummaries ? 0 : trades.reduce((sum, dt) => sum + (calcMaxGain(dt.trade) ?? 0), 0);
-
   const rocColor = roc === null ? "" : roc > 0 ? "text-green" : roc < 0 ? "text-red" : "text-muted-foreground";
 
   // Both bars share a common scale so they're visually comparable: whichever
@@ -56,11 +53,7 @@ export function ExposurePanel({ trades, hasSummaries }: ExposurePanelProps) {
           <Metric label="Capital at Risk" value={fmtMoneyInt(totalExposure)} />
           <Metric label="Avg Premium" value={fmtMoney(avgPremium)} />
           <Metric label="Avg DTE" value={fmt(avgDte, 1)} />
-          {hasSummaries && roc !== null ? (
-            <Metric label="ROC" value={<span className={cn("text-sm font-semibold tabular-nums", rocColor)}>{fmtPctDec(roc)}</span>} />
-          ) : (
-            <Metric label="Max Gain Potential" value={fmtMoneyInt(totalMaxGain)} />
-          )}
+          {hasSummaries && roc !== null && <Metric label="ROC" value={<span className={cn("text-sm font-semibold tabular-nums", rocColor)}>{fmtPctDec(roc)}</span>} />}
         </div>
 
         {hasSummaries && totalExposure > 0 && (
@@ -92,18 +85,16 @@ export function ExposurePanel({ trades, hasSummaries }: ExposurePanelProps) {
           </div>
         )}
 
-        {/* Morning mode (no EOD summaries yet): show capital at risk vs the
-            projected max-gain headroom + a tiny risk-level breakdown so the
-            section has substance instead of sitting empty until 4pm. */}
-        {!hasSummaries && totalExposure > 0 && (
-          <MorningBreakdown trades={trades} totalExposure={totalExposure} totalMaxGain={totalMaxGain} />
-        )}
+        {/* Morning mode (no EOD summaries yet): risk-level capital
+            distribution so the section has substance instead of sitting
+            empty until 4pm. */}
+        {!hasSummaries && totalExposure > 0 && <MorningBreakdown trades={trades} totalExposure={totalExposure} />}
       </CardContent>
     </Card>
   );
 }
 
-function MorningBreakdown({ trades, totalExposure, totalMaxGain }: { trades: DashboardTrade[]; totalExposure: number; totalMaxGain: number }) {
+function MorningBreakdown({ trades, totalExposure }: { trades: DashboardTrade[]; totalExposure: number }) {
   // Risk-level capital share, computed from premium paid per pick. Long
   // options can only lose the premium so total premium == capital at risk
   // for the bucket.
@@ -120,67 +111,30 @@ function MorningBreakdown({ trades, totalExposure, totalMaxGain }: { trades: Das
   const medPct = totalExposure > 0 ? (buckets.MEDIUM / totalExposure) * 100 : 0;
   const highPct = totalExposure > 0 ? (buckets.HIGH / totalExposure) * 100 : 0;
 
-  // Capital at Risk vs Max Gain Potential, scaled the same way the EOD bars
-  // are scaled — whichever side is larger fills 100%, the other proportional.
-  const barMax = Math.max(totalExposure, totalMaxGain);
-  const riskPct = barMax > 0 ? (totalExposure / barMax) * 100 : 0;
-  const gainPct = barMax > 0 ? (totalMaxGain / barMax) * 100 : 0;
+  if (buckets.LOW === 0 && buckets.MEDIUM === 0 && buckets.HIGH === 0) return null;
 
   return (
-    <div className="space-y-5">
-      {/* Risk vs reward bars */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Capital at Risk vs Max Gain Potential</span>
-          <span className="tabular-nums">
-            {fmtMoneyInt(totalExposure)} &rarr; {fmtMoneyInt(totalMaxGain)}
-          </span>
-        </div>
-        <div className="space-y-1.5">
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-amber transition-all" style={{ width: `${riskPct}%` }} />
-          </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-green transition-all" style={{ width: `${gainPct}%` }} />
-          </div>
-        </div>
-        <div className="flex justify-between text-[11px] text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2 w-2 rounded-full bg-amber" />
-            Capital at Risk
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2 w-2 rounded-full bg-green" />
-            Max Gain Potential
-          </span>
-        </div>
+    <div className="space-y-2">
+      <div className="text-xs text-muted-foreground">Capital by risk level</div>
+      <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
+        {lowPct > 0 && <div className="h-full bg-blue-500/80 transition-all" style={{ width: `${lowPct}%` }} />}
+        {medPct > 0 && <div className="h-full bg-amber transition-all" style={{ width: `${medPct}%` }} />}
+        {highPct > 0 && <div className="h-full bg-red transition-all" style={{ width: `${highPct}%` }} />}
       </div>
-
-      {/* Risk-level capital distribution */}
-      {(buckets.LOW > 0 || buckets.MEDIUM > 0 || buckets.HIGH > 0) && (
-        <div className="space-y-2">
-          <div className="text-xs text-muted-foreground">Capital by risk level</div>
-          <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
-            {lowPct > 0 && <div className="h-full bg-blue-500/80 transition-all" style={{ width: `${lowPct}%` }} />}
-            {medPct > 0 && <div className="h-full bg-amber transition-all" style={{ width: `${medPct}%` }} />}
-            {highPct > 0 && <div className="h-full bg-red transition-all" style={{ width: `${highPct}%` }} />}
-          </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-blue-500/80" />
-              LOW {fmtMoneyInt(buckets.LOW)} ({lowPct.toFixed(0)}%)
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-amber" />
-              MED {fmtMoneyInt(buckets.MEDIUM)} ({medPct.toFixed(0)}%)
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-red" />
-              HIGH {fmtMoneyInt(buckets.HIGH)} ({highPct.toFixed(0)}%)
-            </span>
-          </div>
-        </div>
-      )}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-full bg-blue-500/80" />
+          LOW {fmtMoneyInt(buckets.LOW)} ({lowPct.toFixed(0)}%)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-full bg-amber" />
+          MED {fmtMoneyInt(buckets.MEDIUM)} ({medPct.toFixed(0)}%)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-full bg-red" />
+          HIGH {fmtMoneyInt(buckets.HIGH)} ({highPct.toFixed(0)}%)
+        </span>
+      </div>
     </div>
   );
 }

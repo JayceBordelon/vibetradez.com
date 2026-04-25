@@ -109,10 +109,7 @@ function DesktopTradeRow({ dt, date }: { dt: DashboardTrade; date: string }) {
   const href = tradeHref(trade.symbol, date);
 
   return (
-    <TableRow
-      className={cn("cursor-pointer border-l-2 transition-colors hover:bg-muted/50", row.accentBorder)}
-      onClick={() => router.push(href)}
-    >
+    <TableRow className={cn("cursor-pointer border-l-2 transition-colors hover:bg-muted/50", row.accentBorder)} onClick={() => router.push(href)}>
       <TableCell className="text-center text-sm tabular-nums text-muted-foreground">{trade.rank}</TableCell>
       <TableCell>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -132,9 +129,7 @@ function DesktopTradeRow({ dt, date }: { dt: DashboardTrade; date: string }) {
       <TableCell className={cn("text-right font-mono text-sm tabular-nums", row.hasSummary ? pnlColor(row.stockMove) : "text-muted-foreground")}>
         {row.hasSummary ? fmtPctDec(row.stockMove) : "-"}
       </TableCell>
-      <TableCell className={cn("text-right text-base font-semibold tabular-nums", row.hasSummary ? pnlColor(row.pnl) : "text-muted-foreground")}>
-        {row.hasSummary ? fmtPnlInt(row.pnl) : "-"}
-      </TableCell>
+      <TableCell className={cn("text-right text-base font-semibold tabular-nums", row.hasSummary ? pnlColor(row.pnl) : "text-muted-foreground")}>{row.hasSummary ? fmtPnlInt(row.pnl) : "-"}</TableCell>
       <TableCell className="w-10 text-right">
         <Link
           href={href}
@@ -197,4 +192,3 @@ function TradeRowCard({ dt, date }: { dt: DashboardTrade; date: string }) {
     </Link>
   );
 }
-

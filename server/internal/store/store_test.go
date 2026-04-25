@@ -100,7 +100,6 @@ func TestTradesPersistence(t *testing.T) {
 			CurrentPrice:   148.0,
 			TargetPrice:    155.0,
 			StopLoss:       145.0,
-			ProfitTarget:   50.0,
 			RiskLevel:      "MEDIUM",
 			Catalyst:       "Earnings",
 			MentionCount:   42,
