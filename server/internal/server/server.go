@@ -679,10 +679,10 @@ func (s *Server) checkSchwabTrading(ctx context.Context) serviceHealth {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	switch {
-	case resp.StatusCode == 200:
+	switch resp.StatusCode {
+	case 200:
 		return serviceHealth{Status: "ok", Detail: "Trading scope active", Latency: fmtLatency(time.Since(start))}
-	case resp.StatusCode == 401 || resp.StatusCode == 403:
+	case 401, 403:
 		/*
 			Token doesn't have trading scope. Most common cause: app was
 			market-data-only when the user authorized; trading product was

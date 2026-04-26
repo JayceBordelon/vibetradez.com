@@ -106,7 +106,11 @@ func TestTokenHashIsDeterministicAndDifferentPerToken(t *testing.T) {
 	if TokenHash(a) == TokenHash(b) {
 		t.Fatal("execute and decline tokens for same decision must hash differently")
 	}
-	if TokenHash(a) != TokenHash(a) {
+	// Re-hash the same token via two separate calls (assigned to distinct
+	// vars so staticcheck doesn't flag the comparison as trivial).
+	first := TokenHash(a)
+	second := TokenHash(a)
+	if first != second {
 		t.Fatal("token hash not deterministic")
 	}
 }
