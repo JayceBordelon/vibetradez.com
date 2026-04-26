@@ -29,8 +29,10 @@ export function AccountMenu({ user }: { user: SessionUser }) {
 
   const initials = (user.name || user.email).trim().charAt(0).toUpperCase() || "?";
   const [pictureFailed, setPictureFailed] = useState(false);
-  // Google returns a =s96-c suffix; we display at 24-32px so a smaller
-  // variant is plenty and avoids the bigger images' stricter rate limits.
+  /**
+  Google returns a =s96-c suffix; we display at 24-32px so a smaller
+  variant is plenty and avoids the bigger images' stricter rate limits.
+  */
   const avatarSrc = user.picture_url ? user.picture_url.replace(/=s\d+(-c)?$/, "=s64-c") : "";
   const showImage = Boolean(avatarSrc) && !pictureFailed;
 

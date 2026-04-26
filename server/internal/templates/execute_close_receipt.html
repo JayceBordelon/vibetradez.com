@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>{{.Subject}}</title>
+  <style>
+    @media (prefers-color-scheme: dark) {
+      .body-bg { background-color: #0f172a !important; }
+      .header-bg { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important; }
+      .content-bg { background-color: #1e293b !important; }
+      .text-primary { color: #f1f5f9 !important; }
+      .text-secondary { color: #cbd5e1 !important; }
+      .panel-bg { background-color: #0f172a !important; border-color: #334155 !important; }
+    }
+  </style>
+</head>
+<body class="body-bg" style="margin:0;padding:0;background-color:#fafafa;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="body-bg" style="background-color:#fafafa;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;max-width:580px;">
+          <tr><td style="height:4px;background:linear-gradient(90deg,#10a37f,#D97757);border-radius:12px 12px 0 0;font-size:0;line-height:0;">&nbsp;</td></tr>
+          <tr>
+            <td class="header-bg" style="padding:24px 28px;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);">
+              <span style="font-size:24px;font-weight:800;color:#10a37f;">Vibe</span><span style="font-size:24px;font-weight:800;color:#D97757;">Tradez</span>
+              <span style="display:inline-block;margin-left:12px;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:0.5px;{{if eq .Mode "live"}}background:#dc2626;color:#fff;{{else}}background:#fbbf24;color:#1e293b;{{end}}">{{.Mode}} MODE</span>
+              <span style="float:right;color:#94a3b8;font-size:13px;line-height:30px;">{{.Date}}</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="content-bg" style="background-color:#ffffff;padding:32px 28px;">
+              <h1 class="text-primary" style="margin:0 0 12px 0;font-size:22px;font-weight:800;color:#0f172a;">Position closed at 3:55 PM ET</h1>
+              <p class="text-secondary" style="margin:0 0 20px 0;font-size:14px;color:#64748b;line-height:1.6;">
+                The mandatory close ran on schedule. Today's auto-execution P&amp;L:
+              </p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="panel-bg" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+                <tr>
+                  <td style="padding:20px 24px;">
+                    <p class="text-primary" style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">{{.Symbol}} {{printf "%.2f" .StrikePrice}} {{.ContractType}}</p>
+                    <p class="text-secondary" style="margin:6px 0 20px 0;font-size:13px;color:#64748b;">{{.Expiration}}</p>
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td>
+                          <p style="margin:0 0 4px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Entry</p>
+                          <p class="text-primary" style="margin:0;font-size:16px;font-weight:600;color:#0f172a;">${{printf "%.2f" .OpenPrice}}</p>
+                        </td>
+                        <td>
+                          <p style="margin:0 0 4px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Close</p>
+                          <p class="text-primary" style="margin:0;font-size:16px;font-weight:600;color:#0f172a;">${{printf "%.2f" .ClosePrice}}</p>
+                        </td>
+                        <td>
+                          <p style="margin:0 0 4px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">P&amp;L</p>
+                          <p style="margin:0;font-size:18px;font-weight:800;color:{{if gt .RealizedPnL 0.0}}#10a37f{{else if lt .RealizedPnL 0.0}}#dc2626{{else}}#0f172a{{end}};">{{if gt .RealizedPnL 0.0}}+{{end}}${{printf "%.2f" .RealizedPnL}}</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:24px;">
+                <tr>
+                  <td align="center">
+                    <a href="{{.SchwabPositionsURL}}" style="display:inline-block;padding:12px 28px;background-color:#0f172a;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:700;">View on Schwab →</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr><td style="height:3px;background:linear-gradient(90deg,#10a37f,#D97757);font-size:0;line-height:0;">&nbsp;</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

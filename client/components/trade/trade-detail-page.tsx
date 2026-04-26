@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { ExecutionBadge, matchesTrade } from "@/components/execution-badge";
 import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,9 +13,13 @@ import { api } from "@/lib/api";
 import { calcBreakeven, calcMaxLoss, calcMoneyness, sentimentColor, sentimentLabel } from "@/lib/calculations";
 import { fmt, fmtMoney, fmtPctDec, fmtPnlInt } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { DashboardTrade } from "@/types/trade";
+import type { DashboardTrade, Execution } from "@/types/trade";
 
-type LoadState = { kind: "loading" } | { kind: "found"; dt: DashboardTrade; resolvedDate: string } | { kind: "not-found"; tried: string } | { kind: "error"; message: string };
+type LoadState =
+  | { kind: "loading" }
+  | { kind: "found"; dt: DashboardTrade; resolvedDate: string; execution: Execution | null }
+  | { kind: "not-found"; tried: string }
+  | { kind: "error"; message: string };
 
 export function TradeDetailPage({ symbol, date }: { symbol: string; date?: string }) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
@@ -31,7 +36,8 @@ export function TradeDetailPage({ symbol, date }: { symbol: string; date?: strin
           setState({ kind: "not-found", tried: data.date ?? date ?? "today" });
           return;
         }
-        setState({ kind: "found", dt, resolvedDate: data.date });
+        const execution = matchesTrade(data.execution, dt.trade) ? (data.execution ?? null) : null;
+        setState({ kind: "found", dt, resolvedDate: data.date, execution });
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -50,7 +56,7 @@ export function TradeDetailPage({ symbol, date }: { symbol: string; date?: strin
       {state.kind === "not-found" && (
         <Panel tone="muted" title={`No $${symbol} pick on ${state.tried}`} body="The dashboard only shows picks for trading days the system ran. Try a different date or head back to the dashboard." />
       )}
-      {state.kind === "found" && <TradeDetailBody dt={state.dt} resolvedDate={state.resolvedDate} />}
+      {state.kind === "found" && <TradeDetailBody dt={state.dt} resolvedDate={state.resolvedDate} execution={state.execution} />}
     </div>
   );
 }
@@ -87,7 +93,7 @@ function Panel({ tone, title, body }: { tone: "error" | "muted"; title: string; 
   );
 }
 
-function TradeDetailBody({ dt, resolvedDate }: { dt: DashboardTrade; resolvedDate: string }) {
+function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; resolvedDate: string; execution: Execution | null }) {
   const { trade, summary } = dt;
   const moneyness = calcMoneyness(trade);
   const breakeven = calcBreakeven(trade);
@@ -99,6 +105,7 @@ function TradeDetailBody({ dt, resolvedDate }: { dt: DashboardTrade; resolvedDat
 
   return (
     <div className="space-y-5">
+      {execution && <ExecutionBadge execution={execution} variant="full" />}
       {/* Header: ticker + badges + price */}
       <Card>
         <CardContent className="space-y-4 p-5 sm:p-6">

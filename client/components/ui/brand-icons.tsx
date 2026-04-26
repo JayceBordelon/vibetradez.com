@@ -4,10 +4,12 @@ interface BrandIconProps extends React.SVGProps<SVGSVGElement> {
   className?: string;
 }
 
-// Brand colors lifted from each provider's official site:
-// - OpenAI: #10a37f (the primary green used on chatgpt.com / openai.com).
-// - Claude: #D97757 (the official Claude orange shipped in their own
-//   marketing SVG).
+/**
+Brand colors lifted from each provider's official site:
+- OpenAI: #10a37f (the primary green used on chatgpt.com / openai.com).
+- Claude: #D97757 (the official Claude orange shipped in their own
+  marketing SVG).
+*/
 const OPENAI_COLOR = "#10a37f";
 const CLAUDE_COLOR = "#D97757";
 

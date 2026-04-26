@@ -1,5 +1,7 @@
-// Local-dev only health proxy.
-// In production, Traefik routes /health directly to the Go server.
+/**
+Local-dev only health proxy.
+In production, Traefik routes /health directly to the Go server.
+*/
 
 import { NextResponse } from "next/server";
 

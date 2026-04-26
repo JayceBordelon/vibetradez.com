@@ -3,11 +3,13 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 
+import { ExecutionBadge } from "@/components/execution-badge";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { formatDayName, formatMonthDay } from "@/lib/date-utils";
 import { fmtMoney, fmtPctDec, fmtPnlInt, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import type { Execution } from "@/types/trade";
 
 interface TradeDetail {
   symbol: string;
@@ -29,6 +31,7 @@ interface DayStat {
   hasSummaries: boolean;
   invested: number;
   returned: number;
+  execution: Execution | null;
   details: TradeDetail[];
 }
 
@@ -66,6 +69,12 @@ function DayRow({ ds, maxAbsPnl }: { ds: DayStat; maxAbsPnl: number }) {
         <div className="relative h-8 flex-1 overflow-hidden rounded-md bg-muted/40">
           <div className={cn("h-full", isPositive ? "bg-green/60" : "bg-red/60")} style={{ width: `${barWidth}%` }} />
         </div>
+
+        {ds.execution && (
+          <div className="hidden shrink-0 sm:block">
+            <ExecutionBadge execution={ds.execution} />
+          </div>
+        )}
 
         <div className={cn("w-20 shrink-0 text-right text-sm font-semibold tabular-nums", pnlColor(ds.pnl))}>{fmtPnlInt(ds.pnl)}</div>
       </CollapsibleTrigger>

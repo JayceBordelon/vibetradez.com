@@ -34,9 +34,11 @@ func NewScraper() *Scraper {
 	}
 }
 
-// GetTrendingTickers combines all market signal sources and returns the top
-// trending tickers. Each source contributes independently; failures are
-// logged but do not block other sources from running.
+/*
+GetTrendingTickers combines all market signal sources and returns the top
+trending tickers. Each source contributes independently; failures are
+logged but do not block other sources from running.
+*/
 func (s *Scraper) GetTrendingTickers(ctx context.Context, limit int) ([]TickerMention, error) {
 	allMentions := make(map[string]*TickerMention)
 
@@ -108,9 +110,11 @@ type stockTwitsResponse struct {
 	} `json:"symbols"`
 }
 
-// scrapeStockTwitsTrending fetches StockTwits' trending symbols endpoint.
-// Returns up to 30 symbols with trending scores and human-readable
-// summaries explaining why each ticker is trending. No auth required.
+/*
+scrapeStockTwitsTrending fetches StockTwits' trending symbols endpoint.
+Returns up to 30 symbols with trending scores and human-readable
+summaries explaining why each ticker is trending. No auth required.
+*/
 func (s *Scraper) scrapeStockTwitsTrending(ctx context.Context) ([]TickerMention, error) {
 	body, err := s.fetchJSON(ctx, "https://api.stocktwits.com/api/2/trending/symbols.json")
 	if err != nil {
@@ -164,9 +168,11 @@ type yahooMoversResponse struct {
 	} `json:"finance"`
 }
 
-// scrapeYahooTrending fetches Yahoo Finance's trending tickers and market
-// movers (gainers + losers). These are public JSON endpoints that do not
-// require authentication.
+/*
+scrapeYahooTrending fetches Yahoo Finance's trending tickers and market
+movers (gainers + losers). These are public JSON endpoints that do not
+require authentication.
+*/
 func (s *Scraper) scrapeYahooTrending(ctx context.Context) ([]TickerMention, error) {
 	urls := []string{
 		"https://query2.finance.yahoo.com/v1/finance/trending/US?count=25",
@@ -184,8 +190,10 @@ func (s *Scraper) scrapeYahooTrending(ctx context.Context) ([]TickerMention, err
 			continue
 		}
 
-		// Trending endpoint has a different shape than screener endpoints.
-		// Try trending first, fall back to screener/movers.
+		/*
+			Trending endpoint has a different shape than screener endpoints.
+			Try trending first, fall back to screener/movers.
+		*/
 		var trending yahooTrendingResponse
 		if err := json.Unmarshal(body, &trending); err == nil {
 			for _, r := range trending.Finance.Result {
@@ -240,12 +248,16 @@ func (s *Scraper) scrapeYahooTrending(ctx context.Context) ([]TickerMention, err
 
 // ---------- Finviz ----------
 
-// scrapeFinvizSignals scrapes Finviz's signal pages for unusual volume and
-// most active options tickers. Finviz serves HTML but with a consistent
-// table structure that is straightforward to parse.
+/*
+scrapeFinvizSignals scrapes Finviz's signal pages for unusual volume and
+most active options tickers. Finviz serves HTML but with a consistent
+table structure that is straightforward to parse.
+*/
 func (s *Scraper) scrapeFinvizSignals(ctx context.Context) ([]TickerMention, error) {
-	// ta_unusualvolume: stocks trading at significantly higher volume than normal
-	// ta_mostactive: highest absolute volume
+	/*
+		ta_unusualvolume: stocks trading at significantly higher volume than normal
+		ta_mostactive: highest absolute volume
+	*/
 	urls := []string{
 		"https://finviz.com/screener.ashx?v=111&s=ta_unusualvolume",
 		"https://finviz.com/screener.ashx?v=111&s=ta_mostactive",
@@ -281,9 +293,11 @@ func (s *Scraper) scrapeFinvizSignals(ctx context.Context) ([]TickerMention, err
 	return result, nil
 }
 
-// extractTickersFromFinvizHTML pulls ticker symbols from Finviz screener
-// HTML. Finviz renders tickers as links inside the screener results table
-// with class "screener-link-primary".
+/*
+extractTickersFromFinvizHTML pulls ticker symbols from Finviz screener
+HTML. Finviz renders tickers as links inside the screener results table
+with class "screener-link-primary".
+*/
 func extractTickersFromFinvizHTML(body string) []string {
 	tickers := make([]string, 0)
 	seen := make(map[string]bool)
@@ -331,10 +345,12 @@ type edgarSearchResponse struct {
 	} `json:"hits"`
 }
 
-// scrapeEDGARCatalysts queries the SEC EDGAR full-text search API (EFTS)
-// for recent 8-K filings containing catalyst keywords (mergers,
-// acquisitions, material agreements). The EFTS API is free, public, and
-// run by the US government, making it extremely stable.
+/*
+scrapeEDGARCatalysts queries the SEC EDGAR full-text search API (EFTS)
+for recent 8-K filings containing catalyst keywords (mergers,
+acquisitions, material agreements). The EFTS API is free, public, and
+run by the US government, making it extremely stable.
+*/
 func (s *Scraper) scrapeEDGARCatalysts(ctx context.Context) ([]TickerMention, error) {
 	today := time.Now().Format("2006-01-02")
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
@@ -386,8 +402,10 @@ func (s *Scraper) scrapeEDGARCatalysts(ctx context.Context) ([]TickerMention, er
 	return result, nil
 }
 
-// fetchEDGAR makes an HTTP request to SEC EDGAR with the required
-// User-Agent format (SEC blocks requests without a proper contact UA).
+/*
+fetchEDGAR makes an HTTP request to SEC EDGAR with the required
+User-Agent format (SEC blocks requests without a proper contact UA).
+*/
 func (s *Scraper) fetchEDGAR(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -458,9 +476,11 @@ func (s *Scraper) fetchHTML(ctx context.Context, url string) (string, error) {
 	return string(body), nil
 }
 
-// estimateSentimentFromText does a quick keyword scan on a short text
-// blurb (like StockTwits' trending_summary) and returns a value between
-// -1 (bearish) and 1 (bullish).
+/*
+estimateSentimentFromText does a quick keyword scan on a short text
+blurb (like StockTwits' trending_summary) and returns a value between
+-1 (bearish) and 1 (bullish).
+*/
 func estimateSentimentFromText(text string) float64 {
 	lower := strings.ToLower(text)
 
@@ -501,8 +521,10 @@ type SourceStatus struct {
 	Latency time.Duration
 }
 
-// ProbeAll tests every scraping source and returns per-source results.
-// Used both for startup verification and the /health endpoint.
+/*
+ProbeAll tests every scraping source and returns per-source results.
+Used both for startup verification and the /health endpoint.
+*/
 func (s *Scraper) ProbeAll(ctx context.Context) []SourceStatus {
 	type probe struct {
 		name string
@@ -534,9 +556,11 @@ func (s *Scraper) ProbeAll(ctx context.Context) []SourceStatus {
 	return results
 }
 
-// isEquityTicker validates that a string looks like a US equity ticker
-// (1-5 uppercase letters, no dots or numbers which indicate preferred
-// shares, warrants, etc.).
+/*
+isEquityTicker validates that a string looks like a US equity ticker
+(1-5 uppercase letters, no dots or numbers which indicate preferred
+shares, warrants, etc.).
+*/
 func isEquityTicker(sym string) bool {
 	if len(sym) < 1 || len(sym) > 5 {
 		return false

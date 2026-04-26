@@ -110,21 +110,25 @@ FIELD EXPLANATIONS:
 
 Only respond with the JSON array, no other text.`
 
-// Both Analyzer (OpenAI) and ClaudePicker (Anthropic) use AnalysisPrompt
-// directly. The previous ClaudeValidationPrompt was removed when the
-// pipeline switched from a proposer/validator model to two independent
-// pickers running the same workflow on the same raw sentiment data.
+/*
+Both Analyzer (OpenAI) and ClaudePicker (Anthropic) use AnalysisPrompt
+directly. The previous ClaudeValidationPrompt was removed when the
+pipeline switched from a proposer/validator model to two independent
+pickers running the same workflow on the same raw sentiment data.
+*/
 
-// CrossExaminationPrompt is the second-pass prompt each model runs after
-// both have produced their independent top-10. The model is shown the
-// OTHER model's pick list and asked to write one short, specific
-// sentence per pick: a critique, a cosign, or a flag. No tools are
-// granted; this is a pure reasoning pass over the rationales already
-// produced. Verdicts persist on the trade row and surface beside the
-// original rationale on the dashboard and in the morning email.
-//
-// Format args (in order): today's date, weekday, your model name, your
-// own picks JSON, the other model's name, the other model's picks JSON.
+/*
+CrossExaminationPrompt is the second-pass prompt each model runs after
+both have produced their independent top-10. The model is shown the
+OTHER model's pick list and asked to write one short, specific
+sentence per pick: a critique, a cosign, or a flag. No tools are
+granted; this is a pure reasoning pass over the rationales already
+produced. Verdicts persist on the trade row and surface beside the
+original rationale on the dashboard and in the morning email.
+
+Format args (in order): today's date, weekday, your model name, your
+own picks JSON, the other model's name, the other model's picks JSON.
+*/
 const CrossExaminationPrompt = `You are an expert options trader. Today is %s (%s).
 
 Earlier this morning, you (%s) and another model (%s) each independently produced your own top-10 options picks for today. You both received the EXACT same sentiment data, the EXACT same prompt, and the EXACT same toolset (Schwab quotes, options chain, web search). Now that both pick lists are locked, you are being shown the OTHER model's picks and asked for your honest take.

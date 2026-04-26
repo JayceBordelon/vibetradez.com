@@ -26,9 +26,11 @@ const REFRESH_SECONDS = 60;
 const LIVE_POLL_SECONDS = 15;
 
 function filterByRank(data: DashboardResponse, topFilter: number): DashboardResponse {
-  // Server should always return an empty array, but be defensive in
-  // case any deployment regresses to nil-slice → JSON null. Mirrors
-  // the same defensive coalescing the history page already does.
+  /**
+  Server should always return an empty array, but be defensive in
+  case any deployment regresses to nil-slice → JSON null. Mirrors
+  the same defensive coalescing the history page already does.
+  */
   const trades = data.trades ?? [];
   if (topFilter >= 10) return { ...data, trades };
   return {
@@ -110,9 +112,11 @@ export function DashboardShell() {
     } catch {}
   }, [topFilter, dayIndex, dates]);
 
-  // Load dates. If the API returns an empty list (fresh deploy with
-  // no historical trades yet), we still kick off loadDay() so the
-  // shell renders the EmptyState instead of an infinite skeleton.
+  /**
+  Load dates. If the API returns an empty list (fresh deploy with
+  no historical trades yet), we still kick off loadDay() so the
+  shell renders the EmptyState instead of an infinite skeleton.
+  */
   const [datesFetched, setDatesFetched] = useState(false);
   useEffect(() => {
     api
@@ -142,11 +146,13 @@ export function DashboardShell() {
   }, [dates, dayIndex]);
 
   useEffect(() => {
-    // Fire loadDay on every dates change OR once dates have been
-    // fetched (even if the result was empty). The empty-dates branch
-    // still calls api.getTrades(undefined) which the server handles
-    // by returning an empty dashboardResponse{}, letting the shell
-    // render its EmptyState branch instead of the loading skeleton.
+    /**
+    Fire loadDay on every dates change OR once dates have been
+    fetched (even if the result was empty). The empty-dates branch
+    still calls api.getTrades(undefined) which the server handles
+    by returning an empty dashboardResponse{}, letting the shell
+    render its EmptyState branch instead of the loading skeleton.
+    */
     if (dates.length > 0 || datesFetched) loadDay();
   }, [loadDay, dates, datesFetched]);
 
@@ -236,7 +242,7 @@ export function DashboardShell() {
               <ExposurePanel trades={filtered.trades} hasSummaries={false} />
             </Section>
             <Section title="Today's Picks" subtitle={`${filtered.trades.length} ranked plays · click any pick for the full single-contract view`}>
-              <MorningCards trades={filtered.trades} liveQuotes={liveQuotes} date={filtered.date} />
+              <MorningCards trades={filtered.trades} liveQuotes={liveQuotes} date={filtered.date} execution={filtered.execution} />
             </Section>
           </>
         )}

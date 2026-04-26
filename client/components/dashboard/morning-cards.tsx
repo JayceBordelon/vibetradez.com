@@ -3,29 +3,31 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
+import { ExecutionBadge, matchesTrade } from "@/components/execution-badge";
 import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
 import { calcMoneyness } from "@/lib/calculations";
 import { fmtMoney, fmtMoneyInt, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { DashboardTrade, LiveQuotesResponse } from "@/types/trade";
+import type { DashboardTrade, Execution, LiveQuotesResponse } from "@/types/trade";
 
 interface MorningCardsProps {
   trades: DashboardTrade[];
   liveQuotes?: LiveQuotesResponse | null;
   date: string;
+  execution?: Execution | null;
 }
 
 function tradeHref(symbol: string, date: string): string {
   return `/trade/${encodeURIComponent(symbol)}?date=${encodeURIComponent(date)}`;
 }
 
-export function MorningCards({ trades, liveQuotes, date }: MorningCardsProps) {
+export function MorningCards({ trades, liveQuotes, date, execution }: MorningCardsProps) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {trades.map((dt) => (
-        <MorningCard key={dt.trade.symbol} dt={dt} liveQuotes={liveQuotes} date={date} />
+        <MorningCard key={dt.trade.symbol} dt={dt} liveQuotes={liveQuotes} date={date} execution={matchesTrade(execution, dt.trade) ? execution : null} />
       ))}
     </div>
   );
@@ -35,17 +37,20 @@ interface MorningCardProps {
   dt: DashboardTrade;
   liveQuotes?: LiveQuotesResponse | null;
   date: string;
+  execution?: Execution | null;
 }
 
-function MorningCard({ dt, liveQuotes, date }: MorningCardProps) {
+function MorningCard({ dt, liveQuotes, date, execution }: MorningCardProps) {
   const { trade } = dt;
   const moneyness = calcMoneyness(trade);
 
-  // Live option mark for "current contract price". Backend keys are
-  // "<SYMBOL>|<CALL|PUT>|<strike formatted to 2dp>|<expiration>" — see
-  // server.go:846 — so reconstruct the same key here. Falls back to
-  // null (em-dash) when Schwab isn't connected or the contract dropped
-  // off the chain.
+  /**
+  Live option mark for "current contract price". Backend keys are
+  "<SYMBOL>|<CALL|PUT>|<strike formatted to 2dp>|<expiration>" — see
+  server.go:846 — so reconstruct the same key here. Falls back to
+  null (em-dash) when Schwab isn't connected or the contract dropped
+  off the chain.
+  */
   const optionKey = `${trade.symbol}|${trade.contract_type}|${trade.strike_price.toFixed(2)}|${trade.expiration}`;
   const liveOption = liveQuotes?.options?.[optionKey] ?? null;
   const currentContractPrice = liveOption?.mark ?? null;
@@ -84,6 +89,7 @@ function MorningCard({ dt, liveQuotes, date }: MorningCardProps) {
             </Badge>
             <Badge variant={moneyness.variant}>{moneyness.label}</Badge>
             <Badge variant={riskBadgeVariant}>{trade.risk_level}</Badge>
+            {execution && <ExecutionBadge execution={execution} />}
             {showAnyScore && (
               <div className="ml-auto flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-0.5 text-[11px] font-semibold tabular-nums">
                 {showGpt && (

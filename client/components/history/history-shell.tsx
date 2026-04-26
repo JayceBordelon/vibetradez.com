@@ -29,6 +29,7 @@ type DayStat = {
   hasSummaries: boolean;
   invested: number;
   returned: number;
+  execution: import("@/types/trade").Execution | null;
   details: {
     symbol: string;
     type: string;
@@ -42,8 +43,10 @@ type DayStat = {
 };
 
 function filterByRank(data: WeekResponse, topFilter: number): WeekResponse {
-  // Server should always return an empty array, but be defensive in case
-  // an older deployment or a transient error path emits null days.
+  /**
+  Server should always return an empty array, but be defensive in case
+  an older deployment or a transient error path emits null days.
+  */
   const days = data.days ?? [];
   if (topFilter >= 10) return { ...data, days };
   return {
@@ -148,6 +151,7 @@ function computeAggregates(data: WeekResponse) {
       hasSummaries: dayHasSummaries,
       invested: dayInvested,
       returned: dayReturned,
+      execution: day.execution ?? null,
       details,
     });
   }
@@ -191,11 +195,13 @@ function computeAggregates(data: WeekResponse) {
   };
 }
 
-// buildMultiEquityPoints replays the same date range under all four Top-N
-// pick-set selections (1 / 3 / 5 / 10) and merges the cumulative P&L series
-// into one row per date with one column per series. The Equity Curve always
-// renders this multi-line view so the user can compare strategies without
-// toggling the toolbar filter.
+/**
+buildMultiEquityPoints replays the same date range under all four Top-N
+pick-set selections (1 / 3 / 5 / 10) and merges the cumulative P&L series
+into one row per date with one column per series. The Equity Curve always
+renders this multi-line view so the user can compare strategies without
+toggling the toolbar filter.
+*/
 function buildMultiEquityPoints(data: WeekResponse): {
   date: string;
   top1: number;
@@ -298,10 +304,12 @@ export function HistoryShell() {
   const filtered = rawData ? filterByRank(rawData, topFilter) : null;
   const agg = filtered?.days?.length ? computeAggregates(filtered) : null;
 
-  // Equity curve always shows all four Top-N strategies overlaid, regardless
-  // of which one is currently selected by the toolbar's TopNFilter. This
-  // lets the user compare how each pick-set would have performed at a
-  // glance without having to toggle the filter.
+  /**
+  Equity curve always shows all four Top-N strategies overlaid, regardless
+  of which one is currently selected by the toolbar's TopNFilter. This
+  lets the user compare how each pick-set would have performed at a
+  glance without having to toggle the filter.
+  */
   const multiEquityPoints = rawData ? buildMultiEquityPoints(rawData) : [];
 
   const maxOffset = maxRangeOffset(mode, availableDates);

@@ -1,14 +1,16 @@
-// Catch-all auth proxy for local development.
-//
-// In production, Traefik routes /auth/* to the Go server before the request
-// reaches Next.js. This handler only fires in dev (where API_URL is set).
-//
-// Two things make this different from the /api/* proxy:
-// - redirect: "manual" so the 302 from the Go OAuth callback flows back to
-//   the browser instead of being followed server-side (which would resolve
-//   to an unreachable google.com from the Docker network).
-// - getSetCookie() to preserve multiple Set-Cookie headers; the session
-//   cookie and the oauth_state clear-cookie both ship in the same response.
+/**
+Catch-all auth proxy for local development.
+
+In production, Traefik routes /auth/* to the Go server before the request
+reaches Next.js. This handler only fires in dev (where API_URL is set).
+
+Two things make this different from the /api/* proxy:
+- redirect: "manual" so the 302 from the Go OAuth callback flows back to
+  the browser instead of being followed server-side (which would resolve
+  to an unreachable google.com from the Docker network).
+- getSetCookie() to preserve multiple Set-Cookie headers; the session
+  cookie and the oauth_state clear-cookie both ship in the same response.
+*/
 
 import { type NextRequest, NextResponse } from "next/server";
 

@@ -16,12 +16,14 @@ import (
 	"vibetradez.com/internal/sentiment"
 )
 
-// ClaudePicker runs the same morning trade analysis pipeline as the
-// OpenAI Analyzer, but powered by Anthropic Claude. Both pickers consume
-// raw sentiment data, do the full Schwab + web-search workflow with the
-// same AnalysisPrompt, and independently produce 10 ranked trades. The
-// cron pipeline unions both pick sets so the dashboard / emails can show
-// what each model would have picked on its own.
+/*
+ClaudePicker runs the same morning trade analysis pipeline as the
+OpenAI Analyzer, but powered by Anthropic Claude. Both pickers consume
+raw sentiment data, do the full Schwab + web-search workflow with the
+same AnalysisPrompt, and independently produce 10 ranked trades. The
+cron pipeline unions both pick sets so the dashboard / emails can show
+what each model would have picked on its own.
+*/
 type ClaudePicker struct {
 	client anthropic.Client
 	model  string
@@ -42,13 +44,15 @@ func NewClaudePicker(apiKey, model string, schwabClient *schwab.Client) *ClaudeP
 // Model returns the Anthropic model identifier this picker is configured with.
 func (p *ClaudePicker) Model() string { return p.model }
 
-// GetTopTrades runs the same workflow the OpenAI Analyzer does — pull in
-// market signals, do its own Schwab tool calls and web search, then
-// emit 10 ranked trades. Crucially, Claude is not given GPT's picks; it
-// generates its own from scratch. The returned trades have ClaudeScore /
-// ClaudeRationale populated (because Claude is the model that produced
-// them); GPTScore / GPTRationale are left at zero for the cron pipeline
-// to merge in if GPT also picked the same ticker.
+/*
+GetTopTrades runs the same workflow the OpenAI Analyzer does — pull in
+market signals, do its own Schwab tool calls and web search, then
+emit 10 ranked trades. Crucially, Claude is not given GPT's picks; it
+generates its own from scratch. The returned trades have ClaudeScore /
+ClaudeRationale populated (because Claude is the model that produced
+them); GPTScore / GPTRationale are left at zero for the cron pipeline
+to merge in if GPT also picked the same ticker.
+*/
 func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentiment.TickerMention) ([]Trade, error) {
 	sentimentJSON, err := json.Marshal(sentimentData)
 	if err != nil {
@@ -86,6 +90,7 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentime
 			RiskLevel:       r.RiskLevel,
 			Catalyst:        r.Catalyst,
 			Rank:            r.Rank,
+			ClaudeRank:      r.Rank,
 			ClaudeScore:     r.Score,
 			ClaudeRationale: r.Rationale,
 			ClaudeModel:     p.model,
@@ -93,9 +98,11 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentime
 		})
 	}
 
-	// Enrich with sentiment data the same way the OpenAI Analyzer does so
-	// downstream consumers see consistent SentimentScore and MentionCount
-	// regardless of which model picked the trade.
+	/*
+		Enrich with sentiment data the same way the OpenAI Analyzer does so
+		downstream consumers see consistent SentimentScore and MentionCount
+		regardless of which model picked the trade.
+	*/
 	type sentimentInfo struct {
 		Score    float64
 		Mentions int
@@ -114,11 +121,13 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentime
 	return trades, nil
 }
 
-// WriteVerdicts runs the cross-examination pass for Claude: given the
-// other model's pick list (and Claude's own picks for context), returns
-// a one-sentence verdict per symbol. No tools are granted; this is a
-// pure reasoning pass over the rationales already produced. Errors are
-// non-fatal at the caller level.
+/*
+WriteVerdicts runs the cross-examination pass for Claude: given the
+other model's pick list (and Claude's own picks for context), returns
+a one-sentence verdict per symbol. No tools are granted; this is a
+pure reasoning pass over the rationales already produced. Errors are
+non-fatal at the caller level.
+*/
 func (p *ClaudePicker) WriteVerdicts(ctx context.Context, ownTrades, otherTrades []Trade, ownModelName, otherModelName string) (map[string]string, error) {
 	if len(otherTrades) == 0 {
 		return map[string]string{}, nil
@@ -166,10 +175,12 @@ func (p *ClaudePicker) WriteVerdicts(ctx context.Context, ownTrades, otherTrades
 	return verdicts, nil
 }
 
-// verdictTradeView projects a Trade down to the fields a model needs to
-// reason about a pick during cross-examination. Strips out scoring
-// fields from the OTHER side so each model judges the trade on its
-// merits, not on the opposing model's confidence.
+/*
+verdictTradeView projects a Trade down to the fields a model needs to
+reason about a pick during cross-examination. Strips out scoring
+fields from the OTHER side so each model judges the trade on its
+merits, not on the opposing model's confidence.
+*/
 type verdictTradeRow struct {
 	Rank         int     `json:"rank"`
 	Symbol       string  `json:"symbol"`
@@ -272,8 +283,10 @@ func (p *ClaudePicker) runConversation(ctx context.Context, prompt string) (stri
 			return "", fmt.Errorf("anthropic messages.new: %w", err)
 		}
 
-		// Track the code-execution container so follow-up requests can
-		// reattach to it (required when web_search triggers code execution).
+		/*
+			Track the code-execution container so follow-up requests can
+			reattach to it (required when web_search triggers code execution).
+		*/
 		if msg.Container.JSON.ID.Valid() {
 			containerID = msg.Container.ID
 		}
@@ -308,12 +321,14 @@ func (p *ClaudePicker) runConversation(ctx context.Context, prompt string) (stri
 	return "", fmt.Errorf("exceeded max claude tool rounds (%d)", maxRounds)
 }
 
-// assistantEchoFromRaw rebuilds an assistant MessageParam by round-tripping
-// each content block's raw server JSON through param.Override. We avoid
-// msg.ToParam() because anthropic-sdk-go v1.35.1 drops the required `type`
-// field on code_execution_tool_result error content (and the same pattern
-// affects other server-tool result errors), which causes a 400 from
-// /v1/messages on the next round.
+/*
+assistantEchoFromRaw rebuilds an assistant MessageParam by round-tripping
+each content block's raw server JSON through param.Override. We avoid
+msg.ToParam() because anthropic-sdk-go v1.35.1 drops the required `type`
+field on code_execution_tool_result error content (and the same pattern
+affects other server-tool result errors), which causes a 400 from
+/v1/messages on the next round.
+*/
 func assistantEchoFromRaw(msg *anthropic.Message) anthropic.MessageParam {
 	blocks := make([]anthropic.ContentBlockParamUnion, 0, len(msg.Content))
 	for _, b := range msg.Content {

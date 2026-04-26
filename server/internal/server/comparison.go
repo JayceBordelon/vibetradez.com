@@ -68,9 +68,11 @@ type comparisonResponse struct {
 	TotalDaysCovered int        `json:"total_days_covered"`
 }
 
-// emptyModelStats returns a modelStats with non-nil empty slices so a
-// JSON response shape is always renderable on the frontend, even when
-// the database has no trades yet (fresh deploy, pre-cron, etc).
+/*
+emptyModelStats returns a modelStats with non-nil empty slices so a
+JSON response shape is always renderable on the frontend, even when
+the database has no trades yet (fresh deploy, pre-cron, etc).
+*/
 func emptyModelStats(model string) modelStats {
 	return modelStats{
 		Model:          model,
@@ -87,9 +89,11 @@ func (s *Server) handleModelComparison(w http.ResponseWriter, r *http.Request) {
 
 	start, end := s.computeRange(rangeParam)
 	if start == "" || end == "" {
-		// No trade data yet (fresh deploy, pre-cron). Return a 200 with
-		// an empty but well-formed response so the frontend can render
-		// an empty state instead of crashing on undefined.cumulative_pnl.
+		/*
+			No trade data yet (fresh deploy, pre-cron). Return a 200 with
+			an empty but well-formed response so the frontend can render
+			an empty state instead of crashing on undefined.cumulative_pnl.
+		*/
 		writeJSON(w, http.StatusOK, comparisonResponse{
 			Range:     rangeParam,
 			TopN:      comparisonTopN,
@@ -178,15 +182,19 @@ type scoreSelector func(t trades.Trade) int
 func scoreSelectorGPT(t trades.Trade) int    { return t.GPTScore }
 func scoreSelectorClaude(t trades.Trade) int { return t.ClaudeScore }
 
-// scoreSelectorCombined rounds the float combined score to the nearest
-// integer so it shares a 1-10 scale with the per-model selectors. The
-// rounding only matters when two combined scores collapse to the same
-// integer; the existing stable sort then preserves the per-day input order.
+/*
+scoreSelectorCombined rounds the float combined score to the nearest
+integer so it shares a 1-10 scale with the per-model selectors. The
+rounding only matters when two combined scores collapse to the same
+integer; the existing stable sort then preserves the per-day input order.
+*/
 func scoreSelectorCombined(t trades.Trade) int { return int(t.CombinedScore + 0.5) }
 
-// computeModelStats simulates "what if you only followed this model's
-// ranking?" by picking the top N trades per day according to the model's
-// score and aggregating realised P&L from the matching summaries.
+/*
+computeModelStats simulates "what if you only followed this model's
+ranking?" by picking the top N trades per day according to the model's
+score and aggregating realised P&L from the matching summaries.
+*/
 func computeModelStats(
 	tradesMap map[string][]trades.Trade,
 	summaryByKey map[summaryLookupKey]trades.TradeSummary,

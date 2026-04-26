@@ -11,9 +11,11 @@ import { fmtPnlInt } from "@/lib/format";
 const GREEN = "var(--green)";
 const RED = "var(--red)";
 
-// mondayKey returns the Monday-of-week (YYYY-MM-DD) for a YYYY-MM-DD date,
-// so a year/all-time series can be aggregated into weekly bars instead of
-// hundreds of unreadable daily ticks.
+/**
+mondayKey returns the Monday-of-week (YYYY-MM-DD) for a YYYY-MM-DD date,
+so a year/all-time series can be aggregated into weekly bars instead of
+hundreds of unreadable daily ticks.
+*/
 function mondayKey(dateStr: string): string {
   // Parse as UTC noon to dodge DST edges; result formatted as YYYY-MM-DD.
   const d = new Date(`${dateStr}T12:00:00Z`);

@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     description: "Two silly models, same data, same prompt, same tools. Independent picks plus cross-examination, delivered free before the opening bell.",
     images: [
       {
-        url: "/og",
+        url: "/opengraph-image",
         width: 1200,
         height: 630,
         alt: "VibeTradez",
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     title: "VibeTradez | AI-Powered Options Picks",
     description: "Two silly models, same data, same prompt, same tools. Independent picks plus cross-examination, delivered free before the opening bell.",
     creator: "@JayceBordelon",
-    images: ["/og"],
+    images: ["/opengraph-image"],
   },
   robots: {
     index: true,

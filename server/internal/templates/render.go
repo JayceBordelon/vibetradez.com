@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-//go:embed email.html summary.html test.html error.html weekly.html
+//go:embed email.html summary.html test.html error.html weekly.html execute_confirm.html execute_canceled.html execute_receipt.html execute_close_receipt.html execute_close_failed.html rollout_auto_execution_live.html
 var templateFS embed.FS
 
 type Trade struct {
@@ -39,9 +39,11 @@ type Trade struct {
 	ClaudeVerdict   string
 }
 
-// YesterdayRecap is a tiny digest of the previous trading day's results
-// surfaced at the top of the morning email so subscribers see how the
-// last batch performed before reading today's picks.
+/*
+YesterdayRecap is a tiny digest of the previous trading day's results
+surfaced at the top of the morning email so subscribers see how the
+last batch performed before reading today's picks.
+*/
 type YesterdayRecap struct {
 	Date        string // formatted, e.g. "Apr 24"
 	TotalPnL    float64
@@ -94,10 +96,12 @@ type SummaryEmailData struct {
 	Winners     int
 	Losers      int
 	TotalPnL    float64
-	// Dual-model attribution: P&L by which model picked the top 3 trades
-	// (sorted by each model's score). Lets the EOD email surface a tiny
-	// leaderboard answering "which model would you have made more money
-	// listening to today?".
+	/*
+		Dual-model attribution: P&L by which model picked the top 3 trades
+		(sorted by each model's score). Lets the EOD email surface a tiny
+		leaderboard answering "which model would you have made more money
+		listening to today?".
+	*/
 	GPTTop3Pnl       float64
 	ClaudeTop3Pnl    float64
 	CombinedTop3Pnl  float64
@@ -136,10 +140,12 @@ type WeeklyEmailData struct {
 	WorstTrade    string
 	WorstPnL      float64
 	DashboardURL  string
-	// Per-model backtest aggregates over the week, mirroring the
-	// /api/model-comparison response. The weekly email surfaces these so
-	// subscribers see which model's ranking would have produced the most
-	// P&L if followed in isolation.
+	/*
+		Per-model backtest aggregates over the week, mirroring the
+		/api/model-comparison response. The weekly email surfaces these so
+		subscribers see which model's ranking would have produced the most
+		P&L if followed in isolation.
+	*/
 	GPTTotalPnl      float64
 	GPTWinRate       float64
 	ClaudeTotalPnl   float64
@@ -223,11 +229,13 @@ func RenderEmail(trades []Trade, gptModelName, claudeModelName string, yesterday
 		return "", err
 	}
 
-	// Pick each model's #1 conviction trade independently — Claude's top is
-	// the highest-ClaudeScore trade Claude actually picked, ditto for GPT.
-	// They may resolve to the same underlying ticker on consensus days; the
-	// template renders both sections regardless so each model leads with its
-	// own rationale.
+	/*
+		Pick each model's #1 conviction trade independently — Claude's top is
+		the highest-ClaudeScore trade Claude actually picked, ditto for GPT.
+		They may resolve to the same underlying ticker on consensus days; the
+		template renders both sections regardless so each model leads with its
+		own rationale.
+	*/
 	var claudeTop, gptTop *Trade
 	for i := range trades {
 		t := &trades[i]
@@ -290,8 +298,143 @@ type ErrorEmailData struct {
 	Error   string
 }
 
-// VerifyTemplates exercises all email templates with sample data to catch rendering errors.
-// Returns a HealthCheck for template rendering.
+// ── Auto-execution emails ──
+
+/*
+ExecuteConfirmData powers the 5-minute confirmation email. Includes
+every piece of context the user could possibly want when deciding
+whether to fire: contract details, capital at risk, both models'
+rationales + scores + cross-verdicts, catalyst, expiry timer, signed
+Execute / Decline links.
+*/
+type ExecuteConfirmData struct {
+	Subject         string
+	Date            string
+	Mode            string // "paper" | "live"
+	Symbol          string
+	ContractType    string
+	StrikePrice     float64
+	Expiration      string
+	DTE             int
+	OCCSymbol       string
+	ContractPrice   float64
+	CapitalAtRisk   float64 // ContractPrice * 100 * 1
+	CurrentPrice    float64
+	RiskLevel       string
+	Catalyst        string
+	Thesis          string
+	GPTModelName    string
+	GPTScore        int
+	GPTRationale    string
+	GPTVerdict      string
+	ClaudeModelName string
+	ClaudeScore     int
+	ClaudeRationale string
+	ClaudeVerdict   string
+	ExpiresAtText   string // formatted expiry, e.g. "9:30 AM ET"
+	ExecuteURL      string // signed token + auth-required confirmation page
+	DeclineURL      string
+}
+
+type ExecuteCanceledData struct {
+	Subject         string
+	Date            string
+	Mode            string
+	Symbol          string
+	ContractType    string
+	StrikePrice     float64
+	Expiration      string
+	ContractPrice   float64
+	GPTModelName    string
+	GPTScore        int
+	ClaudeModelName string
+	ClaudeScore     int
+}
+
+type ExecuteReceiptData struct {
+	Subject            string
+	Date               string
+	Mode               string
+	Symbol             string
+	ContractType       string
+	StrikePrice        float64
+	Expiration         string
+	OCCSymbol          string
+	FillPrice          float64
+	Quantity           int
+	OrderID            string
+	SchwabPositionsURL string
+}
+
+type ExecuteCloseReceiptData struct {
+	Subject            string
+	Date               string
+	Mode               string
+	Symbol             string
+	ContractType       string
+	StrikePrice        float64
+	Expiration         string
+	OpenPrice          float64
+	ClosePrice         float64
+	RealizedPnL        float64 // (close - open) * 100 * contracts
+	SchwabPositionsURL string
+}
+
+type ExecuteCloseFailedData struct {
+	Subject            string
+	Date               string
+	Symbol             string
+	ContractType       string
+	StrikePrice        float64
+	Expiration         string
+	OCCSymbol          string
+	ErrorMessage       string
+	SchwabPositionsURL string
+}
+
+func RenderExecuteConfirm(d ExecuteConfirmData) (string, error) {
+	return renderOne("execute_confirm.html", d)
+}
+func RenderExecuteCanceled(d ExecuteCanceledData) (string, error) {
+	return renderOne("execute_canceled.html", d)
+}
+func RenderExecuteReceipt(d ExecuteReceiptData) (string, error) {
+	return renderOne("execute_receipt.html", d)
+}
+func RenderExecuteCloseReceipt(d ExecuteCloseReceiptData) (string, error) {
+	return renderOne("execute_close_receipt.html", d)
+}
+func RenderExecuteCloseFailed(d ExecuteCloseFailedData) (string, error) {
+	return renderOne("execute_close_failed.html", d)
+}
+
+/*
+RenderRolloutAutoExecutionLive renders the v1 rollout email
+announcing the auto-execution feature. Static content — no
+parameters, just a Subject string for the <title> tag.
+*/
+func RenderRolloutAutoExecutionLive() (string, error) {
+	return renderOne("rollout_auto_execution_live.html", map[string]string{
+		"Subject": "VibeTradez can now execute trades",
+	})
+}
+
+func renderOne(name string, data any) (string, error) {
+	tmpl, err := template.New(name).Funcs(funcMap).ParseFS(templateFS, name)
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+/*
+VerifyTemplates exercises all email templates with sample data to catch rendering errors.
+Returns a HealthCheck for template rendering.
+*/
 func VerifyTemplates() HealthCheck {
 	start := time.Now()
 
@@ -358,10 +501,12 @@ func VerifyTemplates() HealthCheck {
 	return HealthCheck{Name: "Email Templates", Status: "ok", Detail: "All 4 templates rendered", Latency: fmtLatency(start)}
 }
 
-// topNPnl picks the N highest-scoring summaries by the given score
-// selector and sums their per-contract P&L. Used by both the EOD and
-// weekly emails to backtest "what if you had only followed this model
-// today / this week" without re-fetching the trades table.
+/*
+topNPnl picks the N highest-scoring summaries by the given score
+selector and sums their per-contract P&L. Used by both the EOD and
+weekly emails to backtest "what if you had only followed this model
+today / this week" without re-fetching the trades table.
+*/
 func topNPnl(trades []SummaryTrade, n int, score func(SummaryTrade) float64) float64 {
 	if len(trades) == 0 {
 		return 0
@@ -404,8 +549,10 @@ func RenderTestEmail(data StatusEmailData) (string, error) {
 	return buf.String(), nil
 }
 
-// RenderErrorEmail renders an error notification email. Kept intentionally simple
-// (no loops, no comparisons) to minimize the chance of this template itself failing.
+/*
+RenderErrorEmail renders an error notification email. Kept intentionally simple
+(no loops, no comparisons) to minimize the chance of this template itself failing.
+*/
 func RenderErrorEmail(errMsg string) (string, error) {
 	tmpl, err := template.New("error.html").Funcs(funcMap).ParseFS(templateFS, "error.html")
 	if err != nil {
@@ -469,11 +616,13 @@ func RenderSummaryEmail(summaryTrades []SummaryTrade) (string, error) {
 		totalPnL += t.PriceChange * 100 // per contract
 	}
 
-	// Per-model attribution: replay this single day's picks under each
-	// model's ranking and aggregate the top-3 P&L for each, the same way
-	// /api/model-comparison does for longer windows. Lets the EOD email
-	// surface a tiny "which model would you have made more money
-	// listening to today" leaderboard.
+	/*
+		Per-model attribution: replay this single day's picks under each
+		model's ranking and aggregate the top-3 P&L for each, the same way
+		/api/model-comparison does for longer windows. Lets the EOD email
+		surface a tiny "which model would you have made more money
+		listening to today" leaderboard.
+	*/
 	gptTop3Pnl := topNPnl(summaryTrades, 3, func(t SummaryTrade) float64 { return float64(t.GPTScore) })
 	claudeTop3Pnl := topNPnl(summaryTrades, 3, func(t SummaryTrade) float64 { return float64(t.ClaudeScore) })
 	combinedTop3Pnl := topNPnl(summaryTrades, 3, func(t SummaryTrade) float64 { return t.CombinedScore })

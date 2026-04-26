@@ -10,6 +10,7 @@ require (
 	github.com/openai/openai-go/v3 v3.32.0
 	github.com/resend/resend-go/v2 v2.28.0
 	golang.org/x/net v0.53.0
+	golang.org/x/time v0.5.0
 )
 
 require (

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { ModelComparisonShell } from "@/components/models/comparison-shell";
 
-const OG_IMAGE = "/og";
+const OG_IMAGE = "/opengraph-image";
 
 export const metadata: Metadata = {
   title: "Model Comparison",

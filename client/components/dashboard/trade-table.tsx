@@ -97,10 +97,12 @@ export function TradeTable({ trades, date }: TradeTableProps) {
   );
 }
 
-// ---- Desktop row ----
-// Each row is a navigation surface to /trade/<symbol>?date=<date>; we render
-// the link inside a regular cell rather than wrapping the entire <tr> so we
-// keep valid table semantics (no <a> wrapping <tr>).
+/**
+---- Desktop row ----
+Each row is a navigation surface to /trade/<symbol>?date=<date>; we render
+the link inside a regular cell rather than wrapping the entire <tr> so we
+keep valid table semantics (no <a> wrapping <tr>).
+*/
 function DesktopTradeRow({ dt, date }: { dt: DashboardTrade; date: string }) {
   const router = useRouter();
   const { trade } = dt;

@@ -335,15 +335,176 @@ BEGIN
     END LOOP;
 END $$;
 
+-- ─── Auto-execution demo data ──────────────────────────────────────────────
+--
+-- Seeds the execution_decisions + executions tables with 5 demo positions
+-- spanning the different badge states, so the local dashboard / history /
+-- trade detail pages have visible examples of the transparency labeling
+-- before any real auto-execution has fired in prod.
+--
+-- Mode mix: 4 paper + 1 live (so you can see both color treatments).
+-- State mix: holding / closed-winner / closed-loser / failed / closed-live.
+--
+-- Each execution targets the rank-1 trade for the chosen day so the badge
+-- renders on the most prominent card.
+
+-- New columns the runtime migration would add anyway (ADD COLUMN IF NOT
+-- EXISTS) — declared here so the seed schema isn't stale.
+ALTER TABLE trades ADD COLUMN IF NOT EXISTS gpt_rank INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE trades ADD COLUMN IF NOT EXISTS claude_rank INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS execution_decisions (
+    id              SERIAL PRIMARY KEY,
+    trade_date      TEXT NOT NULL,
+    symbol          TEXT NOT NULL,
+    contract_type   TEXT NOT NULL,
+    strike_price    DOUBLE PRECISION NOT NULL,
+    expiration      TEXT NOT NULL,
+    occ_symbol      TEXT NOT NULL,
+    contract_price  DOUBLE PRECISION NOT NULL,
+    gpt_score       INTEGER NOT NULL,
+    claude_score    INTEGER NOT NULL,
+    trade_id        INTEGER REFERENCES trades(id),
+    token_hash      TEXT NOT NULL UNIQUE,
+    decision        TEXT NOT NULL DEFAULT 'pending',
+    decided_at      TIMESTAMPTZ,
+    expires_at      TIMESTAMPTZ NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(trade_date)
+);
+
+CREATE TABLE IF NOT EXISTS executions (
+    id                  SERIAL PRIMARY KEY,
+    decision_id         INTEGER NOT NULL REFERENCES execution_decisions(id),
+    mode                TEXT NOT NULL,
+    side                TEXT NOT NULL,
+    schwab_order_id     TEXT,
+    status              TEXT NOT NULL,
+    fill_price          DOUBLE PRECISION,
+    filled_quantity     INTEGER NOT NULL DEFAULT 0,
+    requested_quantity  INTEGER NOT NULL,
+    submitted_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    filled_at           TIMESTAMPTZ,
+    error_message       TEXT NOT NULL DEFAULT '',
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Helper: insert a complete execution scenario (decision + open + maybe
+-- close) targeting the rank-1 trade on a given date. Returns silently if
+-- no trade exists for that date (e.g. weekend skip).
+DO $$
+DECLARE
+    today_date DATE := CURRENT_DATE;
+    scenarios RECORD;
+    t RECORD;
+    decision_id INT;
+    fill_open NUMERIC;
+    fill_close NUMERIC;
+    occ TEXT;
+BEGIN
+    FOR scenarios IN
+        -- (offset_days, mode, state, fill_open_pct, fill_close_pct)
+        --   offset_days: how many days back from today
+        --   state: 'holding' | 'closed-win' | 'closed-loss' | 'failed'
+        --   fill_open_pct: open fill as % of trade.estimated_price (1.0 = exactly mark)
+        --   fill_close_pct: close fill as % of fill_open (1.0 = breakeven, 1.5 = +50% etc.)
+        SELECT * FROM (VALUES
+            (0,  'paper', 'holding',    1.00, NULL),       -- TODAY: paper position still open
+            (2,  'paper', 'closed-win', 1.00, 1.45),       -- 2 days ago: paper closed +45%
+            (4,  'paper', 'closed-loss',1.00, 0.62),       -- 4 days ago: paper closed -38%
+            (6,  'live',  'closed-win', 0.98, 1.80),       -- 6 days ago: LIVE position +80%
+            (8,  'paper', 'failed',     NULL, NULL)        -- 8 days ago: open rejected by broker
+        ) AS s(offset_days, mode, state, fill_open_pct, fill_close_pct)
+    LOOP
+        -- Find the rank-1 trade for the target date.
+        SELECT id, symbol, contract_type, strike_price, expiration, estimated_price, gpt_score, claude_score
+        INTO t
+        FROM trades
+        WHERE date = to_char(today_date - scenarios.offset_days, 'YYYY-MM-DD')
+          AND rank = 1
+        LIMIT 1;
+
+        CONTINUE WHEN t IS NULL;
+
+        -- Build a valid OCC-21 OSI symbol for the contract.
+        occ := rpad(t.symbol, 6, ' ')
+            || to_char(to_date(t.expiration, 'YYYY-MM-DD'), 'YYMMDD')
+            || CASE WHEN t.contract_type = 'CALL' THEN 'C' ELSE 'P' END
+            || lpad((round(t.strike_price * 1000))::text, 8, '0');
+
+        INSERT INTO execution_decisions (
+            trade_date, symbol, contract_type, strike_price, expiration,
+            occ_symbol, contract_price, gpt_score, claude_score, trade_id,
+            token_hash, decision, decided_at, expires_at
+        ) VALUES (
+            to_char(today_date - scenarios.offset_days, 'YYYY-MM-DD'),
+            t.symbol, t.contract_type, t.strike_price, t.expiration,
+            occ, t.estimated_price,
+            GREATEST(t.gpt_score, 9), GREATEST(t.claude_score, 9), -- demo data: pretend both ranked it 9+
+            t.id,
+            md5(scenarios.offset_days::text || scenarios.state || 'demo-token-hash'),
+            'execute',
+            (today_date - scenarios.offset_days)::timestamptz + interval '9 hours 31 minutes',
+            (today_date - scenarios.offset_days)::timestamptz + interval '9 hours 35 minutes'
+        )
+        ON CONFLICT (trade_date) DO NOTHING
+        RETURNING id INTO decision_id;
+
+        -- ON CONFLICT may have skipped — re-fetch if so.
+        IF decision_id IS NULL THEN
+            SELECT id INTO decision_id FROM execution_decisions
+            WHERE trade_date = to_char(today_date - scenarios.offset_days, 'YYYY-MM-DD');
+        END IF;
+
+        -- Open execution row.
+        IF scenarios.state = 'failed' THEN
+            INSERT INTO executions (decision_id, mode, side, status, requested_quantity, error_message, submitted_at)
+            VALUES (
+                decision_id, scenarios.mode, 'open', 'failed', 1,
+                'Demo: simulated broker rejection (insufficient buying power)',
+                (today_date - scenarios.offset_days)::timestamptz + interval '9 hours 31 minutes 12 seconds'
+            );
+        ELSE
+            fill_open := round((t.estimated_price * scenarios.fill_open_pct)::numeric, 2);
+            INSERT INTO executions (decision_id, mode, side, schwab_order_id, status, fill_price, filled_quantity, requested_quantity, submitted_at, filled_at)
+            VALUES (
+                decision_id, scenarios.mode, 'open',
+                CASE WHEN scenarios.mode = 'paper' THEN 'paper-' || md5(decision_id::text || 'open') ELSE '10000' || decision_id::text END,
+                'filled', fill_open, 1, 1,
+                (today_date - scenarios.offset_days)::timestamptz + interval '9 hours 31 minutes 12 seconds',
+                (today_date - scenarios.offset_days)::timestamptz + interval '9 hours 31 minutes 18 seconds'
+            );
+
+            -- Close execution row (only for closed states).
+            IF scenarios.state IN ('closed-win', 'closed-loss') THEN
+                fill_close := round((fill_open * scenarios.fill_close_pct)::numeric, 2);
+                INSERT INTO executions (decision_id, mode, side, schwab_order_id, status, fill_price, filled_quantity, requested_quantity, submitted_at, filled_at)
+                VALUES (
+                    decision_id, scenarios.mode, 'close',
+                    CASE WHEN scenarios.mode = 'paper' THEN 'paper-' || md5(decision_id::text || 'close') ELSE '20000' || decision_id::text END,
+                    'filled', fill_close, 1, 1,
+                    (today_date - scenarios.offset_days)::timestamptz + interval '15 hours 55 minutes',
+                    (today_date - scenarios.offset_days)::timestamptz + interval '15 hours 55 minutes 8 seconds'
+                );
+            END IF;
+        END IF;
+    END LOOP;
+END $$;
+
 -- Quick sanity check counts (visible in `docker logs vt-local-postgres`)
 DO $$
 DECLARE
     trade_ct INT;
     summary_ct INT;
     sub_ct INT;
+    decision_ct INT;
+    exec_ct INT;
 BEGIN
     SELECT COUNT(*) INTO trade_ct FROM trades;
     SELECT COUNT(*) INTO summary_ct FROM summaries;
     SELECT COUNT(*) INTO sub_ct FROM subscribers;
-    RAISE NOTICE 'Seed complete: % trades, % summaries, % subscribers', trade_ct, summary_ct, sub_ct;
+    SELECT COUNT(*) INTO decision_ct FROM execution_decisions;
+    SELECT COUNT(*) INTO exec_ct FROM executions;
+    RAISE NOTICE 'Seed complete: % trades, % summaries, % subscribers, % execution_decisions, % executions',
+        trade_ct, summary_ct, sub_ct, decision_ct, exec_ct;
 END $$;

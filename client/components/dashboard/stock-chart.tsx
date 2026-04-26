@@ -40,10 +40,12 @@ interface DataPoint {
   optionMark: number | null;
 }
 
-// estimateDelta picks a sensible Black-Scholes-ish delta for the contract
-// based on its moneyness so we can model how the premium tracks the
-// underlying without needing a real Greeks feed. Sign convention: positive
-// delta on calls, negative on puts.
+/**
+estimateDelta picks a sensible Black-Scholes-ish delta for the contract
+based on its moneyness so we can model how the premium tracks the
+underlying without needing a real Greeks feed. Sign convention: positive
+delta on calls, negative on puts.
+*/
 function estimateDelta(contractType: string, strike: number, underlying: number): number {
   if (underlying <= 0 || strike <= 0) return 0.5;
   const moneyness = (underlying - strike) / strike; // positive = ITM for calls
@@ -91,12 +93,16 @@ export function StockChart({ symbol, timeframe, strikePrice, trade, summary }: S
           return;
         }
 
-        // Approximate the option premium series from the underlying using
-        // a sticky delta — Schwab doesn't expose intraday option history,
-        // so this is the cleanest way to plot a "contract price over time"
+        /**
+        Approximate the option premium series from the underlying using
+        a sticky delta — Schwab doesn't expose intraday option history,
+        so this is the cleanest way to plot a "contract price over time"
+        */
         // line alongside the stock candles. When a summary exists we
-        // anchor entry/exit to the recorded prices and interpolate in
-        // between with the same model.
+        /**
+        anchor entry/exit to the recorded prices and interpolate in
+        between with the same model.
+        */
         const trd = trade;
         const entryUnderlying = summary?.stock_open ?? trd?.current_price ?? 0;
         const entryPremium = summary?.entry_price ?? trd?.estimated_price ?? 0;
@@ -104,9 +110,11 @@ export function StockChart({ symbol, timeframe, strikePrice, trade, summary }: S
         const exitPremium = summary?.closing_price;
         const delta = trd ? estimateDelta(trd.contract_type, trd.strike_price, entryUnderlying) : 0.5;
 
-        // When we have both endpoints, blend the linear-delta estimate with
-        // the recorded entry/exit so the line lands exactly on those marks
-        // and tracks the underlying in between.
+        /**
+        When we have both endpoints, blend the linear-delta estimate with
+        the recorded entry/exit so the line lands exactly on those marks
+        and tracks the underlying in between.
+        */
         let blendNum = 0;
         let blendDen = 0;
         if (entryUnderlying > 0 && entryPremium > 0) {
@@ -200,11 +208,13 @@ export function StockChart({ symbol, timeframe, strikePrice, trade, summary }: S
   const lastDate = formatDate(data[data.length - 1].time);
   const multiDay = firstDate !== lastDate;
 
-  // First/last candle of the most recent trading day. BUY anchors to the
-  // entry candle whenever a trade exists (live or settled); SELL only
-  // shows once the trade has an EOD summary. We also pull the actual
-  // candle CLOSE at each anchor so we can drop a dot marker at the
-  // exact level the trade hit on the price line.
+  /**
+  First/last candle of the most recent trading day. BUY anchors to the
+  entry candle whenever a trade exists (live or settled); SELL only
+  shows once the trade has an EOD summary. We also pull the actual
+  candle CLOSE at each anchor so we can drop a dot marker at the
+  exact level the trade hit on the price line.
+  */
   let buyTime: number | undefined;
   let buyPrice: number | undefined;
   let sellTime: number | undefined;
@@ -224,8 +234,10 @@ export function StockChart({ symbol, timeframe, strikePrice, trade, summary }: S
     }
   }
 
-  // Premium-axis bounds — option marks are an order of magnitude smaller
-  // than the underlying, so the line gets its own right-side scale.
+  /**
+  Premium-axis bounds — option marks are an order of magnitude smaller
+  than the underlying, so the line gets its own right-side scale.
+  */
   const optionMarks = data.map((d) => d.optionMark).filter((v): v is number => v !== null);
   const hasOptionLine = optionMarks.length > 0;
   let oMin = 0;

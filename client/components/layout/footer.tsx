@@ -27,11 +27,17 @@ export function Footer() {
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0">
-            <Link href="/terms" className="inline-flex min-h-11 items-center underline underline-offset-2 transition-colors hover:text-foreground sm:min-h-0">
+            <Link
+              href="/terms"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center underline underline-offset-2 transition-colors hover:text-foreground sm:min-h-0 sm:min-w-0 sm:justify-start"
+            >
               Terms
             </Link>
             <Separator orientation="vertical" className="hidden h-3 sm:inline-flex" />
-            <Link href="/faq" className="inline-flex min-h-11 items-center underline underline-offset-2 transition-colors hover:text-foreground sm:min-h-0">
+            <Link
+              href="/faq"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center underline underline-offset-2 transition-colors hover:text-foreground sm:min-h-0 sm:min-w-0 sm:justify-start"
+            >
               FAQ
             </Link>
             <Separator orientation="vertical" className="hidden h-3 sm:inline-flex" />
@@ -39,7 +45,7 @@ export function Footer() {
               href="https://jaycebordelon.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-11 items-center underline underline-offset-2 transition-colors hover:text-foreground sm:min-h-0"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center underline underline-offset-2 transition-colors hover:text-foreground sm:min-h-0 sm:min-w-0 sm:justify-start"
             >
               jaycebordelon.com
             </a>

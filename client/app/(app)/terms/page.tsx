@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 
 import { Separator } from "@/components/ui/separator";
 
-const OG_IMAGE = "/og";
+const OG_IMAGE = "/opengraph-image";
 
 export const metadata: Metadata = {
   title: "Terms of Service",

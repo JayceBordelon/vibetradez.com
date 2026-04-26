@@ -37,10 +37,12 @@ export function ExposurePanel({ trades, hasSummaries }: ExposurePanelProps) {
 
   const rocColor = roc === null ? "" : roc > 0 ? "text-green" : roc < 0 ? "text-red" : "text-muted-foreground";
 
-  // Both bars share a common scale so they're visually comparable: whichever
-  // is larger fills 100%, the other fills proportionally less. Without this
-  // the deployed bar always pinned to 100% and a winning day pushed the
-  // returned bar past its container, making every day look identical.
+  /**
+  Both bars share a common scale so they're visually comparable: whichever
+  is larger fills 100%, the other fills proportionally less. Without this
+  the deployed bar always pinned to 100% and a winning day pushed the
+  returned bar past its container, making every day look identical.
+  */
   const barMax = Math.max(totalExposure, totalReturned);
   const deployedPct = barMax > 0 ? (totalExposure / barMax) * 100 : 0;
   const returnedPct = barMax > 0 ? (totalReturned / barMax) * 100 : 0;
@@ -95,9 +97,11 @@ export function ExposurePanel({ trades, hasSummaries }: ExposurePanelProps) {
 }
 
 function MorningBreakdown({ trades, totalExposure }: { trades: DashboardTrade[]; totalExposure: number }) {
-  // Risk-level capital share, computed from premium paid per pick. Long
-  // options can only lose the premium so total premium == capital at risk
-  // for the bucket.
+  /**
+  Risk-level capital share, computed from premium paid per pick. Long
+  options can only lose the premium so total premium == capital at risk
+  for the bucket.
+  */
   const buckets = { LOW: 0, MEDIUM: 0, HIGH: 0 } as Record<"LOW" | "MEDIUM" | "HIGH", number>;
   for (const dt of trades) {
     const level = (dt.trade.risk_level ?? "MEDIUM") as keyof typeof buckets;

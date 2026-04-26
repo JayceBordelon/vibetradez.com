@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Subject}}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#7f1d1d;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;max-width:580px;background-color:#ffffff;border-radius:12px;border:4px solid #dc2626;">
+          <tr>
+            <td style="padding:24px 28px;background-color:#dc2626;color:#ffffff;border-radius:8px 8px 0 0;">
+              <h1 style="margin:0;font-size:24px;font-weight:800;">⚠ ACTION REQUIRED — Close failed</h1>
+              <p style="margin:6px 0 0 0;font-size:14px;color:#fecaca;">{{.Date}}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 28px;background-color:#ffffff;">
+              <p style="margin:0 0 20px 0;font-size:15px;color:#0f172a;line-height:1.6;">
+                The 3:55 PM ET mandatory close did <strong>NOT</strong> fill within the retry window. The position is still open at Schwab and you must close it manually before 4:00 PM ET market close.
+              </p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#fef2f2;border:1px solid #fecaca;border-radius:8px;margin-bottom:20px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <p style="margin:0 0 4px 0;font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:0.5px;">Open Position</p>
+                    <p style="margin:0;font-size:20px;font-weight:800;color:#0f172a;">{{.Symbol}} {{printf "%.2f" .StrikePrice}} {{.ContractType}}</p>
+                    <p style="margin:6px 0 0 0;font-size:13px;color:#64748b;">{{.Expiration}} · OCC <span style="font-family:monospace;">{{.OCCSymbol}}</span></p>
+                  </td>
+                </tr>
+              </table>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#fef2f2;border:1px solid #fecaca;border-radius:8px;margin-bottom:20px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <p style="margin:0 0 4px 0;font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:0.5px;">Last Schwab Error</p>
+                    <p style="margin:0;font-size:13px;color:#1e293b;line-height:1.6;font-family:monospace;word-break:break-word;">{{.ErrorMessage}}</p>
+                  </td>
+                </tr>
+              </table>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td align="center">
+                    <a href="{{.SchwabPositionsURL}}" style="display:inline-block;padding:16px 36px;background-color:#dc2626;color:#ffffff;text-decoration:none;border-radius:8px;font-size:16px;font-weight:800;">Close on Schwab NOW →</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

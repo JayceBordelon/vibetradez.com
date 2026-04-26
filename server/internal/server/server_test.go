@@ -24,7 +24,7 @@ func setupTestServer(t *testing.T) *Server {
 
 	db.RemoveAllForTest()
 
-	return New(db, nil, nil, sentiment.NewScraper(), nil, "", "", "", "", "", "vt_session", 30*24*time.Hour, "", "", "", "0")
+	return New(db, nil, nil, sentiment.NewScraper(), nil, "", "", "", "", "", "vt_session", 30*24*time.Hour, "", "", "", "0", nil, "")
 }
 
 func TestSubscribeEndpoint(t *testing.T) {

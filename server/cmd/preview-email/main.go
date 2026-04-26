@@ -1,8 +1,10 @@
-// Standalone helper that renders the morning email with synthetic data
-// so you can eyeball the layout in a browser without booting the full
-// stack. Not used in production. Run with:
-//
-//	go run ./cmd/preview-email > /tmp/email-preview.html && open /tmp/email-preview.html
+/*
+Standalone helper that renders the morning email with synthetic data
+so you can eyeball the layout in a browser without booting the full
+stack. Not used in production. Run with:
+
+	go run ./cmd/preview-email > /tmp/email-preview.html && open /tmp/email-preview.html
+*/
 package main
 
 import (

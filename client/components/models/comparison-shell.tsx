@@ -54,10 +54,12 @@ export function ModelComparisonShell() {
   }, [range]);
 
   const chartSeries = useMemo(() => {
-    // Defensive: every data.<side> field is optional in the wire
-    // shape (the server returns an empty model stats object when
-    // there are no trades yet, and a future API change could drop
-    // a field). Coalesce missing arrays to [] so this never throws.
+    /**
+    Defensive: every data.<side> field is optional in the wire
+    shape (the server returns an empty model stats object when
+    there are no trades yet, and a future API change could drop
+    a field). Coalesce missing arrays to [] so this never throws.
+    */
     if (!data?.openai || !data?.anthropic || !data?.combined) return [];
     const merged = new Map<string, { date: string; openai: number; anthropic: number; combined: number }>();
     for (const p of data.openai.cumulative_pnl ?? []) {

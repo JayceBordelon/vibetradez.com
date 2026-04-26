@@ -216,3 +216,27 @@ func (c *Client) AuthenticatedGet(url string) (*http.Response, error) {
 
 	return c.httpClient.Do(req)
 }
+
+/*
+AuthenticatedDo performs an arbitrary authenticated request. Used by
+the Trader API client for POST (place order) and DELETE (cancel
+order) calls. Body may be nil; if non-nil the caller must set the
+reader and the Content-Type header gets defaulted to application/json
+so callers don't have to repeat themselves.
+*/
+func (c *Client) AuthenticatedDo(method, url string, body io.Reader) (*http.Response, error) {
+	token, err := c.ValidToken()
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	return c.httpClient.Do(req)
+}

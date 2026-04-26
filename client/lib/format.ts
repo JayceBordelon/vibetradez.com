@@ -38,9 +38,11 @@ export function pnlColor(v: number): string {
  */
 export function percentHueColor(pct: number): string {
   const clamped = Math.max(0, Math.min(100, pct));
-  // Hue 0 = red, 145 ≈ project's green hue. Linear in between.
-  // Lightness comes from --percent-hue-l so light/dark themes can each
-  // pick a value that meets WCAG contrast against their background.
+  /**
+  Hue 0 = red, 145 ≈ project's green hue. Linear in between.
+  Lightness comes from --percent-hue-l so light/dark themes can each
+  pick a value that meets WCAG contrast against their background.
+  */
   const hue = (clamped / 100) * 145;
   return `hsl(${hue.toFixed(0)} 70% var(--percent-hue-l))`;
 }

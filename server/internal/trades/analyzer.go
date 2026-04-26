@@ -17,10 +17,12 @@ import (
 	"vibetradez.com/internal/sentiment"
 )
 
-// Output token caps shared across the OpenAI Analyzer and the Claude
-// picker so head-to-head comparisons aren't skewed by call config.
-// Picks need more headroom than verdicts because each pick carries a
-// multi-sentence rationale; verdicts are one sentence per trade.
+/*
+Output token caps shared across the OpenAI Analyzer and the Claude
+picker so head-to-head comparisons aren't skewed by call config.
+Picks need more headroom than verdicts because each pick carries a
+multi-sentence rationale; verdicts are one sentence per trade.
+*/
 const (
 	maxOutputTokensPicks    = 16384
 	maxOutputTokensVerdicts = 8192
@@ -43,37 +45,54 @@ type Trade struct {
 	MentionCount   int     `json:"mention_count"`
 	Rank           int     `json:"rank"`
 
-	// Dual-model scoring. Each side rates the trade 1-10 and explains why.
-	// Rank above is the final ordering after combining both scores.
+	/*
+		Per-model ranks as the picker returned them, BEFORE unioning into a
+		combined Rank. These exist so the auto-execution selector can ask
+		"did both models independently rank this trade #1?" — Rank above is
+		the post-union combined rank and is not useful for that check.
+	*/
+	GPTRank    int `json:"gpt_rank"`
+	ClaudeRank int `json:"claude_rank"`
+
+	/*
+		Dual-model scoring. Each side rates the trade 1-10 and explains why.
+		Rank above is the final ordering after combining both scores.
+	*/
 	GPTScore        int     `json:"gpt_score"`
 	GPTRationale    string  `json:"gpt_rationale"`
 	ClaudeScore     int     `json:"claude_score"`
 	ClaudeRationale string  `json:"claude_rationale"`
 	CombinedScore   float64 `json:"combined_score"`
 
-	// Versioned model identifiers as sent to the OpenAI / Anthropic
-	// APIs at pick time (e.g. "gpt-5.5", "claude-opus-4-7"). Persisted
-	// per row so historical analysis can attribute picks to the exact
-	// model that produced them, even after the default is bumped.
+	/*
+		Versioned model identifiers as sent to the OpenAI / Anthropic
+		APIs at pick time (e.g. "gpt-5.5", "claude-opus-4-7"). Persisted
+		per row so historical analysis can attribute picks to the exact
+		model that produced them, even after the default is bumped.
+	*/
 	GPTModel    string `json:"gpt_model"`
 	ClaudeModel string `json:"claude_model"`
 
-	// Picker attribution. Both models run the full AnalysisPrompt
-	// independently and each return their own 10 picks; the union of
-	// both pick sets is persisted, and these flags record which model(s)
-	// actually picked the trade. The All view shows everything; the
-	// OpenAI / Claude filter views show only the rows where the matching
-	// flag is true.
+	/*
+		Picker attribution. Both models run the full AnalysisPrompt
+		independently and each return their own 10 picks; the union of
+		both pick sets is persisted, and these flags record which model(s)
+		actually picked the trade. The All view shows everything; the
+		OpenAI / Claude filter views show only the rows where the matching
+		flag is true.
+	*/
 	PickedByOpenAI bool `json:"picked_by_openai"`
 	PickedByClaude bool `json:"picked_by_claude"`
 
-	// Cross-examination verdicts. Once both pickers finish their
-	// independent runs, each model is shown the other's full pick list
-	// and writes a one-sentence verdict on every trade in it. GPTVerdict
-	// is what GPT wrote about this trade (only populated when Claude
-	// picked it); ClaudeVerdict is what Claude wrote about this trade
-	// (only populated when GPT picked it). Consensus picks may carry
-	// both verdicts.
+	/*
+		Cross-examination verdicts. Once both pickers finish their
+		independent runs, each model is shown the other's full pick list
+		and writes a one-sentence verdict on every trade in it. GPTVerdict
+		is what GPT wrote about this trade (only populated when Claude
+		picked it); ClaudeVerdict is what Claude wrote about this trade
+		(only populated when GPT picked it). Consensus picks may carry
+		both verdicts.
+	*/
 	GPTVerdict    string `json:"gpt_verdict"`
 	ClaudeVerdict string `json:"claude_verdict"`
 }
@@ -110,8 +129,10 @@ func NewAnalyzer(apiKey, model string, schwabClient *schwab.Client) *Analyzer {
 // Model returns the OpenAI model identifier this analyzer is configured with.
 func (a *Analyzer) Model() string { return a.model }
 
-// gptTradeOutput is the JSON shape we ask GPT to return. We map it onto
-// Trade and stamp GPTScore / GPTRationale from the score / rationale fields.
+/*
+gptTradeOutput is the JSON shape we ask GPT to return. We map it onto
+Trade and stamp GPTScore / GPTRationale from the score / rationale fields.
+*/
 type gptTradeOutput struct {
 	Symbol         string  `json:"symbol"`
 	ContractType   string  `json:"contract_type"`
@@ -167,6 +188,7 @@ func (a *Analyzer) GetTopTrades(ctx context.Context, sentimentData []sentiment.T
 			RiskLevel:      r.RiskLevel,
 			Catalyst:       r.Catalyst,
 			Rank:           r.Rank,
+			GPTRank:        r.Rank,
 			GPTScore:       r.Score,
 			GPTRationale:   r.Rationale,
 			GPTModel:       a.model,
@@ -193,11 +215,13 @@ func (a *Analyzer) GetTopTrades(ctx context.Context, sentimentData []sentiment.T
 	return trades, nil
 }
 
-// WriteVerdicts runs the cross-examination pass: given the other model's
-// pick list (and this model's own picks for context), it returns a
-// one-sentence verdict per symbol. Errors are non-fatal at the caller
-// level — the cron treats verdicts as best-effort enrichment and ships
-// the trades regardless.
+/*
+WriteVerdicts runs the cross-examination pass: given the other model's
+pick list (and this model's own picks for context), it returns a
+one-sentence verdict per symbol. Errors are non-fatal at the caller
+level — the cron treats verdicts as best-effort enrichment and ships
+the trades regardless.
+*/
 func (a *Analyzer) WriteVerdicts(ctx context.Context, ownTrades, otherTrades []Trade, ownModelName, otherModelName string) (map[string]string, error) {
 	if len(otherTrades) == 0 {
 		return map[string]string{}, nil
@@ -445,10 +469,12 @@ func (a *Analyzer) execGetOptionChain(_ context.Context, arguments string) strin
 	return string(result)
 }
 
-// extractJSON pulls the first balanced JSON object or array out of a
-// model response, tolerating ```json fences and free-form prose on
-// either side of the payload. Returns the original (trimmed) string if
-// no JSON-like block is found so json.Unmarshal reports a useful error.
+/*
+extractJSON pulls the first balanced JSON object or array out of a
+model response, tolerating ```json fences and free-form prose on
+either side of the payload. Returns the original (trimmed) string if
+no JSON-like block is found so json.Unmarshal reports a useful error.
+*/
 func extractJSON(s string) string {
 	s = strings.TrimSpace(s)
 
@@ -512,9 +538,11 @@ func extractJSON(s string) string {
 	return s[start:]
 }
 
-// parseJSONResponse extracts JSON from a model's free-form output and
-// unmarshals it into dst. On failure it logs the raw response (truncated)
-// tagged with source so the next parse failure is diagnosable from logs.
+/*
+parseJSONResponse extracts JSON from a model's free-form output and
+unmarshals it into dst. On failure it logs the raw response (truncated)
+tagged with source so the next parse failure is diagnosable from logs.
+*/
 func parseJSONResponse(raw string, dst any, source string) error {
 	if err := json.Unmarshal([]byte(extractJSON(raw)), dst); err != nil {
 		log.Printf("Failed to parse %s JSON (%d bytes raw): %s", source, len(raw), truncateForLog(raw, 2000))

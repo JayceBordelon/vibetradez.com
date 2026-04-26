@@ -22,6 +22,7 @@ import (
 
 	"vibetradez.com/internal/authclient"
 	"vibetradez.com/internal/email"
+	"vibetradez.com/internal/exec"
 	"vibetradez.com/internal/schwab"
 	"vibetradez.com/internal/sentiment"
 	"vibetradez.com/internal/store"
@@ -49,6 +50,9 @@ type Server struct {
 	ssoRedirectURI string
 	mux            *http.ServeMux
 	port           string
+	// Auto-execution (paper or live). nil = trading disabled at startup.
+	executor      *exec.Service
+	executorEmail string // email allowlist for /api/execution/* (single user)
 }
 
 type subscribeRequest struct {
@@ -65,7 +69,7 @@ type apiResponse struct {
 	Message string `json:"message"`
 }
 
-func New(db *store.Store, schwabClient *schwab.Client, authClient *authclient.Client, scraper *sentiment.Scraper, emailClient *email.Client, emailFrom, openaiKey, openaiModel, anthropicKey, anthropicModel, sessionCookie string, sessionTTL time.Duration, ssoPublicURL, ssoClientID, ssoRedirectURI, port string) *Server {
+func New(db *store.Store, schwabClient *schwab.Client, authClient *authclient.Client, scraper *sentiment.Scraper, emailClient *email.Client, emailFrom, openaiKey, openaiModel, anthropicKey, anthropicModel, sessionCookie string, sessionTTL time.Duration, ssoPublicURL, ssoClientID, ssoRedirectURI, port string, executor *exec.Service, executorEmail string) *Server {
 	s := &Server{
 		db:             db,
 		schwab:         schwabClient,
@@ -84,22 +88,38 @@ func New(db *store.Store, schwabClient *schwab.Client, authClient *authclient.Cl
 		ssoRedirectURI: ssoRedirectURI,
 		mux:            http.NewServeMux(),
 		port:           port,
+		executor:       executor,
+		executorEmail:  executorEmail,
 	}
 	s.routes()
 	return s
 }
 
 func (s *Server) routes() {
+	/*
+		Per-endpoint rate limiters. Buckets are per-source-IP; keys come
+		from clientIP (X-Forwarded-For first hop, set by Traefik in prod).
+		Tuned for the actual access pattern, not arbitrary defaults:
+		  - subscribe: anti-spam (1/min — humans never re-subscribe)
+		  - auth: anti-brute-force (10/min on OAuth start endpoints)
+		  - execution: anti-DoS on the high-stakes confirm + cancel-all
+		    endpoints (5/min each — even authenticated user wouldn't
+		    legitimately hit them more than once per real decision)
+	*/
+	subscribeLimit := newIPLimiter(1, 3) // 1/min, 3-burst (initial signup)
+	authLimit := newIPLimiter(10, 5)     // 10/min, 5-burst (OAuth retries)
+	executionLimit := newIPLimiter(5, 3) // 5/min, 3-burst (HMAC tokens unbruteable; this is just DoS bound)
+
 	s.mux.HandleFunc("/health", s.handleHealth)
-	s.mux.HandleFunc("/auth/schwab", s.handleSchwabAuth)
+	s.mux.HandleFunc("/auth/schwab", authLimit.middleware(s.handleSchwabAuth))
 	s.mux.HandleFunc("/auth/callback", s.handleSchwabCallback)
-	s.mux.HandleFunc("/auth/sso/start", s.handleSSOStart)
+	s.mux.HandleFunc("/auth/sso/start", authLimit.middleware(s.handleSSOStart))
 	s.mux.HandleFunc("/auth/sso/callback", s.handleSSOCallback)
 	s.mux.HandleFunc("/auth/logout", s.handleLogout)
 
 	// API routes — require internal header (requests must come from the website)
-	s.mux.HandleFunc("/api/subscribe", requireInternal(s.handleSubscribe))
-	s.mux.HandleFunc("/api/unsubscribe", requireInternal(s.handleUnsubscribe))
+	s.mux.HandleFunc("/api/subscribe", requireInternal(subscribeLimit.middleware(s.handleSubscribe)))
+	s.mux.HandleFunc("/api/unsubscribe", requireInternal(subscribeLimit.middleware(s.handleUnsubscribe)))
 	s.mux.HandleFunc("/api/me", requireInternal(s.attachUser(s.handleMe)))
 	s.mux.HandleFunc("/api/trades/today", requireInternal(s.handleTradesToday))
 	s.mux.HandleFunc("/api/trades/dates", requireInternal(s.handleTradeDates))
@@ -107,18 +127,43 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/chart/", requireInternal(s.handleChart))
 	s.mux.HandleFunc("/api/quotes/live", requireInternal(s.handleLiveQuotes))
 	s.mux.HandleFunc("/api/model-comparison", requireInternal(s.handleModelComparison))
+
+	/*
+		Auto-execution endpoints. Stack: requireInternal (trusted website
+		origin) → executionLimit (per-IP rate cap, defense vs DoS-flood)
+		→ attachUser (load session) → requireUser (must be signed in) →
+		requireEmailAllowlist (must be the one allowed email) → executor
+		handler. All five gates must pass; any single failure returns
+		401/403/429 before the handler runs.
+	*/
+	if s.executor != nil {
+		s.mux.HandleFunc("/api/execution/confirm",
+			requireInternal(executionLimit.middleware(s.attachUser(s.requireUser(s.requireEmailAllowlist(s.executorEmail, s.executor.HandleConfirm))))))
+		s.mux.HandleFunc("/api/execution/cancel-all",
+			requireInternal(executionLimit.middleware(s.attachUser(s.requireUser(s.requireEmailAllowlist(s.executorEmail, s.executor.HandleCancelAll))))))
+	}
 }
 
 func (s *Server) Start() {
 	addr := ":" + s.port
 	log.Printf("API server listening on %s", addr)
-	if err := http.ListenAndServe(addr, s.mux); err != nil {
+	/*
+		Wrap mux in baseline security headers (HSTS, X-Frame-Options,
+		X-Content-Type-Options, Referrer-Policy, Permissions-Policy).
+		Defense-in-depth — each closes a door an attacker would otherwise
+		have ajar even though SameSite cookies + origin model already
+		block the dominant attack classes.
+	*/
+	handler := securityHeaders(s.mux)
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatalf("API server error: %v", err)
 	}
 }
 
-// requireInternal rejects requests to /api/* that don't include the internal header.
-// This prevents direct external API access — callers must go through the website.
+/*
+requireInternal rejects requests to /api/* that don't include the internal header.
+This prevents direct external API access — callers must go through the website.
+*/
 func requireInternal(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("X-VT-Source") == "" {
@@ -137,11 +182,19 @@ type dashboardTrade struct {
 type dashboardResponse struct {
 	Date   string           `json:"date"`
 	Trades []dashboardTrade `json:"trades"`
+	/*
+		Execution surfaces a position taken (paper or live) on a trade
+		from this date. nil when no qualifying pick converted to an
+		actual execution that day. Frontend matches by symbol+
+		contract_type+strike to render the badge on the right card.
+	*/
+	Execution *store.ExecutionView `json:"execution,omitempty"`
 }
 
 type weekDay struct {
-	Date   string           `json:"date"`
-	Trades []dashboardTrade `json:"trades"`
+	Date      string               `json:"date"`
+	Trades    []dashboardTrade     `json:"trades"`
+	Execution *store.ExecutionView `json:"execution,omitempty"`
 }
 
 type weekResponse struct {
@@ -166,11 +219,13 @@ func (s *Server) handleTradeDates(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"dates": dates})
 }
 
-// pickerFilter is the global model filter selected from the nav bar.
-// 'all' returns every union trade ranked by combined_score (default).
-// 'openai' returns only trades where picked_by_openai = true, ranked by
-// gpt_score desc. 'claude' returns only trades where picked_by_claude
-// = true, ranked by claude_score desc.
+/*
+pickerFilter is the global model filter selected from the nav bar.
+'all' returns every union trade ranked by combined_score (default).
+'openai' returns only trades where picked_by_openai = true, ranked by
+gpt_score desc. 'claude' returns only trades where picked_by_claude
+= true, ranked by claude_score desc.
+*/
 type pickerFilter string
 
 const (
@@ -190,12 +245,14 @@ func parsePicker(r *http.Request) pickerFilter {
 	}
 }
 
-// applyPickerFilter narrows and re-orders a single day's trades according
-// to the selected picker. The all view leaves the order untouched (it's
-// already ranked by combined_score from the cron). The openai / claude
-// views drop trades the chosen model didn't pick and re-rank by that
-// model's individual score, then renumber the rank field 1..N so the
-// frontend can render the same way regardless of which view is active.
+/*
+applyPickerFilter narrows and re-orders a single day's trades according
+to the selected picker. The all view leaves the order untouched (it's
+already ranked by combined_score from the cron). The openai / claude
+views drop trades the chosen model didn't pick and re-rank by that
+model's individual score, then renumber the rank field 1..N so the
+frontend can render the same way regardless of which view is active.
+*/
 func applyPickerFilter(picker pickerFilter, in []trades.Trade) []trades.Trade {
 	if picker == pickerAll {
 		return in
@@ -231,10 +288,12 @@ func (s *Server) handleTradesToday(w http.ResponseWriter, r *http.Request) {
 	} else {
 		date, err = s.db.GetLatestTradeDate()
 		if err != nil {
-			// No trade data yet (fresh DB, pre-cron). Return an empty
-			// trades slice (NEVER nil) so the frontend can safely call
-			// .filter / .map without a null guard and falls through to
-			// the EmptyState branch.
+			/*
+				No trade data yet (fresh DB, pre-cron). Return an empty
+				trades slice (NEVER nil) so the frontend can safely call
+				.filter / .map without a null guard and falls through to
+				the EmptyState branch.
+			*/
 			writeJSON(w, http.StatusOK, dashboardResponse{Trades: []dashboardTrade{}})
 			return
 		}
@@ -261,8 +320,14 @@ func (s *Server) handleTradesToday(w http.ResponseWriter, r *http.Request) {
 		result[i] = dashboardTrade{Trade: t, Summary: summaryMap[key]}
 	}
 
+	/*
+		Optional execution badge for transparency. Errors are non-fatal —
+		the dashboard still renders without the badge if the lookup fails.
+	*/
+	exec, _ := s.db.GetExecutionForDate(date)
+
 	w.Header().Set("Cache-Control", "public, max-age=30")
-	writeJSON(w, http.StatusOK, dashboardResponse{Date: date, Trades: result})
+	writeJSON(w, http.StatusOK, dashboardResponse{Date: date, Trades: result, Execution: exec})
 }
 
 func (s *Server) handleTradesWeek(w http.ResponseWriter, r *http.Request) {
@@ -276,13 +341,16 @@ func (s *Server) handleTradesWeek(w http.ResponseWriter, r *http.Request) {
 
 	tradesMap, err := s.db.GetTradesForDateRange(start, end)
 	if err != nil {
-		// Always return an empty array for days (never nil) so the
-		// frontend can safely call .map without a null guard.
+		/*
+			Always return an empty array for days (never nil) so the
+			frontend can safely call .map without a null guard.
+		*/
 		writeJSON(w, http.StatusOK, weekResponse{Start: start, End: end, Days: []weekDay{}})
 		return
 	}
 
 	summariesMap, _ := s.db.GetSummariesForDateRange(start, end)
+	executionsMap, _ := s.db.GetExecutionsForDateRange(start, end)
 	picker := parsePicker(r)
 
 	// Collect all dates that have trades
@@ -313,7 +381,7 @@ func (s *Server) handleTradesWeek(w http.ResponseWriter, r *http.Request) {
 			result[i] = dashboardTrade{Trade: t, Summary: summaryMap[key]}
 		}
 
-		days = append(days, weekDay{Date: date, Trades: result})
+		days = append(days, weekDay{Date: date, Trades: result, Execution: executionsMap[date]})
 	}
 
 	w.Header().Set("Cache-Control", "public, max-age=30")
@@ -423,21 +491,43 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		allOK = false
 	}
 
-	// Schwab Market Data
+	/*
+		Schwab Market Data Production — token freshness check. The token
+		is shared with the Trading API, but this slot only proves the
+		market-data side is reachable (which is what the live quotes /
+		option chain code paths actually depend on).
+	*/
 	if s.schwab != nil {
 		if s.schwab.IsConnected() {
 			tokStart := time.Now()
 			if _, err := s.schwab.ValidToken(); err != nil {
-				services["schwab"] = serviceHealth{Status: "fail", Detail: err.Error(), Latency: fmtLatency(time.Since(tokStart))}
+				services["schwab_market_data"] = serviceHealth{Status: "fail", Detail: err.Error(), Latency: fmtLatency(time.Since(tokStart))}
 				allOK = false
 			} else {
-				services["schwab"] = serviceHealth{Status: "ok", Detail: "Authenticated", Latency: fmtLatency(time.Since(tokStart))}
+				services["schwab_market_data"] = serviceHealth{Status: "ok", Detail: "Authenticated", Latency: fmtLatency(time.Since(tokStart))}
 			}
 		} else {
-			services["schwab"] = serviceHealth{Status: "warn", Detail: "Configured but not authorized"}
+			services["schwab_market_data"] = serviceHealth{Status: "warn", Detail: "Configured but not authorized"}
 		}
 	} else {
-		services["schwab"] = serviceHealth{Status: "warn", Detail: "Not configured"}
+		services["schwab_market_data"] = serviceHealth{Status: "warn", Detail: "Not configured"}
+	}
+
+	/*
+		Schwab Accounts and Trading Production — verifies the OAuth token
+		has the Trading product scope by hitting the accountNumbers
+		endpoint. Severity is conditional on trading mode:
+		  - executor nil OR mode=paper: failure is `warn` (trading scope
+		    isn't load-bearing yet, just a heads-up that re-auth is needed
+		    before flipping to live).
+		  - mode=live: failure is `fail` and trips allOK so the deploy
+		    healthcheck blocks (because live orders WILL be attempted and
+		    they'll bounce without trading scope).
+	*/
+	tradingHealth := s.checkSchwabTrading(r.Context())
+	services["schwab_trading"] = tradingHealth
+	if tradingHealth.Status == "fail" {
+		allOK = false
 	}
 
 	// Market signal sources
@@ -494,9 +584,11 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// isStubKey returns true for the placeholder keys used by the local Docker
-// stack. The local runtime sets ANTHROPIC_API_KEY / OPENAI_API_KEY to a
-// stub value so the server boots without making real API calls.
+/*
+isStubKey returns true for the placeholder keys used by the local Docker
+stack. The local runtime sets ANTHROPIC_API_KEY / OPENAI_API_KEY to a
+stub value so the server boots without making real API calls.
+*/
 func isStubKey(k string) bool {
 	if k == "" {
 		return false
@@ -549,6 +641,65 @@ func (s *Server) checkAnthropic() serviceHealth {
 		return serviceHealth{Status: "fail", Detail: err.Error()}
 	}
 	return serviceHealth{Status: "ok", Detail: "Anthropic API reachable"}
+}
+
+/*
+checkSchwabTrading verifies the OAuth token covers the "Accounts and
+Trading Production" Schwab product. Hits /trader/v1/accounts/
+accountNumbers — the lightest endpoint on the Trader API surface.
+
+Severity is conditional on trading mode (executor.Mode):
+  - paper or executor nil: failures are `warn` (trading scope isn't
+    load-bearing yet; the warning is just a heads-up that re-auth is
+    required before flipping live).
+  - live: failures are `fail` so deploys are gated — without trading
+    scope the cron WILL try to place orders and they WILL bounce.
+*/
+func (s *Server) checkSchwabTrading(ctx context.Context) serviceHealth {
+	failSeverity := "warn"
+	if s.executor != nil && s.executor.Mode() == "live" {
+		failSeverity = "fail"
+	}
+
+	if s.schwab == nil {
+		return serviceHealth{Status: "warn", Detail: "Not configured"}
+	}
+	if !s.schwab.IsConnected() {
+		return serviceHealth{Status: failSeverity, Detail: "Schwab OAuth not authorized — visit /auth/schwab"}
+	}
+
+	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	_ = probeCtx // reserved for future use; AuthenticatedDo doesn't take ctx today
+
+	start := time.Now()
+	resp, err := s.schwab.AuthenticatedDo("GET", "https://api.schwabapi.com/trader/v1/accounts/accountNumbers", nil)
+	if err != nil {
+		return serviceHealth{Status: failSeverity, Detail: "request failed: " + err.Error(), Latency: fmtLatency(time.Since(start))}
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	switch {
+	case resp.StatusCode == 200:
+		return serviceHealth{Status: "ok", Detail: "Trading scope active", Latency: fmtLatency(time.Since(start))}
+	case resp.StatusCode == 401 || resp.StatusCode == 403:
+		/*
+			Token doesn't have trading scope. Most common cause: app was
+			market-data-only when the user authorized; trading product was
+			added later but the token wasn't refreshed via /auth/schwab.
+		*/
+		return serviceHealth{
+			Status:  failSeverity,
+			Detail:  fmt.Sprintf("HTTP %d — token lacks trading scope; re-run /auth/schwab", resp.StatusCode),
+			Latency: fmtLatency(time.Since(start)),
+		}
+	default:
+		return serviceHealth{
+			Status:  failSeverity,
+			Detail:  fmt.Sprintf("HTTP %d — Schwab Trader API unreachable", resp.StatusCode),
+			Latency: fmtLatency(time.Since(start)),
+		}
+	}
 }
 
 func fmtLatency(d time.Duration) string {
@@ -607,8 +758,10 @@ func (s *Server) handleChart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Schwab not available — generate synthetic candles from the trade's
-	// current_price so local dev still renders a chart.
+	/*
+		Schwab not available — generate synthetic candles from the trade's
+		current_price so local dev still renders a chart.
+	*/
 	candles := s.syntheticCandles(symbol, period, frequency)
 	w.Header().Set("Cache-Control", "public, max-age=60")
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -617,9 +770,11 @@ func (s *Server) handleChart(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// syntheticCandles generates realistic-looking OHLCV candles for local dev
-// when Schwab is not connected. It looks up the symbol's current_price from
-// the trades table to anchor the simulation at the right price level.
+/*
+syntheticCandles generates realistic-looking OHLCV candles for local dev
+when Schwab is not connected. It looks up the symbol's current_price from
+the trades table to anchor the simulation at the right price level.
+*/
 func (s *Server) syntheticCandles(symbol string, days, freqMinutes int) []schwab.Candle {
 	// Look up a base price from the most recent trade for this symbol.
 	basePrice := 150.0 // fallback
@@ -785,12 +940,14 @@ func (s *Server) handleLiveQuotes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.schwab == nil || !s.schwab.IsConnected() {
-		// Local-dev convenience: when LOCAL_MOCK_QUOTES=1 and Schwab is
-		// unauthorized, synthesize plausible live marks for today's picks
-		// so the dashboard's Buy/Current cards exercise the live-data
-		// path without needing a real Schwab account. Production never
-		// sets this env var, so the empty-response branch still wins
-		// there.
+		/*
+			Local-dev convenience: when LOCAL_MOCK_QUOTES=1 and Schwab is
+			unauthorized, synthesize plausible live marks for today's picks
+			so the dashboard's Buy/Current cards exercise the live-data
+			path without needing a real Schwab account. Production never
+			sets this env var, so the empty-response branch still wins
+			there.
+		*/
 		if os.Getenv("LOCAL_MOCK_QUOTES") == "1" {
 			s.fillMockLiveQuotes(&resp)
 		}
@@ -871,12 +1028,14 @@ func (s *Server) handleLiveQuotes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// fillMockLiveQuotes synthesizes plausible live marks for today's morning
-// picks so the dashboard's Buy/Current cards have data to render in local
-// dev (Schwab OAuth not set up). Each ticker gets a stable per-trade drift
-// derived from its symbol so refreshes don't flicker wildly, plus a small
-// time-based jitter so the numbers visibly tick. Never invoked in
-// production: gated behind the LOCAL_MOCK_QUOTES env var.
+/*
+fillMockLiveQuotes synthesizes plausible live marks for today's morning
+picks so the dashboard's Buy/Current cards have data to render in local
+dev (Schwab OAuth not set up). Each ticker gets a stable per-trade drift
+derived from its symbol so refreshes don't flicker wildly, plus a small
+time-based jitter so the numbers visibly tick. Never invoked in
+production: gated behind the LOCAL_MOCK_QUOTES env var.
+*/
 func (s *Server) fillMockLiveQuotes(resp *liveQuotesResponse) {
 	date, err := s.db.GetLatestTradeDate()
 	if err != nil {
@@ -892,8 +1051,10 @@ func (s *Server) fillMockLiveQuotes(resp *liveQuotesResponse) {
 	tick := math.Sin(float64(time.Now().Unix()%600) / 600.0 * 2 * math.Pi)
 
 	for _, t := range morningTrades {
-		// Stable drift in [-0.35, +0.35] derived from the symbol so each
-		// ticker has its own personality across refreshes.
+		/*
+			Stable drift in [-0.35, +0.35] derived from the symbol so each
+			ticker has its own personality across refreshes.
+		*/
 		var hash uint64
 		for _, c := range t.Symbol {
 			hash = hash*31 + uint64(c)
@@ -911,8 +1072,10 @@ func (s *Server) fillMockLiveQuotes(resp *liveQuotesResponse) {
 			AskPrice:     stockNow + 0.02,
 			Volume:       1_000_000 + int64(hash%500_000),
 		}
-		// Option mark: scale the move by a fake delta of ~0.5 for ATM,
-		// plus its own jitter so winners and losers diverge visibly.
+		/*
+			Option mark: scale the move by a fake delta of ~0.5 for ATM,
+			plus its own jitter so winners and losers diverge visibly.
+		*/
 		optMove := stockMove*0.5 + t.EstimatedPrice*tick*0.04 + t.EstimatedPrice*drift*0.1
 		mark := math.Max(0.01, t.EstimatedPrice+optMove)
 		key := fmt.Sprintf("%s|%s|%.2f|%s", t.Symbol, t.ContractType, t.StrikePrice, t.Expiration)

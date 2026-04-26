@@ -39,9 +39,11 @@ export function Reveal({ children, className, delay = 0, duration = 800, effect 
       setVisible(true);
       return;
     }
-    // If the element is already in (or above) the viewport at mount, reveal
-    // synchronously so SEO/OG snapshots and screen-readers see content
-    // without waiting for an IntersectionObserver tick.
+    /**
+    If the element is already in (or above) the viewport at mount, reveal
+    synchronously so SEO/OG snapshots and screen-readers see content
+    without waiting for an IntersectionObserver tick.
+    */
     const r = el.getBoundingClientRect();
     if (r.bottom <= window.innerHeight && r.top >= 0) {
       setVisible(true);

@@ -1,6 +1,7 @@
 package schwab
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -171,6 +172,35 @@ func (c *Client) GetQuotes(symbols []string) (map[string]StockQuote, error) {
 	return result, nil
 }
 
+/*
+OptionMark returns the current mark price for a single option
+contract, or the bid-ask midpoint if mark is missing. Used by the
+auto-execution paper trader to synthesize a fill at the prevailing
+market price. Wraps GetOptionChain (which is cached 15s) and scans
+for the matching strike.
+*/
+func (c *Client) OptionMark(_ context.Context, symbol, expiration, contractType string, strike float64) (float64, error) {
+	chain, err := c.GetOptionChain(symbol, contractType, expiration, expiration, strike)
+	if err != nil {
+		return 0, err
+	}
+	contracts := chain.Calls
+	if contractType == "PUT" {
+		contracts = chain.Puts
+	}
+	for _, oc := range contracts {
+		if oc.StrikePrice == strike {
+			if oc.Mark > 0 {
+				return oc.Mark, nil
+			}
+			if oc.Bid > 0 && oc.Ask > 0 {
+				return (oc.Bid + oc.Ask) / 2, nil
+			}
+		}
+	}
+	return 0, fmt.Errorf("no quote found for %s %s %s %.2f", symbol, expiration, contractType, strike)
+}
+
 // GetOptionChain fetches the option chain for a symbol with optional filters.
 func (c *Client) GetOptionChain(symbol, contractType, fromDate, toDate string, strike float64) (*OptionChain, error) {
 	cacheKey := fmt.Sprintf("chain:%s:%s:%.2f:%s:%s", symbol, contractType, strike, fromDate, toDate)
@@ -232,8 +262,10 @@ func (c *Client) GetOptionChain(symbol, contractType, fromDate, toDate string, s
 	return chain, nil
 }
 
-// GetPriceHistory fetches OHLCV candle data for a symbol.
-// periodType: "day","month","year","ytd". frequencyType: "minute","daily","weekly","monthly".
+/*
+GetPriceHistory fetches OHLCV candle data for a symbol.
+periodType: "day","month","year","ytd". frequencyType: "minute","daily","weekly","monthly".
+*/
 func (c *Client) GetPriceHistory(symbol, periodType string, period int, frequencyType string, frequency int) ([]Candle, error) {
 	cacheKey := fmt.Sprintf("history:%s:%s:%d:%s:%d", symbol, periodType, period, frequencyType, frequency)
 	if cached, ok := cacheGet(cacheKey); ok {

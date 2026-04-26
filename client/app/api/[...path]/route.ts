@@ -1,11 +1,13 @@
-// Catch-all API proxy.
-//
-// In production, Traefik routes /api/* to the Go server before requests
-// ever reach Next.js, so this handler never fires. It only handles requests
-// in local development (where there is no reverse proxy) by forwarding to
-// the Go server identified by the API_URL env var.
-//
-// If API_URL isn't set, returns 404 (matches the previous Next.js behavior).
+/**
+Catch-all API proxy.
+
+In production, Traefik routes /api/* to the Go server before requests
+ever reach Next.js, so this handler never fires. It only handles requests
+in local development (where there is no reverse proxy) by forwarding to
+the Go server identified by the API_URL env var.
+
+If API_URL isn't set, returns 404 (matches the previous Next.js behavior).
+*/
 
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -27,10 +29,12 @@ async function proxy(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: false, message: "bad request" }, { status: 400 });
   }
 
-  // Build a fresh, minimal header set. Forwarding the entire Headers object
-  // sometimes drags in hop-by-hop headers (`connection`, `transfer-encoding`)
-  // that the upstream fetch refuses to send and that cause the whole request
-  // to throw before it ever leaves the container.
+  /**
+  Build a fresh, minimal header set. Forwarding the entire Headers object
+  sometimes drags in hop-by-hop headers (`connection`, `transfer-encoding`)
+  that the upstream fetch refuses to send and that cause the whole request
+  to throw before it ever leaves the container.
+  */
   const upstreamHeaders = new Headers();
   for (const [k, v] of req.headers.entries()) {
     const lower = k.toLowerCase();
@@ -67,8 +71,10 @@ async function proxy(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: false, message: "upstream fetch failed" }, { status: 502 });
   }
 
-  // Read the body as bytes once so we can set an explicit Content-Length
-  // and avoid streaming-related quirks in the runtime's response writer.
+  /**
+  Read the body as bytes once so we can set an explicit Content-Length
+  and avoid streaming-related quirks in the runtime's response writer.
+  */
   const body = await upstream.arrayBuffer();
   const responseHeaders = new Headers();
   for (const [k, v] of upstream.headers.entries()) {

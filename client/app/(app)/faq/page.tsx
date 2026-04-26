@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 
-const OG_IMAGE = "/og";
+const OG_IMAGE = "/opengraph-image";
 
 export const metadata: Metadata = {
   title: "FAQ",

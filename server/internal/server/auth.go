@@ -28,11 +28,13 @@ func userFrom(ctx context.Context) *authclient.User {
 	return nil
 }
 
-// attachUser reads the local vt_session cookie (holds an opaque access
-// token issued by auth.jaycebordelon.com), verifies it via the auth
-// service's /oauth/verify endpoint (cached 60s), and attaches the user
-// to the request context. Non-blocking: invalid or missing tokens just
-// proceed with no user.
+/*
+attachUser reads the local vt_session cookie (holds an opaque access
+token issued by auth.jaycebordelon.com), verifies it via the auth
+service's /oauth/verify endpoint (cached 60s), and attaches the user
+to the request context. Non-blocking: invalid or missing tokens just
+proceed with no user.
+*/
 func (s *Server) attachUser(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie(s.sessionCookie)
@@ -56,12 +58,14 @@ func (s *Server) attachUser(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// handleSSOStart kicks off the authorization code flow to
-// auth.jaycebordelon.com. Generates a CSRF state, stores it in an
-// httpOnly cookie (double-submit) and redirects to the auth service's
-// /oauth/authorize with the consumer client id + registered redirect
-// URI. return_to is echoed back through the auth service so the
-// callback can bounce the user to the originating page.
+/*
+handleSSOStart kicks off the authorization code flow to
+auth.jaycebordelon.com. Generates a CSRF state, stores it in an
+httpOnly cookie (double-submit) and redirects to the auth service's
+/oauth/authorize with the consumer client id + registered redirect
+URI. return_to is echoed back through the auth service so the
+callback can bounce the user to the originating page.
+*/
 func (s *Server) handleSSOStart(w http.ResponseWriter, r *http.Request) {
 	returnTo := r.URL.Query().Get("return_to")
 	if !isSafeReturnTo(returnTo) {
@@ -93,9 +97,11 @@ func (s *Server) handleSSOStart(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, s.ssoPublicURL+"/oauth/authorize?"+q.Encode(), http.StatusFound)
 }
 
-// handleSSOCallback completes the auth.jaycebordelon.com authorization
-// code flow: exchanges the one-shot code for an access token, then sets
-// the access token as the vt_session cookie on vibetradez.com.
+/*
+handleSSOCallback completes the auth.jaycebordelon.com authorization
+code flow: exchanges the one-shot code for an access token, then sets
+the access token as the vt_session cookie on vibetradez.com.
+*/
 func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
@@ -189,8 +195,45 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, meResponse{User: userFrom(r.Context())})
 }
 
-// isSafeReturnTo ensures we only redirect to same-origin paths so the
-// callback can't be used as an open redirector.
+/*
+requireUser is the strict counterpart to attachUser: rejects with 401
+if no user is on the context. Use this on endpoints where unauthenticated
+callers must not be able to reach the handler at all (auto-execution
+confirm, cancel-all kill switch). Stack as: attachUser → requireUser →
+optionally requireEmailAllowlist → handler.
+*/
+func (s *Server) requireUser(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if u := userFrom(r.Context()); u == nil {
+			writeJSON(w, http.StatusUnauthorized, apiResponse{OK: false, Message: "authentication required"})
+			return
+		}
+		next(w, r)
+	}
+}
+
+/*
+requireEmailAllowlist gates a handler to a single allowed email
+address. Used for the auto-execution surface — even an authenticated
+non-allowed user must never be able to fire trades. Email comparison
+is case-insensitive and trimmed.
+*/
+func (s *Server) requireEmailAllowlist(allowed string, next http.HandlerFunc) http.HandlerFunc {
+	want := strings.ToLower(strings.TrimSpace(allowed))
+	return func(w http.ResponseWriter, r *http.Request) {
+		u := userFrom(r.Context())
+		if u == nil || strings.ToLower(strings.TrimSpace(u.Email)) != want {
+			writeJSON(w, http.StatusForbidden, apiResponse{OK: false, Message: "forbidden"})
+			return
+		}
+		next(w, r)
+	}
+}
+
+/*
+isSafeReturnTo ensures we only redirect to same-origin paths so the
+callback can't be used as an open redirector.
+*/
 func isSafeReturnTo(p string) bool {
 	if p == "" {
 		return false

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>{{.Subject}}</title>
+  <style>
+    :root { color-scheme: light dark; }
+    @media (prefers-color-scheme: dark) {
+      .body-bg { background-color: #0f172a !important; }
+      .header-bg { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important; }
+      .content-bg { background-color: #1e293b !important; }
+      .footer-bg { background-color: #1e293b !important; border-color: #334155 !important; }
+      .text-primary { color: #f1f5f9 !important; }
+      .text-secondary { color: #cbd5e1 !important; }
+      .panel-bg { background-color: #0f172a !important; border-color: #334155 !important; }
+      .label-muted { color: #94a3b8 !important; }
+    }
+  </style>
+</head>
+<body class="body-bg" style="margin: 0; padding: 0; background-color: #fafafa; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="body-bg" style="background-color: #fafafa;">
+    <tr>
+      <td align="center" style="padding: 32px 16px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" style="width: 100%; max-width: 640px;">
+
+          <tr>
+            <td style="height: 4px; background: linear-gradient(90deg, #10a37f, #D97757); border-radius: 12px 12px 0 0; font-size: 0; line-height: 0;">&nbsp;</td>
+          </tr>
+
+          <tr>
+            <td class="header-bg" style="padding: 24px 28px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td>
+                    <span style="font-size: 24px; font-weight: 800; color: #10a37f; letter-spacing: -0.5px;">Vibe</span><span style="font-size: 24px; font-weight: 800; color: #D97757; letter-spacing: -0.5px;">Tradez</span>
+                    <span style="display: inline-block; margin-left: 12px; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; {{if eq .Mode "live"}}background: #dc2626; color: #fff;{{else}}background: #fbbf24; color: #1e293b;{{end}}">{{.Mode | printf "%s"}} MODE</span>
+                  </td>
+                  <td align="right">
+                    <span style="color: #94a3b8; font-size: 13px;">{{.Date}}</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td class="content-bg" style="background-color: #ffffff; padding: 32px 28px;">
+
+              <h1 class="text-primary" style="margin: 0 0 8px 0; font-size: 22px; font-weight: 800; color: #0f172a;">Both models converged on a single trade</h1>
+              <p class="text-secondary" style="margin: 0 0 24px 0; font-size: 14px; color: #64748b; line-height: 1.6;">
+                ChatGPT and Claude independently picked the SAME contract as their #1 conviction trade today. You have <strong>5 minutes</strong> from this email to confirm execution. After {{.ExpiresAtText}}, the trade is automatically cancelled.
+              </p>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="panel-bg" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 24px;">
+                <tr>
+                  <td style="padding: 20px 24px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td>
+                          <p class="label-muted" style="margin: 0 0 4px 0; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Contract</p>
+                          <p class="text-primary" style="margin: 0; font-size: 24px; font-weight: 800; color: #0f172a;">{{.Symbol}} {{printf "%.2f" .StrikePrice}} {{.ContractType}}</p>
+                          <p class="text-secondary" style="margin: 4px 0 0 0; font-size: 13px; color: #64748b;">Expires {{.Expiration}} ({{.DTE}} DTE) · OCC <span style="font-family: monospace;">{{.OCCSymbol}}</span></p>
+                        </td>
+                        <td align="right">
+                          <p class="label-muted" style="margin: 0 0 4px 0; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Premium</p>
+                          <p class="text-primary" style="margin: 0; font-size: 24px; font-weight: 800; color: #0f172a;">${{printf "%.2f" .ContractPrice}}</p>
+                          <p class="text-secondary" style="margin: 4px 0 0 0; font-size: 13px; color: #64748b;">~${{printf "%.0f" .CapitalAtRisk}} capital at risk · 1 contract</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 0 24px 20px 24px; border-top: 1px solid #e2e8f0;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top: 16px;">
+                      <tr>
+                        <td>
+                          <p class="label-muted" style="margin: 0 0 4px 0; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Current Price</p>
+                          <p class="text-primary" style="margin: 0; font-size: 16px; font-weight: 600; color: #0f172a;">${{printf "%.2f" .CurrentPrice}}</p>
+                        </td>
+                        <td>
+                          <p class="label-muted" style="margin: 0 0 4px 0; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Risk Level</p>
+                          <p class="text-primary" style="margin: 0; font-size: 16px; font-weight: 600; color: #0f172a;">{{.RiskLevel}}</p>
+                        </td>
+                        <td>
+                          <p class="label-muted" style="margin: 0 0 4px 0; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Auto-close</p>
+                          <p class="text-primary" style="margin: 0; font-size: 16px; font-weight: 600; color: #0f172a;">3:55 PM ET</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p class="text-primary" style="margin: 0 0 8px 0; font-size: 14px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">Catalyst</p>
+              <p class="text-secondary" style="margin: 0 0 24px 0; font-size: 14px; color: #475569; line-height: 1.6;">{{.Catalyst}}</p>
+
+              <p class="text-primary" style="margin: 0 0 8px 0; font-size: 14px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">Thesis</p>
+              <p class="text-secondary" style="margin: 0 0 24px 0; font-size: 14px; color: #475569; line-height: 1.6;">{{.Thesis}}</p>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 16px;">
+                <tr>
+                  <td style="padding: 16px; background-color: #ecfdf5; border: 1px solid #10a37f; border-radius: 8px; vertical-align: top; width: 50%;">
+                    <p style="margin: 0 0 4px 0; font-size: 11px; font-weight: 700; color: #10a37f; text-transform: uppercase; letter-spacing: 0.5px;">{{.GPTModelName}} · Score {{.GPTScore}}/10 · Rank #1</p>
+                    <p style="margin: 0 0 12px 0; font-size: 13px; color: #065f46; line-height: 1.6;">{{.GPTRationale}}</p>
+                    {{if .ClaudeVerdict}}
+                    <p style="margin: 0; padding-top: 10px; border-top: 1px solid #a7f3d0; font-size: 12px; color: #065f46; font-style: italic;"><strong>Claude's take:</strong> {{.ClaudeVerdict}}</p>
+                    {{end}}
+                  </td>
+                  <td style="width: 8px;">&nbsp;</td>
+                  <td style="padding: 16px; background-color: #fef3c7; border: 1px solid #D97757; border-radius: 8px; vertical-align: top; width: 50%;">
+                    <p style="margin: 0 0 4px 0; font-size: 11px; font-weight: 700; color: #D97757; text-transform: uppercase; letter-spacing: 0.5px;">{{.ClaudeModelName}} · Score {{.ClaudeScore}}/10 · Rank #1</p>
+                    <p style="margin: 0 0 12px 0; font-size: 13px; color: #78350f; line-height: 1.6;">{{.ClaudeRationale}}</p>
+                    {{if .GPTVerdict}}
+                    <p style="margin: 0; padding-top: 10px; border-top: 1px solid #fcd34d; font-size: 12px; color: #78350f; font-style: italic;"><strong>ChatGPT's take:</strong> {{.GPTVerdict}}</p>
+                    {{end}}
+                  </td>
+                </tr>
+              </table>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top: 32px;">
+                <tr>
+                  <td align="center" style="padding-bottom: 16px;">
+                    <p class="text-primary" style="margin: 0; font-size: 14px; font-weight: 700; color: #0f172a;">⏱ Window expires {{.ExpiresAtText}}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center">
+                    <table role="presentation" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td style="padding-right: 8px;">
+                          <a href="{{.ExecuteURL}}" style="display: inline-block; padding: 14px 32px; background-color: #10a37f; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 15px; font-weight: 700; letter-spacing: 0.3px;">✓ Execute Trade</a>
+                        </td>
+                        <td style="padding-left: 8px;">
+                          <a href="{{.DeclineURL}}" style="display: inline-block; padding: 14px 32px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 15px; font-weight: 700; letter-spacing: 0.3px;">✕ Don't Execute</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding-top: 16px;">
+                    <p class="text-secondary" style="margin: 0; font-size: 12px; color: #94a3b8;">
+                      Both buttons require you to be signed in to vibetradez.com. The trade auto-cancels if you don't click within 5 minutes.<br/>
+                      If executed, the position will be closed at 3:55 PM ET regardless of P&L.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <tr>
+            <td style="height: 3px; background: linear-gradient(90deg, #10a37f, #D97757); font-size: 0; line-height: 0;">&nbsp;</td>
+          </tr>
+
+          <tr>
+            <td class="footer-bg" style="padding: 20px 28px; background-color: #f1f5f9; border-radius: 0 0 12px 12px;">
+              <p align="center" style="margin: 0; font-size: 12px; color: #94a3b8;">This is an auto-execution alert. You are the only recipient.</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

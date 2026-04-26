@@ -3,7 +3,7 @@ import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { serverFetch } from "@/lib/api";
 import type { DashboardResponse } from "@/types/trade";
 
-const OG_IMAGE = "/og";
+const OG_IMAGE = "/opengraph-image";
 
 export async function generateMetadata(): Promise<Metadata> {
   try {
