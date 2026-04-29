@@ -567,6 +567,13 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		allOK = false
 	}
 
+	// Morning picks — surfaces single-model degraded runs (e.g. Claude
+	// timed out at 9:35 ET) that the cron logs but nothing else gates on.
+	services["morning_picks"] = s.checkMorningPicks()
+	if services["morning_picks"].Status == "fail" {
+		allOK = false
+	}
+
 	// API (self-check)
 	services["api"] = serviceHealth{Status: "ok", Detail: fmt.Sprintf("Listening on :%s", s.port)}
 
@@ -597,6 +604,71 @@ func isStubKey(k string) bool {
 		return true
 	}
 	return false
+}
+
+/*
+checkMorningPicks reports whether today's 9:25 ET trade-picking cron
+ran cleanly. Reads today's saved trades and counts how many came from
+each picker. Severity:
+  - ok:   both pickers produced ≥1 pick today, OR the morning run is
+    not yet expected (weekend, or before ~9:40 ET on a weekday)
+  - warn: exactly one picker produced 0 picks (single-model run), or
+    no trades exist for today after the expected run time (also
+    covers market holidays — false-positive warns are tolerable
+    since warn doesn't trip allOK)
+
+Reserved as warn rather than fail so a stale morning issue can't block
+a fresh deploy from going out — a deploy is often the fix.
+*/
+func (s *Server) checkMorningPicks() serviceHealth {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		return serviceHealth{Status: "warn", Detail: "Could not load ET timezone: " + err.Error()}
+	}
+	now := time.Now().In(loc)
+	today := now.Format("2006-01-02")
+
+	// Weekend: cron doesn't fire, no trades expected.
+	if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+		return serviceHealth{Status: "ok", Detail: "No morning run scheduled (weekend)"}
+	}
+
+	// Cron fires at 9:25 ET; pickers take 1–10 minutes. Give 15 min slack.
+	expectedBy := time.Date(now.Year(), now.Month(), now.Day(), 9, 40, 0, 0, loc)
+	morningRunExpected := !now.Before(expectedBy)
+
+	tradesToday, err := s.db.GetMorningTrades(today)
+	if err != nil {
+		return serviceHealth{Status: "warn", Detail: "Could not query today's trades: " + err.Error()}
+	}
+
+	if len(tradesToday) == 0 {
+		if !morningRunExpected {
+			return serviceHealth{Status: "ok", Detail: "Morning run not yet expected (cron at 9:25 ET)"}
+		}
+		return serviceHealth{Status: "warn", Detail: fmt.Sprintf("No trades saved for %s (cron failure or market holiday)", today)}
+	}
+
+	gptCount, claudeCount := 0, 0
+	for _, t := range tradesToday {
+		if t.PickedByOpenAI {
+			gptCount++
+		}
+		if t.PickedByClaude {
+			claudeCount++
+		}
+	}
+
+	switch {
+	case gptCount > 0 && claudeCount > 0:
+		return serviceHealth{Status: "ok", Detail: fmt.Sprintf("GPT=%d, Claude=%d picks today", gptCount, claudeCount)}
+	case gptCount > 0 && claudeCount == 0:
+		return serviceHealth{Status: "warn", Detail: fmt.Sprintf("Claude produced 0 picks today (single-model run, GPT=%d)", gptCount)}
+	case gptCount == 0 && claudeCount > 0:
+		return serviceHealth{Status: "warn", Detail: fmt.Sprintf("GPT produced 0 picks today (single-model run, Claude=%d)", claudeCount)}
+	default:
+		return serviceHealth{Status: "warn", Detail: fmt.Sprintf("Both pickers produced 0 picks today (%d trades saved with no model attribution)", len(tradesToday))}
+	}
 }
 
 func (s *Server) checkOpenAI() serviceHealth {

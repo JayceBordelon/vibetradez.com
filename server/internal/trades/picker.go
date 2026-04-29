@@ -34,7 +34,7 @@ func NewClaudePicker(apiKey, model string, schwabClient *schwab.Client) *ClaudeP
 	return &ClaudePicker{
 		client: anthropic.NewClient(
 			option.WithAPIKey(apiKey),
-			option.WithRequestTimeout(10*time.Minute),
+			option.WithRequestTimeout(15*time.Minute),
 		),
 		model:  model,
 		schwab: schwabClient,
