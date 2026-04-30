@@ -11,7 +11,7 @@ export async function generateMetadata(): Promise<Metadata> {
     const count = data.trades?.length ?? 0;
     const hasSummaries = data.trades?.some((t) => t.summary) ?? false;
 
-    let description = "Live options trade dashboard. Independent picks from ChatGPT and Claude with cross-examination verdicts and real-time analytics.";
+    let description = "Live options trade dashboard powered by Claude. Conviction-scored picks with rationales and real-time analytics.";
 
     if (count > 0 && hasSummaries) {
       let totalPnl = 0;
@@ -26,13 +26,13 @@ export async function generateMetadata(): Promise<Metadata> {
         }
       }
       const sign = totalPnl > 0 ? "+" : "";
-      description = `Today: ${count} union picks, ${winners}W/${losers}L, ${sign}$${Math.round(totalPnl)} P&L. Independent picks from ChatGPT and Claude with cross-examination verdicts.`;
+      description = `Today: ${count} picks, ${winners}W/${losers}L, ${sign}$${Math.round(totalPnl)} P&L. Conviction-scored picks from Claude with full rationales.`;
     } else if (count > 0) {
       const topSymbols = data.trades
         .slice(0, 3)
         .map((t) => t.trade.symbol)
         .join(", ");
-      description = `Today's ${count} union picks: ${topSymbols} and more. Independent picks from ChatGPT and Claude with cross-examination verdicts.`;
+      description = `Today's ${count} picks: ${topSymbols} and more. Conviction-scored picks from Claude with full rationales.`;
     }
 
     return {
@@ -53,7 +53,7 @@ export async function generateMetadata(): Promise<Metadata> {
   } catch {
     return {
       title: "Live Dashboard",
-      description: "Live options trade dashboard. Independent picks from ChatGPT and Claude with cross-examination verdicts and real-time analytics.",
+      description: "Live options trade dashboard powered by Claude. Conviction-scored picks with rationales and real-time analytics.",
       openGraph: {
         title: "VibeTradez | Live Options Dashboard",
         images: [{ url: OG_IMAGE, width: 1200, height: 630 }],

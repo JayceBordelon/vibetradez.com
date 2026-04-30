@@ -3,6 +3,7 @@
 import { BarChart3 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { TopNFilter } from "@/components/dashboard/top-n-filter";
 import { HistorySkeleton } from "@/components/layout/dashboard-skeleton";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { Section } from "@/components/layout/section";
@@ -338,6 +339,7 @@ export function HistoryShell() {
             />
           </>
         }
+        rightSlot={agg && agg.totalWinners + agg.totalLosers > 0 ? <TopNFilter value={topFilter} onChange={setTopFilter} /> : null}
       />
 
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-7">
@@ -349,7 +351,7 @@ export function HistoryShell() {
           <>
             {agg.totalWinners + agg.totalLosers > 0 && (
               <>
-                <HistoryStats {...agg} topN={topFilter} onTopNChange={setTopFilter} />
+                <HistoryStats {...agg} />
 
                 {multiEquityPoints.length > 1 && (
                   <Section className="mt-8">

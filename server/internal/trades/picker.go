@@ -16,14 +16,67 @@ import (
 	"vibetradez.com/internal/sentiment"
 )
 
-/*
-ClaudePicker runs the same morning trade analysis pipeline as the
-OpenAI Analyzer, but powered by Anthropic Claude. Both pickers consume
-raw sentiment data, do the full Schwab + web-search workflow with the
-same AnalysisPrompt, and independently produce 10 ranked trades. The
-cron pipeline unions both pick sets so the dashboard / emails can show
-what each model would have picked on its own.
-*/
+const (
+	maxOutputTokensPicks = 16384
+	maxOutputTokensEOD   = 16384
+
+	/*
+		maxToolRounds is generous on purpose. The picker walks Schwab quotes,
+		option chains, and web search across many tickers; complex mornings
+		(earnings clusters, macro events) can chain dozens of tool calls
+		before Claude's ready to commit. We'd rather burn API spend than
+		short-circuit the analysis with a "too many rounds" abort.
+	*/
+	maxToolRounds = 30
+
+	/*
+		httpRequestTimeout caps a single Anthropic API call (one round of the
+		conversation, not the whole conversation). Set high so streaming
+		responses with long tool plans don't get cut off mid-flight. The
+		conversation-level deadline lives on ctx in the caller.
+	*/
+	httpRequestTimeout = 30 * time.Minute
+)
+
+type Trade struct {
+	// ID is the trades.id row identifier, populated by store.SaveMorningTrades
+	// + the various read paths. Exposed only to internal callers (omitted from
+	// the public JSON wire) so dashboard responses don't leak the row id.
+	ID int `json:"-"`
+
+	Symbol         string  `json:"symbol"`
+	ContractType   string  `json:"contract_type"`
+	StrikePrice    float64 `json:"strike_price"`
+	Expiration     string  `json:"expiration"`
+	DTE            int     `json:"dte"`
+	EstimatedPrice float64 `json:"estimated_price"`
+	Thesis         string  `json:"thesis"`
+	SentimentScore float64 `json:"sentiment_score"`
+	CurrentPrice   float64 `json:"current_price"`
+	TargetPrice    float64 `json:"target_price"`
+	StopLoss       float64 `json:"stop_loss"`
+	RiskLevel      string  `json:"risk_level"`
+	Catalyst       string  `json:"catalyst"`
+	MentionCount   int     `json:"mention_count"`
+	Rank           int     `json:"rank"`
+
+	Score     int    `json:"score"`
+	Rationale string `json:"rationale"`
+	Model     string `json:"model"`
+}
+
+type TradeSummary struct {
+	Symbol       string  `json:"symbol"`
+	ContractType string  `json:"contract_type"`
+	StrikePrice  float64 `json:"strike_price"`
+	Expiration   string  `json:"expiration"`
+	EntryPrice   float64 `json:"entry_price"`
+	ClosingPrice float64 `json:"closing_price"`
+	StockOpen    float64 `json:"stock_open"`
+	StockClose   float64 `json:"stock_close"`
+	Notes        string  `json:"notes"`
+}
+
 type ClaudePicker struct {
 	client anthropic.Client
 	model  string
@@ -34,25 +87,33 @@ func NewClaudePicker(apiKey, model string, schwabClient *schwab.Client) *ClaudeP
 	return &ClaudePicker{
 		client: anthropic.NewClient(
 			option.WithAPIKey(apiKey),
-			option.WithRequestTimeout(15*time.Minute),
+			option.WithRequestTimeout(httpRequestTimeout),
 		),
 		model:  model,
 		schwab: schwabClient,
 	}
 }
 
-// Model returns the Anthropic model identifier this picker is configured with.
 func (p *ClaudePicker) Model() string { return p.model }
 
-/*
-GetTopTrades runs the same workflow the OpenAI Analyzer does — pull in
-market signals, do its own Schwab tool calls and web search, then
-emit 10 ranked trades. Crucially, Claude is not given GPT's picks; it
-generates its own from scratch. The returned trades have ClaudeScore /
-ClaudeRationale populated (because Claude is the model that produced
-them); GPTScore / GPTRationale are left at zero for the cron pipeline
-to merge in if GPT also picked the same ticker.
-*/
+type claudeTradeOutput struct {
+	Symbol         string  `json:"symbol"`
+	ContractType   string  `json:"contract_type"`
+	StrikePrice    float64 `json:"strike_price"`
+	Expiration     string  `json:"expiration"`
+	DTE            int     `json:"dte"`
+	EstimatedPrice float64 `json:"estimated_price"`
+	CurrentPrice   float64 `json:"current_price"`
+	TargetPrice    float64 `json:"target_price"`
+	StopLoss       float64 `json:"stop_loss"`
+	RiskLevel      string  `json:"risk_level"`
+	Catalyst       string  `json:"catalyst"`
+	Thesis         string  `json:"thesis"`
+	Score          int     `json:"score"`
+	Rationale      string  `json:"rationale"`
+	Rank           int     `json:"rank"`
+}
+
 func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentiment.TickerMention) ([]Trade, error) {
 	sentimentJSON, err := json.Marshal(sentimentData)
 	if err != nil {
@@ -64,12 +125,12 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentime
 
 	prompt := fmt.Sprintf(AnalysisPrompt, today, weekday, string(sentimentJSON))
 
-	content, err := p.runConversation(ctx, prompt)
+	content, err := p.runConversation(ctx, prompt, maxOutputTokensPicks)
 	if err != nil {
 		return nil, err
 	}
 
-	var raw []gptTradeOutput
+	var raw []claudeTradeOutput
 	if err := parseJSONResponse(content, &raw, "Claude trades"); err != nil {
 		return nil, fmt.Errorf("failed to parse trades from claude response: %w", err)
 	}
@@ -77,32 +138,25 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentime
 	trades := make([]Trade, 0, len(raw))
 	for _, r := range raw {
 		trades = append(trades, Trade{
-			Symbol:          r.Symbol,
-			ContractType:    r.ContractType,
-			StrikePrice:     r.StrikePrice,
-			Expiration:      r.Expiration,
-			DTE:             r.DTE,
-			EstimatedPrice:  r.EstimatedPrice,
-			Thesis:          r.Thesis,
-			CurrentPrice:    r.CurrentPrice,
-			TargetPrice:     r.TargetPrice,
-			StopLoss:        r.StopLoss,
-			RiskLevel:       r.RiskLevel,
-			Catalyst:        r.Catalyst,
-			Rank:            r.Rank,
-			ClaudeRank:      r.Rank,
-			ClaudeScore:     r.Score,
-			ClaudeRationale: r.Rationale,
-			ClaudeModel:     p.model,
-			PickedByClaude:  true,
+			Symbol:         r.Symbol,
+			ContractType:   r.ContractType,
+			StrikePrice:    r.StrikePrice,
+			Expiration:     r.Expiration,
+			DTE:            r.DTE,
+			EstimatedPrice: r.EstimatedPrice,
+			Thesis:         r.Thesis,
+			CurrentPrice:   r.CurrentPrice,
+			TargetPrice:    r.TargetPrice,
+			StopLoss:       r.StopLoss,
+			RiskLevel:      r.RiskLevel,
+			Catalyst:       r.Catalyst,
+			Rank:           r.Rank,
+			Score:          r.Score,
+			Rationale:      r.Rationale,
+			Model:          p.model,
 		})
 	}
 
-	/*
-		Enrich with sentiment data the same way the OpenAI Analyzer does so
-		downstream consumers see consistent SentimentScore and MentionCount
-		regardless of which model picked the trade.
-	*/
 	type sentimentInfo struct {
 		Score    float64
 		Mentions int
@@ -121,98 +175,27 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentime
 	return trades, nil
 }
 
-/*
-WriteVerdicts runs the cross-examination pass for Claude: given the
-other model's pick list (and Claude's own picks for context), returns
-a one-sentence verdict per symbol. No tools are granted; this is a
-pure reasoning pass over the rationales already produced. Errors are
-non-fatal at the caller level.
-*/
-func (p *ClaudePicker) WriteVerdicts(ctx context.Context, ownTrades, otherTrades []Trade, ownModelName, otherModelName string) (map[string]string, error) {
-	if len(otherTrades) == 0 {
-		return map[string]string{}, nil
-	}
-
-	ownJSON, err := json.Marshal(verdictTradeView(ownTrades))
+func (p *ClaudePicker) GetEndOfDayAnalysis(ctx context.Context, morningTrades []Trade) ([]TradeSummary, error) {
+	tradesJSON, err := json.Marshal(morningTrades)
 	if err != nil {
-		return nil, fmt.Errorf("marshal own trades: %w", err)
-	}
-	otherJSON, err := json.Marshal(verdictTradeView(otherTrades))
-	if err != nil {
-		return nil, fmt.Errorf("marshal other trades: %w", err)
+		return nil, fmt.Errorf("failed to marshal morning trades: %w", err)
 	}
 
 	today := time.Now().Format("2006-01-02")
 	weekday := time.Now().Weekday().String()
-	prompt := fmt.Sprintf(CrossExaminationPrompt, today, weekday, ownModelName, otherModelName, string(ownJSON), otherModelName, string(otherJSON))
 
-	msg, err := p.client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.Model(p.model),
-		MaxTokens: maxOutputTokensVerdicts,
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
-		},
-	})
+	prompt := fmt.Sprintf(EndOfDayPrompt, today, weekday, string(tradesJSON))
+
+	content, err := p.runConversation(ctx, prompt, maxOutputTokensEOD)
 	if err != nil {
-		return nil, fmt.Errorf("anthropic verdicts messages.new: %w", err)
+		return nil, err
 	}
 
-	var text strings.Builder
-	for _, block := range msg.Content {
-		if tb, ok := block.AsAny().(anthropic.TextBlock); ok {
-			text.WriteString(tb.Text)
-		}
+	var summaries []TradeSummary
+	if err := parseJSONResponse(content, &summaries, "Claude EOD summaries"); err != nil {
+		return nil, fmt.Errorf("failed to parse summaries from claude response: %w", err)
 	}
-	out := strings.TrimSpace(text.String())
-	if out == "" {
-		return nil, fmt.Errorf("empty verdict response from claude")
-	}
-
-	var verdicts map[string]string
-	if err := parseJSONResponse(out, &verdicts, "Claude verdicts"); err != nil {
-		return nil, fmt.Errorf("parse verdict json: %w", err)
-	}
-	return verdicts, nil
-}
-
-/*
-verdictTradeView projects a Trade down to the fields a model needs to
-reason about a pick during cross-examination. Strips out scoring
-fields from the OTHER side so each model judges the trade on its
-merits, not on the opposing model's confidence.
-*/
-type verdictTradeRow struct {
-	Rank         int     `json:"rank"`
-	Symbol       string  `json:"symbol"`
-	ContractType string  `json:"contract_type"`
-	StrikePrice  float64 `json:"strike_price"`
-	Expiration   string  `json:"expiration"`
-	DTE          int     `json:"dte"`
-	CurrentPrice float64 `json:"current_price"`
-	OptionPrice  float64 `json:"option_price"`
-	Catalyst     string  `json:"catalyst"`
-	Thesis       string  `json:"thesis"`
-	RiskLevel    string  `json:"risk_level"`
-}
-
-func verdictTradeView(ts []Trade) []verdictTradeRow {
-	out := make([]verdictTradeRow, len(ts))
-	for i, t := range ts {
-		out[i] = verdictTradeRow{
-			Rank:         t.Rank,
-			Symbol:       t.Symbol,
-			ContractType: t.ContractType,
-			StrikePrice:  t.StrikePrice,
-			Expiration:   t.Expiration,
-			DTE:          t.DTE,
-			CurrentPrice: t.CurrentPrice,
-			OptionPrice:  t.EstimatedPrice,
-			Catalyst:     t.Catalyst,
-			Thesis:       t.Thesis,
-			RiskLevel:    t.RiskLevel,
-		}
-	}
-	return out
+	return summaries, nil
 }
 
 func (p *ClaudePicker) buildTools() []anthropic.ToolUnionParam {
@@ -257,7 +240,7 @@ func (p *ClaudePicker) buildTools() []anthropic.ToolUnionParam {
 	return tools
 }
 
-func (p *ClaudePicker) runConversation(ctx context.Context, prompt string) (string, error) {
+func (p *ClaudePicker) runConversation(ctx context.Context, prompt string, maxTokens int64) (string, error) {
 	tools := p.buildTools()
 
 	messages := []anthropic.MessageParam{
@@ -266,12 +249,11 @@ func (p *ClaudePicker) runConversation(ctx context.Context, prompt string) (stri
 
 	var containerID string
 
-	const maxRounds = 10
-	for round := 0; round < maxRounds; round++ {
+	for round := 0; round < maxToolRounds; round++ {
 		_ = round
 		params := anthropic.MessageNewParams{
 			Model:     anthropic.Model(p.model),
-			MaxTokens: maxOutputTokensPicks,
+			MaxTokens: maxTokens,
 			Messages:  messages,
 			Tools:     tools,
 		}
@@ -300,7 +282,7 @@ func (p *ClaudePicker) runConversation(ctx context.Context, prompt string) (stri
 				finalText.WriteString(b.Text)
 			case anthropic.ToolUseBlock:
 				out := p.executeTool(ctx, b.Name, b.Input)
-				log.Printf("Claude tool call: %s → %d bytes", b.Name, len(out))
+				log.Printf("Claude tool call: %s -> %d bytes", b.Name, len(out))
 				toolResults = append(toolResults, anthropic.NewToolResultBlock(b.ID, out, false))
 			}
 		}
@@ -318,7 +300,7 @@ func (p *ClaudePicker) runConversation(ctx context.Context, prompt string) (stri
 		return text, nil
 	}
 
-	return "", fmt.Errorf("exceeded max claude tool rounds (%d)", maxRounds)
+	return "", fmt.Errorf("exceeded max claude tool rounds (%d)", maxToolRounds)
 }
 
 /*
@@ -388,4 +370,82 @@ func (p *ClaudePicker) executeTool(_ context.Context, name string, input json.Ra
 	default:
 		return fmt.Sprintf(`{"error": "unknown function: %s"}`, name)
 	}
+}
+
+func extractJSON(s string) string {
+	s = strings.TrimSpace(s)
+
+	if i := strings.Index(s, "```"); i >= 0 {
+		rest := s[i+3:]
+		if nl := strings.Index(rest, "\n"); nl >= 0 {
+			rest = rest[nl+1:]
+		}
+		if end := strings.Index(rest, "```"); end >= 0 {
+			s = strings.TrimSpace(rest[:end])
+		}
+	}
+
+	start := -1
+	var open byte
+	for i := 0; i < len(s); i++ {
+		if s[i] == '{' || s[i] == '[' {
+			start = i
+			open = s[i]
+			break
+		}
+	}
+	if start < 0 {
+		return s
+	}
+	closeB := byte('}')
+	if open == '[' {
+		closeB = ']'
+	}
+
+	depth := 0
+	inStr := false
+	escape := false
+	for i := start; i < len(s); i++ {
+		c := s[i]
+		if escape {
+			escape = false
+			continue
+		}
+		if inStr {
+			switch c {
+			case '\\':
+				escape = true
+			case '"':
+				inStr = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			inStr = true
+		case open:
+			depth++
+		case closeB:
+			depth--
+			if depth == 0 {
+				return s[start : i+1]
+			}
+		}
+	}
+	return s[start:]
+}
+
+func parseJSONResponse(raw string, dst any, source string) error {
+	if err := json.Unmarshal([]byte(extractJSON(raw)), dst); err != nil {
+		log.Printf("Failed to parse %s JSON (%d bytes raw): %s", source, len(raw), truncateForLog(raw, 2000))
+		return err
+	}
+	return nil
+}
+
+func truncateForLog(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "...[truncated]"
 }

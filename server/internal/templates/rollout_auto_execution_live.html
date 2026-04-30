@@ -11,11 +11,16 @@
       .body-bg { background-color: #0f172a !important; }
       .header-bg { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important; }
       .content-bg { background-color: #1e293b !important; }
-      .footer-bg { background-color: #1e293b !important; border-color: #334155 !important; }
-      .text-primary { color: #f1f5f9 !important; }
-      .text-secondary { color: #cbd5e1 !important; }
-      .panel-bg { background-color: #0f172a !important; border-color: #334155 !important; }
-      .label-muted { color: #94a3b8 !important; }
+      .footer-bg { background-color: #0f172a !important; border-color: #334155 !important; }
+      /* Boosted from slate-100/300/400 to pure white + slate-200/300 so
+         body text reads punchy on the slate-800 content bg instead of
+         feeling washed-out. */
+      .text-primary { color: #ffffff !important; }
+      .text-secondary { color: #e2e8f0 !important; }
+      .label-muted { color: #cbd5e1 !important; }
+      /* Panel bg is one step darker than content bg so the bordered card
+         pops without needing a heavy outline. */
+      .panel-bg { background-color: #0b1220 !important; border-color: #334155 !important; }
       .divider-color { border-color: #334155 !important; }
     }
   </style>
@@ -58,7 +63,7 @@
                   VibeTradez can now <span style="background:linear-gradient(90deg,#10a37f,#D97757);-webkit-background-clip:text;background-clip:text;color:transparent;">execute trades</span>.
                 </h1>
                 <p class="text-secondary" style="margin:0;font-size:15px;color:#475569;line-height:1.6;">
-                  When ChatGPT and Claude both rank the <em>same exact</em> contract as their #1 conviction trade — a rare, high-conviction event — VibeTradez can now place a real order through Schwab. You get to watch it happen on the dashboard, in real time, and laugh at me when it goes wrong.
+                  When Claude ranks a contract #1 with very high conviction (a rare, high-bar event), VibeTradez can now place a real order through Schwab. You get to watch it happen on the dashboard, in real time, and laugh at me when it goes wrong.
                 </p>
               </div>
             </td>
@@ -78,19 +83,19 @@
                       <tr>
                         <td style="padding-bottom:14px;">
                           <span style="display:inline-block;padding:5px 10px;border:1px solid #d97706;background-color:#fef3c7;color:#92400e;font-size:11px;font-weight:600;border-radius:6px;">● Holding @ $1.85 <span style="font-weight:800;letter-spacing:0.5px;">PAPER</span></span>
-                          <span class="text-secondary" style="margin-left:10px;font-size:13px;color:#64748b;">— I&apos;m simulating this position; no real money on the line.</span>
+                          <span class="text-secondary" style="margin-left:10px;font-size:13px;color:#64748b;">I&apos;m simulating this position. No real money on the line.</span>
                         </td>
                       </tr>
                       <tr>
                         <td style="padding-bottom:14px;">
                           <span style="display:inline-block;padding:5px 10px;border:1px solid #dc2626;background-color:#fee2e2;color:#991b1b;font-size:11px;font-weight:600;border-radius:6px;">● Holding @ $1.85 <span style="font-weight:800;letter-spacing:0.5px;">LIVE</span></span>
-                          <span class="text-secondary" style="margin-left:10px;font-size:13px;color:#64748b;">— Real money. I am, in fact, doing this.</span>
+                          <span class="text-secondary" style="margin-left:10px;font-size:13px;color:#64748b;">Real money. I am, in fact, doing this.</span>
                         </td>
                       </tr>
                       <tr>
                         <td>
                           <span style="display:inline-block;padding:5px 10px;border:1px solid #d97706;background-color:#fef3c7;color:#92400e;font-size:11px;font-weight:600;border-radius:6px;">● Closed <strong>+$48.50</strong> <span style="font-weight:800;letter-spacing:0.5px;">PAPER</span></span>
-                          <span class="text-secondary" style="margin-left:10px;font-size:13px;color:#64748b;">— After the close. P&amp;L is shown right on the badge.</span>
+                          <span class="text-secondary" style="margin-left:10px;font-size:13px;color:#64748b;">After the close. P&amp;L is shown right on the badge.</span>
                         </td>
                       </tr>
                     </table>
@@ -110,32 +115,26 @@
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
                   <td style="padding:8px 0;border-bottom:1px solid #e2e8f0;" class="divider-color">
-                    <strong class="text-primary" style="color:#0f172a;">1. Both AIs must agree.</strong>
-                    <span class="text-secondary" style="color:#475569;">ChatGPT and Claude have to <em>independently</em> rank the same contract as their #1 pick of the day. Most days this never happens — and that&apos;s the point.</span>
+                    <strong class="text-primary" style="color:#0f172a;">1. Auto-fire on the rank-1 pick.</strong>
+                    <span class="text-secondary" style="color:#475569;">Whatever Claude ranks #1 every morning gets a paper trade placed at 9:30 ET. No conviction floor, no email confirmation step, just the top pick of the day.</span>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding:10px 0;border-bottom:1px solid #e2e8f0;" class="divider-color">
-                    <strong class="text-primary" style="color:#0f172a;">2. Five-minute confirmation window.</strong>
-                    <span class="text-secondary" style="color:#475569;">When the criteria fire, I get a one-time email with a signed link. Five minutes to click Execute or Decline. No click = trade auto-cancels.</span>
+                    <strong class="text-primary" style="color:#0f172a;">2. Hard cap: $500 per trade.</strong>
+                    <span class="text-secondary" style="color:#475569;">Server rejects anything where the contract premium is above $5/share. Worst-case daily loss is bounded by the entry premium.</span>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding:10px 0;border-bottom:1px solid #e2e8f0;" class="divider-color">
-                    <strong class="text-primary" style="color:#0f172a;">3. Hard cap: $500 per trade.</strong>
-                    <span class="text-secondary" style="color:#475569;">Server rejects anything above. Worst-case daily loss is bounded by the entry premium.</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:10px 0;border-bottom:1px solid #e2e8f0;" class="divider-color">
-                    <strong class="text-primary" style="color:#0f172a;">4. Mandatory close at 3:55 PM ET.</strong>
+                    <strong class="text-primary" style="color:#0f172a;">3. Mandatory close at 3:55 PM ET.</strong>
                     <span class="text-secondary" style="color:#475569;">Every position is unconditionally closed five minutes before market close. No overnight risk. No &quot;I&apos;ll just hold it one more day.&quot;</span>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding:10px 0;">
-                    <strong class="text-primary" style="color:#0f172a;">5. Paper-only for now.</strong>
-                    <span class="text-secondary" style="color:#475569;">Trades currently fill at the live Schwab option mark in a simulated environment so I can build trust in the system before flipping to real money. The badge says PAPER until that flip happens.</span>
+                    <strong class="text-primary" style="color:#0f172a;">4. Paper-only for now.</strong>
+                    <span class="text-secondary" style="color:#475569;">Trades fill at the live Schwab option mark in a simulated environment so I can build trust in the system before flipping to real money. The badge says PAPER until that flip happens.</span>
                   </td>
                 </tr>
               </table>
@@ -147,12 +146,12 @@
             <td class="content-bg" style="background-color:#ffffff;padding:24px 28px 8px 28px;">
               <h2 class="text-primary" style="margin:0 0 12px 0;font-size:18px;font-weight:800;color:#0f172a;">Also shipped recently</h2>
               <ul class="text-secondary" style="margin:0;padding:0 0 0 20px;font-size:14px;color:#475569;line-height:1.7;">
-                <li><strong style="color:#0f172a;">Per-trade detail pages.</strong> Click any pick on the dashboard or history → full single-contract view with both models&apos; rationales and cross-verdicts.</li>
-                <li><strong style="color:#0f172a;">Stock chart upgrades.</strong> Modeled contract-premium overlay anchored to entry/exit, BUY/SELL marked as full-height vertical lines with price labels.</li>
-                <li><strong style="color:#0f172a;">Live cards.</strong> Dashboard now shows <em>Buy</em> (entry premium) and <em>Current</em> (live option mark) per pick, polled every few seconds during market hours.</li>
-                <li><strong style="color:#0f172a;">Redesigned morning email.</strong> Each model gets its own &quot;hero&quot; pick at the top with the cross-examination verdict from the other model right beside it.</li>
-                <li><strong style="color:#0f172a;">History page.</strong> Daily P&amp;L breakdown is now expandable, with clickable contracts that deep-link to the trade detail page.</li>
-                <li><strong style="color:#0f172a;">Mobile polish.</strong> Tap targets fixed, light-mode contrast pass, and a UX audit harness that catches regressions before they ship.</li>
+                <li><strong class="text-primary" style="color:#0f172a;">Per-trade detail pages.</strong> Click any pick on the dashboard or history → full single-contract view with both models&apos; rationales and cross-verdicts.</li>
+                <li><strong class="text-primary" style="color:#0f172a;">Stock chart upgrades.</strong> Modeled contract-premium overlay anchored to entry/exit, BUY/SELL marked as full-height vertical lines with price labels.</li>
+                <li><strong class="text-primary" style="color:#0f172a;">Live cards.</strong> Dashboard now shows <em>Buy</em> (entry premium) and <em>Current</em> (live option mark) per pick, polled every few seconds during market hours.</li>
+                <li><strong class="text-primary" style="color:#0f172a;">Redesigned morning email.</strong> Each model gets its own &quot;hero&quot; pick at the top with the cross-examination verdict from the other model right beside it.</li>
+                <li><strong class="text-primary" style="color:#0f172a;">History page.</strong> Daily P&amp;L breakdown is now expandable, with clickable contracts that deep-link to the trade detail page.</li>
+                <li><strong class="text-primary" style="color:#0f172a;">Mobile polish.</strong> Tap targets fixed, light-mode contrast pass, and a UX audit harness that catches regressions before they ship.</li>
               </ul>
             </td>
           </tr>
@@ -162,7 +161,7 @@
             <td class="content-bg" style="background-color:#ffffff;padding:32px 28px 8px 28px;">
               <h2 class="text-primary" style="margin:0 0 12px 0;font-size:18px;font-weight:800;color:#0f172a;">Sign in to follow along</h2>
               <p class="text-secondary" style="margin:0 0 20px 0;font-size:14px;color:#475569;line-height:1.6;">
-                You don&apos;t need to sign in to see today&apos;s picks — those are public. Sign in to get notified when I take a real position, save your dashboard preferences, and (soon) <strong>simulate your own paper trades</strong> against the same daily picks.
+                You don&apos;t need to sign in to see today&apos;s picks; those are public. Sign in to get notified when I take a real position, save your dashboard preferences, and (soon) <strong>simulate your own paper trades</strong> against the same daily picks.
               </p>
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
@@ -174,7 +173,7 @@
                   <td align="center">
                     <p class="text-secondary" style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">
                       One click through Google. No password. No data resale, no advertising trackers.<br/>
-                      Your email is used to send these updates and (later) your simulation results — that&apos;s it.
+                      Your email is used to send these updates and (later) your simulation results. That&apos;s it.
                     </p>
                   </td>
                 </tr>

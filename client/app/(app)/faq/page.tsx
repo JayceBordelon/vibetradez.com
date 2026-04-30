@@ -24,27 +24,27 @@ export const metadata: Metadata = {
 const faqs = [
   {
     question: "How are the daily trade picks generated?",
-    answer: `Every market day at 9:25 AM ET the system aggregates trending tickers from StockTwits, Yahoo Finance, Finviz, and SEC EDGAR. That same payload is handed to ChatGPT and Claude in parallel, each running the identical prompt with live Schwab quotes, full options chains, and web search. Each model independently produces 10 ranked picks without seeing the other's work. Once both lists are locked, each model writes a one-sentence verdict on every one of the other's trades. The two pick sets are then unioned: trades both models picked rank ahead of solo picks, ties broken by combined conviction.`,
+    answer: `Every market day at 9:25 AM ET the system aggregates trending tickers from StockTwits, Yahoo Finance, Finviz, and SEC EDGAR. That payload is handed to Claude with live Schwab quotes, full options chains, and web search as tools. Claude produces 10 ranked picks, each with a 1-10 conviction score and a written rationale defending the score. The list is saved to the database, surfaced on the dashboard, and emailed to subscribers before the opening bell.`,
   },
   {
     question: "What do the rankings (Top 1, Top 3, Top 5, Top 10) mean?",
-    answer: `The Top N filter narrows the visible picks to only the highest-ranked entries from the combined daily list. Rank 1 is the single highest-conviction trade of the day. The historical performance page recalculates all metrics (win rate, P&L, Sharpe, expectancy, drawdown) based on your selected Top N so you can directly compare how each tier has performed over time.`,
-  },
-  {
-    question: "What does the Models page show?",
-    answer: `The Models page replays the historical pick data under each model's individual ranking in isolation and shows a side-by-side cumulative P&L curve so you can see what you would have made by following only ChatGPT, only Claude, or the combined consensus over the selected range (week, month, year, or all time). It also surfaces an "agreement rate" stat, the fraction of trades where both models picked the same ticker. Best and worst pick per model is shown too, along with each model's verdict on the other's calls so you can see who was right when they disagreed.`,
+    answer: `The Top N filter narrows the visible picks to only the highest-ranked entries from the daily list. Rank 1 is the single highest-conviction trade of the day. The historical performance page recalculates all metrics (win rate, P&L, Sharpe, expectancy, drawdown) based on your selected Top N so you can directly compare how each tier has performed over time.`,
   },
   {
     question: "Is the P&L shown based on real trades?",
-    answer: `No. VibeTradez does not execute any trades. All P&L figures are hypothetical. They assume you bought one contract of each suggested trade at the estimated market open price (the option's mark price from Schwab at 9:25 AM) and sold at the closing mark price (captured at 4:05 PM). The calculation is (closing premium minus entry premium) times 100 per contract. Real-world results would differ due to bid-ask spreads, slippage, commissions, liquidity, and execution timing. These numbers are meant to track the quality of the picks over time, not to represent actual portfolio returns.`,
+    answer: `Mostly hypothetical for the picks list, real for the rank-1 paper trade. The historical P&L for picks #2 through #10 assumes you bought one contract at the estimated market open price (the option's mark price from Schwab at 9:25 AM) and sold at the closing mark price (captured at 4:05 PM). The calculation is (closing premium minus entry premium) times 100 per contract. Real-world results would differ due to bid-ask spreads, slippage, commissions, liquidity, and execution timing. The rank-1 pick is different: every weekday at 9:30 AM ET the system auto-fires a paper trade on it (or a live trade if TRADING_MODE=live is configured), held until 3:55 PM ET when the close cron exits the position unconditionally. Those positions surface on the dashboard with a clearly-labeled PAPER or LIVE badge.`,
+  },
+  {
+    question: "How does the auto-execution pipeline work?",
+    answer: `Every weekday morning at 9:30 ET, the rank-1 pick of the day fires automatically. There's no email confirmation step, no five-minute window, just a paper order placed at the live Schwab option mark. If TRADING_MODE=live is configured, real orders go to the Schwab Trader API instead. The hard cap is $5/share (= $500 capital exposure per contract); anything above gets skipped for the day. At 3:55 PM ET (or 12:55 PM on half-trading days) the close cron unconditionally sells everything still open, with a retry-cancel-replace fallback if the first close attempt doesn't fill. Receipt emails fire after every fill so you have a paper trail. There's a kill-switch endpoint (POST /api/execution/cancel-all, auth-gated) if you ever need to bail before 3:55 PM.`,
   },
   {
     question: "Where does the market data come from?",
-    answer: `Stock quotes and option chain data (bid, ask, mark, greeks, open interest, volume) come from the Schwab Market Data API via OAuth. Market signals are aggregated from StockTwits, Yahoo Finance, Finviz, and SEC EDGAR. Both models call into the same Schwab + web search tool surface via function-calling so the only variable between them is reasoning.`,
+    answer: `Stock quotes and option chain data (bid, ask, mark, greeks, open interest, volume) come from the Schwab Market Data API via OAuth. Market signals are aggregated from StockTwits, Yahoo Finance, Finviz, and SEC EDGAR. Claude calls into the Schwab + web search tool surface via function-calling so prices are real, not hallucinated.`,
   },
   {
     question: "How often are emails sent, and what do they contain?",
-    answer: `Subscribers receive up to three emails per market day. The morning email (before 9:30 AM ET) contains every union pick with full contract details, thesis, catalyst, sentiment, risk level, both models' conviction scores and rationales, and the cross-examination verdict each model wrote on the other's pick. The end-of-day email (after 4:05 PM ET) shows how each pick performed: entry vs closing price, stock movement, per-trade P&L, and a leaderboard noting which model's top picks made the most money that day. On Fridays the weekly digest aggregates everything across the week. All emails are free and always will be.`,
+    answer: `Subscribers receive up to three emails per market day. The morning email (before 9:30 AM ET) contains the headline pick with full contract details, thesis, catalyst, sentiment, risk level, conviction score, and Claude's written rationale defending the call. The end-of-day email (after 4:05 PM ET) shows how each pick performed: entry vs closing price, stock movement, per-trade P&L, and the day's totals. On Fridays the weekly digest aggregates everything across the week. All emails are free and always will be. Auto-execution receipts (open fill, close fill, close-failed alerts) go only to the operator, not to subscribers.`,
   },
   {
     question: "How do I sign up?",

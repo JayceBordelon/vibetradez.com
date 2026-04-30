@@ -1,6 +1,10 @@
 package exec
 
-import "testing"
+import (
+	"testing"
+
+	"vibetradez.com/internal/trades"
+)
 
 func TestOCCSymbol_KnownFixtures(t *testing.T) {
 	cases := []struct {
@@ -70,9 +74,9 @@ func TestOCCSymbol_Errors(t *testing.T) {
 	}
 }
 
-func TestBuildOpenOrder_HardcodedShape(t *testing.T) {
-	d := &Decision{OCCSymbol: "AAPL  240119C00150000"}
-	o, err := BuildOpenOrder(d)
+func TestBuildOpenOrderForTrade_HardcodedShape(t *testing.T) {
+	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: 150, Expiration: "2024-01-19"}
+	o, err := BuildOpenOrderForTrade(tr, "AAPL  240119C00150000")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,21 +98,21 @@ func TestBuildOpenOrder_HardcodedShape(t *testing.T) {
 	}
 }
 
-func TestBuildOpenOrder_RejectsNilDecision(t *testing.T) {
-	if _, err := BuildOpenOrder(nil); err == nil {
+func TestBuildOpenOrderForTrade_RejectsNilTrade(t *testing.T) {
+	if _, err := BuildOpenOrderForTrade(nil, "AAPL  240119C00150000"); err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-func TestBuildOpenOrder_RejectsMissingOCC(t *testing.T) {
-	if _, err := BuildOpenOrder(&Decision{}); err == nil {
+func TestBuildOpenOrderForTrade_RejectsMissingOCC(t *testing.T) {
+	if _, err := BuildOpenOrderForTrade(&trades.Trade{Symbol: "AAPL"}, ""); err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-func TestBuildCloseOrder_SellToClose(t *testing.T) {
-	d := &Decision{OCCSymbol: "AAPL  240119C00150000"}
-	o, err := BuildCloseOrder(d)
+func TestBuildCloseOrderForPosition_SellToClose(t *testing.T) {
+	p := &OpenPosition{Symbol: "AAPL", ContractType: "CALL", StrikePrice: 150, Expiration: "2024-01-19"}
+	o, err := BuildCloseOrderForPosition(p)
 	if err != nil {
 		t.Fatal(err)
 	}

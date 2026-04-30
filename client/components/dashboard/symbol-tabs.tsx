@@ -2,7 +2,6 @@
 
 import { Sparkles } from "lucide-react";
 
-import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fmtPnlInt, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -19,8 +18,7 @@ interface SymbolEntry {
   rank: number;
   contractType: string;
   strike: number;
-  pickedByOpenAI: boolean;
-  pickedByClaude: boolean;
+  score: number;
   pnl: number | null;
 }
 
@@ -38,16 +36,14 @@ export function SymbolTabs({ trades, activeSymbol, onSelect }: SymbolTabsProps) 
         rank: dt.trade.rank,
         contractType: dt.trade.contract_type,
         strike: dt.trade.strike_price,
-        pickedByOpenAI: dt.trade.picked_by_openai,
-        pickedByClaude: dt.trade.picked_by_claude,
+        score: dt.trade.score,
         pnl: tradePnl,
       });
     } else {
       symbolMap.set(sym, {
         ...existing,
         rank: Math.min(existing.rank, dt.trade.rank),
-        pickedByOpenAI: existing.pickedByOpenAI || dt.trade.picked_by_openai,
-        pickedByClaude: existing.pickedByClaude || dt.trade.picked_by_claude,
+        score: Math.max(existing.score, dt.trade.score),
         pnl: tradePnl !== null ? (existing.pnl ?? 0) + tradePnl : existing.pnl,
       });
     }
@@ -91,10 +87,7 @@ function PickSummary({ entry }: { entry: SymbolEntry }) {
         </span>
       </span>
       <span className="flex items-center gap-2">
-        <span className="flex items-center gap-1">
-          {entry.pickedByOpenAI && <OpenAILogo className="h-3.5 w-3.5" />}
-          {entry.pickedByClaude && <ClaudeLogo className="h-3.5 w-3.5" />}
-        </span>
+        {entry.score > 0 && <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">{entry.score}/10</span>}
         {entry.pnl != null && <span className={cn("text-xs font-semibold tabular-nums", pnlColor(entry.pnl))}>{fmtPnlInt(entry.pnl)}</span>}
       </span>
     </span>

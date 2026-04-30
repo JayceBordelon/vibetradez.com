@@ -1,4 +1,4 @@
-import type { ApiResponse, ChartParams, ChartResponse, DashboardResponse, LiveQuotesResponse, ModelComparisonResponse, WeekResponse } from "@/types/trade";
+import type { ApiResponse, ChartParams, ChartResponse, DashboardResponse, LiveQuotesResponse, WeekResponse } from "@/types/trade";
 
 export interface SessionUser {
   id: number;
@@ -50,8 +50,6 @@ export const api = {
   getWeekTrades: (start: string, end: string) => clientFetch<WeekResponse>(`/api/trades/week?start=${start}&end=${end}`),
 
   getLiveQuotes: () => clientFetch<LiveQuotesResponse>("/api/quotes/live"),
-
-  getModelComparison: (range: "week" | "month" | "year" | "all" = "all") => clientFetch<ModelComparisonResponse>(`/api/model-comparison?range=${range}`),
 
   getChartData: (symbol: string, params: ChartParams) =>
     clientFetch<ChartResponse>(`/api/chart/${symbol}?periodType=${params.ptype}&period=${params.period}&frequencyType=${params.ftype}&frequency=${params.freq}`),

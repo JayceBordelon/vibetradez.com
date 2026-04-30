@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
-import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
+import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
 import { Metric } from "@/components/ui/metric";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -71,7 +71,7 @@ export function TradeTable({ trades, date }: TradeTableProps) {
             <TableRow>
               <TableHead className="w-10 text-center">#</TableHead>
               <TableHead>Trade</TableHead>
-              <TableHead className="text-center">Scores</TableHead>
+              <TableHead className="text-center">Score</TableHead>
               <TableHead className="text-right">Entry</TableHead>
               <TableHead className="text-right">Close</TableHead>
               <TableHead className="text-right">Stock</TableHead>
@@ -124,7 +124,7 @@ function DesktopTradeRow({ dt, date }: { dt: DashboardTrade; date: string }) {
         </div>
       </TableCell>
       <TableCell className="text-center text-xs tabular-nums">
-        <ScorePill gpt={trade.gpt_score} claude={trade.claude_score} />
+        <ScorePill score={trade.score} />
       </TableCell>
       <TableCell className="text-right font-mono text-sm tabular-nums">{row.entry}</TableCell>
       <TableCell className="text-right font-mono text-sm tabular-nums">{row.close}</TableCell>
@@ -146,27 +146,14 @@ function DesktopTradeRow({ dt, date }: { dt: DashboardTrade; date: string }) {
   );
 }
 
-function ScorePill({ gpt, claude }: { gpt: number; claude: number }) {
-  if (gpt === 0 && claude === 0) {
+function ScorePill({ score }: { score: number }) {
+  if (score === 0) {
     return <span className="text-muted-foreground">-</span>;
   }
-  const showGpt = gpt > 0;
-  const showClaude = claude > 0;
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-1.5 py-0.5 font-semibold">
-      {showGpt && (
-        <span className="inline-flex items-center gap-1">
-          <OpenAILogo className="h-3 w-3" />
-          <span>{gpt}</span>
-        </span>
-      )}
-      {showGpt && showClaude && <span className="text-muted-foreground">·</span>}
-      {showClaude && (
-        <span className="inline-flex items-center gap-1">
-          <ClaudeLogo className="h-3 w-3" />
-          <span>{claude}</span>
-        </span>
-      )}
+    <span className="inline-flex items-center gap-1 rounded-md border bg-muted/40 px-1.5 py-0.5 font-semibold">
+      <ClaudeLogo className="h-3 w-3" />
+      <span>{score}/10</span>
     </span>
   );
 }

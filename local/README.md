@@ -4,8 +4,8 @@ A self-contained Docker stack for testing VibeTradez locally with realistic seed
 
 ## What's included
 
-- **Postgres 16** — auto-seeded with ~10 trading days of trades + EOD summaries (the most recent day is left in "morning picks" mode without summaries so you can see both UI states)
-- **Go API server** — runs against the local Postgres, with stub env vars for OpenAI/Resend/Schwab so it never makes real API calls
+- **Postgres 16** — auto-seeded with ~1 year of Claude-picked trades + EOD summaries (the most recent day is left in "morning picks" mode without summaries so you can see both UI states)
+- **Go API server** — runs against the local Postgres, with stub env vars for Anthropic/Resend/Schwab so it never makes real API calls
 - **Next.js frontend** — proxies `/api`, `/auth`, `/admin`, and `/health` to the Go server via `next.config.ts` rewrites
 
 ## Prerequisites
@@ -91,7 +91,7 @@ ORDER BY t.rank;
 ## Disabled in local mode
 
 - **Cron jobs** — pushed to Sunday so they never fire
-- **OpenAI / Schwab / Resend** — stub keys; the server starts but never makes real calls
+- **Anthropic / Schwab / Resend** — stub keys; the server starts but never makes real calls
 - **Live quotes (`/api/quotes/live`)** — returns `connected: false` since Schwab is unauthorized; the frontend gracefully degrades to "market closed" freshness
 - **Stock chart (`/api/chart/{symbol}`)** — returns 503; the chart panel shows "Chart unavailable"
 

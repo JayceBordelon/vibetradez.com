@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { ExecutionBadge, matchesTrade } from "@/components/execution-badge";
 import { Badge } from "@/components/ui/badge";
-import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
+import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
 import { calcMoneyness } from "@/lib/calculations";
 import { fmtMoney, fmtMoneyInt, pnlColor } from "@/lib/format";
@@ -73,9 +73,7 @@ function MorningCard({ dt, liveQuotes, date, execution }: MorningCardProps) {
     );
 
   const riskBadgeVariant: "destructive" | "outline" | "secondary" = trade.risk_level === "HIGH" ? "destructive" : trade.risk_level === "MEDIUM" ? "outline" : "secondary";
-  const showGpt = trade.gpt_score > 0;
-  const showClaude = trade.claude_score > 0;
-  const showAnyScore = showGpt || showClaude;
+  const showScore = trade.score > 0;
 
   return (
     <Link href={tradeHref(trade.symbol, date)} className="block">
@@ -90,21 +88,10 @@ function MorningCard({ dt, liveQuotes, date, execution }: MorningCardProps) {
             <Badge variant={moneyness.variant}>{moneyness.label}</Badge>
             <Badge variant={riskBadgeVariant}>{trade.risk_level}</Badge>
             {execution && <ExecutionBadge execution={execution} />}
-            {showAnyScore && (
-              <div className="ml-auto flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-0.5 text-[11px] font-semibold tabular-nums">
-                {showGpt && (
-                  <span className="inline-flex items-center gap-1">
-                    <OpenAILogo className="h-3 w-3" />
-                    <span>{trade.gpt_score}</span>
-                  </span>
-                )}
-                {showGpt && showClaude && <span className="text-muted-foreground">·</span>}
-                {showClaude && (
-                  <span className="inline-flex items-center gap-1">
-                    <ClaudeLogo className="h-3 w-3" />
-                    <span>{trade.claude_score}</span>
-                  </span>
-                )}
+            {showScore && (
+              <div className="ml-auto inline-flex items-center gap-1 rounded-md border bg-muted/40 px-2 py-0.5 text-[11px] font-semibold tabular-nums">
+                <ClaudeLogo className="h-3 w-3" />
+                <span>{trade.score}/10</span>
               </div>
             )}
           </div>

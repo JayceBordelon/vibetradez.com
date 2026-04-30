@@ -5,6 +5,8 @@ import (
 	"math"
 	"strings"
 	"time"
+
+	"vibetradez.com/internal/trades"
 )
 
 /*
@@ -66,17 +68,17 @@ func OCCSymbol(symbol, expiration, contractType string, strike float64) (string,
 }
 
 /*
-BuildOpenOrder returns the Order to submit for an Execute confirmation.
-Hardcodes MaxContracts (1) and BUY_TO_OPEN — these are NOT parameters,
-they are invariants. Any caller that wants something different is a
-programming error and panics.
+BuildOpenOrderForTrade returns the Order to submit for the morning
+auto-execution. Hardcodes MaxContracts (1) and BUY_TO_OPEN, these are
+invariants, not parameters. Caller passes the rank-1 Trade plus its
+pre-built OCC symbol.
 */
-func BuildOpenOrder(d *Decision) (Order, error) {
-	if d == nil {
+func BuildOpenOrderForTrade(t *trades.Trade, occSymbol string) (Order, error) {
+	if t == nil {
 		return Order{}, ErrInvalidOrder
 	}
-	if d.OCCSymbol == "" {
-		return Order{}, fmt.Errorf("decision missing OCC symbol")
+	if occSymbol == "" {
+		return Order{}, fmt.Errorf("missing OCC symbol")
 	}
 	return Order{
 		OrderType:         "MARKET",
@@ -87,7 +89,7 @@ func BuildOpenOrder(d *Decision) (Order, error) {
 			Instruction: "BUY_TO_OPEN",
 			Quantity:    MaxContracts,
 			Instrument: Instrument{
-				Symbol:    d.OCCSymbol,
+				Symbol:    occSymbol,
 				AssetType: "OPTION",
 			},
 		}},
@@ -95,16 +97,19 @@ func BuildOpenOrder(d *Decision) (Order, error) {
 }
 
 /*
-BuildCloseOrder mirrors BuildOpenOrder for the 3:55pm mandatory close.
-Same hardcoded contract count + market order; only the instruction
-differs (SELL_TO_CLOSE).
+BuildCloseOrderForPosition mirrors BuildOpenOrderForTrade for the
+3:55pm mandatory close. Same hardcoded contract count + market order,
+only the instruction differs (SELL_TO_CLOSE). Caller passes an
+OpenPosition (joined trade + execution row) so the OCC symbol is
+rebuilt from the trade's contract spec.
 */
-func BuildCloseOrder(d *Decision) (Order, error) {
-	if d == nil {
+func BuildCloseOrderForPosition(p *OpenPosition) (Order, error) {
+	if p == nil {
 		return Order{}, ErrInvalidOrder
 	}
-	if d.OCCSymbol == "" {
-		return Order{}, fmt.Errorf("decision missing OCC symbol")
+	occ, err := OCCSymbol(p.Symbol, p.Expiration, p.ContractType, p.StrikePrice)
+	if err != nil {
+		return Order{}, fmt.Errorf("rebuild OCC: %w", err)
 	}
 	return Order{
 		OrderType:         "MARKET",
@@ -115,7 +120,7 @@ func BuildCloseOrder(d *Decision) (Order, error) {
 			Instruction: "SELL_TO_CLOSE",
 			Quantity:    MaxContracts,
 			Instrument: Instrument{
-				Symbol:    d.OCCSymbol,
+				Symbol:    occ,
 				AssetType: "OPTION",
 			},
 		}},

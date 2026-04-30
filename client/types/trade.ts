@@ -14,15 +14,9 @@ export interface Trade {
   catalyst: string;
   mention_count: number;
   rank: number;
-  gpt_score: number;
-  gpt_rationale: string;
-  claude_score: number;
-  claude_rationale: string;
-  combined_score: number;
-  picked_by_openai: boolean;
-  picked_by_claude: boolean;
-  gpt_verdict: string;
-  claude_verdict: string;
+  score: number;
+  rationale: string;
+  model: string;
 }
 
 export interface TradeSummary {
@@ -42,61 +36,11 @@ export interface DashboardTrade {
   summary: TradeSummary | null;
 }
 
-export interface ModelPickSummary {
-  date: string;
-  symbol: string;
-  contract_type: string;
-  pnl: number;
-  pct_return: number;
-  score: number;
-}
-
-export interface ModelDayPnl {
-  date: string;
-  pnl: number;
-}
-
-export interface ModelDayBreakdown {
-  date: string;
-  pnl: number;
-  trades: number;
-  winners: number;
-  losers: number;
-  picks: ModelPickSummary[];
-}
-
-export interface ModelStats {
-  model: string;
-  total_pnl: number;
-  win_rate: number;
-  avg_pct_return: number;
-  trades_evaluated: number;
-  avg_score: number;
-  best_pick: ModelPickSummary | null;
-  worst_pick: ModelPickSummary | null;
-  cumulative_pnl: ModelDayPnl[];
-  daily_breakdown: ModelDayBreakdown[];
-}
-
-export interface ModelComparisonResponse {
-  range: string;
-  start: string;
-  end: string;
-  top_n: number;
-  openai: ModelStats;
-  anthropic: ModelStats;
-  combined: ModelStats;
-  agreement_rate: number;
-  total_dual_scored: number;
-  total_days_covered: number;
-}
-
 /**
-Execution surfaces a position Jayce actually took on a trade —
-either via the auto-execution pipeline (paper or live). Mode is
-always rendered in the badge so paper is never mistaken for a real
-position. Server omits this field entirely when no qualifying pick
-converted to an execution that day.
+Execution surfaces a position taken on a trade via the auto-execution
+pipeline (paper or live). Mode is always rendered in the badge so paper
+is never mistaken for a real position. Server omits this field entirely
+when no qualifying pick converted to an execution that day.
 */
 export interface Execution {
   mode: "paper" | "live";

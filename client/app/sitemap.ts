@@ -18,6 +18,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.3,
     },
     {
+      url: "https://vibetradez.com/privacy",
+      changeFrequency: "monthly",
+      priority: 0.3,
+    },
+    {
       url: "https://vibetradez.com/faq",
       changeFrequency: "monthly",
       priority: 0.5,

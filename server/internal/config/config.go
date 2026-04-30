@@ -12,11 +12,9 @@ type Config struct {
 	CronScheduleClose  string
 	CronScheduleWeekly string
 	ResendAPIKey       string
-	OpenAIAPIKey       string
-	OpenAIModel        string
 	AnthropicAPIKey    string
 	AnthropicModel     string
-	EmailRecipients    []string // Fallback: seed subscribers from env on first run
+	EmailRecipients    []string
 	EmailFrom          string
 	DatabaseURL        string
 	ServerPort         string
@@ -28,11 +26,11 @@ type Config struct {
 		server delegates sign-in to the centralized auth service and talks
 		to it over HTTP for token exchange + session introspection.
 	*/
-	AuthBaseURL       string // e.g. http://auth-service:8081 (internal)
-	AuthPublicURL     string // e.g. https://auth.jaycebordelon.com (browser-facing)
+	AuthBaseURL       string
+	AuthPublicURL     string
 	AuthClientID      string
 	AuthClientSecret  string
-	AuthRedirectURI   string // consumer callback URL (must be registered at auth service)
+	AuthRedirectURI   string
 	SessionCookieName string
 	SessionTTLDays    int
 	/*
@@ -41,39 +39,29 @@ type Config struct {
 		is dead code and no rows are ever written. TradingMode chooses
 		between PaperTrader (synthetic fills, never touches Schwab Trader
 		API) and LiveTrader (real money). Default is paper, and "anything
-		not literally 'live'" resolves to paper — there is no fallback to
+		not literally 'live'" resolves to paper, there is no fallback to
 		live on misconfiguration.
 	*/
-	TradingEnabled      bool
-	TradingMode         string // "paper" | "live"
-	ExecutionHMACSecret []byte // 32+ bytes, used to sign confirmation tokens
-	ExecutionRecipient  string // single recipient for execution emails (defense in depth vs subscriber list)
-	PublicBaseURL       string // e.g. https://vibetradez.com — used to build email links
+	TradingEnabled     bool
+	TradingMode        string
+	ExecutionRecipient string
+	PublicBaseURL      string
 }
 
 /*
-DefaultOpenAIModel and DefaultAnthropicModel must be refreshed from the
-official Go SDK documentation each time work touches the trade analyzer
-or validator. They should always point at the latest production model
-available in their respective SDKs at the time of the edit. See CLAUDE.md
-"Model version refresh" for the policy.
+DefaultAnthropicModel must be refreshed from the official Anthropic Go SDK
+documentation each time work touches the trade picker. It should always
+point at the latest production Claude model available in the SDK at the
+time of the edit. See CLAUDE.md "Model version refresh" for the policy.
 */
-const (
-	DefaultOpenAIModel    = "gpt-5.5"
-	DefaultAnthropicModel = "claude-opus-4-7"
-)
+const DefaultAnthropicModel = "claude-opus-4-7"
 
 /*
-User-facing labels for the current default models. Emails, logs, and
-the React app reference these instead of the versioned identifier so
-that bumping a default doesn't require a copy sweep across the UI.
-The actual model id (e.g. "gpt-5.5") is still stamped onto each trade
-row in the database for historical accuracy.
+CurrentModelLabel is the user-facing label for the picker model. Emails,
+logs, and the React app reference this constant instead of the versioned
+identifier so that bumping the default doesn't require a copy sweep.
 */
-const (
-	CurrentOpenAILabel    = "GPT Latest"
-	CurrentAnthropicLabel = "Claude Latest"
-)
+const CurrentModelLabel = "Claude Latest"
 
 func getEnvOrDefault(key, def string) string {
 	if v := os.Getenv(key); v != "" {
@@ -95,13 +83,9 @@ func mustEnv(key string) string {
 }
 
 func Load() *Config {
-	/*
-		Required: service refuses to start without these. Keep the list in sync
-		with the .env.example / docker-compose env blocks.
-	*/
 	databaseURL := mustEnv("DATABASE_URL")
 	resendKey := mustEnv("RESEND_API_KEY")
-	openaiKey := mustEnv("OPENAI_API_KEY")
+	anthropicKey := mustEnv("ANTHROPIC_API_KEY")
 	authBaseURL := mustEnv("VT_AUTH_BASE_URL")
 	authClientID := mustEnv("VT_AUTH_CLIENT_ID")
 	authClientSecret := mustEnv("VT_AUTH_CLIENT_SECRET")
@@ -128,45 +112,36 @@ func Load() *Config {
 		CronScheduleClose:  getEnvOrDefault("CRON_SCHEDULE_CLOSE", "5 16 * * 1-5"),
 		CronScheduleWeekly: getEnvOrDefault("CRON_SCHEDULE_WEEKLY", "30 16 * * 5"),
 		ResendAPIKey:       resendKey,
-		OpenAIAPIKey:       openaiKey,
-		OpenAIModel:        getEnvOrDefault("OPENAI_MODEL", DefaultOpenAIModel),
-		// Anthropic validator is optional — empty key disables Claude picking.
-		AnthropicAPIKey: os.Getenv("ANTHROPIC_API_KEY"),
-		AnthropicModel:  getEnvOrDefault("ANTHROPIC_MODEL", DefaultAnthropicModel),
-		EmailRecipients: recipients,
-		EmailFrom:       getEnvOrDefault("EMAIL_FROM", "Vibe Tradez <trades@vibetradez.com>"),
-		DatabaseURL:     databaseURL,
-		ServerPort:      getEnvOrDefault("SERVER_PORT", "8080"),
+		AnthropicAPIKey:    anthropicKey,
+		AnthropicModel:     getEnvOrDefault("ANTHROPIC_MODEL", DefaultAnthropicModel),
+		EmailRecipients:    recipients,
+		EmailFrom:          getEnvOrDefault("EMAIL_FROM", "Vibe Tradez <trades@vibetradez.com>"),
+		DatabaseURL:        databaseURL,
+		ServerPort:         getEnvOrDefault("SERVER_PORT", "8080"),
 		/*
-			Schwab market data is optional — live quotes degrade gracefully when
-			keys are unset. Leave this dual-var pair free-form.
+			Schwab market data is optional, live quotes degrade gracefully when
+			keys are unset.
 		*/
-		SchwabAppKey:      os.Getenv("SCHWAB_APP_KEY"),
-		SchwabSecret:      os.Getenv("SCHWAB_SECRET"),
-		SchwabCallbackURL: getEnvOrDefault("SCHWAB_CALLBACK_URL", "https://vibetradez.com/auth/callback"),
-		AuthBaseURL:       authBaseURL,
-		AuthPublicURL:     getEnvOrDefault("VT_AUTH_PUBLIC_URL", "https://auth.jaycebordelon.com"),
-		AuthClientID:      authClientID,
-		AuthClientSecret:  authClientSecret,
-		AuthRedirectURI:   authRedirectURI,
-		SessionCookieName: getEnvOrDefault("SESSION_COOKIE_NAME", "vt_session"),
-		SessionTTLDays:    sessionTTLDays,
-		TradingEnabled:    os.Getenv("TRADING_ENABLED") == "true",
-		TradingMode:       resolveTradingMode(os.Getenv("TRADING_MODE")),
-		/*
-			Required if TradingEnabled — checked at startup in main, not
-			here, so a misconfig surfaces as a clear log line rather than
-			a silent dormant pipeline.
-		*/
-		ExecutionHMACSecret: []byte(os.Getenv("EXECUTION_HMAC_SECRET")),
-		ExecutionRecipient:  getEnvOrDefault("EXECUTION_RECIPIENT", "bordelonjayce@gmail.com"),
-		PublicBaseURL:       getEnvOrDefault("PUBLIC_BASE_URL", "https://vibetradez.com"),
+		SchwabAppKey:       os.Getenv("SCHWAB_APP_KEY"),
+		SchwabSecret:       os.Getenv("SCHWAB_SECRET"),
+		SchwabCallbackURL:  getEnvOrDefault("SCHWAB_CALLBACK_URL", "https://vibetradez.com/auth/callback"),
+		AuthBaseURL:        authBaseURL,
+		AuthPublicURL:      getEnvOrDefault("VT_AUTH_PUBLIC_URL", "https://auth.jaycebordelon.com"),
+		AuthClientID:       authClientID,
+		AuthClientSecret:   authClientSecret,
+		AuthRedirectURI:    authRedirectURI,
+		SessionCookieName:  getEnvOrDefault("SESSION_COOKIE_NAME", "vt_session"),
+		SessionTTLDays:     sessionTTLDays,
+		TradingEnabled:     os.Getenv("TRADING_ENABLED") == "true",
+		TradingMode:        resolveTradingMode(os.Getenv("TRADING_MODE")),
+		ExecutionRecipient: getEnvOrDefault("EXECUTION_RECIPIENT", "bordelonjayce@gmail.com"),
+		PublicBaseURL:      getEnvOrDefault("PUBLIC_BASE_URL", "https://vibetradez.com"),
 	}
 }
 
 /*
 resolveTradingMode collapses anything other than the literal string
-"live" to "paper". This is intentional — a typo or empty env var must
+"live" to "paper". This is intentional, a typo or empty env var must
 never accidentally route to real-money execution.
 */
 func resolveTradingMode(v string) string {

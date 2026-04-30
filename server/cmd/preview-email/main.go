@@ -23,13 +23,9 @@ func main() {
 			SentimentScore: 0.45, CurrentPrice: 945, TargetPrice: 8.40, StopLoss: 2.10,
 			RiskLevel: "MEDIUM",
 			Catalyst:  "Jensen keynote post-close", MentionCount: 320,
-			Rank:     1,
-			GPTScore: 9, ClaudeScore: 8, CombinedScore: 8.5,
-			PickedByOpenAI: true, PickedByClaude: true,
-			GPTRationale:    "Setup screams pre-event vol expansion. Spot is pinned within 0.6% of the 950 strike on a 5-DTE clock; an AI keynote is the cleanest catalyst we've had in weeks. Premium is below our mark-price filter and the chain shows healthy interest at the strike. Risk is the move already being priced in.",
-			ClaudeRationale: "Bull case is real but the chain shows a fairly priced 5-DTE call rather than a steal. I like the catalyst alignment but I'd want a stop tighter than the suggested 2.10 — anything below the 943 pivot from last Friday and the thesis breaks.",
-			GPTVerdict:      "Agree on direction. I'd take the conviction down a half point because IV is already lifted into the keynote.",
-			ClaudeVerdict:   "Concur. The catalyst is clean and the strike picks itself. My one nit: the thesis ignores that AAPL prints the same week and could pull tape attention.",
+			Rank:      1,
+			Score:     9,
+			Rationale: "Setup screams pre-event vol expansion. Spot is pinned within 0.6 percent of the 950 strike on a 5-DTE clock; an AI keynote is the cleanest catalyst we've had in weeks. Premium is below our mark-price filter and the chain shows healthy interest at the strike. Risk is the move already being priced in.",
 		},
 		{
 			Symbol: "AMD", ContractType: "PUT", StrikePrice: 168,
@@ -38,13 +34,9 @@ func main() {
 			SentimentScore: -0.2, CurrentPrice: 170, TargetPrice: 3.50, StopLoss: 0.90,
 			RiskLevel: "HIGH",
 			Catalyst:  "Bearish dark-pool prints", MentionCount: 78,
-			Rank:     2,
-			GPTScore: 7, ClaudeScore: 9, CombinedScore: 8.0,
-			PickedByOpenAI: true, PickedByClaude: true,
-			GPTRationale:    "I'm in but cautiously. Setup looks clean on the chart but momentum names cutting hard into earnings is exactly when shorts get squeezed by a single sympathy bid.",
-			ClaudeRationale: "This is the cleanest contrarian setup on the screen. Dark-pool prints into a name trading 35x forward earnings during a sentiment-driven rally is textbook reversion. Strike is right at the gamma flip and DTE gives one full session for any post-keynote AI tape softness to spread.",
-			GPTVerdict:      "Convicted setup. I downgraded the score for path risk only — a positive AI tape Monday morning rips this name back to 175 fast.",
-			ClaudeVerdict:   "Solid analysis. The risk callout is right, but the dark-pool flow asymmetry is the tiebreaker for me.",
+			Rank:      2,
+			Score:     8,
+			Rationale: "Cleanest contrarian setup on the screen. Dark-pool prints into a name trading 35x forward earnings during a sentiment-driven rally is textbook reversion. Strike is right at the gamma flip and DTE gives one full session for any post-keynote AI tape softness to spread.",
 		},
 	}
 
@@ -60,7 +52,7 @@ func main() {
 		WorstPnL:    -78.00,
 	}
 
-	html, err := templates.RenderEmail(trades, "ChatGPT", "Claude", yesterday)
+	html, err := templates.RenderEmail(trades, "Claude", yesterday)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "render error:", err)
 		os.Exit(1)

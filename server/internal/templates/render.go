@@ -9,34 +9,27 @@ import (
 	"time"
 )
 
-//go:embed email.html summary.html test.html error.html weekly.html execute_confirm.html execute_canceled.html execute_receipt.html execute_close_receipt.html execute_close_failed.html rollout_auto_execution_live.html
+//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_close_receipt.html execute_close_failed.html rollout_auto_execution_live.html rollout_claude_only.html
 var templateFS embed.FS
 
 type Trade struct {
-	Symbol          string
-	ContractType    string
-	StrikePrice     float64
-	Expiration      string
-	DTE             int
-	EstimatedPrice  float64
-	Thesis          string
-	SentimentScore  float64
-	CurrentPrice    float64
-	TargetPrice     float64
-	StopLoss        float64
-	RiskLevel       string
-	Catalyst        string
-	MentionCount    int
-	Rank            int
-	GPTScore        int
-	GPTRationale    string
-	ClaudeScore     int
-	ClaudeRationale string
-	CombinedScore   float64
-	PickedByOpenAI  bool
-	PickedByClaude  bool
-	GPTVerdict      string
-	ClaudeVerdict   string
+	Symbol         string
+	ContractType   string
+	StrikePrice    float64
+	Expiration     string
+	DTE            int
+	EstimatedPrice float64
+	Thesis         string
+	SentimentScore float64
+	CurrentPrice   float64
+	TargetPrice    float64
+	StopLoss       float64
+	RiskLevel      string
+	Catalyst       string
+	MentionCount   int
+	Rank           int
+	Score          int
+	Rationale      string
 }
 
 /*
@@ -45,7 +38,7 @@ surfaced at the top of the morning email so subscribers see how the
 last batch performed before reading today's picks.
 */
 type YesterdayRecap struct {
-	Date        string // formatted, e.g. "Apr 24"
+	Date        string
 	TotalPnL    float64
 	Winners     int
 	Losers      int
@@ -57,15 +50,13 @@ type YesterdayRecap struct {
 }
 
 type EmailData struct {
-	Subject         string
-	Date            string
-	Trades          []Trade
-	GPTModelName    string
-	ClaudeModelName string
-	Yesterday       *YesterdayRecap // nil = no recap available (first send, EOD cron failed, etc.)
-	ClaudeTopPick   *Trade          // Claude's #1 by ClaudeScore; nil if Claude picked nothing
-	GPTTopPick      *Trade          // ChatGPT's #1 by GPTScore; nil if GPT picked nothing
-	DashboardURL    string
+	Subject      string
+	Date         string
+	Trades       []Trade
+	ModelName    string
+	Yesterday    *YesterdayRecap
+	TopPick      *Trade
+	DashboardURL string
 }
 
 type SummaryTrade struct {
@@ -83,9 +74,7 @@ type SummaryTrade struct {
 	Result         string
 	Notes          string
 	Rank           int
-	GPTScore       int
-	ClaudeScore    int
-	CombinedScore  float64
+	Score          int
 }
 
 type SummaryEmailData struct {
@@ -96,18 +85,8 @@ type SummaryEmailData struct {
 	Winners     int
 	Losers      int
 	TotalPnL    float64
-	/*
-		Dual-model attribution: P&L by which model picked the top 3 trades
-		(sorted by each model's score). Lets the EOD email surface a tiny
-		leaderboard answering "which model would you have made more money
-		listening to today?".
-	*/
-	GPTTop3Pnl       float64
-	ClaudeTop3Pnl    float64
-	CombinedTop3Pnl  float64
-	GPTAvgScore      float64
-	ClaudeAvgScore   float64
-	AgreementPercent float64
+	Top3Pnl     float64
+	AvgScore    float64
 }
 
 type WeeklyDayData struct {
@@ -140,19 +119,6 @@ type WeeklyEmailData struct {
 	WorstTrade    string
 	WorstPnL      float64
 	DashboardURL  string
-	/*
-		Per-model backtest aggregates over the week, mirroring the
-		/api/model-comparison response. The weekly email surfaces these so
-		subscribers see which model's ranking would have produced the most
-		P&L if followed in isolation.
-	*/
-	GPTTotalPnl      float64
-	GPTWinRate       float64
-	ClaudeTotalPnl   float64
-	ClaudeWinRate    float64
-	CombinedTotalPnl float64
-	CombinedWinRate  float64
-	AgreementPercent float64
 }
 
 var funcMap = template.FuncMap{
@@ -223,40 +189,28 @@ var funcMap = template.FuncMap{
 	},
 }
 
-func RenderEmail(trades []Trade, gptModelName, claudeModelName string, yesterday *YesterdayRecap) (string, error) {
+func RenderEmail(trades []Trade, modelName string, yesterday *YesterdayRecap) (string, error) {
 	tmpl, err := template.New("email.html").Funcs(funcMap).ParseFS(templateFS, "email.html")
 	if err != nil {
 		return "", err
 	}
 
-	/*
-		Pick each model's #1 conviction trade independently — Claude's top is
-		the highest-ClaudeScore trade Claude actually picked, ditto for GPT.
-		They may resolve to the same underlying ticker on consensus days; the
-		template renders both sections regardless so each model leads with its
-		own rationale.
-	*/
-	var claudeTop, gptTop *Trade
+	var topPick *Trade
 	for i := range trades {
 		t := &trades[i]
-		if t.PickedByClaude && (claudeTop == nil || t.ClaudeScore > claudeTop.ClaudeScore) {
-			claudeTop = t
-		}
-		if t.PickedByOpenAI && (gptTop == nil || t.GPTScore > gptTop.GPTScore) {
-			gptTop = t
+		if topPick == nil || t.Score > topPick.Score {
+			topPick = t
 		}
 	}
 
 	data := EmailData{
-		Subject:         "Today's Top Options Plays",
-		Date:            time.Now().Format("Monday, Jan 2, 2006"),
-		Trades:          trades,
-		GPTModelName:    gptModelName,
-		ClaudeModelName: claudeModelName,
-		Yesterday:       yesterday,
-		ClaudeTopPick:   claudeTop,
-		GPTTopPick:      gptTop,
-		DashboardURL:    "https://vibetradez.com/dashboard",
+		Subject:      "Today's Top Options Plays",
+		Date:         time.Now().Format("Monday, Jan 2, 2006"),
+		Trades:       trades,
+		ModelName:    modelName,
+		Yesterday:    yesterday,
+		TopPick:      topPick,
+		DashboardURL: "https://vibetradez.com/dashboard",
 	}
 
 	var buf bytes.Buffer
@@ -269,9 +223,9 @@ func RenderEmail(trades []Trade, gptModelName, claudeModelName string, yesterday
 
 type HealthCheck struct {
 	Name    string
-	Status  string // "ok", "warn", "fail"
+	Status  string
 	Detail  string
-	Latency string // e.g. "12ms"
+	Latency string
 }
 
 type StatusEmailData struct {
@@ -300,57 +254,6 @@ type ErrorEmailData struct {
 
 // ── Auto-execution emails ──
 
-/*
-ExecuteConfirmData powers the 5-minute confirmation email. Includes
-every piece of context the user could possibly want when deciding
-whether to fire: contract details, capital at risk, both models'
-rationales + scores + cross-verdicts, catalyst, expiry timer, signed
-Execute / Decline links.
-*/
-type ExecuteConfirmData struct {
-	Subject         string
-	Date            string
-	Mode            string // "paper" | "live"
-	Symbol          string
-	ContractType    string
-	StrikePrice     float64
-	Expiration      string
-	DTE             int
-	OCCSymbol       string
-	ContractPrice   float64
-	CapitalAtRisk   float64 // ContractPrice * 100 * 1
-	CurrentPrice    float64
-	RiskLevel       string
-	Catalyst        string
-	Thesis          string
-	GPTModelName    string
-	GPTScore        int
-	GPTRationale    string
-	GPTVerdict      string
-	ClaudeModelName string
-	ClaudeScore     int
-	ClaudeRationale string
-	ClaudeVerdict   string
-	ExpiresAtText   string // formatted expiry, e.g. "9:30 AM ET"
-	ExecuteURL      string // signed token + auth-required confirmation page
-	DeclineURL      string
-}
-
-type ExecuteCanceledData struct {
-	Subject         string
-	Date            string
-	Mode            string
-	Symbol          string
-	ContractType    string
-	StrikePrice     float64
-	Expiration      string
-	ContractPrice   float64
-	GPTModelName    string
-	GPTScore        int
-	ClaudeModelName string
-	ClaudeScore     int
-}
-
 type ExecuteReceiptData struct {
 	Subject            string
 	Date               string
@@ -376,7 +279,7 @@ type ExecuteCloseReceiptData struct {
 	Expiration         string
 	OpenPrice          float64
 	ClosePrice         float64
-	RealizedPnL        float64 // (close - open) * 100 * contracts
+	RealizedPnL        float64
 	SchwabPositionsURL string
 }
 
@@ -392,12 +295,6 @@ type ExecuteCloseFailedData struct {
 	SchwabPositionsURL string
 }
 
-func RenderExecuteConfirm(d ExecuteConfirmData) (string, error) {
-	return renderOne("execute_confirm.html", d)
-}
-func RenderExecuteCanceled(d ExecuteCanceledData) (string, error) {
-	return renderOne("execute_canceled.html", d)
-}
 func RenderExecuteReceipt(d ExecuteReceiptData) (string, error) {
 	return renderOne("execute_receipt.html", d)
 }
@@ -410,12 +307,23 @@ func RenderExecuteCloseFailed(d ExecuteCloseFailedData) (string, error) {
 
 /*
 RenderRolloutAutoExecutionLive renders the v1 rollout email
-announcing the auto-execution feature. Static content — no
+announcing the auto-execution feature. Static content, no
 parameters, just a Subject string for the <title> tag.
 */
 func RenderRolloutAutoExecutionLive() (string, error) {
 	return renderOne("rollout_auto_execution_live.html", map[string]string{
 		"Subject": "VibeTradez can now execute trades",
+	})
+}
+
+/*
+RenderRolloutClaudeOnly renders the v2 rollout email announcing the
+removal of the dual-model pipeline in favour of a single Claude-only
+picker. Static content, no parameters beyond the Subject string.
+*/
+func RenderRolloutClaudeOnly() (string, error) {
+	return renderOne("rollout_claude_only.html", map[string]string{
+		"Subject": "We benched ChatGPT. Claude takes the floor.",
 	})
 }
 
@@ -446,10 +354,8 @@ func VerifyTemplates() HealthCheck {
 			CurrentPrice: 498, TargetPrice: 505, StopLoss: 0.75,
 			RiskLevel: "MEDIUM",
 			Catalyst:  "System test", MentionCount: 42,
-			Rank: 1, GPTScore: 9, ClaudeScore: 8, CombinedScore: 8.5,
-			PickedByOpenAI: true, PickedByClaude: true,
-			GPTRationale: "Sample bullish rationale.", ClaudeRationale: "Sample bullish rationale.",
-			GPTVerdict: "Concur on direction.", ClaudeVerdict: "Aligned, slight strike concern.",
+			Rank: 1, Score: 9,
+			Rationale: "Sample bullish rationale.",
 		},
 	}
 	sampleYesterday := &YesterdayRecap{
@@ -463,7 +369,7 @@ func VerifyTemplates() HealthCheck {
 		WorstSymbol: "QQQ",
 		WorstPnL:    -22.00,
 	}
-	if _, err := RenderEmail(sampleTrades, "ChatGPT", "Claude", sampleYesterday); err != nil {
+	if _, err := RenderEmail(sampleTrades, "Claude", sampleYesterday); err != nil {
 		return HealthCheck{Name: "Email Templates", Status: "fail", Detail: err.Error(), Latency: fmtLatency(start)}
 	}
 
@@ -479,7 +385,7 @@ func VerifyTemplates() HealthCheck {
 	}
 
 	sampleWeekly := WeeklyEmailData{
-		Subject: "Weekly Report", WeekRange: "Mar 25 - Mar 29, 2026",
+		Subject: "Weekly Report", WeekRange: "Mar 25 to Mar 29, 2026",
 		Days: []WeeklyDayData{
 			{
 				Date: "2026-03-25", DayName: "Monday",
@@ -503,9 +409,8 @@ func VerifyTemplates() HealthCheck {
 
 /*
 topNPnl picks the N highest-scoring summaries by the given score
-selector and sums their per-contract P&L. Used by both the EOD and
-weekly emails to backtest "what if you had only followed this model
-today / this week" without re-fetching the trades table.
+selector and sums their per-contract P&L. Used by the EOD email to
+backtest "what if you had only followed the top picks today".
 */
 func topNPnl(trades []SummaryTrade, n int, score func(SummaryTrade) float64) float64 {
 	if len(trades) == 0 {
@@ -529,12 +434,11 @@ func topNPnl(trades []SummaryTrade, n int, score func(SummaryTrade) float64) flo
 func fmtLatency(start time.Time) string {
 	d := time.Since(start)
 	if d < time.Millisecond {
-		return fmt.Sprintf("%dμs", d.Microseconds())
+		return fmt.Sprintf("%dus", d.Microseconds())
 	}
 	return fmt.Sprintf("%dms", d.Milliseconds())
 }
 
-// RenderTestEmail renders the startup health check email with the provided data.
 func RenderTestEmail(data StatusEmailData) (string, error) {
 	tmpl, err := template.New("test.html").Funcs(funcMap).ParseFS(templateFS, "test.html")
 	if err != nil {
@@ -613,68 +517,34 @@ func RenderSummaryEmail(summaryTrades []SummaryTrade) (string, error) {
 		} else {
 			t.Result = "FLAT"
 		}
-		totalPnL += t.PriceChange * 100 // per contract
+		totalPnL += t.PriceChange * 100
 	}
 
-	/*
-		Per-model attribution: replay this single day's picks under each
-		model's ranking and aggregate the top-3 P&L for each, the same way
-		/api/model-comparison does for longer windows. Lets the EOD email
-		surface a tiny "which model would you have made more money
-		listening to today" leaderboard.
-	*/
-	gptTop3Pnl := topNPnl(summaryTrades, 3, func(t SummaryTrade) float64 { return float64(t.GPTScore) })
-	claudeTop3Pnl := topNPnl(summaryTrades, 3, func(t SummaryTrade) float64 { return float64(t.ClaudeScore) })
-	combinedTop3Pnl := topNPnl(summaryTrades, 3, func(t SummaryTrade) float64 { return t.CombinedScore })
+	top3Pnl := topNPnl(summaryTrades, 3, func(t SummaryTrade) float64 { return float64(t.Score) })
 
-	var gptScoreSum, claudeScoreSum float64
-	var gptScoreCount, claudeScoreCount int
-	var agree, dualScored int
+	var scoreSum float64
+	var scoreCount int
 	for _, t := range summaryTrades {
-		if t.GPTScore > 0 {
-			gptScoreSum += float64(t.GPTScore)
-			gptScoreCount++
-		}
-		if t.ClaudeScore > 0 {
-			claudeScoreSum += float64(t.ClaudeScore)
-			claudeScoreCount++
-		}
-		if t.GPTScore > 0 && t.ClaudeScore > 0 {
-			dualScored++
-			diff := t.GPTScore - t.ClaudeScore
-			if diff < 0 {
-				diff = -diff
-			}
-			if diff <= 1 {
-				agree++
-			}
+		if t.Score > 0 {
+			scoreSum += float64(t.Score)
+			scoreCount++
 		}
 	}
-	var gptAvg, claudeAvg, agreementPct float64
-	if gptScoreCount > 0 {
-		gptAvg = gptScoreSum / float64(gptScoreCount)
-	}
-	if claudeScoreCount > 0 {
-		claudeAvg = claudeScoreSum / float64(claudeScoreCount)
-	}
-	if dualScored > 0 {
-		agreementPct = (float64(agree) / float64(dualScored)) * 100
+	var avgScore float64
+	if scoreCount > 0 {
+		avgScore = scoreSum / float64(scoreCount)
 	}
 
 	data := SummaryEmailData{
-		Subject:          "End of Day Trade Summary",
-		Date:             time.Now().Format("Monday, Jan 2, 2006"),
-		Trades:           summaryTrades,
-		TotalTrades:      len(summaryTrades),
-		Winners:          winners,
-		Losers:           losers,
-		TotalPnL:         totalPnL,
-		GPTTop3Pnl:       gptTop3Pnl,
-		ClaudeTop3Pnl:    claudeTop3Pnl,
-		CombinedTop3Pnl:  combinedTop3Pnl,
-		GPTAvgScore:      gptAvg,
-		ClaudeAvgScore:   claudeAvg,
-		AgreementPercent: agreementPct,
+		Subject:     "End of Day Trade Summary",
+		Date:        time.Now().Format("Monday, Jan 2, 2006"),
+		Trades:      summaryTrades,
+		TotalTrades: len(summaryTrades),
+		Winners:     winners,
+		Losers:      losers,
+		TotalPnL:    totalPnL,
+		Top3Pnl:     top3Pnl,
+		AvgScore:    avgScore,
 	}
 
 	var buf bytes.Buffer

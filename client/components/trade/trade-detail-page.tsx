@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 import { ExecutionBadge, matchesTrade } from "@/components/execution-badge";
 import { Badge } from "@/components/ui/badge";
-import { ClaudeLogo, OpenAILogo } from "@/components/ui/brand-icons";
+import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
 import { Metric } from "@/components/ui/metric";
 import { api } from "@/lib/api";
@@ -154,41 +154,20 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
         </CardContent>
       </Card>
 
-      {/* Dual-model rationale + cross verdict */}
-      {(trade.gpt_rationale || trade.claude_rationale) && (
+      {/* Picker rationale */}
+      {trade.rationale && (
         <Card>
-          <CardContent className="space-y-5 p-5 sm:p-6">
-            <h2 className="text-base font-semibold">Independent rationales</h2>
-            <div className="grid gap-5 lg:grid-cols-2">
-              {trade.gpt_rationale && (
-                <ModelBlock
-                  Logo={OpenAILogo}
-                  modelLabel="ChatGPT"
-                  modelLabelClass="text-gpt"
-                  score={trade.gpt_score}
-                  rationale={trade.gpt_rationale}
-                  verdict={trade.claude_verdict}
-                  verdictLabel="Claude's verdict"
-                  verdictAccent="border-claude/40 bg-claude/5"
-                  verdictLabelClass="text-claude"
-                  VerdictLogo={ClaudeLogo}
-                />
-              )}
-              {trade.claude_rationale && (
-                <ModelBlock
-                  Logo={ClaudeLogo}
-                  modelLabel="Claude"
-                  modelLabelClass="text-claude"
-                  score={trade.claude_score}
-                  rationale={trade.claude_rationale}
-                  verdict={trade.gpt_verdict}
-                  verdictLabel="ChatGPT's verdict"
-                  verdictAccent="border-gpt/40 bg-gpt/5"
-                  verdictLabelClass="text-gpt"
-                  VerdictLogo={OpenAILogo}
-                />
+          <CardContent className="space-y-3 p-5 sm:p-6">
+            <div className="flex items-center gap-2">
+              <ClaudeLogo className="h-5 w-5" />
+              <span className="text-base font-semibold text-claude">Claude's read</span>
+              {trade.score > 0 && (
+                <Badge variant="secondary" className="tabular-nums">
+                  {trade.score}/10
+                </Badge>
               )}
             </div>
+            <p className="text-sm leading-relaxed text-muted-foreground">{trade.rationale}</p>
           </CardContent>
         </Card>
       )}
@@ -226,54 +205,6 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
             {summary.notes && <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">{summary.notes}</p>}
           </CardContent>
         </Card>
-      )}
-    </div>
-  );
-}
-
-function ModelBlock({
-  Logo,
-  modelLabel,
-  modelLabelClass,
-  score,
-  rationale,
-  verdict,
-  verdictLabel,
-  verdictAccent,
-  verdictLabelClass,
-  VerdictLogo,
-}: {
-  Logo: React.ComponentType<{ className?: string }>;
-  modelLabel: string;
-  modelLabelClass: string;
-  score: number;
-  rationale: string;
-  verdict: string;
-  verdictLabel: string;
-  verdictAccent: string;
-  verdictLabelClass: string;
-  VerdictLogo: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Logo className="h-5 w-5" />
-        <span className={cn("text-sm font-semibold", modelLabelClass)}>{modelLabel}</span>
-        {score > 0 && (
-          <Badge variant="secondary" className="tabular-nums">
-            {score}/10
-          </Badge>
-        )}
-      </div>
-      <p className="text-sm leading-relaxed text-muted-foreground">{rationale}</p>
-      {verdict && (
-        <div className={cn("rounded-md border-l-2 px-3 py-2 text-sm leading-relaxed", verdictAccent)}>
-          <div className={cn("mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider", verdictLabelClass)}>
-            <VerdictLogo className="h-3 w-3" />
-            {verdictLabel}
-          </div>
-          <p className="italic text-muted-foreground">{verdict}</p>
-        </div>
       )}
     </div>
   );

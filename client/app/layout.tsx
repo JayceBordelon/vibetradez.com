@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     template: "%s | VibeTradez",
   },
   description:
-    "A controlled experiment between two silly models. ChatGPT and Claude get the exact same market signals, prompt, and tools, independently pick their top 10, then write a one-sentence verdict on every one of the other model's picks. Delivered before market open.",
+    "Live experiment in letting one silly model trade. Every morning Claude pulls market signals, runs the same prompt against Schwab quotes and web search, and ranks its top 10 contracts with conviction scores. Delivered free before market open.",
   keywords: ["options trading", "AI trading", "daily options picks", "trade alerts", "options analytics", "stock options", "day trading"],
   authors: [{ name: "Jayce Bordelon", url: "https://jaycebordelon.com" }],
   openGraph: {
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     url: "https://vibetradez.com",
     siteName: "VibeTradez",
     title: "VibeTradez | AI-Powered Options Picks",
-    description: "Two silly models, same data, same prompt, same tools. Independent picks plus cross-examination, delivered free before the opening bell.",
+    description: "One silly model, live market data, conviction-scored picks. Delivered free before the opening bell.",
     images: [
       {
         url: "/opengraph-image",
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "VibeTradez | AI-Powered Options Picks",
-    description: "Two silly models, same data, same prompt, same tools. Independent picks plus cross-examination, delivered free before the opening bell.",
+    description: "One silly model, live market data, conviction-scored picks. Delivered free before the opening bell.",
     creator: "@JayceBordelon",
     images: ["/opengraph-image"],
   },

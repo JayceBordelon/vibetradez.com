@@ -4,7 +4,7 @@ import { Separator } from "@/components/ui/separator";
 
 export function Footer() {
   return (
-    <footer className="border-t bg-card">
+    <footer className="relative border-t border-foreground/5 bg-background/40 backdrop-blur-xl dark:border-white/5">
       <div className="mx-auto flex max-w-[1200px] flex-col gap-4 px-4 py-6 sm:px-7">
         <p className="max-w-3xl text-xs leading-relaxed text-muted-foreground">
           <strong className="text-foreground">Disclaimer:</strong> Not financial advice. Options trading involves substantial risk of loss. All P&amp;L figures are hypothetical and assume
@@ -32,6 +32,13 @@ export function Footer() {
               className="inline-flex min-h-11 min-w-11 items-center justify-center underline underline-offset-2 transition-colors hover:text-foreground sm:min-h-0 sm:min-w-0 sm:justify-start"
             >
               Terms
+            </Link>
+            <Separator orientation="vertical" className="hidden h-3 sm:inline-flex" />
+            <Link
+              href="/privacy"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center underline underline-offset-2 transition-colors hover:text-foreground sm:min-h-0 sm:min-w-0 sm:justify-start"
+            >
+              Privacy
             </Link>
             <Separator orientation="vertical" className="hidden h-3 sm:inline-flex" />
             <Link

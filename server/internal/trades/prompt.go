@@ -8,7 +8,7 @@ MARKET SIGNALS (trending tickers, unusual volume, insider buys):
 TOOLS AVAILABLE:
 - get_stock_quotes: Call this to get real-time stock prices from Schwab. Pass comma-separated symbols.
 - get_option_chain: Call this to get live option chain data (bid/ask/mark, greeks, open interest) for a symbol. Use this to find exact contract prices and validate strike/expiration combos.
-- web_search: Use ONLY for news, earnings dates, catalysts, and market context. Do NOT use web search for stock prices or option prices — use the Schwab tools instead.
+- web_search: Use ONLY for news, earnings dates, catalysts, and market context. Do NOT use web search for stock prices or option prices, use the Schwab tools instead.
 
 WORKFLOW:
 1. Identify 12-15 candidate tickers from the market signals above and your own market knowledge.
@@ -20,17 +20,17 @@ WORKFLOW:
 If the market signals are empty, use web search to find trending stocks and market movers, then follow the same workflow.
 
 REQUIREMENTS:
-- Each trade MUST be a DIFFERENT ticker symbol — no duplicate tickers allowed
+- Each trade MUST be a DIFFERENT ticker symbol, no duplicate tickers allowed
 - Each trade should be a short-term option: 0DTE (same day expiration) to 7 DTE (one week out)
 - NO SINGLE CONTRACT should cost more than $200 (so strike prices should be chosen accordingly)
 - Include both CALL and PUT opportunities based on sentiment and market analysis
 - Provide a clear thesis for each trade explaining WHY it should be made
 - Use REAL prices from get_stock_quotes for current_price
-- Use REAL option mark prices from get_option_chain for estimated_price — do NOT guess
+- Use REAL option mark prices from get_option_chain for estimated_price, do NOT guess
 - Verify earnings dates and any major news events via web search
 
 CONVICTION SCORING:
-- Every trade MUST include a "score" field from 1 to 10 representing your conviction. 10 = highest possible conviction this is a winning trade. 1 = lowest. Use the full range — do not cluster scores.
+- Every trade MUST include a "score" field from 1 to 10 representing your conviction. 10 = highest possible conviction this is a winning trade. 1 = lowest. Use the full range, do not cluster scores.
 - Every trade MUST include a "rationale" field explaining specifically WHY you assigned that score: what evidence supports it, what the main risks are, and what you'd need to see to revise the score up or down. The rationale is separate from the thesis: thesis = the trade idea, rationale = the defense of your conviction score.
 - The rank field should still be set 1..10 with 1 being your best. Ranks are derived from your scores; the highest score gets rank 1.
 
@@ -64,9 +64,9 @@ FIELD EXPLANATIONS:
 - stop_loss: Premium level to exit if trade goes against you (typically 50%% of entry)
 - risk_level: LOW (safe, high probability), MEDIUM (balanced), HIGH (speculative/yolo)
 - catalyst: The specific event or reason driving near-term price movement
-- thesis: The trade idea — what the trade is and why it should work
+- thesis: The trade idea, what the trade is and why it should work
 - score: Your conviction 1-10 (REQUIRED, integer)
-- rationale: Defense of the score (REQUIRED) — what makes you confident or cautious
+- rationale: Defense of the score (REQUIRED), what makes you confident or cautious
 
 Only respond with the JSON array, no other text.`
 
@@ -109,50 +109,3 @@ FIELD EXPLANATIONS:
 - notes: Brief explanation of what happened (e.g. "Stock rallied 3%% on earnings beat, contract gained value")
 
 Only respond with the JSON array, no other text.`
-
-/*
-Both Analyzer (OpenAI) and ClaudePicker (Anthropic) use AnalysisPrompt
-directly. The previous ClaudeValidationPrompt was removed when the
-pipeline switched from a proposer/validator model to two independent
-pickers running the same workflow on the same raw sentiment data.
-*/
-
-/*
-CrossExaminationPrompt is the second-pass prompt each model runs after
-both have produced their independent top-10. The model is shown the
-OTHER model's pick list and asked to write one short, specific
-sentence per pick: a critique, a cosign, or a flag. No tools are
-granted; this is a pure reasoning pass over the rationales already
-produced. Verdicts persist on the trade row and surface beside the
-original rationale on the dashboard and in the morning email.
-
-Format args (in order): today's date, weekday, your model name, your
-own picks JSON, the other model's name, the other model's picks JSON.
-*/
-const CrossExaminationPrompt = `You are an expert options trader. Today is %s (%s).
-
-Earlier this morning, you (%s) and another model (%s) each independently produced your own top-10 options picks for today. You both received the EXACT same sentiment data, the EXACT same prompt, and the EXACT same toolset (Schwab quotes, options chain, web search). Now that both pick lists are locked, you are being shown the OTHER model's picks and asked for your honest take.
-
-YOUR OWN PICKS (for context, what YOU concluded was best today):
-%s
-
-THE OTHER MODEL'S PICKS (%s) — write ONE SENTENCE on EACH:
-%s
-
-INSTRUCTIONS:
-- For EVERY pick in the other model's list, write ONE concise sentence (max ~30 words). No more, no less.
-- The sentence should reflect YOUR honest analytical take on that pick, given the analysis you just did. Critique, flag, cosign, or grudging respect are all fair.
-- Be specific. Reference the actual ticker, catalyst, sentiment, contract structure, or risk. Generic praise or generic dismissal is useless.
-- If the other model picked a trade you ALSO picked, acknowledge the agreement and add what you specifically liked about the setup.
-- If the other model picked a trade you considered and rejected, say why you rejected it.
-- If the other model picked a trade you didn't consider, give your honest reaction.
-- No hedging filler. No "interesting choice but". Get to the point.
-
-RESPOND WITH ONLY A JSON OBJECT mapping each ticker symbol to your one-sentence verdict on that pick:
-
-{
-  "AAPL": "Reasonable bull setup but the 3 DTE call is too tight given Friday's macro print risk.",
-  "TSLA": "Cosign — earnings sentiment is one-sided and the ATM call is the cleanest expression."
-}
-
-Include EVERY ticker from the other model's pick list. Symbols are case-sensitive and must match exactly. Only respond with the JSON object, no other text.`

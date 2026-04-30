@@ -1,6 +1,5 @@
 import { Activity, ArrowDownRight, ArrowUpRight, Percent, Scale, Sigma, Target, TrendingDown, TrendingUp } from "lucide-react";
 
-import { TopNFilter } from "@/components/dashboard/top-n-filter";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { fmt, fmtPctDec, fmtPnlInt, percentHueColor, pnlColor } from "@/lib/format";
@@ -23,8 +22,6 @@ interface HistoryStatsProps {
   totalWinners: number;
   totalLosers: number;
   totalTrades: number;
-  topN: number;
-  onTopNChange: (n: number) => void;
 }
 
 function signTone(v: number): "positive" | "negative" | "neutral" {
@@ -50,26 +47,19 @@ export function HistoryStats({
   totalWinners,
   totalLosers,
   totalTrades,
-  topN,
-  onTopNChange,
 }: HistoryStatsProps) {
   const profitFactorValue = profitFactor === Number.POSITIVE_INFINITY ? "\u221E" : `${fmt(profitFactor, 2)}x`;
 
   return (
     <div>
-      {/* Inline filter row: Top-N applies to the stats and breakdown
-          beneath it. Equity curve still overlays all four overlaid. */}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Performance Snapshot</div>
-        <TopNFilter value={topN} onChange={onTopNChange} />
-      </div>
+      <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Performance Snapshot</div>
 
       {/* Primary stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard index={0} label="Net P&L" value={fmtPnlInt(totalPnl)} sub={`${totalTrades} trades`} tone={signTone(totalPnl)} icon={totalPnl >= 0 ? TrendingUp : TrendingDown} />
         <StatCard index={1} label="Win Rate" value={`${winRate.toFixed(0)}%`} sub={`${totalWinners}W \u00B7 ${totalLosers}L`} valueColor={percentHueColor(winRate)} icon={Target} />
         <StatCard index={2} label="Return on Capital" value={fmtPctDec(roc)} sub="ROC" tone={signTone(roc)} icon={Percent} tooltip="Net P&L / total capital deployed" />
-        <StatCard index={3} label="Profit Factor" value={profitFactorValue} tone="neutral" icon={Scale} tooltip="Profit Factor = gross wins \u00F7 gross losses" />
+        <StatCard index={3} label="Profit Factor" value={profitFactorValue} tone="neutral" icon={Scale} tooltip="Profit Factor = gross wins / gross losses" />
       </div>
 
       {/* Secondary stats */}

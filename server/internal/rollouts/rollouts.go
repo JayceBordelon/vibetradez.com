@@ -39,6 +39,7 @@ END of the list.
 */
 var Registry = []Rollout{
 	autoExecutionLiveV1,
+	claudeOnlyV2,
 }
 
 /*

@@ -25,6 +25,7 @@ const sections = [
   { id: "not-advice", title: "Not Financial Advice" },
   { id: "risk", title: "Significant Risk Disclosure" },
   { id: "hypothetical", title: "Hypothetical Performance" },
+  { id: "auto-execution", title: "Auto-Execution Pipeline" },
   { id: "data", title: "Data Sources & Accuracy" },
   { id: "warranty", title: "No Warranty & Limitation of Liability" },
   { id: "contact", title: "Contact" },
@@ -68,9 +69,9 @@ export default function TermsPage() {
               informational and entertainment purposes only. It is not a registered investment advisory service, broker-dealer, or financial institution.
             </p>
             <p>
-              All trade ideas presented on this platform are machine-generated suggestions, not recommendations. They are produced by two large language models, ChatGPT and Claude, running
-              independently with the same prompt and the same toolset over publicly available sentiment data and live market information. After both models produce their picks, each also writes a
-              one-sentence verdict on the other's trades. None of these outputs (picks or verdicts) have been reviewed, verified, or endorsed by any licensed financial professional.
+              All trade ideas presented on this platform are machine-generated suggestions, not recommendations. They are produced by a single large language model (Claude) running with a fixed prompt
+              and a fixed toolset (Schwab market data plus web search) over publicly available sentiment data and live market information. None of these outputs have been reviewed, verified, or
+              endorsed by any licensed financial professional.
             </p>
           </Section>
 
@@ -99,8 +100,8 @@ export default function TermsPage() {
 
           <Section id="hypothetical" num={4} title="Hypothetical Performance">
             <p>
-              All performance metrics on VibeTradez are <strong>hypothetical</strong>. They assume that each suggested trade was entered at the estimated market open price and exited at the closing
-              mark price, with one contract per trade. No actual trades are executed by this platform.
+              Performance metrics for picks #2 through #10 on VibeTradez are <strong>hypothetical</strong>. They assume that each suggested trade was entered at the estimated market open price and
+              exited at the closing mark price, with one contract per trade. No actual orders are placed for these picks.
             </p>
             <p>
               Hypothetical results have inherent limitations. Unlike actual trading, simulated results do not account for slippage, commissions, margin requirements, the impact of liquidity, or the
@@ -108,15 +109,32 @@ export default function TermsPage() {
             </p>
           </Section>
 
-          <Section id="data" num={5} title="Data Sources & Accuracy">
+          <Section id="auto-execution" num={5} title="Auto-Execution Pipeline">
             <p>
-              Trade suggestions are generated using data from third-party sources including StockTwits, Yahoo Finance, Finviz, SEC EDGAR, the ChatGPT and Claude language model APIs, and the Schwab
-              Market Data API. While we strive for accuracy, we make no guarantees regarding the completeness, reliability, or timeliness of any data presented.
+              The rank-1 pick of each trading day is automatically executed by the platform. By default this is a <strong>paper trade</strong> (a synthetic order that fills at the live Schwab option
+              mark in a simulated environment, with no real money or real positions). The operator has the option to flip the system into <strong>live mode</strong>, in which a real order is placed
+              against the operator&apos;s personal Schwab brokerage account using the Schwab Trader API. Live mode is configured server-side via an environment variable; subscribers cannot enable or
+              disable it.
+            </p>
+            <p>
+              The auto-execution pipeline operates with three hard guardrails: (1) a price cap of $5/share (= $500 of capital exposure per contract); (2) a mandatory close at 3:55 PM ET (12:55 PM ET
+              on half-trading days) regardless of P&amp;L; and (3) a single contract per trade, hardcoded at the package level.
+            </p>
+            <p>
+              Trades originating from the auto-execution pipeline surface on the dashboard with a clearly-labeled badge indicating PAPER or LIVE. The badge state always reflects the actual mode the
+              order was placed in, never inferred or extrapolated.
+            </p>
+          </Section>
+
+          <Section id="data" num={6} title="Data Sources & Accuracy">
+            <p>
+              Trade suggestions are generated using data from third-party sources including StockTwits, Yahoo Finance, Finviz, SEC EDGAR, the Anthropic Claude API, and the Schwab Market Data API.
+              While we strive for accuracy, we make no guarantees regarding the completeness, reliability, or timeliness of any data presented.
             </p>
             <p>Market data, option prices, and stock quotes may be delayed or inaccurate. Always verify prices with your broker before placing any trades.</p>
           </Section>
 
-          <Section id="warranty" num={6} title="No Warranty & Limitation of Liability">
+          <Section id="warranty" num={7} title="No Warranty & Limitation of Liability">
             <p>
               VibeTradez is provided without warranty of any kind, express or implied. The creator of this platform shall not be held liable for any financial losses, damages, or other consequences
               arising from your use of or reliance on the information provided.
@@ -124,7 +142,7 @@ export default function TermsPage() {
             <p>This platform may experience downtime, data inaccuracies, or system errors. Trade suggestions may be delayed, missing, or incorrect. Use the platform at your own risk.</p>
           </Section>
 
-          <Section id="contact" num={7} title="Contact">
+          <Section id="contact" num={8} title="Contact">
             <p>
               This project is built and maintained by{" "}
               <a href="https://jaycebordelon.com" target="_blank" rel="noopener noreferrer">

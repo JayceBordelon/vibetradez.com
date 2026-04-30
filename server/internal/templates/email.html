@@ -68,10 +68,10 @@
                 <tr>
                   <td>
                     <h1 class="text-primary" style="margin: 0 0 4px 0; font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;">
-                      Today's headline picks
+                      Today's headline pick
                     </h1>
                     <p class="text-muted" style="margin: 0; font-size: 13px; color: #64748b; line-height: 1.5;">
-                      Each model's #1 conviction trade, with the other model's verdict attached.
+                      {{.ModelName}}'s #1 conviction trade for the session, with the rationale that earned it the top spot.
                     </p>
                   </td>
                 </tr>
@@ -140,8 +140,8 @@
               </table>
               {{end}}
 
-              {{if .ClaudeTopPick}}
-              <!-- Claude's top pick + GPT scrutiny -->
+              {{if .TopPick}}
+              <!-- Top pick -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding: 16px 28px 4px 28px;">
                 <tr>
                   <td>
@@ -149,123 +149,40 @@
                       <!-- Section eyebrow -->
                       <tr>
                         <td style="padding: 14px 18px 6px 18px;">
-                          <span style="color: #D97757; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.7px;">Claude's top pick</span>
-                          <span style="float: right; color: #94a3b8; font-size: 11px; font-weight: 700;"><span class="text-primary" style="color: #0f172a;">{{.ClaudeTopPick.ClaudeScore}}/10</span> &middot; conviction</span>
+                          <span style="color: #D97757; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.7px;">{{.ModelName}}'s top pick</span>
+                          <span style="float: right; color: #94a3b8; font-size: 11px; font-weight: 700;"><span class="text-primary" style="color: #0f172a;">{{.TopPick.Score}}/10</span> &middot; conviction</span>
                         </td>
                       </tr>
                       <!-- Ticker line -->
                       <tr>
                         <td style="padding: 4px 18px 0 18px;">
-                          <span class="text-primary" style="font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.4px;">${{.ClaudeTopPick.Symbol}}</span>
-                          <span style="display: inline-block; margin-left: 8px; vertical-align: middle; background: {{if eq .ClaudeTopPick.ContractType "CALL"}}#dcfce7{{else}}#fee2e2{{end}}; color: {{if eq .ClaudeTopPick.ContractType "CALL"}}#16a34a{{else}}#dc2626{{end}}; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">{{.ClaudeTopPick.ContractType}}</span>
-                          <span style="display: inline-block; margin-left: 4px; vertical-align: middle; background: {{if eq .ClaudeTopPick.RiskLevel "LOW"}}#dbeafe{{else if eq .ClaudeTopPick.RiskLevel "HIGH"}}#fef3c7{{else}}#f1f5f9{{end}}; color: {{if eq .ClaudeTopPick.RiskLevel "LOW"}}#1d4ed8{{else if eq .ClaudeTopPick.RiskLevel "HIGH"}}#b45309{{else}}#475569{{end}}; font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 4px; text-transform: uppercase;">{{.ClaudeTopPick.RiskLevel}}</span>
-                          <span class="text-muted" style="float: right; color: #64748b; font-size: 13px; font-weight: 600; margin-top: 4px;">${{printf "%.2f" .ClaudeTopPick.EstimatedPrice}}</span>
+                          <span class="text-primary" style="font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.4px;">${{.TopPick.Symbol}}</span>
+                          <span style="display: inline-block; margin-left: 8px; vertical-align: middle; background: {{if eq .TopPick.ContractType "CALL"}}#dcfce7{{else}}#fee2e2{{end}}; color: {{if eq .TopPick.ContractType "CALL"}}#16a34a{{else}}#dc2626{{end}}; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">{{.TopPick.ContractType}}</span>
+                          <span style="display: inline-block; margin-left: 4px; vertical-align: middle; background: {{if eq .TopPick.RiskLevel "LOW"}}#dbeafe{{else if eq .TopPick.RiskLevel "HIGH"}}#fef3c7{{else}}#f1f5f9{{end}}; color: {{if eq .TopPick.RiskLevel "LOW"}}#1d4ed8{{else if eq .TopPick.RiskLevel "HIGH"}}#b45309{{else}}#475569{{end}}; font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 4px; text-transform: uppercase;">{{.TopPick.RiskLevel}}</span>
+                          <span class="text-muted" style="float: right; color: #64748b; font-size: 13px; font-weight: 600; margin-top: 4px;">${{printf "%.2f" .TopPick.EstimatedPrice}}</span>
                         </td>
                       </tr>
                       <!-- Contract specs row -->
                       <tr>
                         <td style="padding: 10px 18px 0 18px;">
                           <span class="text-label" style="color: #94a3b8; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Strike</span>
-                          <span class="text-primary" style="margin-left: 4px; color: #0f172a; font-size: 13px; font-weight: 700;">${{printf "%.0f" .ClaudeTopPick.StrikePrice}}</span>
+                          <span class="text-primary" style="margin-left: 4px; color: #0f172a; font-size: 13px; font-weight: 700;">${{printf "%.0f" .TopPick.StrikePrice}}</span>
                           <span class="text-muted" style="color: #94a3b8; padding: 0 8px;">&middot;</span>
                           <span class="text-label" style="color: #94a3b8; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Exp</span>
-                          <span class="text-primary" style="margin-left: 4px; color: #0f172a; font-size: 13px; font-weight: 700;">{{.ClaudeTopPick.Expiration}}</span>
-                          <span style="color: #16a34a; font-size: 11px; font-weight: 700; margin-left: 4px;">({{.ClaudeTopPick.DTE}}d)</span>
+                          <span class="text-primary" style="margin-left: 4px; color: #0f172a; font-size: 13px; font-weight: 700;">{{.TopPick.Expiration}}</span>
+                          <span style="color: #16a34a; font-size: 11px; font-weight: 700; margin-left: 4px;">({{.TopPick.DTE}}d)</span>
                           <span class="text-muted" style="color: #94a3b8; padding: 0 8px;">&middot;</span>
                           <span class="text-label" style="color: #94a3b8; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Target</span>
-                          <span style="margin-left: 4px; color: {{if eq .ClaudeTopPick.ContractType "CALL"}}#16a34a{{else}}#dc2626{{end}}; font-size: 13px; font-weight: 800;">${{printf "%.2f" .ClaudeTopPick.TargetPrice}}</span>
+                          <span style="margin-left: 4px; color: {{if eq .TopPick.ContractType "CALL"}}#16a34a{{else}}#dc2626{{end}}; font-size: 13px; font-weight: 800;">${{printf "%.2f" .TopPick.TargetPrice}}</span>
                         </td>
                       </tr>
-                      <!-- Claude rationale -->
+                      <!-- Rationale -->
                       <tr>
-                        <td style="padding: 14px 18px 0 18px;">
-                          <span style="color: #D97757; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Claude's read</span>
-                          <p class="text-secondary" style="margin: 6px 0 0 0; color: #475569; font-size: 13px; line-height: 1.55;">{{.ClaudeTopPick.ClaudeRationale}}</p>
+                        <td style="padding: 14px 18px 16px 18px;">
+                          <span style="color: #D97757; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">{{.ModelName}}'s read</span>
+                          <p class="text-secondary" style="margin: 6px 0 0 0; color: #475569; font-size: 13px; line-height: 1.55;">{{.TopPick.Rationale}}</p>
                         </td>
                       </tr>
-                      <!-- GPT verdict -->
-                      {{if .ClaudeTopPick.GPTVerdict}}
-                      <tr>
-                        <td style="padding: 12px 18px 14px 18px;">
-                          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="verdict-bg" style="background: #f0fdf8; border-left: 3px solid #10a37f; border-radius: 4px;">
-                            <tr>
-                              <td style="padding: 10px 12px;">
-                                <span style="color: #10a37f; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">ChatGPT's scrutiny</span>
-                                <p class="text-secondary" style="margin: 4px 0 0 0; color: #475569; font-size: 12px; line-height: 1.55; font-style: italic;">{{.ClaudeTopPick.GPTVerdict}}</p>
-                              </td>
-                            </tr>
-                          </table>
-                        </td>
-                      </tr>
-                      {{else}}
-                      <tr><td style="padding: 0 0 14px 0;">&nbsp;</td></tr>
-                      {{end}}
-                    </table>
-                  </td>
-                </tr>
-              </table>
-              {{end}}
-
-              {{if .GPTTopPick}}
-              <!-- GPT's top pick + Claude scrutiny -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding: 12px 28px 4px 28px;">
-                <tr>
-                  <td>
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="card-bg" style="background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; border-top: 3px solid #10a37f; overflow: hidden;">
-                      <!-- Section eyebrow -->
-                      <tr>
-                        <td style="padding: 14px 18px 6px 18px;">
-                          <span style="color: #10a37f; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.7px;">ChatGPT's top pick</span>
-                          <span style="float: right; color: #94a3b8; font-size: 11px; font-weight: 700;"><span class="text-primary" style="color: #0f172a;">{{.GPTTopPick.GPTScore}}/10</span> &middot; conviction</span>
-                        </td>
-                      </tr>
-                      <!-- Ticker line -->
-                      <tr>
-                        <td style="padding: 4px 18px 0 18px;">
-                          <span class="text-primary" style="font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.4px;">${{.GPTTopPick.Symbol}}</span>
-                          <span style="display: inline-block; margin-left: 8px; vertical-align: middle; background: {{if eq .GPTTopPick.ContractType "CALL"}}#dcfce7{{else}}#fee2e2{{end}}; color: {{if eq .GPTTopPick.ContractType "CALL"}}#16a34a{{else}}#dc2626{{end}}; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">{{.GPTTopPick.ContractType}}</span>
-                          <span style="display: inline-block; margin-left: 4px; vertical-align: middle; background: {{if eq .GPTTopPick.RiskLevel "LOW"}}#dbeafe{{else if eq .GPTTopPick.RiskLevel "HIGH"}}#fef3c7{{else}}#f1f5f9{{end}}; color: {{if eq .GPTTopPick.RiskLevel "LOW"}}#1d4ed8{{else if eq .GPTTopPick.RiskLevel "HIGH"}}#b45309{{else}}#475569{{end}}; font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 4px; text-transform: uppercase;">{{.GPTTopPick.RiskLevel}}</span>
-                          <span class="text-muted" style="float: right; color: #64748b; font-size: 13px; font-weight: 600; margin-top: 4px;">${{printf "%.2f" .GPTTopPick.EstimatedPrice}}</span>
-                        </td>
-                      </tr>
-                      <!-- Contract specs row -->
-                      <tr>
-                        <td style="padding: 10px 18px 0 18px;">
-                          <span class="text-label" style="color: #94a3b8; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Strike</span>
-                          <span class="text-primary" style="margin-left: 4px; color: #0f172a; font-size: 13px; font-weight: 700;">${{printf "%.0f" .GPTTopPick.StrikePrice}}</span>
-                          <span class="text-muted" style="color: #94a3b8; padding: 0 8px;">&middot;</span>
-                          <span class="text-label" style="color: #94a3b8; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Exp</span>
-                          <span class="text-primary" style="margin-left: 4px; color: #0f172a; font-size: 13px; font-weight: 700;">{{.GPTTopPick.Expiration}}</span>
-                          <span style="color: #16a34a; font-size: 11px; font-weight: 700; margin-left: 4px;">({{.GPTTopPick.DTE}}d)</span>
-                          <span class="text-muted" style="color: #94a3b8; padding: 0 8px;">&middot;</span>
-                          <span class="text-label" style="color: #94a3b8; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Target</span>
-                          <span style="margin-left: 4px; color: {{if eq .GPTTopPick.ContractType "CALL"}}#16a34a{{else}}#dc2626{{end}}; font-size: 13px; font-weight: 800;">${{printf "%.2f" .GPTTopPick.TargetPrice}}</span>
-                        </td>
-                      </tr>
-                      <!-- GPT rationale -->
-                      <tr>
-                        <td style="padding: 14px 18px 0 18px;">
-                          <span style="color: #10a37f; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">ChatGPT's read</span>
-                          <p class="text-secondary" style="margin: 6px 0 0 0; color: #475569; font-size: 13px; line-height: 1.55;">{{.GPTTopPick.GPTRationale}}</p>
-                        </td>
-                      </tr>
-                      <!-- Claude verdict -->
-                      {{if .GPTTopPick.ClaudeVerdict}}
-                      <tr>
-                        <td style="padding: 12px 18px 14px 18px;">
-                          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="verdict-bg" style="background: #fef7f2; border-left: 3px solid #D97757; border-radius: 4px;">
-                            <tr>
-                              <td style="padding: 10px 12px;">
-                                <span style="color: #D97757; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Claude's scrutiny</span>
-                                <p class="text-secondary" style="margin: 4px 0 0 0; color: #475569; font-size: 12px; line-height: 1.55; font-style: italic;">{{.GPTTopPick.ClaudeVerdict}}</p>
-                              </td>
-                            </tr>
-                          </table>
-                        </td>
-                      </tr>
-                      {{else}}
-                      <tr><td style="padding: 0 0 14px 0;">&nbsp;</td></tr>
-                      {{end}}
                     </table>
                   </td>
                 </tr>
@@ -277,7 +194,7 @@
                 <tr>
                   <td align="center">
                     <p class="text-muted" style="margin: 0 0 12px 0; color: #64748b; font-size: 13px; line-height: 1.5;">
-                      Full ranked list, conviction scores, and cross-examination on the dashboard.
+                      Full ranked list with conviction scores and rationales on the dashboard.
                     </p>
                     <a href="{{.DashboardURL}}" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #10a37f 0%, #D97757 100%); color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none; border-radius: 10px; letter-spacing: 0.2px;">Open Dashboard &rarr;</a>
                   </td>
