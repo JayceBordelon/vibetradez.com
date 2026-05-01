@@ -53,7 +53,7 @@ function DayRow({ ds, maxAbsPnl }: { ds: DayStat; maxAbsPnl: number }) {
 
   return (
     <Collapsible className="animate-in fade-in fill-mode-backwards duration-200">
-      <CollapsibleTrigger className={cn("group flex w-full items-center gap-3 rounded-md border bg-card px-4 py-3 text-left transition-colors hover:bg-muted/50")}>
+      <CollapsibleTrigger className={cn("lg-control group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50")}>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
 
         <div className="w-20 shrink-0">

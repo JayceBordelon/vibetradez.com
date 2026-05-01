@@ -26,15 +26,12 @@ interface StatCardProps {
   delta?: { value: string; positive: boolean };
   tooltip?: string;
   className?: string;
-  index?: number;
 }
 
-export function StatCard({ label, value, sub, icon: Icon, tone = "neutral", valueColor, delta, tooltip, className, index }: StatCardProps): React.JSX.Element {
+export function StatCard({ label, value, sub, icon: Icon, tone = "neutral", valueColor, delta, tooltip, className }: StatCardProps): React.JSX.Element {
   const valueToneClass = valueColor ? "" : tone === "positive" ? "text-green" : tone === "negative" ? "text-red" : "text-foreground";
 
   const dotToneClass = tone === "positive" ? "bg-green" : tone === "negative" ? "bg-red" : "bg-primary";
-
-  const animationStyle = typeof index === "number" ? { animationDelay: `${index * 40}ms` } : undefined;
 
   const eyebrow = (
     <div className="flex items-center gap-2">
@@ -63,18 +60,7 @@ export function StatCard({ label, value, sub, icon: Icon, tone = "neutral", valu
     </CardContent>
   );
 
-  const card = (
-    <Card
-      className={cn(
-        "group gap-0 py-0 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md",
-        typeof index === "number" && "animate-in fade-in slide-in-from-bottom-1 duration-300",
-        className
-      )}
-      style={animationStyle}
-    >
-      {body}
-    </Card>
-  );
+  const card = <Card className={cn("lg-card group gap-0 py-0 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md", className)}>{body}</Card>;
 
   if (!tooltip) return card;
 

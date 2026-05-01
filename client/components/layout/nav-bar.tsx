@@ -1,6 +1,5 @@
 "use client";
 
-import { LogIn } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -28,7 +27,7 @@ export function NavBar({ onSubscribe }: NavBarProps) {
           don't paint a pseudo-element across the full-width header. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-b from-foreground/15 to-transparent dark:from-white/15" aria-hidden />
       <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-7 sm:py-3">
-        <Link href="/" className="inline-flex min-h-9 shrink-0 items-center text-[19px] font-extrabold tracking-tight sm:min-h-0 sm:text-[21px]">
+        <Link href="/" className="inline-flex min-h-11 shrink-0 items-center py-2 text-[19px] font-extrabold tracking-tight sm:min-h-9 sm:py-0 sm:text-[21px]">
           <span className="text-foreground">Vibe</span>
           <span className="text-gradient-brand">Tradez</span>
         </Link>
@@ -65,11 +64,10 @@ export function NavBar({ onSubscribe }: NavBarProps) {
                 variant="outline"
                 size="sm"
                 onClick={onSubscribe}
-                className="h-9 gap-1.5 rounded-full border-foreground/10 bg-foreground/5 px-3 text-xs hover:bg-foreground/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 sm:px-3.5 sm:text-sm"
+                className="h-9 gap-1.5 rounded-full border-foreground/10 bg-foreground/5 px-3 text-xs font-semibold hover:bg-foreground/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 sm:px-3.5 sm:text-sm"
                 aria-label="Sign in or sign up"
               >
-                <LogIn className="h-3.5 w-3.5 sm:hidden" />
-                <span className="hidden sm:inline">Sign in</span>
+                Sign in
               </Button>
             )
           )}

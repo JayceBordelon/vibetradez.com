@@ -48,7 +48,7 @@ export function DailyPnlChart({ data, granularity = "daily" }: { data: { date: s
   };
 
   return (
-    <Card>
+    <Card className="lg-card">
       <CardHeader>
         <CardTitle className="text-base">{isWeekly ? "Weekly P&L" : "Daily P&L"}</CardTitle>
         <CardDescription>{isWeekly ? "Net P&L per trading week (Monday–Friday)" : "Net P&L per trading day"}</CardDescription>

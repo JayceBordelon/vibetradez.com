@@ -5,11 +5,13 @@ import { AmbientBackground } from "@/components/landing/ambient-background";
 import { LandingNavAccount } from "@/components/landing/nav-account";
 import { Reveal } from "@/components/landing/reveal";
 import { SubscribeCTA } from "@/components/landing/subscribe-cta";
+import { Testimonials } from "@/components/landing/testimonials";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 
 export const metadata: Metadata = {
   title: "VibeTradez | AI-Powered Options Picks",
-  description: "Claude ranks 10 options contracts every weekday with live Schwab market data and full conviction rationales. The rank-1 pick auto-fires as a paper trade. Free, before market open.",
+  description:
+    "An LLM ranks 10 options contracts every weekday with live market data and a written rationale for each. The rank-1 pick auto-fires in my actual brokerage account every morning. Free to watch, expensive to run.",
 };
 
 export default function LandingPage() {
@@ -20,7 +22,7 @@ export default function LandingPage() {
       {/* ── Glass nav ── */}
       <nav className="fixed top-3 left-1/2 z-50 w-[calc(100%-1.5rem)] -translate-x-1/2 sm:top-4 sm:max-w-5xl">
         <div className="lg-panel lg-edge-shine flex items-center justify-between px-4 py-2 sm:px-5 sm:py-2.5">
-          <Link href="/" className="text-xl font-extrabold tracking-tight">
+          <Link href="/" className="inline-flex min-h-11 items-center text-xl font-extrabold tracking-tight sm:min-h-9">
             <span className="text-foreground">Vibe</span>
             <span className="text-gradient-brand">Tradez</span>
           </Link>
@@ -63,8 +65,8 @@ export default function LandingPage() {
 
           <Reveal effect="rise" delay={280} duration={900}>
             <p className="mx-auto mt-7 max-w-[640px] text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Every weekday at 9:25 ET, Claude ranks 10 options contracts with conviction scores and live Schwab market data. The rank-1 pick auto-fires as a paper trade. You watch the P&amp;L roll in
-              by close.
+              Every weekday at 9:25 ET, an LLM ranks 10 options contracts with live market data and a written essay defending each one. At 9:30 the rank-1 pick auto-fires in my actual brokerage
+              account, with my actual money. By close you find out whether Claude was right. <span className="italic">It is sometimes.</span>
             </p>
           </Reveal>
 
@@ -101,10 +103,10 @@ export default function LandingPage() {
             <div className="lg-panel lg-edge-shine overflow-hidden p-6 sm:p-10">
               <div className="flex flex-col gap-2 text-center sm:gap-3">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">The pipeline</span>
-                <h2 className="text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">A trade fires every weekday. No clicks needed.</h2>
+                <h2 className="text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">A real trade fires every weekday. No clicks needed.</h2>
                 <p className="mx-auto max-w-2xl text-sm text-muted-foreground sm:text-base">
-                  Picks arrive in your inbox before the bell. The rank-1 contract gets a paper trade placed at 9:30 ET, held until 3:55 ET, and closed automatically. You see every step on the
-                  dashboard with a clearly-labeled badge.
+                  Picks land in your inbox before the bell. At 9:30 ET the rank-1 contract gets ordered live in my actual Schwab account with my actual money, held until 3:55 ET, and unconditionally
+                  closed before the close. You watch it happen on the dashboard. I watch it happen on the dashboard. Honestly, that&apos;s most of what &ldquo;oversight&rdquo; means around here.
                 </p>
               </div>
 
@@ -138,7 +140,10 @@ export default function LandingPage() {
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
               Built to <span className="text-gradient-brand">show its work</span>
             </h2>
-            <p className="mt-3 text-muted-foreground">Every pick comes with the contract spec, a 1-10 conviction score, and Claude&apos;s written rationale defending it. No cherry-picking.</p>
+            <p className="mt-3 text-muted-foreground">
+              Every pick comes with the contract spec, a 1-10 conviction score, and Claude&apos;s whole essay defending it. We don&apos;t cherry-pick the wins because we don&apos;t actually know which
+              ones will be wins.
+            </p>
           </Reveal>
 
           <div className="grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
@@ -162,6 +167,9 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Testimonials (clearly-satirical) ── */}
+      <Testimonials />
+
       {/* ── Subscribe CTA ── */}
       <section className="relative px-5 pb-20 sm:px-6 sm:pb-28">
         <div className="relative z-10 mx-auto max-w-3xl">
@@ -174,7 +182,8 @@ export default function LandingPage() {
                   Start getting <span className="text-gradient-brand">picks</span>
                 </h2>
                 <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-                  Completely free. No credit card. No premium tier. One silly model doing its best, one human hoping it knows what it&apos;s doing. Unsubscribe any time, no hard feelings.
+                  Completely free. No credit card. No premium tier I&apos;m secretly building. One silly model doing its best, one human absolutely hoping it knows what it&apos;s doing. Unsubscribe
+                  any time &mdash; I won&apos;t email you a sad cat photo.
                 </p>
                 <div className="mt-7 flex w-full flex-col items-center justify-center gap-3 sm:flex-row">
                   <SubscribeCTA className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gradient-brand px-7 text-[15px] font-semibold text-white shadow-lg transition-opacity hover:opacity-90">
@@ -237,25 +246,25 @@ const pipeline = [
   {
     time: "9:25 AM ET",
     title: "Claude picks",
-    detail: "Pulls market signals, calls Schwab quotes + chains, ranks 10 contracts with conviction scores.",
+    detail: "Pulls market signals, calls Schwab quotes and option chains, ranks 10 contracts. Whether it 'analyzed' anything is between Claude and its conscience.",
     Icon: Sparkles,
   },
   {
     time: "9:30 AM ET",
     title: "Auto-fire rank-1",
-    detail: "The top pick fires as a paper trade (live if you flip the switch). Capped at $5/share.",
+    detail: "Top pick fires live in my actual Schwab account. Real money, real fills. Capped at $5/share so the worst case is a manageable amount of regret on my part.",
     Icon: Zap,
   },
   {
     time: "Mid-day",
     title: "Live dashboard",
-    detail: "Buy and Current marks update in real time. Position badge labeled clearly.",
+    detail: "Buy and Current marks tick in real time. Position is clearly badged so there's no mystery about whether the trade is real (it is).",
     Icon: Eye,
   },
   {
     time: "3:55 PM ET",
     title: "Mandatory close",
-    detail: "Position is unconditionally closed five minutes before the bell. No overnight risk.",
+    detail: "Position is unconditionally closed five minutes before the bell. No overnight risk. No 'let it ride' improvisation.",
     Icon: Clock,
   },
 ];
@@ -264,31 +273,32 @@ const features = [
   {
     Icon: Sparkles,
     title: "Conviction-scored picks",
-    description: "Every pick has a 1-10 conviction score and a written rationale defending it. No cluster of 7s, no hand-waves.",
+    description: "Every pick has a 1-10 conviction score and a written rationale defending it. Claude is opinionated. Sometimes that's a good thing.",
   },
   {
     Icon: TrendingUp,
     title: "Live market data",
-    description: "Real-time quotes and full option chains from Schwab. Claude calls tools mid-analysis instead of hallucinating prices.",
+    description: "Real-time quotes and full option chains from Schwab. Claude calls tools mid-analysis instead of hallucinating prices, which is a genuine upgrade from 'making it up'.",
   },
   {
     Icon: Zap,
-    title: "Auto-paper-trade",
-    description: "The rank-1 pick auto-fires every morning. Capped at $5/share, mandatory close at 3:55 ET. No clicks, no overnight risk.",
+    title: "Auto-fired live trade",
+    description:
+      "The rank-1 pick auto-fires every morning in my actual brokerage account, with my actual money. Capped at $5/share, mandatory close at 3:55 ET. No clicks, no overnight risk, no chance for me to second-guess it.",
   },
   {
     Icon: Mail,
     title: "Pre-market email",
-    description: "Ranked picks in your inbox before the opening bell. EOD results at close. Weekly digest on Fridays.",
+    description: "Ranked picks in your inbox before the opening bell. EOD results at close. Friday digest. All free, all automated, unsubscribe whenever.",
   },
   {
     Icon: Clock,
     title: "End-of-day tracking",
-    description: 'Every pick is tracked to close. Win rate, P&L, Sharpe, drawdown all computed automatically. No "trust me bro" screenshots.',
+    description: "Every pick tracked to close. Win rate, P&L, Sharpe, drawdown — all computed honestly. No 'trust me bro' screenshots, no quietly-removed losers.",
   },
   {
     Icon: Shield,
     title: "Completely free",
-    description: "No paywalls, no premium tiers, no credit card. A live experiment in letting one silly model trade. Watch and judge.",
+    description: "No paywalls. No premium tier. No 'pro plan'. A live experiment in letting one model trade. You watch, you judge, you bring your own popcorn.",
   },
 ];

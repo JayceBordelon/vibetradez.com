@@ -62,7 +62,7 @@
   --red-border: #fca5a5;
   --amber: #92400e;
   --amber-bg: #fef3c7;
-  --percent-hue-l: 38%;
+  --percent-hue-l: 30%;
   --card-elevated: #fafafa;
   --card-hover: #ffffff;
   --accent-subtle: #fafafa;
@@ -331,6 +331,61 @@ body {
     background: color-mix(in srgb, white 7%, transparent);
   }
 
+  /*
+  .lg-card  Drop-in glass surface for shadcn Card. Tuned high enough
+            opacity (93% / 7%) that colored value text on stat cards
+            (win-rate hue, ROC tone) keeps WCAG large-text contrast
+            even on the lightest hue bands, while still letting the
+            ambient orbs show through as a soft pastel tint.
+            Designed to override Card's default bg-card / shadow-sm /
+            rounded-xl via cascade order in @layer utilities.
+  */
+  .lg-card {
+    background: color-mix(in srgb, var(--card) 93%, transparent);
+    backdrop-filter: saturate(160%) blur(24px);
+    -webkit-backdrop-filter: saturate(160%) blur(24px);
+    border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+    border-radius: 16px;
+    box-shadow:
+      0 1px 0 0 color-mix(in srgb, white 60%, transparent) inset,
+      0 -1px 0 0 color-mix(in srgb, var(--foreground) 3%, transparent) inset,
+      0 12px 32px -16px rgb(0 0 0 / 0.14),
+      0 4px 12px -8px rgb(0 0 0 / 0.08);
+  }
+  .dark .lg-card {
+    background: color-mix(in srgb, white 7%, transparent);
+    border-color: color-mix(in srgb, white 9%, transparent);
+    box-shadow:
+      0 1px 0 0 color-mix(in srgb, white 10%, transparent) inset,
+      0 -1px 0 0 color-mix(in srgb, white 3%, transparent) inset,
+      0 12px 32px -16px rgb(0 0 0 / 0.50),
+      0 4px 12px -8px rgb(0 0 0 / 0.30);
+  }
+
+  /*
+  .lg-control  Small rounded glass surface for inline controls (date
+               navigators, mode toggles, segmented bars). Smaller radius
+               than .lg-pill so it pairs visually with rounded-md
+               buttons.
+  */
+  .lg-control {
+    background: color-mix(in srgb, var(--card) 70%, transparent);
+    backdrop-filter: saturate(160%) blur(18px);
+    -webkit-backdrop-filter: saturate(160%) blur(18px);
+    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+    border-radius: 10px;
+    box-shadow:
+      0 1px 0 0 color-mix(in srgb, white 50%, transparent) inset,
+      0 4px 12px -8px rgb(0 0 0 / 0.10);
+  }
+  .dark .lg-control {
+    background: color-mix(in srgb, white 5%, transparent);
+    border-color: color-mix(in srgb, white 11%, transparent);
+    box-shadow:
+      0 1px 0 0 color-mix(in srgb, white 10%, transparent) inset,
+      0 4px 12px -8px rgb(0 0 0 / 0.30);
+  }
+
   .lg-pill {
     background: color-mix(in srgb, var(--card) 60%, transparent);
     backdrop-filter: saturate(160%) blur(20px);
@@ -350,9 +405,10 @@ body {
   }
 
   /*
-  Ambient orbs. Use absolute positioning + a high blur to bleed colored
-  light through the panels stacked above. Saturate via the body color
-  variables so light/dark mode each get appropriately tuned hues.
+  Legacy orb primitive — kept only for the landing CTA panel which
+  uses two scoped lg-orb decorations as glass accents. The full-page
+  ambient now uses .lg-mesh (below) instead. If you're reaching for
+  this for a full-bg, use .lg-mesh.
   */
   .lg-orb {
     position: absolute;
@@ -369,33 +425,87 @@ body {
   .lg-orb-claude {
     background: radial-gradient(circle at center, #d97757 0%, transparent 70%);
   }
-  .lg-orb-amber {
-    background: radial-gradient(circle at center, #f59e0b 0%, transparent 70%);
-  }
-  .lg-orb-rose {
-    background: radial-gradient(circle at center, #fb7185 0%, transparent 70%);
-  }
   .lg-orb-cyan {
     background: radial-gradient(circle at center, #38bdf8 0%, transparent 70%);
   }
-  .lg-orb-violet {
-    background: radial-gradient(circle at center, #a78bfa 0%, transparent 70%);
+
+  /*
+  .lg-mesh  Single continuous mesh-gradient wash. Three oversized
+            radial tints layered at low opacity so they merge into a
+            seamless gradient field — no discrete orb edges, no
+            "splotchy" blobs. Tuned per theme: light mode pale warm
+            + cool tints, dark mode slightly stronger so the wash
+            survives the near-black canvas.
+
+            The drift is intentionally barely perceptible: the entire
+            mesh transforms as a single layer (scale + tiny translate)
+            over ~80s, so the wash subtly "breathes" without any
+            moving parts the eye can lock onto. Disabled under
+            prefers-reduced-motion.
+  */
+  .lg-mesh {
+    position: absolute;
+    inset: -8%;
+    pointer-events: none;
+    will-change: transform;
+    background:
+      radial-gradient(ellipse 90% 70% at 12% 8%, color-mix(in oklab, #d97757 22%, transparent) 0%, transparent 60%),
+      radial-gradient(ellipse 95% 75% at 92% 96%, color-mix(in oklab, #38bdf8 18%, transparent) 0%, transparent 62%),
+      radial-gradient(ellipse 80% 90% at 60% 40%, color-mix(in oklab, var(--gpt) 10%, transparent) 0%, transparent 70%);
+    filter: blur(40px) saturate(120%);
+    animation: lg-mesh-breathe 48s ease-in-out infinite;
+  }
+  .dark .lg-mesh {
+    background:
+      radial-gradient(ellipse 90% 70% at 12% 8%, color-mix(in oklab, #d97757 28%, transparent) 0%, transparent 62%),
+      radial-gradient(ellipse 95% 75% at 92% 96%, color-mix(in oklab, #38bdf8 22%, transparent) 0%, transparent 64%),
+      radial-gradient(ellipse 80% 90% at 60% 40%, color-mix(in oklab, var(--gpt) 14%, transparent) 0%, transparent 72%);
+    filter: blur(56px) saturate(110%);
+  }
+
+  /*
+  Three-stop drift cycle so the wash never lands back in its original
+  configuration mid-cycle — every quadrant of the viewport gets
+  visited over a 48s loop. Translations are larger than the previous
+  pass (now 4-5%) so the motion reads as alive rather than imagined,
+  while staying soft enough that data on top of it stays legible.
+  */
+  @keyframes lg-mesh-breathe {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    33% {
+      transform: translate3d(-4.5%, 2.5%, 0) scale(1.06);
+    }
+    66% {
+      transform: translate3d(3.5%, -3%, 0) scale(1.04);
+    }
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lg-mesh {
+      animation: none;
+    }
   }
 
   /*
   Film grain. Inline SVG, modest opacity, mix-blend-mode so it tints with
-  whatever's underneath instead of looking like a flat overlay.
+  whatever's underneath instead of looking like a flat overlay. Kept
+  very faint — the mesh wash is the primary texture, the grain just
+  takes the digital-flat edge off it.
   */
   .lg-noise {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    opacity: 0.12;
+    opacity: 0.05;
     mix-blend-mode: overlay;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
   }
   .dark .lg-noise {
-    opacity: 0.06;
+    opacity: 0.03;
   }
 
   /* Specular edge highlight, useful on hover or to mark a primary surface. */

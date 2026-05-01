@@ -72,7 +72,7 @@ function BackLink() {
 
 function LoadingPanel({ symbol }: { symbol: string }) {
   return (
-    <Card>
+    <Card className="lg-card">
       <CardContent className="space-y-3 p-6">
         <div className="text-sm text-muted-foreground">Loading ${symbol}…</div>
         <div className="h-6 w-1/3 animate-pulse rounded bg-muted/60" />
@@ -84,7 +84,7 @@ function LoadingPanel({ symbol }: { symbol: string }) {
 
 function Panel({ tone, title, body }: { tone: "error" | "muted"; title: string; body: string }) {
   return (
-    <Card>
+    <Card className="lg-card">
       <CardContent className="space-y-2 p-6">
         <h2 className={cn("text-lg font-semibold", tone === "error" ? "text-red" : "text-foreground")}>{title}</h2>
         <p className="text-sm text-muted-foreground">{body}</p>
@@ -107,7 +107,7 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
     <div className="space-y-5">
       {execution && <ExecutionBadge execution={execution} variant="full" />}
       {/* Header: ticker + badges + price */}
-      <Card>
+      <Card className="lg-card">
         <CardContent className="space-y-4 p-5 sm:p-6">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="font-mono text-2xl font-bold tabular-nums text-foreground sm:text-3xl">${trade.symbol}</h1>
@@ -156,7 +156,7 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
 
       {/* Picker rationale */}
       {trade.rationale && (
-        <Card>
+        <Card className="lg-card">
           <CardContent className="space-y-3 p-5 sm:p-6">
             <div className="flex items-center gap-2">
               <ClaudeLogo className="h-5 w-5" />
@@ -174,7 +174,7 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
 
       {/* EOD result if settled */}
       {summary && (
-        <Card>
+        <Card className="lg-card">
           <CardContent className="space-y-4 p-5 sm:p-6">
             <div className="flex flex-wrap items-baseline justify-between gap-3">
               <h2 className="text-base font-semibold">End-of-day result</h2>

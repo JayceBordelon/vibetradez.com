@@ -260,31 +260,37 @@ export function StockChart({ symbol, timeframe, strikePrice, trade, summary }: S
 
   return (
     <div className="flex h-full w-full flex-col">
-      {/* Chart header */}
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-3 pt-2.5 pb-1 sm:px-4">
-        <span className="font-mono text-sm font-bold text-foreground sm:text-base">${symbol}</span>
-        {trade && (
-          <span className="text-xs text-muted-foreground">
-            {trade.contract_type} ${trade.strike_price} · Exp {trade.expiration}
-          </span>
-        )}
-        <span className="ml-auto font-mono text-sm font-semibold tabular-nums" style={{ color: isUp ? "var(--gpt)" : "var(--red)" }}>
-          ${last.toFixed(2)}{" "}
-          <span className="text-xs">
+      {/* Chart header — ticker + contract on the left, price + change
+          stacked on the right so the dominant price reads at a glance
+          even when the contract metadata wraps. */}
+      <div className="flex items-start justify-between gap-3 px-3 pt-2.5 pb-1 sm:px-4">
+        <div className="min-w-0">
+          <div className="font-mono text-sm font-bold text-foreground sm:text-base">${symbol}</div>
+          {trade && (
+            <div className="truncate text-[11px] text-muted-foreground">
+              {trade.contract_type} ${trade.strike_price} &middot; Exp {trade.expiration}
+            </div>
+          )}
+        </div>
+        <div className="text-right">
+          <div className="font-mono text-base font-semibold tabular-nums leading-tight sm:text-lg" style={{ color: isUp ? "var(--gpt)" : "var(--red)" }}>
+            ${last.toFixed(2)}
+          </div>
+          <div className="text-[11px] tabular-nums" style={{ color: isUp ? "var(--gpt)" : "var(--red)" }}>
             {changeSign}
             {change.toFixed(2)} ({changeSign}
             {changePct.toFixed(2)}%)
-          </span>
-        </span>
+          </div>
+        </div>
       </div>
       {hasOptionLine && (
-        <div className="flex flex-wrap items-center gap-x-3 px-3 pb-1 text-[10px] text-muted-foreground sm:px-4">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pb-1 text-[10px] text-muted-foreground sm:px-4">
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block h-0.5 w-3 rounded" style={{ background: strokeColor }} /> Stock
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block h-0.5 w-3 rounded" style={{ background: "var(--amber)", borderTop: "1px dashed var(--amber)" }} /> Contract{" "}
-            <span className="italic opacity-70">(modeled from delta &middot; anchored to entry / exit)</span>
+            <span className="hidden italic opacity-70 sm:inline">(modeled from delta &middot; anchored to entry / exit)</span>
           </span>
         </div>
       )}

@@ -35,7 +35,7 @@ export default function TermsPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
       <div className="mb-10 flex items-start gap-3">
-        <div className="rounded-md border bg-card p-2 shadow-sm">
+        <div className="lg-control p-2">
           <ScrollText className="h-5 w-5 text-primary" />
         </div>
         <div>
@@ -62,7 +62,7 @@ export default function TermsPage() {
         </aside>
 
         {/* Long-form content */}
-        <article className="prose-terms min-w-0">
+        <article className="lg-card prose-terms min-w-0 p-6 sm:p-8">
           <Section id="experimental" num={1} title="Experimental Nature of This Service">
             <p>
               VibeTradez is an <strong>experimental, educational project</strong> that generates AI-powered options trade suggestions. The platform is provided on an &quot;as-is&quot; basis for
@@ -98,10 +98,10 @@ export default function TermsPage() {
             <p>By using this platform, you acknowledge that you understand these risks and accept full responsibility for any trading decisions you make.</p>
           </Section>
 
-          <Section id="hypothetical" num={4} title="Hypothetical Performance">
+          <Section id="hypothetical" num={4} title="Hypothetical Performance (picks #2 through #10)">
             <p>
               Performance metrics for picks #2 through #10 on VibeTradez are <strong>hypothetical</strong>. They assume that each suggested trade was entered at the estimated market open price and
-              exited at the closing mark price, with one contract per trade. No actual orders are placed for these picks.
+              exited at the closing mark price, with one contract per trade. No actual orders are placed for picks #2 through #10. The rank-1 pick is different and is covered in the next section.
             </p>
             <p>
               Hypothetical results have inherent limitations. Unlike actual trading, simulated results do not account for slippage, commissions, margin requirements, the impact of liquidity, or the
@@ -109,20 +109,20 @@ export default function TermsPage() {
             </p>
           </Section>
 
-          <Section id="auto-execution" num={5} title="Auto-Execution Pipeline">
+          <Section id="auto-execution" num={5} title="Auto-Execution Pipeline (rank-1 only)">
             <p>
-              The rank-1 pick of each trading day is automatically executed by the platform. By default this is a <strong>paper trade</strong> (a synthetic order that fills at the live Schwab option
-              mark in a simulated environment, with no real money or real positions). The operator has the option to flip the system into <strong>live mode</strong>, in which a real order is placed
-              against the operator&apos;s personal Schwab brokerage account using the Schwab Trader API. Live mode is configured server-side via an environment variable; subscribers cannot enable or
-              disable it.
+              The rank-1 pick of each trading day is automatically executed by the platform as a <strong>real live order</strong> against the operator&apos;s personal Schwab brokerage account using
+              the Schwab Trader API. Real money, real fills, real position. The operator (Jayce Bordelon) is the only party with capital at risk on these orders. Subscribers receive informational
+              notifications about the trade but no order is ever placed on a subscriber&apos;s behalf, and subscribers cannot configure or disable the pipeline.
             </p>
             <p>
-              The auto-execution pipeline operates with three hard guardrails: (1) a price cap of $5/share (= $500 of capital exposure per contract); (2) a mandatory close at 3:55 PM ET (12:55 PM ET
-              on half-trading days) regardless of P&amp;L; and (3) a single contract per trade, hardcoded at the package level.
+              The platform retains a <strong>paper-trade mode</strong> as a fallback (configured server-side via an environment variable) used during testing windows or operator absence. When this
+              mode is active the orders fill at the live Schwab option mark in a simulated environment with no real money or real positions. The dashboard always badges every fill as either LIVE or
+              PAPER so the actual mode is never ambiguous; the badge state reflects the real mode the order was placed in, never inferred or extrapolated.
             </p>
             <p>
-              Trades originating from the auto-execution pipeline surface on the dashboard with a clearly-labeled badge indicating PAPER or LIVE. The badge state always reflects the actual mode the
-              order was placed in, never inferred or extrapolated.
+              The auto-execution pipeline operates with three hard guardrails regardless of mode: (1) a price cap of $5/share (= $500 of capital exposure per contract); (2) a mandatory close at 3:55
+              PM ET (12:55 PM ET on half-trading days) regardless of P&amp;L; and (3) a single contract per trade, hardcoded at the package level.
             </p>
           </Section>
 

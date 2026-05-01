@@ -26,7 +26,7 @@ export function EquityCurveChart({ data, activeTopN = 10 }: { data: EquityPoint[
   const chartConfig: ChartConfig = Object.fromEntries(SERIES.map((s) => [s.key, { label: s.label, color: s.color }]));
 
   return (
-    <Card>
+    <Card className="lg-card">
       <CardHeader>
         <CardTitle className="text-base">Equity Curve</CardTitle>
         <CardDescription>Cumulative P&amp;L over time, replayed under each Top-N pick selection</CardDescription>

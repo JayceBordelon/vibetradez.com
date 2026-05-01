@@ -89,7 +89,7 @@ export function DataFreshness({ state, asOf }: DataFreshnessProps): React.JSX.El
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className={cn("inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-xs font-medium shadow-sm")}>
+          <span className={cn("lg-pill inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium")}>
             <span className="relative flex h-2 w-2">
               {cfg.showPing && <span className={cn("absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 [animation-duration:2s]", cfg.ringColor)} />}
               <span className={cn("relative inline-flex h-2 w-2 rounded-full", cfg.dotColor)} />

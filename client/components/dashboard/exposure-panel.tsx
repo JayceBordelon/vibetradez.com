@@ -49,7 +49,7 @@ export function ExposurePanel({ trades, hasSummaries }: ExposurePanelProps) {
   const returnedBarColor = totalReturned >= totalExposure ? "bg-green" : "bg-red";
 
   return (
-    <Card>
+    <Card className="lg-card">
       <CardContent className="space-y-5 p-5">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Metric label="Capital at Risk" value={fmtMoneyInt(totalExposure)} />

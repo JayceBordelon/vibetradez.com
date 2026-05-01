@@ -38,7 +38,7 @@ export default function PrivacyPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
       <div className="mb-10 flex items-start gap-3">
-        <div className="rounded-md border bg-card p-2 shadow-sm">
+        <div className="lg-control p-2">
           <Lock className="h-5 w-5 text-primary" />
         </div>
         <div>
@@ -63,7 +63,7 @@ export default function PrivacyPage() {
           </nav>
         </aside>
 
-        <article className="prose-terms min-w-0">
+        <article className="lg-card prose-terms min-w-0 p-6 sm:p-8">
           <Section id="scope" num={1} title="Scope">
             <p>
               This policy describes what data VibeTradez collects from visitors and subscribers, how that data is used, and which third-party processors handle it on our behalf. It applies to the

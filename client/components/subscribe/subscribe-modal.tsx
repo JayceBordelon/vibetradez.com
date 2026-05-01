@@ -10,7 +10,7 @@ export function SubscribeModal({ children, open, onOpenChange }: { children?: Re
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {children && <DialogTrigger asChild>{children}</DialogTrigger>}
-      <DialogContent className="top-[8%] max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-[calc(100%-1.5rem)] translate-y-0 overflow-y-auto sm:top-[50%] sm:w-auto sm:max-w-md sm:translate-y-[-50%]">
+      <DialogContent className="lg-card top-[8%] max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-[calc(100%-1.5rem)] translate-y-0 overflow-y-auto sm:top-[50%] sm:w-auto sm:max-w-md sm:translate-y-[-50%]">
         <DialogHeader>
           <DialogTitle className="text-lg font-extrabold">
             Sign in or <span className="text-gradient-brand">sign up</span>

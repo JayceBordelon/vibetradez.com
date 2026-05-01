@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 
 export function DateRangeNav({ label, canPrev, canNext, onPrev, onNext }: { label: string; canPrev: boolean; canNext: boolean; onPrev: () => void; onNext: () => void }) {
   return (
-    <div className="flex shrink-0 items-center overflow-hidden rounded-md border bg-card">
+    <div className="lg-control flex shrink-0 items-center overflow-hidden">
       <Button variant="ghost" size="icon" className="h-9 w-9 rounded-none" disabled={!canPrev} onClick={onPrev} aria-label="Previous period">
         <ChevronLeft className="h-4 w-4" />
       </Button>

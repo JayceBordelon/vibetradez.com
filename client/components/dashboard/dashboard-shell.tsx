@@ -11,13 +11,14 @@ import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
 import type { DashboardResponse, DashboardTrade, LiveQuotesResponse } from "@/types/trade";
 
-import { DateNavigator } from "./date-navigator";
+import { ActiveTickerChip } from "./active-ticker-chip";
 import { ExposurePanel } from "./exposure-panel";
 import { MorningCards } from "./morning-cards";
 import { PnlChart } from "./pnl-chart";
 import { StatsGrid } from "./stats-grid";
 import { StockChart } from "./stock-chart";
 import { SymbolTabs } from "./symbol-tabs";
+import { TIMEFRAME_PRESETS, type TimeframePreset, TimeframeToggle } from "./timeframe-toggle";
 import { TopNFilter } from "./top-n-filter";
 import { TradeTable } from "./trade-table";
 
@@ -75,20 +76,13 @@ function computeStats(trades: DashboardTrade[]) {
 }
 
 export function DashboardShell() {
-  const [dates, setDates] = useState<string[]>([]);
-  const [dayIndex, setDayIndex] = useState(0);
   const [topFilter, setTopFilter] = useState(10);
   const [rawData, setRawData] = useState<DashboardResponse | null>(null);
   const [liveQuotes, setLiveQuotes] = useState<LiveQuotesResponse | null>(null);
   const [activeSymbol, setActiveSymbol] = useState("");
-  const [chartTimeframe] = useState({
-    period: 5,
-    ptype: "day",
-    ftype: "minute",
-    freq: 5,
-  });
+  const [timeframe, setTimeframe] = useState<TimeframePreset>(() => TIMEFRAME_PRESETS.find((p) => p.id === "5D") ?? TIMEFRAME_PRESETS[0]);
 
-  // Restore state from localStorage
+  // Restore Top-N from localStorage
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -99,62 +93,26 @@ export function DashboardShell() {
     } catch {}
   }, []);
 
-  // Save state
+  // Persist Top-N
   useEffect(() => {
     try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          topFilter,
-          date: dates[dayIndex],
-        })
-      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ topFilter }));
     } catch {}
-  }, [topFilter, dayIndex, dates]);
+  }, [topFilter]);
 
-  /**
-  Load dates. If the API returns an empty list (fresh deploy with
-  no historical trades yet), we still kick off loadDay() so the
-  shell renders the EmptyState instead of an infinite skeleton.
+  /*
+  Dashboard is today-only — historical day-by-day analysis lives on
+  /history. Always fetch the current trading day; auto-refresh keeps
+  the morning-mode picks fresh and flips to EOD-mode automatically
+  once summaries land.
   */
-  const [datesFetched, setDatesFetched] = useState(false);
-  useEffect(() => {
-    api
-      .getTradeDates()
-      .then((res) => {
-        if (res.dates?.length) {
-          setDates(res.dates);
-          try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (raw) {
-              const saved = JSON.parse(raw);
-              if (saved.date) {
-                const idx = res.dates.indexOf(saved.date);
-                if (idx >= 0) setDayIndex(idx);
-              }
-            }
-          } catch {}
-        }
-      })
-      .finally(() => setDatesFetched(true));
+  const loadDay = useCallback(() => {
+    api.getTrades().then(setRawData);
   }, []);
 
-  // Load day data
-  const loadDay = useCallback(() => {
-    const date = dates[dayIndex];
-    api.getTrades(date).then(setRawData);
-  }, [dates, dayIndex]);
-
   useEffect(() => {
-    /**
-    Fire loadDay on every dates change OR once dates have been
-    fetched (even if the result was empty). The empty-dates branch
-    still calls api.getTrades(undefined) which the server handles
-    by returning an empty dashboardResponse{}, letting the shell
-    render its EmptyState branch instead of the loading skeleton.
-    */
-    if (dates.length > 0 || datesFetched) loadDay();
-  }, [loadDay, dates, datesFetched]);
+    loadDay();
+  }, [loadDay]);
 
   // Auto-refresh
   useEffect(() => {
@@ -174,8 +132,18 @@ export function DashboardShell() {
     return () => clearInterval(interval);
   }, [rawData]);
 
-  const filtered = rawData ? filterByRank(rawData, topFilter) : null;
+  /*
+  hasSummaries is computed off the unfiltered raw data so it stays
+  stable regardless of TopN selection. On live (morning) days the
+  Top-N filter and timeframe toggle are hidden because the only
+  meaningful view is "today's 10 picks on a 1D chart" — anything
+  else is noise before EOD lands.
+  */
+  const hasSummaries = !!rawData?.trades?.some((t) => t.summary);
+  const effectiveTopFilter = hasSummaries ? topFilter : 10;
+  const filtered = rawData ? filterByRank(rawData, effectiveTopFilter) : null;
   const stats = filtered?.trades ? computeStats(filtered.trades) : null;
+  const liveTimeframe = TIMEFRAME_PRESETS[0];
 
   // Set first symbol when data loads
   useEffect(() => {
@@ -186,18 +154,18 @@ export function DashboardShell() {
 
   return (
     <div className="animate-in fade-in duration-300">
-      <div className="hidden sm:block">
-        <PageToolbar
-          leftControls={<DateNavigator dates={dates} index={dayIndex} onChange={setDayIndex} />}
-          rightSlot={filtered?.trades?.length ? <TopNFilter value={topFilter} onChange={setTopFilter} /> : null}
-        />
-      </div>
+      {hasSummaries && filtered?.trades?.length ? (
+        <div className="hidden sm:block">
+          <PageToolbar rightSlot={<TopNFilter value={topFilter} onChange={setTopFilter} />} />
+        </div>
+      ) : null}
 
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-7">
-        <div className="mb-4 flex items-center justify-between gap-2 sm:hidden">
-          <DateNavigator dates={dates} index={dayIndex} onChange={setDayIndex} />
-          {filtered?.trades?.length ? <TopNFilter value={topFilter} onChange={setTopFilter} /> : null}
-        </div>
+        {hasSummaries && filtered?.trades?.length ? (
+          <div className="mb-4 flex items-center justify-end gap-2 sm:hidden">
+            <TopNFilter value={topFilter} onChange={setTopFilter} />
+          </div>
+        ) : null}
         {!rawData ? (
           <DashboardSkeleton />
         ) : !filtered?.trades?.length ? (
@@ -205,13 +173,16 @@ export function DashboardShell() {
         ) : stats?.hasSummaries ? (
           <>
             <StatsGrid totalPnl={stats.totalPnl} winRate={stats.winRate} profitFactor={stats.profitFactor} bestPnl={stats.bestPnl} bestSym={stats.bestSym} />
-            <Section title="Price Chart" className="mt-8">
-              <SymbolTabs trades={filtered.trades} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
-              <div className="mt-3 h-[280px] overflow-hidden rounded-lg border bg-card sm:h-[360px] lg:h-[420px]">
+            <Section title="Price Chart" className="mt-8" actions={<ActiveTickerChip trades={filtered.trades} activeSymbol={activeSymbol} />}>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <SymbolTabs trades={filtered.trades} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
+                <TimeframeToggle value={timeframe.id} onChange={setTimeframe} />
+              </div>
+              <div className="lg-card mt-3 h-[280px] overflow-hidden p-1.5 sm:h-[360px] lg:h-[420px]">
                 {activeSymbol &&
                   (() => {
                     const dt = filtered.trades.find((t) => t.trade.symbol === activeSymbol);
-                    return <StockChart symbol={activeSymbol} timeframe={chartTimeframe} strikePrice={dt?.trade.strike_price} trade={dt?.trade} summary={dt?.summary ?? undefined} />;
+                    return <StockChart symbol={activeSymbol} timeframe={timeframe.params} strikePrice={dt?.trade.strike_price} trade={dt?.trade} summary={dt?.summary ?? undefined} />;
                   })()}
               </div>
             </Section>
@@ -228,13 +199,13 @@ export function DashboardShell() {
           </>
         ) : (
           <>
-            <Section title="Price Chart">
+            <Section title="Price Chart" actions={<ActiveTickerChip trades={filtered.trades} activeSymbol={activeSymbol} />}>
               <SymbolTabs trades={filtered.trades} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
-              <div className="mt-3 h-[280px] overflow-hidden rounded-lg border bg-card sm:h-[360px] lg:h-[420px]">
+              <div className="lg-card mt-3 h-[280px] overflow-hidden p-1.5 sm:h-[360px] lg:h-[420px]">
                 {activeSymbol &&
                   (() => {
                     const dt = filtered.trades.find((t) => t.trade.symbol === activeSymbol);
-                    return <StockChart symbol={activeSymbol} timeframe={chartTimeframe} strikePrice={dt?.trade.strike_price} trade={dt?.trade} summary={dt?.summary ?? undefined} />;
+                    return <StockChart symbol={activeSymbol} timeframe={liveTimeframe.params} strikePrice={dt?.trade.strike_price} trade={dt?.trade} summary={dt?.summary ?? undefined} />;
                   })()}
               </div>
             </Section>

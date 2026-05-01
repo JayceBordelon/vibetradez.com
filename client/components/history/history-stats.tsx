@@ -1,9 +1,20 @@
 import { Activity, ArrowDownRight, ArrowUpRight, Percent, Scale, Sigma, Target, TrendingDown, TrendingUp } from "lucide-react";
+import { motion, type Variants } from "motion/react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { fmt, fmtPctDec, fmtPnlInt, percentHueColor, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
+
+const containerVariants: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.05 } },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } },
+};
 
 interface HistoryStatsProps {
   totalPnl: number;
@@ -55,38 +66,54 @@ export function HistoryStats({
       <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Performance Snapshot</div>
 
       {/* Primary stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard index={0} label="Net P&L" value={fmtPnlInt(totalPnl)} sub={`${totalTrades} trades`} tone={signTone(totalPnl)} icon={totalPnl >= 0 ? TrendingUp : TrendingDown} />
-        <StatCard index={1} label="Win Rate" value={`${winRate.toFixed(0)}%`} sub={`${totalWinners}W \u00B7 ${totalLosers}L`} valueColor={percentHueColor(winRate)} icon={Target} />
-        <StatCard index={2} label="Return on Capital" value={fmtPctDec(roc)} sub="ROC" tone={signTone(roc)} icon={Percent} tooltip="Net P&L / total capital deployed" />
-        <StatCard index={3} label="Profit Factor" value={profitFactorValue} tone="neutral" icon={Scale} tooltip="Profit Factor = gross wins / gross losses" />
-      </div>
+      <motion.div className="grid grid-cols-2 gap-3 sm:grid-cols-4" variants={containerVariants} initial="hidden" animate="show">
+        <motion.div variants={itemVariants}>
+          <StatCard label="Net P&L" value={fmtPnlInt(totalPnl)} sub={`${totalTrades} trades`} tone={signTone(totalPnl)} icon={totalPnl >= 0 ? TrendingUp : TrendingDown} />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <StatCard label="Win Rate" value={`${winRate.toFixed(0)}%`} sub={`${totalWinners}W \u00B7 ${totalLosers}L`} valueColor={percentHueColor(winRate)} icon={Target} />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <StatCard label="Return on Capital" value={fmtPctDec(roc)} sub="ROC" tone={signTone(roc)} icon={Percent} tooltip="Net P&L / total capital deployed" />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <StatCard label="Profit Factor" value={profitFactorValue} tone="neutral" icon={Scale} tooltip="Profit Factor = gross wins / gross losses" />
+        </motion.div>
+      </motion.div>
 
       {/* Secondary stats */}
-      <div className="mt-3 grid grid-cols-1 gap-3 sm:mt-4 sm:grid-cols-2 xl:grid-cols-4">
-        <DualMetricCard label="Avg Win / Loss" left={{ value: `+$${fmt(avgWin, 0)}`, hint: "Win", positive: true }} right={{ value: `-$${fmt(avgLoss, 0)}`, hint: "Loss", positive: false }} />
-        <StatCard
-          label="Expectancy"
-          value={fmtPnlInt(expectancy)}
-          sub="Per trade"
-          tone={signTone(expectancy)}
-          icon={Sigma}
-          tooltip="Expected $ per trade = (winRate × avgWin) − (lossRate × avgLoss)"
-        />
-        <StatCard
-          label="Sharpe / Drawdown"
-          value={fmt(sharpe, 2)}
-          sub={`Max DD ${fmt(maxDrawdown, 1)}%`}
-          tone="neutral"
-          icon={Activity}
-          tooltip="Sharpe: annualized risk-adjusted return. Max DD: largest peak-to-trough decline"
-        />
-        <DualMetricCard
-          label="Best / Worst Trade"
-          left={{ value: fmtPnlInt(bestPnl), hint: bestSym ? `$${bestSym}` : "·", positive: bestPnl >= 0 }}
-          right={{ value: fmtPnlInt(worstPnl), hint: worstSym ? `$${worstSym}` : "·", positive: worstPnl >= 0 }}
-        />
-      </div>
+      <motion.div className="mt-3 grid grid-cols-1 gap-3 sm:mt-4 sm:grid-cols-2 xl:grid-cols-4" variants={containerVariants} initial="hidden" animate="show">
+        <motion.div variants={itemVariants}>
+          <DualMetricCard label="Avg Win / Loss" left={{ value: `+$${fmt(avgWin, 0)}`, hint: "Win", positive: true }} right={{ value: `-$${fmt(avgLoss, 0)}`, hint: "Loss", positive: false }} />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <StatCard
+            label="Expectancy"
+            value={fmtPnlInt(expectancy)}
+            sub="Per trade"
+            tone={signTone(expectancy)}
+            icon={Sigma}
+            tooltip="Expected $ per trade = (winRate × avgWin) − (lossRate × avgLoss)"
+          />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <StatCard
+            label="Sharpe / Drawdown"
+            value={fmt(sharpe, 2)}
+            sub={`Max DD ${fmt(maxDrawdown, 1)}%`}
+            tone="neutral"
+            icon={Activity}
+            tooltip="Sharpe: annualized risk-adjusted return. Max DD: largest peak-to-trough decline"
+          />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <DualMetricCard
+            label="Best / Worst Trade"
+            left={{ value: fmtPnlInt(bestPnl), hint: bestSym ? `$${bestSym}` : "·", positive: bestPnl >= 0 }}
+            right={{ value: fmtPnlInt(worstPnl), hint: worstSym ? `$${worstSym}` : "·", positive: worstPnl >= 0 }}
+          />
+        </motion.div>
+      </motion.div>
     </div>
   );
 }
@@ -99,7 +126,7 @@ interface DualMetricCardProps {
 
 function DualMetricCard({ label, left, right }: DualMetricCardProps) {
   return (
-    <Card className="group gap-0 py-0 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
+    <Card className="lg-card group gap-0 py-0 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
       <CardContent className="p-5">
         <div className="flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />

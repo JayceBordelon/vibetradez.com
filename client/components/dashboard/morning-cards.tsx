@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight } from "lucide-react";
+import { motion, type Variants } from "motion/react";
 import Link from "next/link";
 
 import { ExecutionBadge, matchesTrade } from "@/components/execution-badge";
@@ -23,13 +24,25 @@ function tradeHref(symbol: string, date: string): string {
   return `/trade/${encodeURIComponent(symbol)}?date=${encodeURIComponent(date)}`;
 }
 
+const containerVariants: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.045, delayChildren: 0.04 } },
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 12, filter: "blur(4px)" },
+  show: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } },
+};
+
 export function MorningCards({ trades, liveQuotes, date, execution }: MorningCardsProps) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <motion.div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" variants={containerVariants} initial="hidden" animate="show">
       {trades.map((dt) => (
-        <MorningCard key={dt.trade.symbol} dt={dt} liveQuotes={liveQuotes} date={date} execution={matchesTrade(execution, dt.trade) ? execution : null} />
+        <motion.div key={dt.trade.symbol} variants={itemVariants}>
+          <MorningCard dt={dt} liveQuotes={liveQuotes} date={date} execution={matchesTrade(execution, dt.trade) ? execution : null} />
+        </motion.div>
       ))}
-    </div>
+    </motion.div>
   );
 }
 
@@ -77,7 +90,7 @@ function MorningCard({ dt, liveQuotes, date, execution }: MorningCardProps) {
 
   return (
     <Link href={tradeHref(trade.symbol, date)} className="block">
-      <Card className="group h-full animate-in fade-in fill-mode-backwards duration-200 transition-all hover:-translate-y-0.5 hover:border-foreground/30 hover:shadow-md">
+      <Card className="lg-card group h-full transition-all hover:-translate-y-0.5 hover:border-foreground/30 hover:shadow-md">
         <CardContent className="space-y-4 p-5">
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant="secondary">#{trade.rank}</Badge>

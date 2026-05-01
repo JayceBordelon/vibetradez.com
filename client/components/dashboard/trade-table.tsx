@@ -65,7 +65,7 @@ export function TradeTable({ trades, date }: TradeTableProps) {
   return (
     <div className="min-w-0">
       {/* Desktop table */}
-      <div className="hidden md:block">
+      <div className="lg-card hidden overflow-hidden p-2 md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -166,7 +166,7 @@ function TradeRowCard({ dt, date }: { dt: DashboardTrade; date: string }) {
 
   return (
     <Link href={tradeHref(trade.symbol, date)} className="block">
-      <Card className={cn("animate-in fade-in fill-mode-backwards duration-200 border-l-2 transition-colors hover:bg-muted/40", row.accentBorder)}>
+      <Card className={cn("lg-card animate-in fade-in fill-mode-backwards duration-200 border-l-2 transition-colors hover:bg-muted/40", row.accentBorder)}>
         <CardContent className="space-y-3 p-4">
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant="secondary">#{trade.rank}</Badge>

@@ -56,7 +56,7 @@ export function AccountMenu({ user }: { user: SessionUser }) {
         <span className="hidden max-w-[140px] truncate sm:inline">{user.email}</span>
       </button>
       {open && (
-        <div role="menu" className="absolute right-0 top-full z-30 mt-2 w-56 overflow-hidden rounded-md border bg-popover shadow-lg">
+        <div role="menu" className="lg-card absolute right-0 top-full z-30 mt-2 w-56 overflow-hidden">
           <div className="border-b px-3 py-2">
             <div className="truncate text-xs font-semibold">{user.name || "Signed in"}</div>
             <div className="truncate text-[11px] text-muted-foreground">{user.email}</div>
