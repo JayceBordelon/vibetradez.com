@@ -415,13 +415,24 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		is shared with the Trading API, but this slot only proves the
 		market-data side is reachable (which is what the live quotes /
 		option chain code paths actually depend on).
+
+		Severity is `warn` rather than `fail` for refresh-token rejection.
+		Schwab refresh tokens roll every ~7 days and require manual
+		re-auth at /auth/schwab — a known operational state, not a code
+		defect, and one the deploy pipeline shouldn't block on. The
+		degraded surfaces (chart endpoint, live quotes) already render
+		empty / em-dash placeholders rather than crashing. Detail still
+		surfaces in the consolidated deploy email so it can't be missed.
 	*/
 	if s.schwab != nil {
 		if s.schwab.IsConnected() {
 			tokStart := time.Now()
 			if _, err := s.schwab.ValidToken(); err != nil {
-				services["schwab_market_data"] = serviceHealth{Status: "fail", Detail: err.Error(), Latency: fmtLatency(time.Since(tokStart))}
-				allOK = false
+				services["schwab_market_data"] = serviceHealth{
+					Status:  "warn",
+					Detail:  "refresh token rejected — visit /auth/schwab to re-authorize: " + err.Error(),
+					Latency: fmtLatency(time.Since(tokStart)),
+				}
 			} else {
 				services["schwab_market_data"] = serviceHealth{Status: "ok", Detail: "Authenticated", Latency: fmtLatency(time.Since(tokStart))}
 			}
