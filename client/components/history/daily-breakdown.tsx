@@ -1,7 +1,8 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 
 import { ExecutionBadge } from "@/components/execution-badge";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,8 @@ import { formatDayName, formatMonthDay } from "@/lib/date-utils";
 import { fmtMoney, fmtPctDec, fmtPnlInt, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Execution } from "@/types/trade";
+
+const PAGE_SIZE = 25;
 
 interface TradeDetail {
   symbol: string;
@@ -36,13 +39,73 @@ interface DayStat {
 }
 
 export function DailyBreakdown({ dayStats }: { dayStats: DayStat[] }) {
-  const maxAbsPnl = Math.max(...dayStats.map((d) => Math.abs(d.pnl)), 1);
+  const maxAbsPnl = useMemo(() => Math.max(...dayStats.map((d) => Math.abs(d.pnl)), 1), [dayStats]);
+  const totalPages = Math.max(1, Math.ceil(dayStats.length / PAGE_SIZE));
+  const [page, setPage] = useState(0);
+
+  /**
+  Reset to the first page whenever the underlying range changes (mode
+  toggle, date-range nav). Otherwise the page index could exceed the
+  new shorter list.
+  */
+  useEffect(() => {
+    setPage(0);
+  }, []);
+  useEffect(() => {
+    if (page >= totalPages) setPage(0);
+  }, [page, totalPages]);
+
+  const start = page * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, dayStats.length);
+  const visible = dayStats.slice(start, end);
+  const showPagination = dayStats.length > PAGE_SIZE;
 
   return (
-    <div className="space-y-1">
-      {dayStats.map((ds) => (
-        <DayRow key={ds.date} ds={ds} maxAbsPnl={maxAbsPnl} />
-      ))}
+    <div className="space-y-3">
+      <div className="space-y-1">
+        {visible.map((ds) => (
+          <DayRow key={ds.date} ds={ds} maxAbsPnl={maxAbsPnl} />
+        ))}
+      </div>
+
+      {showPagination ? (
+        <div className="flex flex-col items-center justify-between gap-2 pt-2 sm:flex-row">
+          <div className="text-[11px] text-muted-foreground tabular-nums">
+            Showing {start + 1}–{end} of {dayStats.length} days
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className={cn(
+                "lg-control inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-xs font-semibold transition-colors",
+                page === 0 ? "cursor-not-allowed text-muted-foreground/40" : "text-foreground hover:bg-muted/50"
+              )}
+              aria-label="Previous page"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+              Prev
+            </button>
+            <div className="px-2 font-mono text-xs text-muted-foreground tabular-nums">
+              {page + 1} / {totalPages}
+            </div>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className={cn(
+                "lg-control inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-xs font-semibold transition-colors",
+                page >= totalPages - 1 ? "cursor-not-allowed text-muted-foreground/40" : "text-foreground hover:bg-muted/50"
+              )}
+              aria-label="Next page"
+            >
+              Next
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

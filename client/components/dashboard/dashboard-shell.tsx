@@ -9,10 +9,12 @@ import { PageToolbar } from "@/components/layout/page-toolbar";
 import { Section } from "@/components/layout/section";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
+import { getMarketStatus } from "@/lib/market-status";
 import type { DashboardResponse, DashboardTrade, LiveQuotesResponse } from "@/types/trade";
 
 import { ActiveTickerChip } from "./active-ticker-chip";
 import { ExposurePanel } from "./exposure-panel";
+import { MarketsClosed } from "./markets-closed";
 import { MorningCards } from "./morning-cards";
 import { PnlChart } from "./pnl-chart";
 import { StatsGrid } from "./stats-grid";
@@ -144,6 +146,7 @@ export function DashboardShell() {
   const filtered = rawData ? filterByRank(rawData, effectiveTopFilter) : null;
   const stats = filtered?.trades ? computeStats(filtered.trades) : null;
   const liveTimeframe = TIMEFRAME_PRESETS[0];
+  const marketStatus = getMarketStatus();
 
   // Set first symbol when data loads
   useEffect(() => {
@@ -169,7 +172,11 @@ export function DashboardShell() {
         {!rawData ? (
           <DashboardSkeleton />
         ) : !filtered?.trades?.length ? (
-          <EmptyState />
+          marketStatus.open ? (
+            <EmptyState />
+          ) : (
+            <MarketsClosed reason={marketStatus.reason} nextOpen={marketStatus.nextOpen} />
+          )
         ) : stats?.hasSummaries ? (
           <>
             <StatsGrid totalPnl={stats.totalPnl} winRate={stats.winRate} profitFactor={stats.profitFactor} bestPnl={stats.bestPnl} bestSym={stats.bestSym} />

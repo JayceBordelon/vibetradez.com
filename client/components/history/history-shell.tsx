@@ -12,10 +12,12 @@ import { api } from "@/lib/api";
 import { getRangeBounds, getRangeLabel, maxRangeOffset } from "@/lib/date-utils";
 import type { WeekResponse } from "@/types/trade";
 
+import { CapitalEfficiency } from "./capital-efficiency";
 import { DailyBreakdown } from "./daily-breakdown";
 import { DailyPnlChart } from "./daily-pnl-chart";
 import { DateRangeNav } from "./date-range-nav";
 import { EquityCurveChart } from "./equity-curve-chart";
+import { ExposureReturnsChart } from "./exposure-returns-chart";
 import { HistoryStats } from "./history-stats";
 import { ModeToggle } from "./mode-toggle";
 
@@ -366,6 +368,16 @@ export function HistoryShell() {
                     <DailyPnlChart data={daysWithPnl} granularity={mode === "year" || mode === "all" ? "weekly" : "daily"} />
                   </Section>
                 )}
+
+                {daysWithPnl.length > 1 && (
+                  <Section className="mt-6">
+                    <ExposureReturnsChart data={daysWithPnl} />
+                  </Section>
+                )}
+
+                <Section className="mt-6">
+                  <CapitalEfficiency totalInvested={agg.totalInvested} totalReturn={agg.totalReturn} totalPnl={agg.totalPnl} roc={agg.roc} />
+                </Section>
               </>
             )}
 
