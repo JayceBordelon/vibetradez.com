@@ -236,6 +236,7 @@ func main() {
 			EmailFrom:         cfg.EmailFrom,
 			ModelLabel:        modelLabel,
 			SchwabAccountHash: trader.AccountHash,
+			OptionAsk:         schwabClient.OptionAsk,
 		}
 		executor = exec.NewService(db, trader, emailClient, execCfg)
 	}

@@ -34,16 +34,20 @@ func (s *Store) InsertExecution(e exec.Execution) (int, error) {
 
 /*
 UpdateExecutionStatus updates fill state on an existing execution row.
-Used as orders progress from working -> filled (or canceled / failed).
+Used as orders progress from working -> filled (or canceled / failed /
+rejected). schwabOrderID is preserved across multi-step transitions:
+pass the broker-issued id once it's known, pass "" on subsequent
+updates to leave the column untouched. Same convention as errMsg.
 */
-func (s *Store) UpdateExecutionStatus(id int, status string, fillPrice *float64, filledQty int, errMsg string) error {
+func (s *Store) UpdateExecutionStatus(id int, status, schwabOrderID string, fillPrice *float64, filledQty int, errMsg string) error {
 	_, err := s.db.Exec(`
 		UPDATE executions
 		SET status = $1, fill_price = COALESCE($2, fill_price), filled_quantity = $3,
 		    error_message = CASE WHEN $4 = '' THEN error_message ELSE $4 END,
+		    schwab_order_id = CASE WHEN $5 = '' THEN schwab_order_id ELSE $5 END,
 		    filled_at = CASE WHEN $1 = 'filled' AND filled_at IS NULL THEN NOW() ELSE filled_at END
-		WHERE id = $5
-	`, status, fillPrice, filledQty, errMsg, id)
+		WHERE id = $6
+	`, status, fillPrice, filledQty, errMsg, schwabOrderID, id)
 	if err != nil {
 		return fmt.Errorf("update execution: %w", err)
 	}

@@ -10,6 +10,42 @@ import (
 )
 
 /*
+LimitPriceMultiplier is the buffer applied to the live ask (or the
+fallback estimate) when constructing the open LIMIT order. 1.05 = 5%
+above ask. Schwab rejects MARKET option orders submitted before the
+9:30 ET open, so the morning cron uses LIMIT with this buffer to be
+accepted pre-market and fill at or near the open. The buffer is
+sized so a typical pre-open quote spread closes at fill without
+exceeding MaxContractPremium for any contract that already passed the
+selector cap.
+*/
+const LimitPriceMultiplier = 1.05
+
+/*
+ComputeOpenLimitPrice picks the LIMIT price for a morning open order:
+askPrice × LimitPriceMultiplier, rounded to nearest cent, clamped to
+MaxContractPremium. Falls back to estimatedPrice (Claude's modeled
+premium at pick time) when askPrice is unavailable or zero — typical
+pre-open Schwab market data sometimes returns 0 ask on thin contracts.
+Returns 0 if neither basis is usable; callers treat 0 as "do not
+submit".
+*/
+func ComputeOpenLimitPrice(askPrice, estimatedPrice float64) float64 {
+	basis := askPrice
+	if basis <= 0 {
+		basis = estimatedPrice
+	}
+	if basis <= 0 {
+		return 0
+	}
+	limit := math.Round(basis*LimitPriceMultiplier*100) / 100
+	if limit > MaxContractPremium {
+		limit = MaxContractPremium
+	}
+	return limit
+}
+
+/*
 MaxContracts is the per-trade contract count cap. Hardcoded at 1 so
 no caller can ever submit a multi-contract order — even if a future
 bug computed N>1, BuildOpenOrder would panic. Modify here AND in the
@@ -68,23 +104,31 @@ func OCCSymbol(symbol, expiration, contractType string, strike float64) (string,
 }
 
 /*
-BuildOpenOrderForTrade returns the Order to submit for the morning
-auto-execution. Hardcodes MaxContracts (1) and BUY_TO_OPEN, these are
-invariants, not parameters. Caller passes the rank-1 Trade plus its
-pre-built OCC symbol.
+BuildOpenOrderForTrade returns the LIMIT BUY_TO_OPEN order to submit
+for the morning auto-execution. Hardcodes MaxContracts (1) and
+BUY_TO_OPEN; caller passes the rank-1 Trade, its pre-built OCC symbol,
+and the limit price (see ComputeOpenLimitPrice).
+
+Returns ErrInvalidOrder when limitPrice is non-positive — Schwab
+rejects LIMIT orders without a price, so the caller MUST resolve a
+price (live ask or fallback estimate) before invoking this.
 */
-func BuildOpenOrderForTrade(t *trades.Trade, occSymbol string) (Order, error) {
+func BuildOpenOrderForTrade(t *trades.Trade, occSymbol string, limitPrice float64) (Order, error) {
 	if t == nil {
 		return Order{}, ErrInvalidOrder
 	}
 	if occSymbol == "" {
 		return Order{}, fmt.Errorf("missing OCC symbol")
 	}
+	if limitPrice <= 0 {
+		return Order{}, fmt.Errorf("limit price must be positive (got %.2f)", limitPrice)
+	}
 	return Order{
-		OrderType:         "MARKET",
+		OrderType:         "LIMIT",
 		Session:           "NORMAL",
 		Duration:          "DAY",
 		OrderStrategyType: "SINGLE",
+		Price:             limitPrice,
 		OrderLegCollection: []OrderLeg{{
 			Instruction: "BUY_TO_OPEN",
 			Quantity:    MaxContracts,

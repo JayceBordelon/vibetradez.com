@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_close_receipt.html execute_close_failed.html rollout_auto_execution_live.html rollout_claude_only.html
+//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_close_receipt.html execute_close_failed.html execute_open_failed.html rollout_auto_execution_live.html rollout_claude_only.html rollout_live_trading_starts.html
 var templateFS embed.FS
 
 type Trade struct {
@@ -295,6 +295,26 @@ type ExecuteCloseFailedData struct {
 	SchwabPositionsURL string
 }
 
+/*
+ExecuteOpenFailedData drives the operator-only alert sent when the
+morning open order errors at submission, errors on status lookup, or
+returns terminal-but-not-filled (REJECTED / CANCELED / EXPIRED). Goes
+to EXECUTION_RECIPIENT only — never the subscriber list.
+*/
+type ExecuteOpenFailedData struct {
+	Subject            string
+	Date               string
+	Mode               string
+	Symbol             string
+	ContractType       string
+	StrikePrice        float64
+	Expiration         string
+	OCCSymbol          string
+	OrderID            string
+	ErrorMessage       string
+	SchwabPositionsURL string
+}
+
 func RenderExecuteReceipt(d ExecuteReceiptData) (string, error) {
 	return renderOne("execute_receipt.html", d)
 }
@@ -303,6 +323,9 @@ func RenderExecuteCloseReceipt(d ExecuteCloseReceiptData) (string, error) {
 }
 func RenderExecuteCloseFailed(d ExecuteCloseFailedData) (string, error) {
 	return renderOne("execute_close_failed.html", d)
+}
+func RenderExecuteOpenFailed(d ExecuteOpenFailedData) (string, error) {
+	return renderOne("execute_open_failed.html", d)
 }
 
 /*
@@ -324,6 +347,17 @@ picker. Static content, no parameters beyond the Subject string.
 func RenderRolloutClaudeOnly() (string, error) {
 	return renderOne("rollout_claude_only.html", map[string]string{
 		"Subject": "We benched ChatGPT. Claude takes the floor.",
+	})
+}
+
+/*
+RenderRolloutLiveTradingStarts renders the v3 rollout email announcing
+the flip from paper trading to live trading. Static content, no
+parameters beyond the Subject string.
+*/
+func RenderRolloutLiveTradingStarts() (string, error) {
+	return renderOne("rollout_live_trading_starts.html", map[string]string{
+		"Subject": "Tomorrow: trades go LIVE — real money on a 1-contract leash",
 	})
 }
 

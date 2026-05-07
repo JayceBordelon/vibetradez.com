@@ -74,14 +74,17 @@ func TestOCCSymbol_Errors(t *testing.T) {
 	}
 }
 
-func TestBuildOpenOrderForTrade_HardcodedShape(t *testing.T) {
+func TestBuildOpenOrderForTrade_LimitShape(t *testing.T) {
 	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: 150, Expiration: "2024-01-19"}
-	o, err := BuildOpenOrderForTrade(tr, "AAPL  240119C00150000")
+	o, err := BuildOpenOrderForTrade(tr, "AAPL  240119C00150000", 1.50)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if o.OrderType != "MARKET" || o.Session != "NORMAL" || o.Duration != "DAY" || o.OrderStrategyType != "SINGLE" {
+	if o.OrderType != "LIMIT" || o.Session != "NORMAL" || o.Duration != "DAY" || o.OrderStrategyType != "SINGLE" {
 		t.Errorf("envelope wrong: %+v", o)
+	}
+	if o.Price != 1.50 {
+		t.Errorf("price wrong: want 1.50 got %.2f", o.Price)
 	}
 	if len(o.OrderLegCollection) != 1 {
 		t.Fatalf("want 1 leg got %d", len(o.OrderLegCollection))
@@ -99,14 +102,47 @@ func TestBuildOpenOrderForTrade_HardcodedShape(t *testing.T) {
 }
 
 func TestBuildOpenOrderForTrade_RejectsNilTrade(t *testing.T) {
-	if _, err := BuildOpenOrderForTrade(nil, "AAPL  240119C00150000"); err == nil {
+	if _, err := BuildOpenOrderForTrade(nil, "AAPL  240119C00150000", 1.50); err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestBuildOpenOrderForTrade_RejectsMissingOCC(t *testing.T) {
-	if _, err := BuildOpenOrderForTrade(&trades.Trade{Symbol: "AAPL"}, ""); err == nil {
+	if _, err := BuildOpenOrderForTrade(&trades.Trade{Symbol: "AAPL"}, "", 1.50); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestBuildOpenOrderForTrade_RejectsNonPositiveLimit(t *testing.T) {
+	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: 150, Expiration: "2024-01-19"}
+	for _, p := range []float64{0, -0.5} {
+		if _, err := BuildOpenOrderForTrade(tr, "AAPL  240119C00150000", p); err == nil {
+			t.Fatalf("expected error for limit %.2f", p)
+		}
+	}
+}
+
+func TestComputeOpenLimitPrice(t *testing.T) {
+	cases := []struct {
+		name     string
+		ask, est float64
+		want     float64
+	}{
+		{"ask used, rounded to cent", 1.20, 0, 1.26}, // 1.20*1.05 = 1.26
+		{"ask zero falls back to estimate", 0, 0.80, 0.84},
+		{"both zero returns zero", 0, 0, 0},
+		{"both negative returns zero", -1, -1, 0},
+		{"clamped to MaxContractPremium", 6.00, 0, MaxContractPremium},
+		{"ask preferred over estimate", 2.00, 99.00, 2.10},
+		{"rounds up at half-cent", 1.234, 0, 1.30}, // 1.234*1.05 = 1.2957 → 1.30
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ComputeOpenLimitPrice(tc.ask, tc.est)
+			if got != tc.want {
+				t.Errorf("got %.4f want %.4f", got, tc.want)
+			}
+		})
 	}
 }
 

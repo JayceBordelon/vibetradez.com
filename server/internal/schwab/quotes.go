@@ -201,6 +201,32 @@ func (c *Client) OptionMark(_ context.Context, symbol, expiration, contractType 
 	return 0, fmt.Errorf("no quote found for %s %s %s %.2f", symbol, expiration, contractType, strike)
 }
 
+/*
+OptionAsk returns the live ask price for a single option contract. Used
+by the auto-execution morning open path to size the LIMIT price (Schwab
+rejects MARKET option orders pre-market). Wraps GetOptionChain (15s
+cache) and scans for the matching strike. Returns 0 with an error if
+the chain is fetchable but no ask is populated for the contract — the
+caller is expected to fall back to a modeled estimate rather than
+submit a zero-price order.
+*/
+func (c *Client) OptionAsk(_ context.Context, symbol, expiration, contractType string, strike float64) (float64, error) {
+	chain, err := c.GetOptionChain(symbol, contractType, expiration, expiration, strike)
+	if err != nil {
+		return 0, err
+	}
+	contracts := chain.Calls
+	if contractType == "PUT" {
+		contracts = chain.Puts
+	}
+	for _, oc := range contracts {
+		if oc.StrikePrice == strike && oc.Ask > 0 {
+			return oc.Ask, nil
+		}
+	}
+	return 0, fmt.Errorf("no ask quote for %s %s %s %.2f", symbol, expiration, contractType, strike)
+}
+
 // GetOptionChain fetches the option chain for a symbol with optional filters.
 func (c *Client) GetOptionChain(symbol, contractType, fromDate, toDate string, strike float64) (*OptionChain, error) {
 	cacheKey := fmt.Sprintf("chain:%s:%s:%.2f:%s:%s", symbol, contractType, strike, fromDate, toDate)

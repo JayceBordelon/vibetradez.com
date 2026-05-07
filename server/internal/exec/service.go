@@ -25,7 +25,7 @@ Defined as an interface so tests don't need a real Postgres.
 */
 type DecisionStore interface {
 	InsertExecution(e Execution) (int, error)
-	UpdateExecutionStatus(id int, status string, fillPrice *float64, filledQty int, errMsg string) error
+	UpdateExecutionStatus(id int, status, schwabOrderID string, fillPrice *float64, filledQty int, errMsg string) error
 	GetExecution(id int) (*Execution, error)
 	OpenExecutionForTrade(tradeID int) (*Execution, error)
 	LiveExecutionsForDate(tradeDate string) ([]Execution, error)
@@ -47,6 +47,15 @@ type ServiceConfig struct {
 	EmailFrom         string
 	ModelLabel        string
 	SchwabAccountHash func(ctx context.Context) (string, error)
+	/*
+		OptionAsk returns the current ask quote for an option contract.
+		Called at order-submission time to size the morning open LIMIT
+		price. Optional — when nil, the limit falls back to the trade's
+		EstimatedPrice (Claude's modeled premium at pick time). Live
+		mode wires this to schwab.Client.OptionAsk; tests can pass a
+		stub.
+	*/
+	OptionAsk func(ctx context.Context, symbol, expiration, contractType string, strike float64) (float64, error)
 }
 
 /*
@@ -101,7 +110,28 @@ func (s *Service) HandleQualifyingPick(ctx context.Context, t *trades.Trade, tra
 		return fmt.Errorf("account hash: %w", err)
 	}
 
-	order, err := BuildOpenOrderForTrade(t, occ)
+	// Resolve LIMIT price for the open order. Live ask preferred;
+	// fall back to Claude's estimate when the chain fetch errors or
+	// returns 0. Schwab rejects MARKET option orders pre-market, so
+	// LIMIT is mandatory for the 9:25 ET cron path.
+	var askPrice float64
+	if s.cfg.OptionAsk != nil {
+		fetched, askErr := s.cfg.OptionAsk(ctx, t.Symbol, t.Expiration, t.ContractType, t.StrikePrice)
+		if askErr != nil {
+			log.Printf("execution: option ask unavailable, falling back to estimate (symbol=%s err=%v)", t.Symbol, askErr)
+		} else {
+			askPrice = fetched
+		}
+	}
+	limitPrice := ComputeOpenLimitPrice(askPrice, t.EstimatedPrice)
+	if limitPrice <= 0 {
+		msg := fmt.Sprintf("could not resolve a LIMIT price (ask=%.2f, est=%.2f)", askPrice, t.EstimatedPrice)
+		log.Printf("execution: %s", msg)
+		s.sendOpenFailedEmail(t, occ, "", msg)
+		return errors.New(msg)
+	}
+
+	order, err := BuildOpenOrderForTrade(t, occ, limitPrice)
 	if err != nil {
 		return fmt.Errorf("build open order: %w", err)
 	}
@@ -120,23 +150,37 @@ func (s *Service) HandleQualifyingPick(ctx context.Context, t *trades.Trade, tra
 
 	orderID, err := s.trader.PlaceOrder(ctx, hash, order)
 	if err != nil {
-		_ = s.store.UpdateExecutionStatus(execID, "failed", nil, 0, err.Error())
+		_ = s.store.UpdateExecutionStatus(execID, "failed", "", nil, 0, err.Error())
+		s.sendOpenFailedEmail(t, occ, "", err.Error())
 		return fmt.Errorf("place open order: %w", err)
 	}
 
 	st, err := s.trader.GetOrder(ctx, hash, orderID)
 	if err != nil {
-		_ = s.store.UpdateExecutionStatus(execID, "failed", nil, 0, err.Error())
+		_ = s.store.UpdateExecutionStatus(execID, "failed", orderID, nil, 0, err.Error())
+		s.sendOpenFailedEmail(t, occ, orderID, err.Error())
 		return fmt.Errorf("get open order status: %w", err)
 	}
 
-	if st.Filled {
+	switch {
+	case st.Filled:
 		fp := st.FillPrice
-		_ = s.store.UpdateExecutionStatus(execID, "filled", &fp, st.FilledQuantity, "")
+		_ = s.store.UpdateExecutionStatus(execID, "filled", orderID, &fp, st.FilledQuantity, "")
 		s.sendReceiptEmail(t, occ, orderID, st.FillPrice)
 		log.Printf("execution: open filled (trade_id=%d, mode=%s, fill=%.2f, order=%s)", tradeID, s.cfg.Mode, st.FillPrice, orderID)
-	} else {
-		_ = s.store.UpdateExecutionStatus(execID, "working", nil, 0, "")
+	case st.Terminal:
+		// Terminal-but-not-filled: REJECTED, CANCELED, EXPIRED, REPLACED.
+		// Persist the broker's reason and alert the operator — silent
+		// rejection is how three days of bad orders went unnoticed.
+		reason := st.ErrorMessage
+		if reason == "" {
+			reason = st.RawStatus
+		}
+		_ = s.store.UpdateExecutionStatus(execID, "rejected", orderID, nil, 0, reason)
+		s.sendOpenFailedEmail(t, occ, orderID, reason)
+		log.Printf("execution: open order rejected (trade_id=%d, order=%s, status=%s, reason=%q)", tradeID, orderID, st.RawStatus, reason)
+	default:
+		_ = s.store.UpdateExecutionStatus(execID, "working", orderID, nil, 0, "")
 		log.Printf("execution: open order working (trade_id=%d, order=%s, status=%s)", tradeID, orderID, st.RawStatus)
 	}
 	return nil
@@ -205,7 +249,7 @@ func (s *Service) closeOne(ctx context.Context, p *OpenPosition) {
 
 	orderID, err := s.trader.PlaceOrder(ctx, hash, order)
 	if err != nil {
-		_ = s.store.UpdateExecutionStatus(execID, "failed", nil, 0, err.Error())
+		_ = s.store.UpdateExecutionStatus(execID, "failed", "", nil, 0, err.Error())
 		s.sendCloseFailedEmail(p, fmt.Sprintf("first PlaceOrder: %v", err))
 		return
 	}
@@ -217,7 +261,7 @@ func (s *Service) closeOne(ctx context.Context, p *OpenPosition) {
 	_ = s.trader.CancelOrder(ctx, hash, orderID)
 	orderID2, err := s.trader.PlaceOrder(ctx, hash, order)
 	if err != nil {
-		_ = s.store.UpdateExecutionStatus(execID, "failed", nil, 0, "cancel-replace failed: "+err.Error())
+		_ = s.store.UpdateExecutionStatus(execID, "failed", orderID, nil, 0, "cancel-replace failed: "+err.Error())
 		s.sendCloseFailedEmail(p, fmt.Sprintf("cancel-replace PlaceOrder: %v", err))
 		return
 	}
@@ -226,7 +270,7 @@ func (s *Service) closeOne(ctx context.Context, p *OpenPosition) {
 		return
 	}
 
-	_ = s.store.UpdateExecutionStatus(execID, "failed", nil, 0, "unfilled after retry-cancel-replace")
+	_ = s.store.UpdateExecutionStatus(execID, "failed", orderID2, nil, 0, "unfilled after retry-cancel-replace")
 	s.sendCloseFailedEmail(p, "Position did not fill within 4-minute retry-cancel-replace window. Close on Schwab manually before 4:00pm ET.")
 }
 
@@ -259,7 +303,7 @@ func (s *Service) recordCloseAndEmail(ctx context.Context, p *OpenPosition, exec
 		return
 	}
 	fp := st.FillPrice
-	_ = s.store.UpdateExecutionStatus(execID, "filled", &fp, st.FilledQuantity, "")
+	_ = s.store.UpdateExecutionStatus(execID, "filled", orderID, &fp, st.FilledQuantity, "")
 
 	openPrice := p.ContractPrice
 	open, err := s.store.OpenExecutionForTrade(p.Execution.TradeID)
@@ -313,6 +357,42 @@ func (s *Service) sendReceiptEmail(t *trades.Trade, occSymbol, orderID string, f
 	}
 	if err := s.mail.SendTradeEmail(s.cfg.EmailFrom, []string{s.cfg.Recipient}, data.Subject, html); err != nil {
 		log.Printf("execution: send receipt: %v", err)
+	}
+}
+
+/*
+sendOpenFailedEmail alerts the operator when the morning open order
+either errored at submission, errored on status lookup, or came back
+in a terminal-but-not-filled state (REJECTED / CANCELED / EXPIRED).
+Goes ONLY to cfg.Recipient — never the subscriber list — so live-mode
+broker rejections don't leak to subscribers as a "we tried, it didn't
+work" message. Best-effort: render or send failures are logged and
+swallowed so the morning pipeline keeps running.
+*/
+func (s *Service) sendOpenFailedEmail(t *trades.Trade, occSymbol, orderID, errMsg string) {
+	if s.cfg.Recipient == "" {
+		return
+	}
+	data := templates.ExecuteOpenFailedData{
+		Subject:            fmt.Sprintf("[%s] Open failed: %s %s", strings.ToUpper(s.cfg.Mode), t.Symbol, t.ContractType),
+		Date:               time.Now().In(easternTime()).Format("Monday, Jan 2 (3:04 PM ET)"),
+		Mode:               s.cfg.Mode,
+		Symbol:             t.Symbol,
+		ContractType:       t.ContractType,
+		StrikePrice:        t.StrikePrice,
+		Expiration:         t.Expiration,
+		OCCSymbol:          occSymbol,
+		OrderID:            orderID,
+		ErrorMessage:       errMsg,
+		SchwabPositionsURL: schwabPositionsURL,
+	}
+	html, err := templates.RenderExecuteOpenFailed(data)
+	if err != nil {
+		log.Printf("execution: render open-failed email: %v", err)
+		return
+	}
+	if err := s.mail.SendTradeEmail(s.cfg.EmailFrom, []string{s.cfg.Recipient}, data.Subject, html); err != nil {
+		log.Printf("execution: send open-failed email: %v", err)
 	}
 }
 

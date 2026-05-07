@@ -54,14 +54,14 @@ func (s *Service) HandleCancelAll(w http.ResponseWriter, r *http.Request) {
 	for i := range live {
 		ex := &live[i]
 		if ex.SchwabOrderID == nil || *ex.SchwabOrderID == "" {
-			_ = s.store.UpdateExecutionStatus(ex.ID, "canceled", nil, 0, "cancel-all kill switch")
+			_ = s.store.UpdateExecutionStatus(ex.ID, "canceled", "", nil, 0, "cancel-all kill switch")
 			canceledOrders++
 			continue
 		}
 		if cancelErr := s.trader.CancelOrder(ctx, hash, *ex.SchwabOrderID); cancelErr != nil {
-			_ = s.store.UpdateExecutionStatus(ex.ID, "failed", nil, 0, "cancel-all attempt: "+cancelErr.Error())
+			_ = s.store.UpdateExecutionStatus(ex.ID, "failed", "", nil, 0, "cancel-all attempt: "+cancelErr.Error())
 		} else {
-			_ = s.store.UpdateExecutionStatus(ex.ID, "canceled", nil, 0, "cancel-all kill switch")
+			_ = s.store.UpdateExecutionStatus(ex.ID, "canceled", "", nil, 0, "cancel-all kill switch")
 			canceledOrders++
 		}
 	}

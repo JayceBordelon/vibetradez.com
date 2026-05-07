@@ -53,10 +53,11 @@ are omitted entirely rather than left zero — the broker is strict
 about extra fields.
 */
 type Order struct {
-	OrderType          string     `json:"orderType"`         // "MARKET"
+	OrderType          string     `json:"orderType"`         // "MARKET" | "LIMIT"
 	Session            string     `json:"session"`           // "NORMAL"
 	Duration           string     `json:"duration"`          // "DAY"
 	OrderStrategyType  string     `json:"orderStrategyType"` // "SINGLE"
+	Price              float64    `json:"price,omitempty"`   // required for LIMIT, omitted for MARKET
 	OrderLegCollection []OrderLeg `json:"orderLegCollection"`
 }
 

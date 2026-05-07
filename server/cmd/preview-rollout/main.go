@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	slug := "claude-only-v2"
+	slug := "live-trading-starts-v3"
 	if len(os.Args) > 1 {
 		slug = os.Args[1]
 	}
@@ -25,6 +25,8 @@ func main() {
 		err  error
 	)
 	switch slug {
+	case "live-trading-starts-v3":
+		html, err = templates.RenderRolloutLiveTradingStarts()
 	case "claude-only-v2":
 		html, err = templates.RenderRolloutClaudeOnly()
 	case "auto-execution-live-v1":
