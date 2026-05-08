@@ -128,7 +128,27 @@ export function DashboardShell() {
     const hasSummaries = rawData.trades.some((t) => t.summary);
     if (hasSummaries) return;
 
-    const poll = () => api.getLiveQuotes().then(setLiveQuotes);
+    /*
+    Merge new options/quotes over the prior state instead of replacing
+    wholesale. A single poll where one Schwab option-chain call fails
+    omits that contract from the response — replacing the whole map
+    would blank a previously-good "Current" card until the next clean
+    poll. Spreading new over prev means the card keeps its last-known
+    mark when the latest poll didn't return one. Errors from the poll
+    itself are swallowed so the prior state survives the failure too.
+    */
+    const poll = () =>
+      api
+        .getLiveQuotes()
+        .then((next) => {
+          if (!next || typeof next !== "object") return;
+          setLiveQuotes((prev) => ({
+            ...next,
+            quotes: { ...(prev?.quotes ?? {}), ...(next.quotes ?? {}) },
+            options: { ...(prev?.options ?? {}), ...(next.options ?? {}) },
+          }));
+        })
+        .catch(() => {});
     poll();
     const interval = setInterval(poll, LIVE_POLL_SECONDS * 1000);
     return () => clearInterval(interval);

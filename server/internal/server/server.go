@@ -915,7 +915,7 @@ func (s *Server) handleLiveQuotes(w http.ResponseWriter, r *http.Request) {
 		if os.Getenv("LOCAL_MOCK_QUOTES") == "1" {
 			s.fillMockLiveQuotes(&resp)
 		}
-		w.Header().Set("Cache-Control", "public, max-age=5")
+		w.Header().Set("Cache-Control", "no-store")
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
@@ -924,14 +924,14 @@ func (s *Server) handleLiveQuotes(w http.ResponseWriter, r *http.Request) {
 	// Get today's trades to know which symbols to fetch.
 	date, err := s.db.GetLatestTradeDate()
 	if err != nil {
-		w.Header().Set("Cache-Control", "public, max-age=5")
+		w.Header().Set("Cache-Control", "no-store")
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
 	morningTrades, err := s.db.GetMorningTrades(date)
 	if err != nil || len(morningTrades) == 0 {
-		w.Header().Set("Cache-Control", "public, max-age=5")
+		w.Header().Set("Cache-Control", "no-store")
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
@@ -988,7 +988,15 @@ func (s *Server) handleLiveQuotes(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Cache-Control", "public, max-age=10")
+	/*
+		No browser caching: Schwab calls already have a 15s in-process cache
+		in the schwab client, so the server hop is cheap. Caching at the
+		browser turns a single transient failure (e.g. one option-chain call
+		timing out) into a 10s window where every refresh keeps showing
+		"--" — exactly the symptom users report. Force every poll to reach
+		the handler so the next successful Schwab response wins immediately.
+	*/
+	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, resp)
 }
 

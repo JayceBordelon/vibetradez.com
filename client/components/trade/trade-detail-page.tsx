@@ -11,9 +11,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Metric } from "@/components/ui/metric";
 import { api } from "@/lib/api";
 import { calcBreakeven, calcMaxLoss, calcMoneyness, sentimentColor, sentimentLabel } from "@/lib/calculations";
-import { fmt, fmtMoney, fmtPctDec, fmtPnlInt } from "@/lib/format";
+import { fmt, fmtMoney, fmtPctDec, fmtPnlInt, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { DashboardTrade, Execution } from "@/types/trade";
+import type { DashboardTrade, Execution, LiveQuotesResponse, Trade } from "@/types/trade";
+
+const LIVE_POLL_SECONDS = 15;
 
 type LoadState =
   | { kind: "loading" }
@@ -103,9 +105,18 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
   const pctChange = summary && summary.entry_price > 0 ? ((summary.closing_price - summary.entry_price) / summary.entry_price) * 100 : 0;
   const stockPctChange = summary && summary.stock_open > 0 ? ((summary.stock_close - summary.stock_open) / summary.stock_open) * 100 : 0;
 
+  /*
+  Only poll live quotes for unsettled trades — once an EOD summary
+  lands the contract is closed for the day and the EOD block already
+  shows realized P&L. Server only returns live data for today's
+  morning picks anyway, so historical dates render no live block.
+  */
+  const liveQuotes = useLiveQuotes(!summary);
+
   return (
     <div className="space-y-5">
       {execution && <ExecutionBadge execution={execution} variant="full" />}
+      {!summary && <LivePanel trade={trade} liveQuotes={liveQuotes} />}
       {/* Header: ticker + badges + price */}
       <Card className="lg-card">
         <CardContent className="space-y-4 p-5 sm:p-6">
@@ -207,5 +218,131 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
         </Card>
       )}
     </div>
+  );
+}
+
+/*
+Polls /api/quotes/live on the same 15s cadence the dashboard uses, with
+the same merge-over-prior semantics so a single transient miss on the
+contract's option chain doesn't blank the live panel.
+*/
+function useLiveQuotes(enabled: boolean): LiveQuotesResponse | null {
+  const [liveQuotes, setLiveQuotes] = useState<LiveQuotesResponse | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const poll = () =>
+      api
+        .getLiveQuotes()
+        .then((next) => {
+          if (!next || typeof next !== "object") return;
+          setLiveQuotes((prev) => ({
+            ...next,
+            quotes: { ...(prev?.quotes ?? {}), ...(next.quotes ?? {}) },
+            options: { ...(prev?.options ?? {}), ...(next.options ?? {}) },
+          }));
+        })
+        .catch(() => {});
+    poll();
+    const interval = setInterval(poll, LIVE_POLL_SECONDS * 1000);
+    return () => clearInterval(interval);
+  }, [enabled]);
+
+  return liveQuotes;
+}
+
+function LivePanel({ trade, liveQuotes }: { trade: Trade; liveQuotes: LiveQuotesResponse | null }) {
+  /*
+  Reconstruct the same option key the server emits in handleLiveQuotes
+  (server.go: "<SYMBOL>|<CALL|PUT>|<strike .2f>|<expiration>"). When the
+  contract isn't in the response — historical date, market closed,
+  Schwab disconnected — render nothing so the page doesn't lead with a
+  table of em-dashes.
+  */
+  const optionKey = `${trade.symbol}|${trade.contract_type}|${trade.strike_price.toFixed(2)}|${trade.expiration}`;
+  const liveOption = liveQuotes?.options?.[optionKey] ?? null;
+  const liveStock = liveQuotes?.quotes?.[trade.symbol] ?? null;
+
+  if (!liveOption && !liveStock) return null;
+
+  const currentPrice = liveOption?.mark ?? null;
+  const contractDelta = currentPrice !== null && trade.estimated_price > 0 ? currentPrice - trade.estimated_price : null;
+  const contractDeltaPct = contractDelta !== null && trade.estimated_price > 0 ? (contractDelta / trade.estimated_price) * 100 : null;
+  const livePnl = contractDelta !== null ? contractDelta * 100 : null;
+
+  const stockDelta = liveStock && trade.current_price > 0 ? liveStock.last_price - trade.current_price : null;
+  const stockDeltaPct = stockDelta !== null && trade.current_price > 0 ? (stockDelta / trade.current_price) * 100 : null;
+
+  return (
+    <Card className="lg-card">
+      <CardContent className="space-y-4 p-5 sm:p-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
+            </span>
+            <h2 className="text-base font-semibold">Live</h2>
+            {liveQuotes?.market_open === false && (
+              <Badge variant="secondary" className="text-[10px]">
+                Market closed
+              </Badge>
+            )}
+          </div>
+          {livePnl !== null && (
+            <span className={cn("text-2xl font-bold tabular-nums", pnlColor(livePnl))}>
+              {fmtPnlInt(livePnl)}
+              {contractDeltaPct !== null && <span className="ml-2 text-sm font-medium text-muted-foreground">{fmtPctDec(contractDeltaPct)}</span>}
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+          <Metric
+            label="Contract mark"
+            value={
+              currentPrice !== null ? (
+                <span className={cn("text-sm font-semibold tabular-nums", pnlColor(contractDelta ?? 0))}>{fmtMoney(currentPrice)}</span>
+              ) : (
+                <span className="text-sm font-medium text-muted-foreground">—</span>
+              )
+            }
+          />
+          <Metric
+            label="Bid / Ask"
+            value={
+              liveOption ? (
+                <span className="text-sm font-medium tabular-nums">
+                  {fmtMoney(liveOption.bid)} / {fmtMoney(liveOption.ask)}
+                </span>
+              ) : (
+                <span className="text-sm font-medium text-muted-foreground">—</span>
+              )
+            }
+          />
+          <Metric
+            label="Stock"
+            value={
+              liveStock ? (
+                <span className={cn("text-sm font-semibold tabular-nums", pnlColor(stockDelta ?? 0))}>
+                  {fmtMoney(liveStock.last_price)}
+                  {stockDeltaPct !== null && <span className="ml-1 text-xs font-medium text-muted-foreground">({fmtPctDec(stockDeltaPct)})</span>}
+                </span>
+              ) : (
+                <span className="text-sm font-medium text-muted-foreground">—</span>
+              )
+            }
+          />
+          <Metric
+            label="Volume"
+            value={liveOption ? <span className="text-sm font-medium tabular-nums">{liveOption.volume.toLocaleString()}</span> : <span className="text-sm font-medium text-muted-foreground">—</span>}
+          />
+        </div>
+
+        <p className="text-[11px] text-muted-foreground">
+          Refreshes every {LIVE_POLL_SECONDS}s · entry was {fmtMoney(trade.estimated_price)}.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
