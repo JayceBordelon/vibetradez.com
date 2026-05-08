@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>{{.Subject}}</title>
+  <style>
+    :root { color-scheme: light dark; }
+    @media (prefers-color-scheme: dark) {
+      .body-bg { background-color: #0f172a !important; }
+      .header-bg { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important; }
+      .content-bg { background-color: #1e293b !important; }
+      .footer-bg { background-color: #0f172a !important; border-color: #334155 !important; }
+      .text-primary { color: #ffffff !important; }
+      .text-secondary { color: #e2e8f0 !important; }
+      .label-muted { color: #cbd5e1 !important; }
+      .panel-bg { background-color: #0b1220 !important; border-color: #334155 !important; }
+      .divider-color { border-color: #334155 !important; }
+      .green-panel-bg { background-color: #052e1c !important; border-color: #16a34a !important; }
+      .green-text { color: #4ade80 !important; }
+      .amber-panel-bg { background-color: #2b1d05 !important; border-color: #d97706 !important; }
+      .amber-text { color: #fbbf24 !important; }
+    }
+  </style>
+</head>
+<body class="body-bg" style="margin:0;padding:0;background-color:#fafafa;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="body-bg" style="background-color:#fafafa;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;max-width:620px;">
+
+          <!-- Brand accent bar -->
+          <tr>
+            <td style="height:4px;background:linear-gradient(90deg,#10a37f,#D97757);border-radius:12px 12px 0 0;font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
+          <!-- Header -->
+          <tr>
+            <td class="header-bg" style="padding:24px 28px;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td>
+                    <span style="font-size:24px;font-weight:800;color:#10a37f;letter-spacing:-0.5px;">Vibe</span><span style="font-size:24px;font-weight:800;color:#D97757;letter-spacing:-0.5px;">Tradez</span>
+                  </td>
+                  <td align="right">
+                    <span style="color:#86efac;font-size:12px;font-weight:700;background:rgba(34,197,94,0.18);padding:5px 11px;border-radius:6px;letter-spacing:0.4px;">Day 1</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Headline -->
+          <tr>
+            <td class="content-bg" style="background-color:#ffffff;padding:32px 28px 12px 28px;">
+              <h1 class="text-primary" style="margin:0 0 14px 0;font-size:28px;font-weight:800;color:#0f172a;letter-spacing:-0.5px;line-height:1.2;">
+                <span style="background:linear-gradient(90deg,#10a37f,#22c55e);-webkit-background-clip:text;background-clip:text;color:transparent;">Clean slate.</span> The real experiment starts now.
+              </h1>
+              <p class="text-secondary" style="margin:0 0 8px 0;font-size:15px;color:#475569;line-height:1.6;">
+                Friday, May 8, 2026 is the official Day 1 of VibeTradez. Everything in the dashboard before today &mdash; the practice runs, the modeled paper fills, the early calibration noise &mdash; has been wiped from the database. From here on out, the equity curve you see is the equity curve a real broker is actually moving.
+              </p>
+              <p class="text-secondary" style="margin:8px 0 0 0;font-size:15px;color:#475569;line-height:1.6;">
+                Three things you should know before Monday&apos;s open.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Section 1: The wipe -->
+          <tr>
+            <td class="content-bg" style="background-color:#ffffff;padding:28px 28px 8px 28px;">
+              <h2 class="text-primary" style="margin:0 0 12px 0;font-size:18px;font-weight:800;color:#0f172a;">1. Why I deleted everything before today</h2>
+              <p class="text-secondary" style="margin:0 0 14px 0;font-size:14px;color:#475569;line-height:1.6;">
+                Until today the dashboard was a mix of paper-trade modeling, half-deployed feature flags, and a few real broker fills sprinkled in late last week. None of that was a fair representation of what VibeTradez actually does in production. Leaving it up would have been pretending the practice scrimmage counts as a regular-season game.
+              </p>
+              <p class="text-secondary" style="margin:0;font-size:14px;color:#475569;line-height:1.6;">
+                So I dropped every pre-May-8 trade, execution, and EOD summary in a single transaction. Subscribers, oauth tokens, and announcement-email idempotency stay intact &mdash; only the trading history was wiped. The dashboard now shows exactly one day of data, and that day is today.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Section 2: The Equity Walk -->
+          <tr>
+            <td class="content-bg" style="background-color:#ffffff;padding:28px 28px 8px 28px;">
+              <h2 class="text-primary" style="margin:0 0 12px 0;font-size:18px;font-weight:800;color:#0f172a;">2. The <span style="color:#10a37f;">Equity Walk Experiment</span></h2>
+              <p class="text-secondary" style="margin:0 0 14px 0;font-size:14px;color:#475569;line-height:1.6;">
+                Starting Day 1, the cron walks ranks 1 through 3 every morning at 9:30 ET, buys each one whose modeled premium fits inside a hard <strong>$500 daily basket cap</strong>, and closes the basket at 3:55 PM the same day. No overnights, no rollovers, no leverage tricks. Every fill is a real Schwab order against my own brokerage balance, with a live cash check before each contract goes through.
+              </p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="green-panel-bg panel-bg" style="background-color:#f0fdf4;border:1px solid #86efac;border-radius:10px;margin-bottom:14px;">
+                <tr>
+                  <td style="padding:18px 22px;">
+                    <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;">
+                      <tr>
+                        <td style="padding-bottom:6px;">
+                          <span class="text-secondary label-muted" style="font-size:11px;font-weight:700;color:#15803d;letter-spacing:0.5px;text-transform:uppercase;">The rules</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;">
+                            <tr>
+                              <td style="padding-right:8px;width:33%;">
+                                <div class="text-secondary label-muted" style="font-size:10px;color:#15803d;text-transform:uppercase;letter-spacing:0.5px;">Daily cap</div>
+                                <div class="text-primary" style="font-size:18px;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">$500</div>
+                              </td>
+                              <td style="padding:0 8px;width:33%;">
+                                <div class="text-secondary label-muted" style="font-size:10px;color:#15803d;text-transform:uppercase;letter-spacing:0.5px;">Picks/day</div>
+                                <div class="text-primary" style="font-size:18px;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">Up to 3</div>
+                              </td>
+                              <td style="padding-left:8px;width:34%;">
+                                <div class="text-secondary label-muted" style="font-size:10px;color:#15803d;text-transform:uppercase;letter-spacing:0.5px;">Holding period</div>
+                                <div class="text-primary" style="font-size:18px;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">9:30 &rarr; 3:55 ET</div>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              <p class="text-secondary" style="margin:0 0 8px 0;font-size:14px;color:#475569;line-height:1.6;">
+                The point of the experiment is the <em>walk-forward</em> equity curve itself. Every dollar charted on the dashboard from here on is one a real broker actually moved &mdash; no backfill, no retroactive smoothing, no cherry-picking the good days. If the curve goes down, it goes down in public; if it goes up, same. Win rate, drawdown, Sharpe, profit factor &mdash; they&apos;ll all rebuild themselves day by day, starting from today&apos;s opening point.
+              </p>
+              <p class="text-secondary" style="margin:0;font-size:14px;color:#475569;line-height:1.6;">
+                Today&apos;s rank-1 trade (AKAM 145 CALL) closed +$435.67 on a $173 entry. That&apos;s the first datapoint on the walk. There will be losing days; some of them will be ugly. Subscribers who want to follow along get the morning email, the EOD summary, and the same dashboard I look at &mdash; nothing is hidden behind a different view.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Section 3: Pricing fix disclosure -->
+          <tr>
+            <td class="content-bg" style="background-color:#ffffff;padding:28px 28px 8px 28px;">
+              <h2 class="text-primary" style="margin:0 0 12px 0;font-size:18px;font-weight:800;color:#0f172a;">3. <span style="color:#D97757;">Disclosure</span> &mdash; trade-value bug, found and fixed</h2>
+              <p class="text-secondary" style="margin:0 0 14px 0;font-size:14px;color:#475569;line-height:1.6;">
+                While prepping for Day 1 I caught a bug in how the close-side fill price was being read back from Schwab. On MARKET orders (which is how the 3:55 PM exit cron closes every position), the previous code was logging the order&apos;s <em>limit</em> price &mdash; which is always $0 for a MARKET order &mdash; instead of the actual volume-weighted fill across the order&apos;s execution legs. Net effect: today&apos;s realized P&amp;L on the AKAM trade briefly displayed as <strong>$0.00</strong> on the dashboard even though the broker had filled the close at $6.10.
+              </p>
+              <p class="text-secondary" style="margin:0 0 14px 0;font-size:14px;color:#475569;line-height:1.6;">
+                The fix is in the running container as of this morning&apos;s deploy: the close path now reads <code style="background-color:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px;font-family:'JetBrains Mono',monospace;">orderActivityCollection</code> from Schwab and computes a quantity-weighted average across the actual fill legs, falling back to the limit price only when Schwab returns no activity at all. Behavior is covered by four new unit tests so it can&apos;t silently regress. Today&apos;s AKAM record was retroactively backfilled with the correct broker fill, so the +$435.67 you see on the dashboard is the real Schwab number.
+              </p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="amber-panel-bg panel-bg" style="background-color:#fffbeb;border:1px solid #fcd34d;border-radius:10px;">
+                <tr>
+                  <td style="padding:14px 18px;">
+                    <p class="text-secondary" style="margin:0;font-size:13px;color:#92400e;line-height:1.55;">
+                      Paper-mode fills were never affected &mdash; the simulated trader stores the option mark at submission time and reads it straight back, so the limit-vs-market distinction never applied there. Live fills going forward will persist correctly on the first write, no manual reconciliation required.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- CTA -->
+          <tr>
+            <td class="content-bg" style="background-color:#ffffff;padding:32px 28px 8px 28px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td align="center" style="padding-bottom:14px;">
+                    <a href="https://vibetradez.com/dashboard" style="display:inline-block;padding:14px 32px;background-color:#0f172a;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;letter-spacing:0.3px;">See Day 1 on the dashboard &rarr;</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="content-bg" style="background-color:#ffffff;padding:8px 28px 28px 28px;">
+              <p class="text-secondary" style="margin:24px 0 0 0;font-size:12px;color:#94a3b8;line-height:1.6;text-align:center;">
+                Not financial advice. Options trading carries real risk; some weeks the cron loses money. Reply if you spot something off &mdash; the equity walk is public so it can be audited.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Brand accent bar -->
+          <tr>
+            <td style="height:3px;background:linear-gradient(90deg,#10a37f,#D97757);font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
+          <!-- Footer brand bar -->
+          <tr>
+            <td class="footer-bg" style="padding:20px 28px;background-color:#f1f5f9;border-radius:0 0 12px 12px;">
+              <p align="center" style="margin:0;">
+                <span style="font-size:14px;font-weight:700;color:#10a37f;">Vibe</span><span style="font-size:14px;font-weight:700;color:#D97757;">Tradez</span>
+              </p>
+              <p align="center" class="text-secondary" style="margin:6px 0 0 0;font-size:11px;color:#94a3b8;">
+                Claude picks, I trade, the curve walks &mdash; in public, day by day.<br/>
+                <a href="https://vibetradez.com" style="color:#94a3b8;text-decoration:underline;">vibetradez.com</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

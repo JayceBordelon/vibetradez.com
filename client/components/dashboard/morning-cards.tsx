@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { motion, type Variants } from "motion/react";
 import Link from "next/link";
 
-import { ExecutionBadge, findExecutionForTrade } from "@/components/execution-badge";
+import { ExecutionBadge, findExecutionForTrade, liveMarkForTrade } from "@/components/execution-badge";
 import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
@@ -100,7 +100,7 @@ function MorningCard({ dt, liveQuotes, date, execution }: MorningCardProps) {
             </Badge>
             <Badge variant={moneyness.variant}>{moneyness.label}</Badge>
             <Badge variant={riskBadgeVariant}>{trade.risk_level}</Badge>
-            {execution && <ExecutionBadge execution={execution} />}
+            {execution && <ExecutionBadge execution={execution} liveMark={liveMarkForTrade(liveQuotes, trade)} />}
             {showScore && (
               <div className="ml-auto inline-flex items-center gap-1 rounded-md border bg-muted/40 px-2 py-0.5 text-[11px] font-semibold tabular-nums">
                 <ClaudeLogo className="h-3 w-3" />

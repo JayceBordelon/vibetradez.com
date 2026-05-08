@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	slug := "basket-and-copy-trading-v4"
+	slug := "equity-walk-day-one-v5"
 	if len(os.Args) > 1 {
 		slug = os.Args[1]
 	}
@@ -33,6 +33,8 @@ func main() {
 		html, err = templates.RenderRolloutAutoExecutionLive()
 	case "basket-and-copy-trading-v4":
 		html, err = templates.RenderRolloutBasketAndCopyTrading()
+	case "equity-walk-day-one-v5":
+		html, err = templates.RenderRolloutEquityWalkDayOne()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown rollout slug: %s\n", slug)
 		os.Exit(1)

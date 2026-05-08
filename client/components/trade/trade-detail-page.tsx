@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { ExecutionBadge, findExecutionForTrade } from "@/components/execution-badge";
+import { ExecutionBadge, findExecutionForTrade, liveMarkForTrade } from "@/components/execution-badge";
 import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
@@ -129,7 +129,7 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
 
   return (
     <div className="space-y-5">
-      {execution && <ExecutionBadge execution={execution} variant="full" />}
+      {execution && <ExecutionBadge execution={execution} variant="full" liveMark={liveMarkForTrade(liveQuotes, trade)} />}
       {!summary && <LivePanel trade={trade} liveQuotes={liveQuotes} />}
       {/* Header: ticker + badges + price */}
       <Card className="lg-card">

@@ -42,6 +42,7 @@ var Registry = []Rollout{
 	claudeOnlyV2,
 	liveTradingStartsV3,
 	basketAndCopyTradingV4,
+	equityWalkDayOneV5,
 }
 
 /*

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_close_receipt.html execute_close_failed.html execute_open_failed.html rollout_auto_execution_live.html rollout_claude_only.html rollout_live_trading_starts.html rollout_basket_and_copy_trading.html
+//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_close_receipt.html execute_close_failed.html execute_open_failed.html rollout_auto_execution_live.html rollout_claude_only.html rollout_live_trading_starts.html rollout_basket_and_copy_trading.html rollout_equity_walk_day_one.html
 var templateFS embed.FS
 
 type Trade struct {
@@ -372,6 +372,19 @@ a future P&L; create a new slug instead.
 func RenderRolloutBasketAndCopyTrading() (string, error) {
 	return renderOne("rollout_basket_and_copy_trading.html", map[string]string{
 		"Subject": "+$435 today, and what's coming next on VibeTradez",
+	})
+}
+
+/*
+RenderRolloutEquityWalkDayOne renders the v5 rollout email announcing
+the pre-May-8 history wipe, the "Equity Walk Experiment" rules
+(top-3 picks/day under a $500 daily cap, intraday-only, real Schwab
+fills), and disclosure of the close-fill-price bug + fix. Numbers
+and dates are specific to May 8, 2026 — never re-purpose this slug.
+*/
+func RenderRolloutEquityWalkDayOne() (string, error) {
+	return renderOne("rollout_equity_walk_day_one.html", map[string]string{
+		"Subject": "Day 1: clean slate, real money, public equity walk",
 	})
 }
 

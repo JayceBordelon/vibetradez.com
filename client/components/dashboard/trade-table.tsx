@@ -4,6 +4,7 @@ import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { findExecutionForTrade, liveMarkForTrade } from "@/components/execution-badge";
 import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,12 +13,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { calcMoneyness, computeTradePnl } from "@/lib/calculations";
 import { fmtMoney, fmtPctDec, fmtPnlInt, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { DashboardTrade, Execution } from "@/types/trade";
+import type { DashboardTrade, Execution, LiveQuotesResponse } from "@/types/trade";
 
 interface TradeTableProps {
   trades: DashboardTrade[];
   date: string;
   executions?: Execution[] | null;
+  liveQuotes?: LiveQuotesResponse | null;
 }
 
 function tradeHref(symbol: string, date: string): string {
@@ -37,33 +39,63 @@ interface RowComputed {
   close: string;
 }
 
-function computeRow(dt: DashboardTrade, executions: Execution[] | null | undefined): RowComputed {
+function computeRow(dt: DashboardTrade, executions: Execution[] | null | undefined, liveQuotes: LiveQuotesResponse | null | undefined): RowComputed {
   const { trade, summary } = dt;
   const hasSummary = !!summary;
   const result = computeTradePnl(dt, executions);
-  const pnl = result.pnl;
-  const pnlPct = result.pctChange;
   const stockMove = hasSummary && summary.stock_open > 0 ? ((summary.stock_close - summary.stock_open) / summary.stock_open) * 100 : 0;
 
-  const resultLabel = hasSummary ? (pnl > 0 ? "PROFIT" : pnl < 0 ? "LOSS" : "FLAT") : "OPEN";
-  const resultVariant: RowComputed["resultVariant"] = hasSummary ? (pnl > 0 ? "default" : pnl < 0 ? "destructive" : "outline") : "secondary";
+  /*
+  Holding-with-live-mark gives the row a real-time unrealized P&L so
+  the table matches what ExecutionBadge already shows on the morning
+  cards. Only triggers for a live execution still in holding state
+  with a positive mark; closed and paper rows fall through to the
+  pre-existing summary/estimate path below.
+  */
+  const execution = findExecutionForTrade(executions, trade);
+  const liveMark = liveMarkForTrade(liveQuotes, trade);
+  const isLiveHolding = !hasSummary && execution?.state === "holding" && execution.mode === "live" && liveMark != null && execution.open_price > 0;
+  const holdingPnl = isLiveHolding ? (liveMark - execution.open_price) * 100 : 0;
+  const holdingPct = isLiveHolding ? ((liveMark - execution.open_price) / execution.open_price) * 100 : 0;
 
-  const accentBorder = !hasSummary ? "border-l-transparent" : pnlPct > 1 ? "border-l-green/40" : pnlPct < -1 ? "border-l-red/40" : "border-l-transparent";
+  let pnl: number;
+  let pnlPct: number;
+  let resultLabel: string;
+  let resultVariant: RowComputed["resultVariant"];
+  let accentBorder: string;
+  let entry: string;
+  let close: string;
 
-  return {
-    hasSummary,
-    pnl,
-    pnlPct,
-    stockMove,
-    resultLabel,
-    resultVariant,
-    accentBorder,
-    entry: hasSummary ? fmtMoney(result.entryPrice) : fmtMoney(trade.estimated_price),
-    close: hasSummary ? fmtMoney(result.closingPrice) : "-",
-  };
+  if (hasSummary) {
+    pnl = result.pnl;
+    pnlPct = result.pctChange;
+    resultLabel = pnl > 0 ? "PROFIT" : pnl < 0 ? "LOSS" : "FLAT";
+    resultVariant = pnl > 0 ? "default" : pnl < 0 ? "destructive" : "outline";
+    accentBorder = pnlPct > 1 ? "border-l-green/40" : pnlPct < -1 ? "border-l-red/40" : "border-l-transparent";
+    entry = fmtMoney(result.entryPrice);
+    close = fmtMoney(result.closingPrice);
+  } else if (isLiveHolding) {
+    pnl = holdingPnl;
+    pnlPct = holdingPct;
+    resultLabel = holdingPnl > 0 ? "HOLDING ↑" : holdingPnl < 0 ? "HOLDING ↓" : "HOLDING";
+    resultVariant = holdingPnl > 0 ? "default" : holdingPnl < 0 ? "destructive" : "secondary";
+    accentBorder = holdingPnl > 0 ? "border-l-green/60" : holdingPnl < 0 ? "border-l-red/60" : "border-l-transparent";
+    entry = fmtMoney(execution.open_price);
+    close = fmtMoney(liveMark);
+  } else {
+    pnl = result.pnl;
+    pnlPct = result.pctChange;
+    resultLabel = "OPEN";
+    resultVariant = "secondary";
+    accentBorder = "border-l-transparent";
+    entry = fmtMoney(trade.estimated_price);
+    close = "-";
+  }
+
+  return { hasSummary, pnl, pnlPct, stockMove, resultLabel, resultVariant, accentBorder, entry, close };
 }
 
-export function TradeTable({ trades, date, executions }: TradeTableProps) {
+export function TradeTable({ trades, date, executions, liveQuotes }: TradeTableProps) {
   return (
     <div className="min-w-0">
       {/* Desktop table */}
@@ -83,7 +115,7 @@ export function TradeTable({ trades, date, executions }: TradeTableProps) {
           </TableHeader>
           <TableBody>
             {trades.map((dt) => (
-              <DesktopTradeRow key={dt.trade.symbol} dt={dt} date={date} executions={executions} />
+              <DesktopTradeRow key={dt.trade.symbol} dt={dt} date={date} executions={executions} liveQuotes={liveQuotes} />
             ))}
           </TableBody>
         </Table>
@@ -92,7 +124,7 @@ export function TradeTable({ trades, date, executions }: TradeTableProps) {
       {/* Mobile cards */}
       <div className="space-y-3 md:hidden">
         {trades.map((dt) => (
-          <TradeRowCard key={dt.trade.symbol} dt={dt} date={date} executions={executions} />
+          <TradeRowCard key={dt.trade.symbol} dt={dt} date={date} executions={executions} liveQuotes={liveQuotes} />
         ))}
       </div>
     </div>
@@ -105,11 +137,11 @@ Each row is a navigation surface to /trade/<symbol>?date=<date>; we render
 the link inside a regular cell rather than wrapping the entire <tr> so we
 keep valid table semantics (no <a> wrapping <tr>).
 */
-function DesktopTradeRow({ dt, date, executions }: { dt: DashboardTrade; date: string; executions?: Execution[] | null }) {
+function DesktopTradeRow({ dt, date, executions, liveQuotes }: { dt: DashboardTrade; date: string; executions?: Execution[] | null; liveQuotes?: LiveQuotesResponse | null }) {
   const router = useRouter();
   const { trade } = dt;
   const moneyness = calcMoneyness(trade);
-  const row = computeRow(dt, executions);
+  const row = computeRow(dt, executions, liveQuotes);
   const href = tradeHref(trade.symbol, date);
 
   return (
@@ -133,7 +165,9 @@ function DesktopTradeRow({ dt, date, executions }: { dt: DashboardTrade; date: s
       <TableCell className={cn("text-right font-mono text-sm tabular-nums", row.hasSummary ? pnlColor(row.stockMove) : "text-muted-foreground")}>
         {row.hasSummary ? fmtPctDec(row.stockMove) : "-"}
       </TableCell>
-      <TableCell className={cn("text-right text-base font-semibold tabular-nums", row.hasSummary ? pnlColor(row.pnl) : "text-muted-foreground")}>{row.hasSummary ? fmtPnlInt(row.pnl) : "-"}</TableCell>
+      <TableCell className={cn("text-right text-base font-semibold tabular-nums", row.hasSummary || row.pnl !== 0 || row.pnlPct !== 0 ? pnlColor(row.pnl) : "text-muted-foreground")}>
+        {row.hasSummary || row.pnl !== 0 ? fmtPnlInt(row.pnl) : "-"}
+      </TableCell>
       <TableCell className="w-10 text-right">
         <Link
           href={href}
@@ -161,10 +195,11 @@ function ScorePill({ score }: { score: number }) {
 }
 
 // ---- Mobile card ----
-function TradeRowCard({ dt, date, executions }: { dt: DashboardTrade; date: string; executions?: Execution[] | null }) {
+function TradeRowCard({ dt, date, executions, liveQuotes }: { dt: DashboardTrade; date: string; executions?: Execution[] | null; liveQuotes?: LiveQuotesResponse | null }) {
   const { trade } = dt;
   const moneyness = calcMoneyness(trade);
-  const row = computeRow(dt, executions);
+  const row = computeRow(dt, executions, liveQuotes);
+  const showPnl = row.hasSummary || row.pnl !== 0;
 
   return (
     <Link href={tradeHref(trade.symbol, date)} className="block">
@@ -181,7 +216,7 @@ function TradeRowCard({ dt, date, executions }: { dt: DashboardTrade; date: stri
             <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" aria-hidden />
           </div>
 
-          <div className={cn("text-2xl font-semibold tabular-nums", row.hasSummary ? pnlColor(row.pnl) : "text-muted-foreground")}>{row.hasSummary ? fmtPnlInt(row.pnl) : "-"}</div>
+          <div className={cn("text-2xl font-semibold tabular-nums", showPnl ? pnlColor(row.pnl) : "text-muted-foreground")}>{showPnl ? fmtPnlInt(row.pnl) : "-"}</div>
 
           <div className="grid grid-cols-3 gap-3 text-sm">
             <Metric label="Entry" value={row.entry} />
