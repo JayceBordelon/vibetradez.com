@@ -204,6 +204,71 @@ func (s *Store) OpenExecutionForTrade(tradeID int) (*exec.Execution, error) {
 }
 
 /*
+WorkingOpenPositionsForDate returns open-side executions that placed
+successfully at the broker but haven't yet been confirmed filled. Used
+by the per-minute reconciliation cron to re-poll Schwab for the actual
+fill state and flip the row from 'working' to 'filled' (or 'rejected'
+if the broker terminally rejected it after acceptance). Mirrors the
+shape of OpenPositionsForDate so the same OpenPosition struct can be
+fed to the receipt-email helpers without a second query for the
+contract spec.
+*/
+func (s *Store) WorkingOpenPositionsForDate(tradeDate string) ([]exec.OpenPosition, error) {
+	rows, err := s.db.Query(`
+		SELECT e.id, e.trade_id, e.mode, e.side, e.schwab_order_id, e.status,
+			e.fill_price, e.filled_quantity, e.requested_quantity,
+			e.submitted_at, e.filled_at, e.error_message, e.created_at,
+			t.symbol, t.contract_type, t.strike_price, t.expiration, t.estimated_price
+		FROM executions e
+		INNER JOIN trades t ON t.id = e.trade_id
+		WHERE t.date = $1
+		  AND e.side = 'open'
+		  AND e.status = 'working'
+		  AND e.schwab_order_id IS NOT NULL
+		  AND e.schwab_order_id != ''
+		ORDER BY e.id ASC
+	`, tradeDate)
+	if err != nil {
+		return nil, fmt.Errorf("query working open positions: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []exec.OpenPosition
+	for rows.Next() {
+		var p exec.OpenPosition
+		var schwabOrderID sql.NullString
+		var fillPrice sql.NullFloat64
+		var filledAt sql.NullTime
+		var tradeID sql.NullInt64
+		if err := rows.Scan(
+			&p.Execution.ID, &tradeID, &p.Execution.Mode, &p.Execution.Side,
+			&schwabOrderID, &p.Execution.Status,
+			&fillPrice, &p.Execution.FilledQuantity, &p.Execution.RequestedQuantity,
+			&p.Execution.SubmittedAt, &filledAt, &p.Execution.ErrorMessage, &p.Execution.CreatedAt,
+			&p.Symbol, &p.ContractType, &p.StrikePrice, &p.Expiration, &p.ContractPrice,
+		); err != nil {
+			return nil, fmt.Errorf("scan working open position: %w", err)
+		}
+		if tradeID.Valid {
+			p.Execution.TradeID = int(tradeID.Int64)
+		}
+		if schwabOrderID.Valid {
+			v := schwabOrderID.String
+			p.Execution.SchwabOrderID = &v
+		}
+		if fillPrice.Valid {
+			v := fillPrice.Float64
+			p.Execution.FillPrice = &v
+		}
+		if filledAt.Valid {
+			p.Execution.FilledAt = &filledAt.Time
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+/*
 LiveExecutionsForDate returns every execution row for the given trade
 date that's NOT in a terminal state, still pending or working at the
 broker. Used by the cancel-all kill switch to find what to cancel.
@@ -416,9 +481,14 @@ func scanExecutionView(row *sql.Row) (*ExecutionView, error) {
 
 /*
 deriveExecutionState collapses the open/close status pair into the
-single string the frontend renders. Returns empty string when the
-open never reached a terminal-or-filled state, caller treats that
-as "no position to surface".
+single string the frontend renders. Returns empty string only when the
+open row is in a transient state we don't want to surface yet.
+
+'submitted' covers the window between order acceptance at the broker
+and confirmed fill — the row exists, Schwab has the order, but the
+reconcile cron hasn't observed FILLED yet. Without this, a real trade
+that's working at the broker is invisible on the dashboard until the
+next reconcile tick (or, historically, never).
 */
 func deriveExecutionState(openStatus string, closeStatus sql.NullString) string {
 	switch openStatus {
@@ -427,6 +497,8 @@ func deriveExecutionState(openStatus string, closeStatus sql.NullString) string 
 			return "closed"
 		}
 		return "holding"
+	case "working", "pending":
+		return "submitted"
 	case "failed", "rejected":
 		return "failed"
 	default:

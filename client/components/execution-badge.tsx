@@ -9,6 +9,7 @@ Color rules:
   - amber background = paper (clearly distinct from real positions)
   - red-orange background = live (real money on the line)
 State rules:
+  - submitted: order placed at broker, awaiting fill confirmation
   - holding: shows entry + "live position" indicator
   - closed: shows P&L with green/red color
   - failed: shows "open failed" with neutral styling
@@ -39,6 +40,8 @@ function ExecutionPill({ execution, className }: { execution: Execution; classNa
   let label: React.ReactNode;
   if (state === "failed") {
     label = <>Open failed</>;
+  } else if (state === "submitted") {
+    label = <>Order working at broker</>;
   } else if (state === "closed") {
     const pnl = execution.realized_pnl;
     const pnlColor = pnl > 0 ? "text-green" : pnl < 0 ? "text-red" : "text-foreground";
@@ -76,18 +79,22 @@ function ExecutionPanel({ execution, className }: { execution: Execution; classN
   const isLive = mode === "live";
   const headerColors = isLive ? "border-red-border bg-red-bg text-red" : "border-amber-border bg-amber-bg text-amber";
 
+  const headerLabel = state === "submitted" ? "Order placed" : "Position taken";
+  const closeSub = closed_at ? formatTime(closed_at) : state === "holding" ? "auto-closes 3:55pm ET" : state === "submitted" ? "pending open fill" : null;
+  const entrySub = executed_at ? formatTime(executed_at) : state === "submitted" ? "awaiting broker fill" : null;
+
   return (
     <div className={cn("rounded-lg border", className)}>
       <div className={cn("flex items-center justify-between border-b px-4 py-2 text-xs font-semibold uppercase tracking-wider", headerColors)}>
         <span className="inline-flex items-center gap-2">
           <span className="inline-block h-2 w-2 rounded-full bg-current" />
-          Position taken — {mode}
+          {headerLabel} — {mode}
         </span>
         <span>{state}</span>
       </div>
       <div className="grid grid-cols-3 gap-4 p-4">
-        <Stat label="Entry" value={open_price > 0 ? fmtMoney(open_price) : "—"} sub={executed_at ? formatTime(executed_at) : null} />
-        <Stat label="Close" value={close_price > 0 ? fmtMoney(close_price) : "—"} sub={closed_at ? formatTime(closed_at) : state === "holding" ? "auto-closes 3:55pm ET" : null} />
+        <Stat label="Entry" value={open_price > 0 ? fmtMoney(open_price) : "—"} sub={entrySub} />
+        <Stat label="Close" value={close_price > 0 ? fmtMoney(close_price) : "—"} sub={closeSub} />
         <Stat
           label="Realized P&L"
           value={state === "closed" ? `${realized_pnl > 0 ? "+" : ""}${fmtMoney(realized_pnl)}` : "—"}

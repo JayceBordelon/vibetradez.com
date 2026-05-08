@@ -40,4 +40,4 @@ function AccordionContent({ className, children, ...props }: React.ComponentProp
   );
 }
 
-export { Accordion, AccordionItem, AccordionTrigger, AccordionContent };
+export { Accordion, AccordionContent, AccordionItem, AccordionTrigger };

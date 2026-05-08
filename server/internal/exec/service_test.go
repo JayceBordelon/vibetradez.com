@@ -40,6 +40,9 @@ func (f *fakeStore) LiveExecutionsForDate(string) ([]Execution, error) { return 
 func (f *fakeStore) OpenPositionsForDate(string) ([]OpenPosition, error) {
 	return nil, nil
 }
+func (f *fakeStore) WorkingOpenPositionsForDate(string) ([]OpenPosition, error) {
+	return nil, nil
+}
 
 type fakeMail struct {
 	sent []sentEmail

@@ -280,6 +280,27 @@ func main() {
 
 	if executor != nil {
 		ctxBg := context.Background()
+
+		/*
+			Per-minute open-fill reconciliation. The morning cron's single
+			post-PlaceOrder GetOrder call almost always sees WORKING (Schwab
+			doesn't fill pre-market LIMITs instantly), so without this loop
+			a real working order never flips to filled in our DB — meaning
+			the dashboard hides it and the 3:55 close cron skips it. Window
+			is 9:00-15:59 ET, M-F: covers normal-day opens through 3:55
+			close, half-day opens through 12:55 close, and any late catch-up
+			between fills and close. Cheap when there's nothing working.
+		*/
+		if _, err := c.AddFunc("* 9-15 * * 1-5", func() {
+			if open, reason := isMarketOpen(); !open {
+				log.Printf("Skipping open-order reconcile: %s", reason)
+				return
+			}
+			executor.ReconcileOpenOrders(ctxBg, todayDate())
+		}); err != nil {
+			log.Fatalf("Failed to add open-order reconcile cron: %v", err)
+		}
+
 		if _, err := c.AddFunc("55 15 * * 1-5", func() {
 			if open, reason := isMarketOpen(); !open {
 				log.Printf("Skipping 3:55pm close: %s", reason)
@@ -306,7 +327,7 @@ func main() {
 		}); err != nil {
 			log.Fatalf("Failed to add 12:55pm half-day close cron: %v", err)
 		}
-		log.Printf("execution: cron registered (close 3:55pm or 12:55pm half-days)")
+		log.Printf("execution: cron registered (open-reconcile every minute 9-15 ET, close 3:55pm or 12:55pm half-days)")
 	}
 
 	c.Start()

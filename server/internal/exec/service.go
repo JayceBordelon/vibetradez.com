@@ -30,6 +30,7 @@ type DecisionStore interface {
 	OpenExecutionForTrade(tradeID int) (*Execution, error)
 	LiveExecutionsForDate(tradeDate string) ([]Execution, error)
 	OpenPositionsForDate(tradeDate string) ([]OpenPosition, error)
+	WorkingOpenPositionsForDate(tradeDate string) ([]OpenPosition, error)
 }
 
 // MailSender is the slice of *email.Client that exec.Service needs.
@@ -184,6 +185,102 @@ func (s *Service) HandleQualifyingPick(ctx context.Context, t *trades.Trade, tra
 		log.Printf("execution: open order working (trade_id=%d, order=%s, status=%s)", tradeID, orderID, st.RawStatus)
 	}
 	return nil
+}
+
+/*
+ReconcileOpenOrders re-polls Schwab for every open-side execution that
+placed but hasn't yet been observed FILLED. Fired by a per-minute cron
+between market open and the 3:55 close cron, this closes the gap
+between order acceptance and confirmed fill — the morning cron's
+single post-PlaceOrder GetOrder call is racy because pre-market LIMIT
+orders typically remain WORKING for several seconds-to-minutes before
+the broker fills.
+
+Without this, working rows stay in 'working' forever:
+  - the dashboard's deriveExecutionState would silently hide them
+    (pre-fix), and
+  - OpenPositionsForDate filters by status='filled', so the 3:55
+    close cron would skip the position entirely, leaving a real
+    open contract at the broker past market close.
+
+When a working row reaches FILLED here, we send the same receipt
+email that HandleQualifyingPick would have sent on a same-tick fill.
+Terminal-not-filled outcomes (REJECTED / CANCELED / EXPIRED) flip to
+'rejected' and notify the operator. Errors are logged but never
+propagated, the cron must keep running.
+*/
+func (s *Service) ReconcileOpenOrders(ctx context.Context, tradeDate string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("execution: ReconcileOpenOrders top-level panic: %v", r)
+		}
+	}()
+
+	positions, err := s.store.WorkingOpenPositionsForDate(tradeDate)
+	if err != nil {
+		log.Printf("execution: working positions: %v", err)
+		return
+	}
+	if len(positions) == 0 {
+		return
+	}
+
+	hash, err := s.cfg.SchwabAccountHash(ctx)
+	if err != nil {
+		log.Printf("execution: account hash for reconcile: %v", err)
+		return
+	}
+
+	for i := range positions {
+		s.reconcileOne(ctx, hash, &positions[i])
+	}
+}
+
+func (s *Service) reconcileOne(ctx context.Context, hash string, p *OpenPosition) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("execution: reconcileOne panic for trade %d: %v", p.Execution.TradeID, r)
+		}
+	}()
+
+	if p.Execution.SchwabOrderID == nil || *p.Execution.SchwabOrderID == "" {
+		// WorkingOpenPositionsForDate filters this out, but be defensive.
+		return
+	}
+	orderID := *p.Execution.SchwabOrderID
+
+	st, err := s.trader.GetOrder(ctx, hash, orderID)
+	if err != nil {
+		log.Printf("execution: reconcile GetOrder (trade=%d, order=%s): %v", p.Execution.TradeID, orderID, err)
+		return
+	}
+
+	occ, _ := OCCSymbol(p.Symbol, p.Expiration, p.ContractType, p.StrikePrice)
+	syntheticTrade := &trades.Trade{
+		Symbol:         p.Symbol,
+		ContractType:   p.ContractType,
+		StrikePrice:    p.StrikePrice,
+		Expiration:     p.Expiration,
+		EstimatedPrice: p.ContractPrice,
+	}
+
+	switch {
+	case st.Filled:
+		fp := st.FillPrice
+		_ = s.store.UpdateExecutionStatus(p.Execution.ID, "filled", orderID, &fp, st.FilledQuantity, "")
+		s.sendReceiptEmail(syntheticTrade, occ, orderID, st.FillPrice)
+		log.Printf("execution: reconcile open filled (trade=%d, mode=%s, fill=%.2f, order=%s)", p.Execution.TradeID, p.Execution.Mode, st.FillPrice, orderID)
+	case st.Terminal:
+		reason := st.ErrorMessage
+		if reason == "" {
+			reason = st.RawStatus
+		}
+		_ = s.store.UpdateExecutionStatus(p.Execution.ID, "rejected", orderID, nil, 0, reason)
+		s.sendOpenFailedEmail(syntheticTrade, occ, orderID, reason)
+		log.Printf("execution: reconcile open rejected (trade=%d, order=%s, status=%s, reason=%q)", p.Execution.TradeID, orderID, st.RawStatus, reason)
+	default:
+		// Still working at the broker — leave the row, try again next tick.
+	}
 }
 
 /*
