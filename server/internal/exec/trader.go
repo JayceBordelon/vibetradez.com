@@ -22,6 +22,17 @@ type TraderClient interface {
 	AccountHash(ctx context.Context) (string, error)
 
 	/*
+		AvailableFunds returns the cash available to open a new position
+		without putting margin at risk. Live implementations call Schwab's
+		account-balance endpoint and prefer availableFundsNonMarginableTrade
+		(falls back to cashAvailableForTrading then availableFunds when the
+		account type doesn't surface the preferred field). Paper mode
+		returns a synthetic effectively-unlimited number so the basket cap
+		is the only constraint in paper.
+	*/
+	AvailableFunds(ctx context.Context, accountHash string) (float64, error)
+
+	/*
 		PlaceOrder submits an order. Returns the order id from the broker
 		(or a synthetic "paper-<uuid>" id in paper mode). Errors from the
 		broker (validation, rejection, insufficient permissions) come back

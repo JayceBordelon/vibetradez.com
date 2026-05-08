@@ -14,16 +14,17 @@ export async function generateMetadata(): Promise<Metadata> {
     let description = "Live options trade dashboard powered by Claude. Conviction-scored picks with rationales and real-time analytics.";
 
     if (count > 0 && hasSummaries) {
+      const { computeTradePnl } = await import("@/lib/calculations");
       let totalPnl = 0;
       let winners = 0;
       let losers = 0;
-      for (const { summary } of data.trades) {
-        if (summary) {
-          const pnl = (summary.closing_price - summary.entry_price) * 100;
-          totalPnl += pnl;
-          if (pnl > 0.5) winners++;
-          else if (pnl < -0.5) losers++;
-        }
+      for (const dt of data.trades) {
+        const result = computeTradePnl(dt, data.executions ?? null);
+        if (!result.hasData) continue;
+        const pnl = result.pnl;
+        totalPnl += pnl;
+        if (pnl > 0.5) winners++;
+        else if (pnl < -0.5) losers++;
       }
       const sign = totalPnl > 0 ? "+" : "";
       description = `Today: ${count} picks, ${winners}W/${losers}L, ${sign}$${Math.round(totalPnl)} P&L. Conviction-scored picks from Claude with full rationales.`;

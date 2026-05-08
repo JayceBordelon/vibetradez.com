@@ -172,18 +172,21 @@ type dashboardResponse struct {
 	Date   string           `json:"date"`
 	Trades []dashboardTrade `json:"trades"`
 	/*
-		Execution surfaces a position taken (paper or live) on a trade
-		from this date. nil when no qualifying pick converted to an
-		actual execution that day. Frontend matches by symbol+
-		contract_type+strike to render the badge on the right card.
+		Executions surfaces every position taken (paper or live) on a
+		trade from this date. Empty when no qualifying pick converted to
+		an actual execution that day. The basket auto-executor can fire
+		up to exec.MaxBasketRank per day, so the frontend matches each
+		entry to its trade card by symbol + contract_type + strike to
+		render badges and to source realized P&L from broker truth
+		instead of Claude's modeled summary numbers.
 	*/
-	Execution *store.ExecutionView `json:"execution,omitempty"`
+	Executions []*store.ExecutionView `json:"executions,omitempty"`
 }
 
 type weekDay struct {
-	Date      string               `json:"date"`
-	Trades    []dashboardTrade     `json:"trades"`
-	Execution *store.ExecutionView `json:"execution,omitempty"`
+	Date       string                 `json:"date"`
+	Trades     []dashboardTrade       `json:"trades"`
+	Executions []*store.ExecutionView `json:"executions,omitempty"`
 }
 
 type weekResponse struct {
@@ -250,13 +253,13 @@ func (s *Server) handleTradesToday(w http.ResponseWriter, r *http.Request) {
 	}
 
 	/*
-		Optional execution badge for transparency. Errors are non-fatal —
-		the dashboard still renders without the badge if the lookup fails.
+		Optional execution badges for transparency. Errors are non-fatal —
+		the dashboard still renders without badges if the lookup fails.
 	*/
-	exec, _ := s.db.GetExecutionForDate(date)
+	execs, _ := s.db.GetExecutionsForDate(date)
 
 	w.Header().Set("Cache-Control", "public, max-age=30")
-	writeJSON(w, http.StatusOK, dashboardResponse{Date: date, Trades: result, Execution: exec})
+	writeJSON(w, http.StatusOK, dashboardResponse{Date: date, Trades: result, Executions: execs})
 }
 
 func (s *Server) handleTradesWeek(w http.ResponseWriter, r *http.Request) {
@@ -309,7 +312,7 @@ func (s *Server) handleTradesWeek(w http.ResponseWriter, r *http.Request) {
 			result[i] = dashboardTrade{Trade: t, Summary: summaryMap[key]}
 		}
 
-		days = append(days, weekDay{Date: date, Trades: result, Execution: executionsMap[date]})
+		days = append(days, weekDay{Date: date, Trades: result, Executions: executionsMap[date]})
 	}
 
 	w.Header().Set("Cache-Control", "public, max-age=30")

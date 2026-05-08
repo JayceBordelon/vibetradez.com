@@ -71,6 +71,56 @@ func (lt *LiveTrader) AccountHash(ctx context.Context) (string, error) {
 	return lt.cachedHash, nil
 }
 
+/*
+AvailableFunds fetches the account balance from Schwab's Trader API
+and returns the cash available for a new non-marginable position
+(buying long options is non-marginable in a typical retail account).
+The endpoint returns "currentBalances" with several flavors of buying
+power; we prefer the most conservative one available so a margin-type
+account doesn't accidentally let the basket eat margin headroom that
+would otherwise cover working orders or other positions.
+
+Preference order (first non-zero wins):
+  - availableFundsNonMarginableTrade: cash that can fund a long option
+    open without locking into margin. This is the right number for our
+    cash-secured option workflow.
+  - cashAvailableForTrading: surfaced on CASH-type accounts which don't
+    expose the non-marginable-trade field at all.
+  - availableFunds: the broadest "unrestricted cash" number — last resort.
+*/
+func (lt *LiveTrader) AvailableFunds(ctx context.Context, accountHash string) (float64, error) {
+	url := fmt.Sprintf("%s/accounts/%s", traderBase, accountHash)
+	resp, err := lt.c.AuthenticatedDo("GET", url, nil)
+	if err != nil {
+		return 0, fmt.Errorf("get account balances: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("account balances HTTP %d: %s", resp.StatusCode, string(body))
+	}
+	var raw struct {
+		SecuritiesAccount struct {
+			CurrentBalances struct {
+				AvailableFunds                   float64 `json:"availableFunds"`
+				AvailableFundsNonMarginableTrade float64 `json:"availableFundsNonMarginableTrade"`
+				CashAvailableForTrading          float64 `json:"cashAvailableForTrading"`
+			} `json:"currentBalances"`
+		} `json:"securitiesAccount"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return 0, fmt.Errorf("decode account balances: %w", err)
+	}
+	cb := raw.SecuritiesAccount.CurrentBalances
+	if cb.AvailableFundsNonMarginableTrade > 0 {
+		return cb.AvailableFundsNonMarginableTrade, nil
+	}
+	if cb.CashAvailableForTrading > 0 {
+		return cb.CashAvailableForTrading, nil
+	}
+	return cb.AvailableFunds, nil
+}
+
 func (lt *LiveTrader) PlaceOrder(ctx context.Context, accountHash string, order Order) (string, error) {
 	body, err := json.Marshal(order)
 	if err != nil {
@@ -116,17 +166,34 @@ func (lt *LiveTrader) GetOrder(ctx context.Context, accountHash, orderID string)
 		return OrderStatus{}, fmt.Errorf("get order HTTP %d: %s", resp.StatusCode, string(body))
 	}
 	var raw struct {
-		OrderID           int64   `json:"orderId"`
-		Status            string  `json:"status"`
-		Quantity          float64 `json:"quantity"`
-		FilledQuantity    float64 `json:"filledQuantity"`
-		ClosingPrice      float64 `json:"closingPrice"`
-		Price             float64 `json:"price"`
-		StatusDescription string  `json:"statusDescription"`
-		EnteredTime       string  `json:"enteredTime"`
+		OrderID                 int64           `json:"orderId"`
+		Status                  string          `json:"status"`
+		Quantity                float64         `json:"quantity"`
+		FilledQuantity          float64         `json:"filledQuantity"`
+		ClosingPrice            float64         `json:"closingPrice"`
+		Price                   float64         `json:"price"`
+		StatusDescription       string          `json:"statusDescription"`
+		EnteredTime             string          `json:"enteredTime"`
+		OrderActivityCollection []orderActivity `json:"orderActivityCollection"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return OrderStatus{}, fmt.Errorf("decode order status: %w", err)
+	}
+
+	/*
+		raw.Price is the LIMIT price the order was placed at, not the
+		fill price — for MARKET orders (the 3:55pm close path) it is
+		always 0, so a previous version of this code logged closes at
+		$0.00 with wildly wrong P&L. The actual fill prices live in
+		orderActivityCollection[].executionLegs[]; compute a volume-
+		weighted average across all execution legs of EXECUTION /
+		FILL activities. Falls back to raw.Price only when the
+		activity collection is missing entirely (defensive — Schwab
+		populates it on every FILLED order in practice).
+	*/
+	fillPrice := volumeWeightedFillPrice(raw.OrderActivityCollection)
+	if fillPrice == 0 {
+		fillPrice = raw.Price
 	}
 
 	st := OrderStatus{
@@ -134,7 +201,7 @@ func (lt *LiveTrader) GetOrder(ctx context.Context, accountHash, orderID string)
 		RawStatus:      raw.Status,
 		Quantity:       int(raw.Quantity),
 		FilledQuantity: int(raw.FilledQuantity),
-		FillPrice:      raw.Price,
+		FillPrice:      fillPrice,
 		UpdatedAt:      time.Now(),
 		ErrorMessage:   raw.StatusDescription,
 	}
@@ -150,6 +217,58 @@ func (lt *LiveTrader) GetOrder(ctx context.Context, accountHash, orderID string)
 		st.Working = true
 	}
 	return st, nil
+}
+
+/*
+orderActivity mirrors the Schwab Trader API order-activity entry that
+carries fill prices. Each activity holds one or more executionLegs;
+each leg has the price + quantity of one partial fill.
+*/
+type orderActivity struct {
+	ActivityType  string              `json:"activityType"`
+	ExecutionType string              `json:"executionType"`
+	ExecutionLegs []orderExecutionLeg `json:"executionLegs"`
+}
+
+type orderExecutionLeg struct {
+	LegID    int     `json:"legId"`
+	Price    float64 `json:"price"`
+	Quantity float64 `json:"quantity"`
+}
+
+/*
+volumeWeightedFillPrice computes the average fill price across an
+order's execution legs, weighted by quantity. Schwab returns each
+partial fill (and most orders fill in a single execution) inside
+orderActivityCollection[].executionLegs[]. Returns 0 when there are
+no executions OR when the total quantity sums to 0 — caller treats
+0 as "use the limit-price fallback".
+*/
+func volumeWeightedFillPrice(activities []orderActivity) float64 {
+	var totalNotional float64
+	var totalQuantity float64
+	for _, act := range activities {
+		// Schwab uses ActivityType="EXECUTION", ExecutionType="FILL" for
+		// real fills. Anything else (cancels, replaces, etc.) shouldn't
+		// move the fill-price needle.
+		if act.ActivityType != "" && act.ActivityType != "EXECUTION" {
+			continue
+		}
+		if act.ExecutionType != "" && act.ExecutionType != "FILL" {
+			continue
+		}
+		for _, leg := range act.ExecutionLegs {
+			if leg.Quantity <= 0 || leg.Price <= 0 {
+				continue
+			}
+			totalNotional += leg.Price * leg.Quantity
+			totalQuantity += leg.Quantity
+		}
+	}
+	if totalQuantity <= 0 {
+		return 0
+	}
+	return totalNotional / totalQuantity
 }
 
 func (lt *LiveTrader) CancelOrder(ctx context.Context, accountHash, orderID string) error {

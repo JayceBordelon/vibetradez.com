@@ -9,8 +9,9 @@ import { PageToolbar } from "@/components/layout/page-toolbar";
 import { Section } from "@/components/layout/section";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
+import { computeTradePnl } from "@/lib/calculations";
 import { getMarketStatus } from "@/lib/market-status";
-import type { DashboardResponse, DashboardTrade, LiveQuotesResponse } from "@/types/trade";
+import type { DashboardResponse, DashboardTrade, Execution, LiveQuotesResponse } from "@/types/trade";
 
 import { ActiveTickerChip } from "./active-ticker-chip";
 import { ExposurePanel } from "./exposure-panel";
@@ -42,7 +43,7 @@ function filterByRank(data: DashboardResponse, topFilter: number): DashboardResp
   };
 }
 
-function computeStats(trades: DashboardTrade[]) {
+function computeStats(trades: DashboardTrade[], executions: Execution[] | null | undefined) {
   let winners = 0;
   let losers = 0;
   let totalPnl = 0;
@@ -52,22 +53,22 @@ function computeStats(trades: DashboardTrade[]) {
   let grossLosses = 0;
   let hasSummaries = false;
 
-  for (const { trade, summary } of trades ?? []) {
-    if (summary) {
-      hasSummaries = true;
-      const pnl = (summary.closing_price - summary.entry_price) * 100;
-      totalPnl += pnl;
-      if (pnl > 0.5) {
-        winners++;
-        grossWins += pnl;
-      } else if (pnl < -0.5) {
-        losers++;
-        grossLosses += Math.abs(pnl);
-      }
-      if (pnl > bestPnl) {
-        bestPnl = pnl;
-        bestSym = trade.symbol;
-      }
+  for (const dt of trades ?? []) {
+    const result = computeTradePnl(dt, executions);
+    if (!result.hasData) continue;
+    hasSummaries = true;
+    const pnl = result.pnl;
+    totalPnl += pnl;
+    if (pnl > 0.5) {
+      winners++;
+      grossWins += pnl;
+    } else if (pnl < -0.5) {
+      losers++;
+      grossLosses += Math.abs(pnl);
+    }
+    if (pnl > bestPnl) {
+      bestPnl = pnl;
+      bestSym = dt.trade.symbol;
     }
   }
 
@@ -164,7 +165,8 @@ export function DashboardShell() {
   const hasSummaries = !!rawData?.trades?.some((t) => t.summary);
   const effectiveTopFilter = hasSummaries ? topFilter : 10;
   const filtered = rawData ? filterByRank(rawData, effectiveTopFilter) : null;
-  const stats = filtered?.trades ? computeStats(filtered.trades) : null;
+  const executions = rawData?.executions ?? null;
+  const stats = filtered?.trades ? computeStats(filtered.trades, executions) : null;
   const liveTimeframe = TIMEFRAME_PRESETS[0];
   const marketStatus = getMarketStatus();
 
@@ -200,9 +202,9 @@ export function DashboardShell() {
         ) : stats?.hasSummaries ? (
           <>
             <StatsGrid totalPnl={stats.totalPnl} winRate={stats.winRate} profitFactor={stats.profitFactor} bestPnl={stats.bestPnl} bestSym={stats.bestSym} />
-            <Section title="Price Chart" className="mt-8" actions={<ActiveTickerChip trades={filtered.trades} activeSymbol={activeSymbol} />}>
+            <Section title="Price Chart" className="mt-8" actions={<ActiveTickerChip trades={filtered.trades} activeSymbol={activeSymbol} executions={executions} />}>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                <SymbolTabs trades={filtered.trades} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
+                <SymbolTabs trades={filtered.trades} activeSymbol={activeSymbol} onSelect={setActiveSymbol} executions={executions} />
                 <TimeframeToggle value={timeframe.id} onChange={setTimeframe} />
               </div>
               <div className="lg-card mt-3 h-[280px] overflow-hidden p-1.5 sm:h-[360px] lg:h-[420px]">
@@ -214,14 +216,14 @@ export function DashboardShell() {
               </div>
             </Section>
             <Section title="Exposure" subtitle="How capital was deployed today. For long options, max loss is the premium paid.">
-              <ExposurePanel trades={filtered.trades} hasSummaries />
+              <ExposurePanel trades={filtered.trades} executions={executions} hasSummaries />
             </Section>
             <Section title="P&L by Trade" subtitle="Per-contract performance, sorted">
-              <PnlChart trades={filtered.trades} />
+              <PnlChart trades={filtered.trades} executions={executions} />
             </Section>
             <Separator />
             <Section title="Trade Details" subtitle="Click any row to view the single-contract page">
-              <TradeTable trades={filtered.trades} date={filtered.date} />
+              <TradeTable trades={filtered.trades} executions={executions} date={filtered.date} />
             </Section>
           </>
         ) : (
@@ -237,10 +239,10 @@ export function DashboardShell() {
               </div>
             </Section>
             <Section title="Exposure" subtitle="Capital at risk for today's picks. For long options, max loss is the premium paid.">
-              <ExposurePanel trades={filtered.trades} hasSummaries={false} />
+              <ExposurePanel trades={filtered.trades} executions={null} hasSummaries={false} />
             </Section>
             <Section title="Today's Picks" subtitle={`${filtered.trades.length} ranked plays · click any pick for the full single-contract view`}>
-              <MorningCards trades={filtered.trades} liveQuotes={liveQuotes} date={filtered.date} execution={filtered.execution} />
+              <MorningCards trades={filtered.trades} liveQuotes={liveQuotes} date={filtered.date} executions={executions} />
             </Section>
           </>
         )}

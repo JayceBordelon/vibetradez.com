@@ -61,13 +61,26 @@ func (f *fakeMail) SendTradeEmail(from string, to []string, subject, html string
 }
 
 type fakeTrader struct {
-	placeID  string
-	placeErr error
-	status   OrderStatus
-	getErr   error
+	placeID    string
+	placeErr   error
+	status     OrderStatus
+	getErr     error
+	availFunds float64
+	availErr   error
 }
 
 func (f *fakeTrader) AccountHash(context.Context) (string, error) { return "ACCT-HASH", nil }
+func (f *fakeTrader) AvailableFunds(context.Context, string) (float64, error) {
+	if f.availErr != nil {
+		return 0, f.availErr
+	}
+	if f.availFunds == 0 {
+		// Default to comfortably above the basket cap so cash isn't the
+		// gating factor for tests that don't care about it.
+		return 1e6, nil
+	}
+	return f.availFunds, nil
+}
 func (f *fakeTrader) PlaceOrder(context.Context, string, Order) (string, error) {
 	return f.placeID, f.placeErr
 }
@@ -337,6 +350,147 @@ func TestHandleQualifyingPick_AbortsWhenAskAndEstimateBothZero(t *testing.T) {
 	}
 	if !strings.Contains(mail.sent[0].subject, "Open failed") {
 		t.Errorf("subject: want 'Open failed' marker, got %q", mail.sent[0].subject)
+	}
+}
+
+// ── HandleQualifyingPicks (basket) ────────────────────────────────
+
+// countingTrader counts PlaceOrder invocations and the cost of each so
+// the basket tests can assert exactly how many contracts the basket
+// submitted.
+type countingTrader struct {
+	fakeTrader
+	placed []Order
+}
+
+func (c *countingTrader) PlaceOrder(ctx context.Context, hash string, o Order) (string, error) {
+	c.placed = append(c.placed, o)
+	return c.fakeTrader.PlaceOrder(ctx, hash, o)
+}
+
+func basketSampleTrade(symbol string, rank int, est float64) trades.Trade {
+	return trades.Trade{
+		ID:             rank * 1000, // each rank gets a deterministic non-zero ID
+		Symbol:         symbol,
+		ContractType:   "CALL",
+		StrikePrice:    100,
+		Expiration:     "2026-06-19",
+		EstimatedPrice: est,
+		Rank:           rank,
+	}
+}
+
+func TestHandleQualifyingPicks_PlacesEachWhenBasketFits(t *testing.T) {
+	store := &fakeStore{}
+	mail := &fakeMail{}
+	trader := &countingTrader{fakeTrader: fakeTrader{
+		placeID: "ORDER-OK",
+		status:  OrderStatus{OrderID: "ORDER-OK", RawStatus: "FILLED", Filled: true, Terminal: true, FillPrice: 1.25, FilledQuantity: 1},
+	}}
+	svc := newTestService(trader, store, mail)
+	picks := []trades.Trade{
+		basketSampleTrade("AKAM", 1, 1.25),
+		basketSampleTrade("RKLB", 2, 1.69),
+		basketSampleTrade("IREN", 3, 1.65),
+	}
+
+	count, err := svc.HandleQualifyingPicks(context.Background(), picks)
+	if err != nil {
+		t.Fatalf("HandleQualifyingPicks: %v", err)
+	}
+	if count != 3 {
+		t.Fatalf("submitted: want 3, got %d", count)
+	}
+	if len(trader.placed) != 3 {
+		t.Fatalf("PlaceOrder calls: want 3, got %d", len(trader.placed))
+	}
+}
+
+func TestHandleQualifyingPicks_StopsWhenSchwabCashIsLow(t *testing.T) {
+	store := &fakeStore{}
+	mail := &fakeMail{}
+	trader := &countingTrader{fakeTrader: fakeTrader{
+		availFunds: 200, // only $200 cash → only rank-1 fits, ranks 2 and 3 do not
+		placeID:    "ORDER-OK",
+		status:     OrderStatus{OrderID: "ORDER-OK", RawStatus: "FILLED", Filled: true, Terminal: true, FillPrice: 1.25, FilledQuantity: 1},
+	}}
+	svc := newTestService(trader, store, mail)
+	// Limit prices: 1.25*1.05=1.31, 1.69*1.05=1.77, 1.65*1.05=1.73 (rounded).
+	// Costs (×100): 131, 177, 173. With $200 budget: only 131 fits.
+	picks := []trades.Trade{
+		basketSampleTrade("AKAM", 1, 1.25),
+		basketSampleTrade("RKLB", 2, 1.69),
+		basketSampleTrade("IREN", 3, 1.65),
+	}
+
+	count, err := svc.HandleQualifyingPicks(context.Background(), picks)
+	if err != nil {
+		t.Fatalf("HandleQualifyingPicks: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("submitted: want 1 (cash gate), got %d", count)
+	}
+	if len(trader.placed) != 1 {
+		t.Fatalf("PlaceOrder calls: want 1, got %d", len(trader.placed))
+	}
+}
+
+func TestHandleQualifyingPicks_AvailableFundsErrorAbortsBasket(t *testing.T) {
+	store := &fakeStore{}
+	mail := &fakeMail{}
+	trader := &countingTrader{fakeTrader: fakeTrader{
+		availErr: errors.New("HTTP 401: token expired"),
+	}}
+	svc := newTestService(trader, store, mail)
+	picks := []trades.Trade{
+		basketSampleTrade("AKAM", 1, 1.25),
+	}
+
+	count, err := svc.HandleQualifyingPicks(context.Background(), picks)
+	if err == nil {
+		t.Fatal("expected error when AvailableFunds fails")
+	}
+	if count != 0 {
+		t.Errorf("submitted: want 0 on cash-lookup failure, got %d", count)
+	}
+	if len(trader.placed) != 0 {
+		t.Errorf("PlaceOrder must not be called when cash lookup fails, got %d calls", len(trader.placed))
+	}
+}
+
+func TestHandleQualifyingPicks_SkipsContractsWithoutTradeID(t *testing.T) {
+	store := &fakeStore{}
+	mail := &fakeMail{}
+	trader := &countingTrader{fakeTrader: fakeTrader{
+		placeID: "ORDER-OK",
+		status:  OrderStatus{OrderID: "ORDER-OK", RawStatus: "FILLED", Filled: true, Terminal: true, FillPrice: 1.25, FilledQuantity: 1},
+	}}
+	svc := newTestService(trader, store, mail)
+	picks := []trades.Trade{
+		basketSampleTrade("AKAM", 1, 1.25),
+		// Rank-2 missing ID — should be skipped without aborting the basket.
+		{Symbol: "RKLB", ContractType: "CALL", StrikePrice: 90, Expiration: "2026-06-19", EstimatedPrice: 1.69, Rank: 2},
+		basketSampleTrade("IREN", 3, 1.65),
+	}
+
+	count, _ := svc.HandleQualifyingPicks(context.Background(), picks)
+	if count != 2 {
+		t.Errorf("submitted: want 2 (middle pick skipped for missing ID), got %d", count)
+	}
+}
+
+func TestHandleQualifyingPicks_EmptyInputIsNoOp(t *testing.T) {
+	store := &fakeStore{}
+	mail := &fakeMail{}
+	trader := &countingTrader{}
+	svc := newTestService(trader, store, mail)
+
+	count, err := svc.HandleQualifyingPicks(context.Background(), nil)
+	if err != nil || count != 0 {
+		t.Errorf("nil input: want (0, nil), got (%d, %v)", count, err)
+	}
+	if len(trader.placed) != 0 {
+		t.Errorf("PlaceOrder must not be called for empty basket")
 	}
 }
 

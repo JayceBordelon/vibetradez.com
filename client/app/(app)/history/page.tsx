@@ -25,20 +25,21 @@ export async function generateMetadata(): Promise<Metadata> {
     let description = "Historical options trading performance with equity curves, exposure analysis, and risk metrics.";
 
     if (data.days?.length) {
+      const { computeTradePnl } = await import("@/lib/calculations");
       let totalPnl = 0;
       let totalTrades = 0;
       let winners = 0;
       let losers = 0;
 
       for (const day of data.days) {
-        for (const { summary } of day.trades) {
+        for (const dt of day.trades) {
           totalTrades++;
-          if (summary) {
-            const pnl = (summary.closing_price - summary.entry_price) * 100;
-            totalPnl += pnl;
-            if (pnl > 0.5) winners++;
-            else if (pnl < -0.5) losers++;
-          }
+          const result = computeTradePnl(dt, day.executions ?? null);
+          if (!result.hasData) continue;
+          const pnl = result.pnl;
+          totalPnl += pnl;
+          if (pnl > 0.5) winners++;
+          else if (pnl < -0.5) losers++;
         }
       }
 

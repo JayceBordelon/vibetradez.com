@@ -58,13 +58,18 @@ export interface Execution {
 export interface DashboardResponse {
   date: string;
   trades: DashboardTrade[];
-  execution?: Execution | null;
+  /**
+  Plural per day so the basket auto-executor can fire up to N
+  contracts and each trade card can find its matching execution.
+  Empty / undefined when no auto-execution fired that day.
+  */
+  executions?: Execution[] | null;
 }
 
 export interface WeekDay {
   date: string;
   trades: DashboardTrade[];
-  execution?: Execution | null;
+  executions?: Execution[] | null;
 }
 
 export interface WeekResponse {

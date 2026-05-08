@@ -2,13 +2,15 @@
 
 import { AnimatePresence, motion } from "motion/react";
 
+import { computeTradePnl } from "@/lib/calculations";
 import { fmtPnlInt, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { DashboardTrade } from "@/types/trade";
+import type { DashboardTrade, Execution } from "@/types/trade";
 
 interface ActiveTickerChipProps {
   trades: DashboardTrade[];
   activeSymbol: string;
+  executions?: Execution[] | null;
 }
 
 /*
@@ -21,12 +23,13 @@ on either side. mode="popLayout" keeps the slot a fixed shape so
 neighbouring elements (the section title, the timeframe row) don't
 shift.
 */
-export function ActiveTickerChip({ trades, activeSymbol }: ActiveTickerChipProps) {
+export function ActiveTickerChip({ trades, activeSymbol, executions }: ActiveTickerChipProps) {
   const dt = trades.find((t) => t.trade.symbol === activeSymbol);
   if (!dt) return null;
 
-  const { trade, summary } = dt;
-  const pnl = summary ? (summary.closing_price - summary.entry_price) * 100 : null;
+  const { trade } = dt;
+  const result = computeTradePnl(dt, executions);
+  const pnl = result.hasData ? result.pnl : null;
 
   return (
     <div className="relative inline-flex h-9 min-w-0 items-center sm:h-8" aria-live="polite">

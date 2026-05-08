@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 import { motion, type Variants } from "motion/react";
 import Link from "next/link";
 
-import { ExecutionBadge, matchesTrade } from "@/components/execution-badge";
+import { ExecutionBadge, findExecutionForTrade } from "@/components/execution-badge";
 import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,7 +17,7 @@ interface MorningCardsProps {
   trades: DashboardTrade[];
   liveQuotes?: LiveQuotesResponse | null;
   date: string;
-  execution?: Execution | null;
+  executions?: Execution[] | null;
 }
 
 function tradeHref(symbol: string, date: string): string {
@@ -34,12 +34,12 @@ const itemVariants: Variants = {
   show: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } },
 };
 
-export function MorningCards({ trades, liveQuotes, date, execution }: MorningCardsProps) {
+export function MorningCards({ trades, liveQuotes, date, executions }: MorningCardsProps) {
   return (
     <motion.div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" variants={containerVariants} initial="hidden" animate="show">
       {trades.map((dt) => (
         <motion.div key={dt.trade.symbol} variants={itemVariants}>
-          <MorningCard dt={dt} liveQuotes={liveQuotes} date={date} execution={matchesTrade(execution, dt.trade) ? execution : null} />
+          <MorningCard dt={dt} liveQuotes={liveQuotes} date={date} execution={findExecutionForTrade(executions, dt.trade)} />
         </motion.div>
       ))}
     </motion.div>

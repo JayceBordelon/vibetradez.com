@@ -41,6 +41,7 @@ var Registry = []Rollout{
 	autoExecutionLiveV1,
 	claudeOnlyV2,
 	liveTradingStartsV3,
+	basketAndCopyTradingV4,
 }
 
 /*

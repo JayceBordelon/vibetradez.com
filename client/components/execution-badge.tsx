@@ -135,3 +135,32 @@ export function matchesTrade(execution: Execution | null | undefined, trade: { s
   if (!execution) return false;
   return execution.symbol === trade.symbol && execution.contract_type === trade.contract_type && Math.abs(execution.strike_price - trade.strike_price) < 0.005;
 }
+
+/**
+findExecutionForTrade scans a list of executions and returns the one
+matching the given trade by symbol + contract_type + strike. Returns
+null when no execution matches — caller should fall back to Claude's
+modeled summary numbers in that case.
+*/
+export function findExecutionForTrade(executions: Execution[] | null | undefined, trade: { symbol: string; contract_type: string; strike_price: number }): Execution | null {
+  if (!executions || executions.length === 0) return null;
+  for (const e of executions) {
+    if (matchesTrade(e, trade)) return e;
+  }
+  return null;
+}
+
+/**
+findClosedExecutionForTrade returns the execution for the trade ONLY
+when it has a closed state with both fill prices populated. This is
+the gate for sourcing realized P&L from broker truth instead of from
+the modeled EOD summary — pre-bugfix close rows recorded fill_price=0,
+so a closed execution with close_price=0 must fall back to summary.
+*/
+export function findClosedExecutionForTrade(executions: Execution[] | null | undefined, trade: { symbol: string; contract_type: string; strike_price: number }): Execution | null {
+  const e = findExecutionForTrade(executions, trade);
+  if (!e) return null;
+  if (e.state !== "closed") return null;
+  if (e.open_price <= 0 || e.close_price <= 0) return null;
+  return e;
+}

@@ -3,11 +3,13 @@
 import { useMemo } from "react";
 import { Bar, BarChart, Cell, XAxis, YAxis } from "recharts";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { computeTradePnl } from "@/lib/calculations";
 import { fmtPnlInt } from "@/lib/format";
-import type { DashboardTrade } from "@/types/trade";
+import type { DashboardTrade, Execution } from "@/types/trade";
 
 interface PnlChartProps {
   trades: DashboardTrade[];
+  executions?: Execution[] | null;
 }
 
 const chartConfig: ChartConfig = {
@@ -16,22 +18,21 @@ const chartConfig: ChartConfig = {
   },
 };
 
-export function PnlChart({ trades }: PnlChartProps) {
+export function PnlChart({ trades, executions }: PnlChartProps) {
   const data = useMemo(() => {
     return trades
-      .filter((dt) => dt.summary)
       .map((dt) => {
-        const entry = dt.summary!.entry_price;
-        const close = dt.summary!.closing_price;
-        const pnl = (close - entry) * 100;
+        const result = computeTradePnl(dt, executions);
+        if (!result.hasData) return null;
         return {
           name: `$${dt.trade.symbol} ${dt.trade.contract_type}`,
-          pnl,
-          fill: pnl >= 0 ? "#10b981" : "#ef4444",
+          pnl: result.pnl,
+          fill: result.pnl >= 0 ? "#10b981" : "#ef4444",
         };
       })
+      .filter((d): d is { name: string; pnl: number; fill: string } => d !== null)
       .sort((a, b) => b.pnl - a.pnl);
-  }, [trades]);
+  }, [trades, executions]);
 
   if (data.length === 0) {
     return <div className="lg-card flex h-48 items-center justify-center text-sm text-muted-foreground">No closed trades to chart</div>;

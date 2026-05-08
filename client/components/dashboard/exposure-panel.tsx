@@ -1,20 +1,34 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Metric } from "@/components/ui/metric";
+import { computeTradePnl } from "@/lib/calculations";
 import { fmt, fmtMoney, fmtMoneyInt, fmtPctDec } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { DashboardTrade } from "@/types/trade";
+import type { DashboardTrade, Execution } from "@/types/trade";
 
 interface ExposurePanelProps {
   trades: DashboardTrade[];
   hasSummaries: boolean;
+  executions?: Execution[] | null;
 }
 
-export function ExposurePanel({ trades, hasSummaries }: ExposurePanelProps) {
+export function ExposurePanel({ trades, hasSummaries, executions }: ExposurePanelProps) {
   const count = trades.length;
 
+  /*
+  Capital deployed prefers actual broker entry fills when available,
+  falling back to Claude's modeled summary entry_price, then to the
+  morning estimate. Same priority for capital returned: real close
+  fill → modeled close → 0. Without this, a basket-day exposure card
+  would show modeled deployment ($1.25 × 100) when real capital was
+  $1.73 × 100, and the ROC line would silently disagree with the
+  trade-table P&L column.
+  */
   const totalExposure = trades.reduce((sum, dt) => {
-    const price = dt.summary?.entry_price ?? dt.trade.estimated_price ?? 0;
-    return sum + price * 100;
+    const result = computeTradePnl(dt, executions);
+    if (result.hasData && result.entryPrice > 0) {
+      return sum + result.entryPrice * 100;
+    }
+    return sum + (dt.trade.estimated_price ?? 0) * 100;
   }, 0);
 
   const avgPremium = count > 0 ? totalExposure / count / 100 : 0;
@@ -26,10 +40,10 @@ export function ExposurePanel({ trades, hasSummaries }: ExposurePanelProps) {
   let roc: number | null = null;
 
   if (hasSummaries) {
-    const withSummaries = trades.filter((dt) => dt.summary);
-    totalReturned = withSummaries.reduce((sum, dt) => {
-      if (!dt.summary) return sum;
-      return sum + dt.summary.closing_price * 100;
+    totalReturned = trades.reduce((sum, dt) => {
+      const result = computeTradePnl(dt, executions);
+      if (!result.hasData) return sum;
+      return sum + result.closingPrice * 100;
     }, 0);
     netPnl = totalReturned - totalExposure;
     roc = totalExposure > 0 ? (netPnl / totalExposure) * 100 : 0;

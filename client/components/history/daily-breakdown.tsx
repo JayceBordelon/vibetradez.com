@@ -34,7 +34,7 @@ interface DayStat {
   hasSummaries: boolean;
   invested: number;
   returned: number;
-  execution: Execution | null;
+  executions: Execution[];
   details: TradeDetail[];
 }
 
@@ -133,9 +133,11 @@ function DayRow({ ds, maxAbsPnl }: { ds: DayStat; maxAbsPnl: number }) {
           <div className={cn("h-full", isPositive ? "bg-green/60" : "bg-red/60")} style={{ width: `${barWidth}%` }} />
         </div>
 
-        {ds.execution && (
-          <div className="hidden shrink-0 sm:block">
-            <ExecutionBadge execution={ds.execution} />
+        {ds.executions.length > 0 && (
+          <div className="hidden shrink-0 items-center gap-1 sm:flex">
+            {ds.executions.map((e, i) => (
+              <ExecutionBadge key={`${ds.date}-exec-${i}`} execution={e} />
+            ))}
           </div>
         )}
 

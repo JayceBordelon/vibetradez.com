@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strings"
 	"syscall"
 	"time"
 
@@ -440,22 +441,26 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 
 	/*
 		Auto-execution gate: only runs if TRADING_ENABLED. The selector
-		picks the rank-1 trade if its conviction score clears the score
-		floor and the contract premium is at or below the cap. On a
-		qualifying pick the service mints a 5-minute decision row, sends
-		the confirmation email, and returns; the cancel-on-timeout cron
-		plus the user's click flow drive the rest.
+		walks the top MaxBasketRank ranks greedily — including each pick
+		whose modeled premium fits in the remaining MaxDailyBasketUSD
+		budget, skip-and-continue when a contract is too big — and the
+		service places those orders sequentially after a Schwab cash
+		check. Score is not a gate; rank order is the only signal.
 	*/
 	if executor != nil {
-		if pick, ok := exec.QualifyingPick(topTrades); ok {
-			log.Printf("execution: qualifying pick found, %s %s @ %.2f (rank=%d, score=%d, mode=%s)",
-				pick.Symbol, pick.ContractType, pick.EstimatedPrice,
-				pick.Rank, pick.Score, executor.Mode())
-			if err := executor.HandleQualifyingPick(ctx, pick, pick.ID); err != nil {
-				log.Printf("execution: handle qualifying pick: %v", err)
+		picks := exec.QualifyingPicks(topTrades)
+		if len(picks) > 0 {
+			summary := make([]string, 0, len(picks))
+			for _, p := range picks {
+				summary = append(summary, fmt.Sprintf("rank=%d %s %s@%.2f", p.Rank, p.Symbol, p.ContractType, p.EstimatedPrice))
+			}
+			log.Printf("execution: basket of %d pick(s) selected [%s] (mode=%s)", len(picks), strings.Join(summary, ", "), executor.Mode())
+			if _, err := executor.HandleQualifyingPicks(ctx, picks); err != nil {
+				log.Printf("execution: handle qualifying picks: %v", err)
 			}
 		} else {
-			log.Printf("execution: no qualifying pick today (rank-1 missing or premium > $%.2f cap)", exec.MaxContractPremium)
+			log.Printf("execution: no qualifying picks today (top-%d ranks missing, all premium > $%.2f cap, or basket cap $%.2f exhausted)",
+				exec.MaxBasketRank, exec.MaxContractPremium, exec.MaxDailyBasketUSD)
 		}
 	}
 

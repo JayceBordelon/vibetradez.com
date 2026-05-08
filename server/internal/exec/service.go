@@ -84,14 +84,13 @@ schwab_trading auth failures are fatal (live) or merely a warning
 func (s *Service) Mode() string { return s.cfg.Mode }
 
 /*
-HandleQualifyingPick is fired by the morning cron when QualifyingPick
-returns a rank-1 contract under the cap. There's no user confirmation
-step, the order goes straight to the broker (paper or live depending
-on Mode) and a receipt email follows the fill.
-
-t.ID must be set (the cron passes the saved trade row from the DB)
-so the execution row can reference back. Errors do NOT block the
-morning email pipeline, they're logged and the day moves on.
+HandleQualifyingPick is the legacy single-pick entry point. The
+morning cron now uses HandleQualifyingPicks (basket of up to
+MaxBasketRank picks with cash-check gating); this method is retained
+for tests and any external caller that wants the old single-shot
+semantics. It is a thin wrapper around handleSinglePick that does
+NOT pre-check available funds — callers needing the cash gate must
+go through HandleQualifyingPicks.
 */
 func (s *Service) HandleQualifyingPick(ctx context.Context, t *trades.Trade, tradeID int) error {
 	if s.cfg.Recipient == "" {
@@ -100,21 +99,124 @@ func (s *Service) HandleQualifyingPick(ctx context.Context, t *trades.Trade, tra
 	if tradeID == 0 {
 		return errors.New("tradeID must be set for auto-execution")
 	}
-
-	occ, err := OCCSymbol(t.Symbol, t.Expiration, t.ContractType, t.StrikePrice)
-	if err != nil {
-		return fmt.Errorf("build OCC symbol: %w", err)
-	}
-
 	hash, err := s.cfg.SchwabAccountHash(ctx)
 	if err != nil {
 		return fmt.Errorf("account hash: %w", err)
 	}
+	_, err = s.handleSinglePick(ctx, t, tradeID, hash)
+	return err
+}
 
-	// Resolve LIMIT price for the open order. Live ask preferred;
-	// fall back to Claude's estimate when the chain fetch errors or
-	// returns 0. Schwab rejects MARKET option orders pre-market, so
-	// LIMIT is mandatory for the 9:25 ET cron path.
+/*
+HandleQualifyingPicks is the basket entry point fired by the morning
+cron with the trades returned by selector.QualifyingPicks. It walks
+the picks in rank order (rank-1 first), and for each:
+
+  - resolves the LIMIT price from the live ask (or estimate fallback)
+  - checks that the order's worst-case cost (limit price × 100) fits
+    BOTH the remaining daily basket budget AND Schwab's reported
+    available funds — re-queried on the first contract only, then
+    locally decremented per submission since Schwab balance won't
+    refresh until fills land
+  - submits via handleSinglePick on success, decrements remaining
+    budget, moves on; or skips and tries the next rank when the
+    contract is too big for either gate
+
+Per-pick errors are logged and don't abort the basket: if rank-1's
+ask call fails or its order is rejected, rank-2 still gets its turn
+with the local budget intact. Returns the count of contracts the
+service successfully submitted (filled, working, or rejected — every
+case where Schwab actually saw the order). Caller logs the count;
+nothing on the success path requires the number.
+*/
+func (s *Service) HandleQualifyingPicks(ctx context.Context, picks []trades.Trade) (int, error) {
+	if len(picks) == 0 {
+		return 0, nil
+	}
+	if s.cfg.Recipient == "" {
+		return 0, errors.New("execution recipient not configured")
+	}
+	hash, err := s.cfg.SchwabAccountHash(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("account hash: %w", err)
+	}
+
+	/*
+		Poll Schwab for live cash exactly once at basket open. The
+		broker won't decrement available funds until a previous order
+		actually fills (and for options that's typically T+1 settlement
+		anyway), so re-querying mid-basket would over-report and risk
+		double-spending the same cash across contracts. Local budget
+		accounting is the source of truth from this point on.
+	*/
+	availableUSD, err := s.trader.AvailableFunds(ctx, hash)
+	if err != nil {
+		log.Printf("execution: AvailableFunds lookup failed, skipping basket: %v", err)
+		return 0, fmt.Errorf("available funds: %w", err)
+	}
+	remainingUSD := MaxDailyBasketUSD
+	if availableUSD < remainingUSD {
+		remainingUSD = availableUSD
+	}
+	log.Printf("execution: basket budget = $%.2f (Schwab available = $%.2f, basket cap = $%.2f)", remainingUSD, availableUSD, MaxDailyBasketUSD)
+
+	submitted := 0
+	for i := range picks {
+		t := &picks[i]
+		if t.ID == 0 {
+			log.Printf("execution: pick rank=%d %s missing trade ID, skipping", t.Rank, t.Symbol)
+			continue
+		}
+		costUSD, ok := s.checkBudgetAndPlace(ctx, t, hash, remainingUSD)
+		if !ok {
+			continue
+		}
+		remainingUSD -= costUSD
+		submitted++
+	}
+	log.Printf("execution: basket complete, submitted %d/%d contracts, remaining budget $%.2f", submitted, len(picks), remainingUSD)
+	return submitted, nil
+}
+
+/*
+checkBudgetAndPlace resolves the LIMIT price and submits the order
+when it fits remainingUSD. Returns (cost, true) on submit (so the
+caller can decrement its local budget) or (0, false) when the pick
+was skipped — either because pricing failed (already alerted via
+sendOpenFailedEmail) or because the contract's cost exceeded the
+remaining budget. Errors after submission are logged inside
+handleSinglePick; this function only filters by cost.
+*/
+func (s *Service) checkBudgetAndPlace(ctx context.Context, t *trades.Trade, hash string, remainingUSD float64) (float64, bool) {
+	limitPrice, err := s.resolveLimitPrice(ctx, t)
+	if err != nil {
+		occ, _ := OCCSymbol(t.Symbol, t.Expiration, t.ContractType, t.StrikePrice)
+		log.Printf("execution: rank=%d %s pricing failed: %v", t.Rank, t.Symbol, err)
+		s.sendOpenFailedEmail(t, occ, "", err.Error())
+		return 0, false
+	}
+	costUSD := limitPrice * 100 * float64(MaxContracts)
+	if costUSD > remainingUSD {
+		log.Printf("execution: rank=%d %s skipped, cost $%.2f exceeds remaining basket $%.2f", t.Rank, t.Symbol, costUSD, remainingUSD)
+		return 0, false
+	}
+	if _, err := s.handleSinglePick(ctx, t, t.ID, hash); err != nil {
+		log.Printf("execution: rank=%d %s submit failed: %v", t.Rank, t.Symbol, err)
+		// Even on submission failure, the contract reached the broker
+		// (or tried to) — count the cost against the basket so a
+		// retry storm can't blow through the daily cap.
+		return costUSD, true
+	}
+	return costUSD, true
+}
+
+/*
+resolveLimitPrice fetches the live ask and returns the LIMIT price
+the open order should carry, falling back to Claude's modeled premium
+when the live quote is missing. Returns an error only when neither
+basis is usable — caller treats that as "do not submit".
+*/
+func (s *Service) resolveLimitPrice(ctx context.Context, t *trades.Trade) (float64, error) {
 	var askPrice float64
 	if s.cfg.OptionAsk != nil {
 		fetched, askErr := s.cfg.OptionAsk(ctx, t.Symbol, t.Expiration, t.ContractType, t.StrikePrice)
@@ -126,15 +228,35 @@ func (s *Service) HandleQualifyingPick(ctx context.Context, t *trades.Trade, tra
 	}
 	limitPrice := ComputeOpenLimitPrice(askPrice, t.EstimatedPrice)
 	if limitPrice <= 0 {
-		msg := fmt.Sprintf("could not resolve a LIMIT price (ask=%.2f, est=%.2f)", askPrice, t.EstimatedPrice)
-		log.Printf("execution: %s", msg)
-		s.sendOpenFailedEmail(t, occ, "", msg)
-		return errors.New(msg)
+		return 0, fmt.Errorf("could not resolve a LIMIT price (ask=%.2f, est=%.2f)", askPrice, t.EstimatedPrice)
+	}
+	return limitPrice, nil
+}
+
+/*
+handleSinglePick is the per-contract submission body lifted out of
+the old HandleQualifyingPick so HandleQualifyingPicks can call it in
+a loop without re-doing the account-hash lookup. Returns the order
+id from Schwab on success (empty string on early exit). Errors are
+non-nil for "did not reach broker" cases AND for downstream lookup
+failures; the caller decides whether to keep going.
+*/
+func (s *Service) handleSinglePick(ctx context.Context, t *trades.Trade, tradeID int, hash string) (string, error) {
+	occ, err := OCCSymbol(t.Symbol, t.Expiration, t.ContractType, t.StrikePrice)
+	if err != nil {
+		return "", fmt.Errorf("build OCC symbol: %w", err)
+	}
+
+	limitPrice, err := s.resolveLimitPrice(ctx, t)
+	if err != nil {
+		log.Printf("execution: %s", err.Error())
+		s.sendOpenFailedEmail(t, occ, "", err.Error())
+		return "", err
 	}
 
 	order, err := BuildOpenOrderForTrade(t, occ, limitPrice)
 	if err != nil {
-		return fmt.Errorf("build open order: %w", err)
+		return "", fmt.Errorf("build open order: %w", err)
 	}
 
 	execRow := Execution{
@@ -146,21 +268,21 @@ func (s *Service) HandleQualifyingPick(ctx context.Context, t *trades.Trade, tra
 	}
 	execID, err := s.store.InsertExecution(execRow)
 	if err != nil {
-		return fmt.Errorf("insert open execution: %w", err)
+		return "", fmt.Errorf("insert open execution: %w", err)
 	}
 
 	orderID, err := s.trader.PlaceOrder(ctx, hash, order)
 	if err != nil {
 		_ = s.store.UpdateExecutionStatus(execID, "failed", "", nil, 0, err.Error())
 		s.sendOpenFailedEmail(t, occ, "", err.Error())
-		return fmt.Errorf("place open order: %w", err)
+		return "", fmt.Errorf("place open order: %w", err)
 	}
 
 	st, err := s.trader.GetOrder(ctx, hash, orderID)
 	if err != nil {
 		_ = s.store.UpdateExecutionStatus(execID, "failed", orderID, nil, 0, err.Error())
 		s.sendOpenFailedEmail(t, occ, orderID, err.Error())
-		return fmt.Errorf("get open order status: %w", err)
+		return orderID, fmt.Errorf("get open order status: %w", err)
 	}
 
 	switch {
@@ -184,7 +306,7 @@ func (s *Service) HandleQualifyingPick(ctx context.Context, t *trades.Trade, tra
 		_ = s.store.UpdateExecutionStatus(execID, "working", orderID, nil, 0, "")
 		log.Printf("execution: open order working (trade_id=%d, order=%s, status=%s)", tradeID, orderID, st.RawStatus)
 	}
-	return nil
+	return orderID, nil
 }
 
 /*

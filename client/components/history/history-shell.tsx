@@ -9,6 +9,7 @@ import { PageToolbar } from "@/components/layout/page-toolbar";
 import { Section } from "@/components/layout/section";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
+import { computeTradePnl } from "@/lib/calculations";
 import { getRangeBounds, getRangeLabel, maxRangeOffset } from "@/lib/date-utils";
 import type { WeekResponse } from "@/types/trade";
 
@@ -32,7 +33,7 @@ type DayStat = {
   hasSummaries: boolean;
   invested: number;
   returned: number;
-  execution: import("@/types/trade").Execution | null;
+  executions: import("@/types/trade").Execution[];
   details: {
     symbol: string;
     type: string;
@@ -92,18 +93,20 @@ function computeAggregates(data: WeekResponse) {
     let dayReturned = 0;
     const details: DayStat["details"] = [];
 
-    for (const { trade, summary } of day.trades ?? []) {
+    for (const dt of day.trades ?? []) {
+      const { trade } = dt;
       totalTrades++;
-      if (summary) {
+      const result = computeTradePnl(dt, day.executions ?? null);
+      if (result.hasData) {
         dayHasSummaries = true;
-        const pnl = (summary.closing_price - summary.entry_price) * 100;
-        const pct = summary.entry_price > 0 ? ((summary.closing_price - summary.entry_price) / summary.entry_price) * 100 : 0;
+        const pnl = result.pnl;
+        const pct = result.pctChange;
         dayPnl += pnl;
         totalPnl += pnl;
-        dayInvested += summary.entry_price * 100;
-        dayReturned += summary.closing_price * 100;
-        totalInvested += summary.entry_price * 100;
-        totalReturn += summary.closing_price * 100;
+        dayInvested += result.entryPrice * 100;
+        dayReturned += result.closingPrice * 100;
+        totalInvested += result.entryPrice * 100;
+        totalReturn += result.closingPrice * 100;
 
         if (pnl > 0.5) {
           dayW++;
@@ -127,8 +130,8 @@ function computeAggregates(data: WeekResponse) {
           symbol: trade.symbol,
           type: trade.contract_type,
           strike: trade.strike_price,
-          entry: summary.entry_price,
-          close: summary.closing_price,
+          entry: result.entryPrice,
+          close: result.closingPrice,
           pnl,
           pct,
           result: pnl > 0.5 ? "profit" : pnl < -0.5 ? "loss" : "flat",
@@ -154,7 +157,7 @@ function computeAggregates(data: WeekResponse) {
       hasSummaries: dayHasSummaries,
       invested: dayInvested,
       returned: dayReturned,
-      execution: day.execution ?? null,
+      executions: day.executions ?? [],
       details,
     });
   }

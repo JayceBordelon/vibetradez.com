@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { ExecutionBadge, matchesTrade } from "@/components/execution-badge";
+import { ExecutionBadge, findExecutionForTrade } from "@/components/execution-badge";
 import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,7 +38,7 @@ export function TradeDetailPage({ symbol, date }: { symbol: string; date?: strin
           setState({ kind: "not-found", tried: data.date ?? date ?? "today" });
           return;
         }
-        const execution = matchesTrade(data.execution, dt.trade) ? (data.execution ?? null) : null;
+        const execution = findExecutionForTrade(data.executions, dt.trade);
         setState({ kind: "found", dt, resolvedDate: data.date, execution });
       })
       .catch((e: unknown) => {
@@ -101,8 +101,22 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
   const breakeven = calcBreakeven(trade);
   const maxLoss = calcMaxLoss(trade);
 
-  const pnl = summary ? (summary.closing_price - summary.entry_price) * 100 : 0;
-  const pctChange = summary && summary.entry_price > 0 ? ((summary.closing_price - summary.entry_price) / summary.entry_price) * 100 : 0;
+  /*
+  P&L preference for the EOD result block: when a closed live execution
+  exists, prefer its realized_pnl + actual broker fill prices over
+  Claude's modeled summary. The summary uses Claude's morning estimate
+  for entry and an EOD re-quote for close — both can drift from the real
+  broker fill (which often differs by tens of cents on liquid options),
+  so the modeled number occasionally over- or understates real P&L by
+  10-20%. The badge already shows the correct broker number; this
+  alignment removes the user-visible mismatch between the dashboard
+  card and the EOD result block on the same trade.
+  */
+  const hasClosedExecution = execution?.state === "closed" && execution.open_price > 0 && execution.close_price > 0;
+  const entryPrice = hasClosedExecution ? execution.open_price : (summary?.entry_price ?? 0);
+  const closingPrice = hasClosedExecution ? execution.close_price : (summary?.closing_price ?? 0);
+  const pnl = hasClosedExecution ? execution.realized_pnl : summary ? (summary.closing_price - summary.entry_price) * 100 : 0;
+  const pctChange = entryPrice > 0 ? ((closingPrice - entryPrice) / entryPrice) * 100 : 0;
   const stockPctChange = summary && summary.stock_open > 0 ? ((summary.stock_close - summary.stock_open) / summary.stock_open) * 100 : 0;
 
   /*
@@ -188,7 +202,14 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
         <Card className="lg-card">
           <CardContent className="space-y-4 p-5 sm:p-6">
             <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <h2 className="text-base font-semibold">End-of-day result</h2>
+              <div className="flex items-baseline gap-2">
+                <h2 className="text-base font-semibold">End-of-day result</h2>
+                {hasClosedExecution && (
+                  <Badge variant="secondary" className="text-[10px]">
+                    actual fill
+                  </Badge>
+                )}
+              </div>
               <span className={cn("text-2xl font-bold tabular-nums", pnl > 0 ? "text-green" : pnl < 0 ? "text-red" : "text-muted-foreground")}>
                 {fmtPnlInt(pnl)}
                 <span className="ml-2 text-sm font-medium text-muted-foreground">{fmtPctDec(pctChange)}</span>
@@ -196,11 +217,8 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
             </div>
 
             <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-              <Metric label="Contract entry" value={fmtMoney(summary.entry_price)} />
-              <Metric
-                label="Contract close"
-                value={<span className={cn("text-sm font-semibold tabular-nums", pnl > 0 ? "text-green" : pnl < 0 ? "text-red" : "")}>{fmtMoney(summary.closing_price)}</span>}
-              />
+              <Metric label="Contract entry" value={fmtMoney(entryPrice)} />
+              <Metric label="Contract close" value={<span className={cn("text-sm font-semibold tabular-nums", pnl > 0 ? "text-green" : pnl < 0 ? "text-red" : "")}>{fmtMoney(closingPrice)}</span>} />
               <Metric label="Stock open" value={fmtMoney(summary.stock_open)} />
               <Metric
                 label="Stock close"

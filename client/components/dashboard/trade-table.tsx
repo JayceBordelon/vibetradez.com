@@ -9,14 +9,15 @@ import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
 import { Metric } from "@/components/ui/metric";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { calcMoneyness } from "@/lib/calculations";
+import { calcMoneyness, computeTradePnl } from "@/lib/calculations";
 import { fmtMoney, fmtPctDec, fmtPnlInt, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { DashboardTrade } from "@/types/trade";
+import type { DashboardTrade, Execution } from "@/types/trade";
 
 interface TradeTableProps {
   trades: DashboardTrade[];
   date: string;
+  executions?: Execution[] | null;
 }
 
 function tradeHref(symbol: string, date: string): string {
@@ -36,12 +37,13 @@ interface RowComputed {
   close: string;
 }
 
-function computeRow(dt: DashboardTrade): RowComputed {
+function computeRow(dt: DashboardTrade, executions: Execution[] | null | undefined): RowComputed {
   const { trade, summary } = dt;
   const hasSummary = !!summary;
-  const pnl = hasSummary ? (summary.closing_price - summary.entry_price) * 100 : 0;
-  const pnlPct = hasSummary ? ((summary.closing_price - summary.entry_price) / summary.entry_price) * 100 : 0;
-  const stockMove = hasSummary ? ((summary.stock_close - summary.stock_open) / summary.stock_open) * 100 : 0;
+  const result = computeTradePnl(dt, executions);
+  const pnl = result.pnl;
+  const pnlPct = result.pctChange;
+  const stockMove = hasSummary && summary.stock_open > 0 ? ((summary.stock_close - summary.stock_open) / summary.stock_open) * 100 : 0;
 
   const resultLabel = hasSummary ? (pnl > 0 ? "PROFIT" : pnl < 0 ? "LOSS" : "FLAT") : "OPEN";
   const resultVariant: RowComputed["resultVariant"] = hasSummary ? (pnl > 0 ? "default" : pnl < 0 ? "destructive" : "outline") : "secondary";
@@ -56,12 +58,12 @@ function computeRow(dt: DashboardTrade): RowComputed {
     resultLabel,
     resultVariant,
     accentBorder,
-    entry: hasSummary ? fmtMoney(summary.entry_price) : fmtMoney(trade.estimated_price),
-    close: hasSummary ? fmtMoney(summary.closing_price) : "-",
+    entry: hasSummary ? fmtMoney(result.entryPrice) : fmtMoney(trade.estimated_price),
+    close: hasSummary ? fmtMoney(result.closingPrice) : "-",
   };
 }
 
-export function TradeTable({ trades, date }: TradeTableProps) {
+export function TradeTable({ trades, date, executions }: TradeTableProps) {
   return (
     <div className="min-w-0">
       {/* Desktop table */}
@@ -81,7 +83,7 @@ export function TradeTable({ trades, date }: TradeTableProps) {
           </TableHeader>
           <TableBody>
             {trades.map((dt) => (
-              <DesktopTradeRow key={dt.trade.symbol} dt={dt} date={date} />
+              <DesktopTradeRow key={dt.trade.symbol} dt={dt} date={date} executions={executions} />
             ))}
           </TableBody>
         </Table>
@@ -90,7 +92,7 @@ export function TradeTable({ trades, date }: TradeTableProps) {
       {/* Mobile cards */}
       <div className="space-y-3 md:hidden">
         {trades.map((dt) => (
-          <TradeRowCard key={dt.trade.symbol} dt={dt} date={date} />
+          <TradeRowCard key={dt.trade.symbol} dt={dt} date={date} executions={executions} />
         ))}
       </div>
     </div>
@@ -103,11 +105,11 @@ Each row is a navigation surface to /trade/<symbol>?date=<date>; we render
 the link inside a regular cell rather than wrapping the entire <tr> so we
 keep valid table semantics (no <a> wrapping <tr>).
 */
-function DesktopTradeRow({ dt, date }: { dt: DashboardTrade; date: string }) {
+function DesktopTradeRow({ dt, date, executions }: { dt: DashboardTrade; date: string; executions?: Execution[] | null }) {
   const router = useRouter();
   const { trade } = dt;
   const moneyness = calcMoneyness(trade);
-  const row = computeRow(dt);
+  const row = computeRow(dt, executions);
   const href = tradeHref(trade.symbol, date);
 
   return (
@@ -159,10 +161,10 @@ function ScorePill({ score }: { score: number }) {
 }
 
 // ---- Mobile card ----
-function TradeRowCard({ dt, date }: { dt: DashboardTrade; date: string }) {
+function TradeRowCard({ dt, date, executions }: { dt: DashboardTrade; date: string; executions?: Execution[] | null }) {
   const { trade } = dt;
   const moneyness = calcMoneyness(trade);
-  const row = computeRow(dt);
+  const row = computeRow(dt, executions);
 
   return (
     <Link href={tradeHref(trade.symbol, date)} className="block">

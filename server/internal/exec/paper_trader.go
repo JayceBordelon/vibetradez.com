@@ -67,6 +67,19 @@ func (pt *PaperTrader) AccountHash(_ context.Context) (string, error) {
 	return "PAPER-ACCOUNT", nil
 }
 
+/*
+AvailableFunds returns a synthetic effectively-unlimited number for
+paper mode so the basket cap (MaxDailyBasketUSD) is the only governor.
+Paper mode mustn't pretend to be cash-constrained: the whole point of
+paper is to mirror what live would have done given an unconstrained
+balance, then compare to live's real-money outcome. If paper trading
+ever needs to exercise a synthetic ledger, this should switch to a
+real counter rather than a constant.
+*/
+func (pt *PaperTrader) AvailableFunds(_ context.Context, _ string) (float64, error) {
+	return 1e9, nil
+}
+
 func (pt *PaperTrader) PlaceOrder(ctx context.Context, _ string, order Order) (string, error) {
 	if len(order.OrderLegCollection) != 1 {
 		return "", fmt.Errorf("paper: expected single-leg order, got %d legs", len(order.OrderLegCollection))

@@ -353,14 +353,19 @@ type ExecutionView struct {
 }
 
 /*
-GetExecutionForDate returns the execution view for a single trade
-date, or nil if no auto-execution fired that day. Paper and live are
-both surfaced, the Mode field carries the distinction. Failed open
-executions DO surface (with state='failed') so the dashboard can show
-what didn't work.
+GetExecutionsForDate returns every execution view for a given trade
+date in chronological (id-ascending) order, or an empty slice if no
+auto-execution fired that day. Paper and live are both surfaced; the
+Mode field carries the distinction. Failed open executions DO surface
+(with state='failed') so the dashboard can show what didn't work.
+
+Plural by design: the basket auto-executor can fire up to
+exec.MaxBasketRank contracts in a single morning, and the frontend
+needs to find the matching execution per trade card to source
+realized P&L from broker truth instead of the modeled EOD summary.
 */
-func (s *Store) GetExecutionForDate(date string) (*ExecutionView, error) {
-	row := s.db.QueryRow(`
+func (s *Store) GetExecutionsForDate(date string) ([]*ExecutionView, error) {
+	rows, err := s.db.Query(`
 		SELECT
 			t.symbol, t.contract_type, t.strike_price,
 			openX.mode, openX.status,
@@ -375,21 +380,34 @@ func (s *Store) GetExecutionForDate(date string) (*ExecutionView, error) {
 		) closeX ON true
 		WHERE t.date = $1 AND openX.side = 'open'
 		ORDER BY openX.id ASC
-		LIMIT 1
 	`, date)
-	v, err := scanExecutionView(row)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+	if err != nil {
+		return nil, fmt.Errorf("query executions for date: %w", err)
 	}
-	return v, err
+	defer func() { _ = rows.Close() }()
+
+	var out []*ExecutionView
+	for rows.Next() {
+		v, err := scanExecutionViewRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		if v == nil {
+			continue
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
 }
 
 /*
-GetExecutionsForDateRange returns a map of trade_date -> ExecutionView
+GetExecutionsForDateRange returns a map of trade_date -> []*ExecutionView
 for the history/week view. Only dates with confirmed executions appear
-in the map; days with no auto-execution are simply absent.
+in the map; days with no auto-execution are simply absent. Plural per
+date for the same reason GetExecutionsForDate is — basket days have
+multiple executions and the frontend matches by trade.
 */
-func (s *Store) GetExecutionsForDateRange(start, end string) (map[string]*ExecutionView, error) {
+func (s *Store) GetExecutionsForDateRange(start, end string) (map[string][]*ExecutionView, error) {
 	rows, err := s.db.Query(`
 		SELECT
 			t.date,
@@ -412,7 +430,7 @@ func (s *Store) GetExecutionsForDateRange(start, end string) (map[string]*Execut
 	}
 	defer func() { _ = rows.Close() }()
 
-	out := make(map[string]*ExecutionView)
+	out := make(map[string][]*ExecutionView)
 	for rows.Next() {
 		var date string
 		v := &ExecutionView{}
@@ -443,27 +461,32 @@ func (s *Store) GetExecutionsForDateRange(start, end string) (map[string]*Execut
 		if v.State == "" {
 			continue
 		}
-		out[date] = v
+		out[date] = append(out[date], v)
 	}
 	return out, rows.Err()
 }
 
-func scanExecutionView(row *sql.Row) (*ExecutionView, error) {
+/*
+scanExecutionViewRow scans one row from GetExecutionsForDate (sans
+date column). Returns (nil, nil) when the derived state is empty —
+caller skips those.
+*/
+func scanExecutionViewRow(rows *sql.Rows) (*ExecutionView, error) {
 	v := &ExecutionView{}
 	var openStatus string
 	var executedAt, closedAt sql.NullTime
 	var closeStatus sql.NullString
-	if err := row.Scan(
+	if err := rows.Scan(
 		&v.Symbol, &v.ContractType, &v.StrikePrice,
 		&v.Mode, &openStatus,
 		&v.OpenPrice, &executedAt,
 		&v.ClosePrice, &closedAt, &closeStatus,
 	); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("scan execution row: %w", err)
 	}
 	v.State = deriveExecutionState(openStatus, closeStatus)
 	if v.State == "" {
-		return nil, sql.ErrNoRows
+		return nil, nil
 	}
 	if executedAt.Valid {
 		t := executedAt.Time

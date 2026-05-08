@@ -1,13 +1,15 @@
 "use client";
 
+import { computeTradePnl } from "@/lib/calculations";
 import { fmtPnlInt, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { DashboardTrade } from "@/types/trade";
+import type { DashboardTrade, Execution } from "@/types/trade";
 
 interface SymbolTabsProps {
   trades: DashboardTrade[];
   activeSymbol: string;
   onSelect: (symbol: string) => void;
+  executions?: Execution[] | null;
 }
 
 interface SymbolEntry {
@@ -26,13 +28,14 @@ carries the rank, ticker, contract side + strike, conviction score, and
 (when the trade has settled) live P&L. The active pill is auto-scrolled
 into view so keyboard / programmatic switches don't strand the user.
 */
-export function SymbolTabs({ trades, activeSymbol, onSelect }: SymbolTabsProps) {
+export function SymbolTabs({ trades, activeSymbol, onSelect, executions }: SymbolTabsProps) {
   const symbolMap = new Map<string, SymbolEntry>();
 
   for (const dt of trades) {
     const sym = dt.trade.symbol;
     const existing = symbolMap.get(sym);
-    const tradePnl = dt.summary ? (dt.summary.closing_price - dt.summary.entry_price) * 100 : null;
+    const result = computeTradePnl(dt, executions);
+    const tradePnl = result.hasData ? result.pnl : null;
 
     if (!existing) {
       symbolMap.set(sym, {
