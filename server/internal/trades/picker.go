@@ -3,8 +3,10 @@ package trades
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -36,6 +38,18 @@ const (
 		conversation-level deadline lives on ctx in the caller.
 	*/
 	httpRequestTimeout = 30 * time.Minute
+
+	/*
+		Retry tuning for transient Anthropic API failures (529 overloaded,
+		429 rate-limited, 5xx gateway). Each tool-conversation round retries
+		independently, so a single transient blip doesn't discard the
+		Schwab tool work already done in earlier rounds. Worst-case wait is
+		~2+4+8+16+30 ≈ 60s, well inside the 5-minute morning-cron budget
+		before the next downstream step.
+	*/
+	maxPickerAttempts = 5
+	pickerBackoffBase = 2 * time.Second
+	pickerBackoffCeil = 30 * time.Second
 )
 
 type Trade struct {
@@ -240,6 +254,76 @@ func (p *ClaudePicker) buildTools() []anthropic.ToolUnionParam {
 	return tools
 }
 
+// sendWithRetry calls Messages.New with exponential backoff + jitter on
+// transient API failures (529 overloaded, 429 rate-limited, 5xx gateway).
+// Non-retryable errors (4xx auth/config, ctx cancel) fast-fail unchanged.
+// A previous morning run (2026-05-11) lost the day's picks to a single 529
+// after ~15 successful Schwab tool calls; retrying just this call recovers
+// without re-running the tool conversation from scratch.
+func (p *ClaudePicker) sendWithRetry(ctx context.Context, params anthropic.MessageNewParams) (*anthropic.Message, error) {
+	return retryWithBackoff(ctx, maxPickerAttempts, backoffDelay, func() (*anthropic.Message, error) {
+		return p.client.Messages.New(ctx, params)
+	})
+}
+
+// retryWithBackoff runs attempt up to maxAttempts times, sleeping delayFor(n)
+// between attempt n and attempt n+1 when the error is retryable. Split out
+// from sendWithRetry so the retry semantics (call counts, fast-fail on
+// non-retryable errors, ctx cancellation mid-sleep) can be unit-tested
+// without standing up an Anthropic client.
+func retryWithBackoff(
+	ctx context.Context,
+	maxAttempts int,
+	delayFor func(attempt int) time.Duration,
+	attempt func() (*anthropic.Message, error),
+) (*anthropic.Message, error) {
+	var lastErr error
+	for i := 1; i <= maxAttempts; i++ {
+		msg, err := attempt()
+		if err == nil {
+			return msg, nil
+		}
+		lastErr = err
+		if !isRetryableAPIError(err) || i == maxAttempts {
+			return nil, err
+		}
+		delay := delayFor(i)
+		log.Printf("Anthropic transient failure (attempt %d/%d, retry in %s): %v", i, maxAttempts, delay, err)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(delay):
+		}
+	}
+	return nil, lastErr
+}
+
+// isRetryableAPIError returns true for Anthropic-side transient failures
+// where another attempt has a real chance of succeeding.
+func isRetryableAPIError(err error) bool {
+	var apiErr *anthropic.Error
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	switch apiErr.StatusCode {
+	case 429, 502, 503, 504, 529:
+		return true
+	}
+	return false
+}
+
+// backoffDelay returns pickerBackoffBase * 2^(attempt-1) capped at
+// pickerBackoffCeil, with ±25% jitter to avoid retry stampedes when
+// Anthropic is recovering from an overload spike.
+func backoffDelay(attempt int) time.Duration {
+	d := pickerBackoffBase << (attempt - 1)
+	if d > pickerBackoffCeil {
+		d = pickerBackoffCeil
+	}
+	jitter := time.Duration(rand.Int63n(int64(d) / 2))
+	return d - d/4 + jitter
+}
+
 func (p *ClaudePicker) runConversation(ctx context.Context, prompt string, maxTokens int64) (string, error) {
 	tools := p.buildTools()
 
@@ -260,7 +344,7 @@ func (p *ClaudePicker) runConversation(ctx context.Context, prompt string, maxTo
 		if containerID != "" {
 			params.Container = param.NewOpt(containerID)
 		}
-		msg, err := p.client.Messages.New(ctx, params)
+		msg, err := p.sendWithRetry(ctx, params)
 		if err != nil {
 			return "", fmt.Errorf("anthropic messages.new: %w", err)
 		}
