@@ -279,6 +279,22 @@ func main() {
 		log.Fatalf("Failed to add weekly email cron job: %v", err)
 	}
 
+	/*
+		Daily Schwab refresh-token expiry warning. Schwab caps refresh
+		tokens at 7 days from the original consent and does NOT rotate
+		them on access-token refresh, so without a proactive nag the
+		operator only discovers the dead token when the 9:25 ET cron
+		hard-fails in front of subscribers. Fires at 12:00 ET (mid-day,
+		when the operator is most likely at a desk to act on it), warns
+		starting at 5-days-old, dedupes per ET date so a same-day
+		restart doesn't double-send.
+	*/
+	if _, err := c.AddFunc("0 12 * * *", func() {
+		checkSchwabReauth(cfg, db, emailClient)
+	}); err != nil {
+		log.Fatalf("Failed to add Schwab re-auth nag cron: %v", err)
+	}
+
 	if executor != nil {
 		ctxBg := context.Background()
 
@@ -363,6 +379,90 @@ func main() {
 
 	log.Println("Shutting down...")
 	c.Stop()
+}
+
+/*
+checkSchwabReauth emails the operator when the Schwab refresh token
+is within 2 days of Schwab's hard 7-day cap. ExecutionRecipient only;
+dedupes per ET calendar date via the reauth_nag_sent_on column so the
+operator gets at most one nag per day no matter how the cron fires
+or how often the container restarts. Skips silently when no issuance
+timestamp is on file (legacy row pre-migration, or no token at all).
+*/
+func checkSchwabReauth(cfg *config.Config, db *store.Store, emailClient *email.Client) {
+	const (
+		schwabRefreshTokenLifetime = 7 * 24 * time.Hour
+		warnThreshold              = 5 * 24 * time.Hour
+	)
+
+	if isLocalStubKey(cfg.ResendAPIKey) {
+		return
+	}
+	if cfg.ExecutionRecipient == "" {
+		return
+	}
+
+	issuedAt, lastNag, ok, err := db.GetRefreshTokenIssuedAt("schwab")
+	if err != nil {
+		log.Printf("schwab-reauth: failed to read issuance: %v", err)
+		return
+	}
+	if !ok {
+		return
+	}
+
+	age := time.Since(issuedAt)
+	if age < warnThreshold {
+		return
+	}
+
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		log.Printf("schwab-reauth: failed to load ET timezone: %v", err)
+		return
+	}
+	todayET := time.Now().In(loc)
+	if !lastNag.IsZero() && sameDate(lastNag.In(loc), todayET) {
+		return
+	}
+
+	daysOld := int(age.Hours() / 24)
+	remaining := schwabRefreshTokenLifetime - age
+	daysRemaining := int(remaining.Hours() / 24)
+	if remaining < 0 {
+		daysRemaining = 0
+	}
+
+	expiresAt := issuedAt.Add(schwabRefreshTokenLifetime).In(loc)
+	html, err := templates.RenderSchwabReauth(templates.SchwabReauthData{
+		Subject:       "Schwab re-authorization needed",
+		Date:          todayET.Format("Monday, Jan 2, 2006 3:04 PM"),
+		IssuedAt:      issuedAt.In(loc).Format("Mon, Jan 2, 2006 3:04 PM MST"),
+		ExpiresAt:     expiresAt.Format("Mon, Jan 2, 2006 3:04 PM MST"),
+		DaysOld:       daysOld,
+		DaysRemaining: daysRemaining,
+		ReauthURL:     "https://vibetradez.com/auth/schwab",
+	})
+	if err != nil {
+		log.Printf("schwab-reauth: render failed: %v", err)
+		return
+	}
+
+	subject := fmt.Sprintf("VibeTradez: Schwab re-auth needed (%d day(s) remaining)", daysRemaining)
+	if err := emailClient.SendTradeEmail(cfg.EmailFrom, []string{cfg.ExecutionRecipient}, subject, html); err != nil {
+		log.Printf("schwab-reauth: send failed: %v", err)
+		return
+	}
+	if err := db.MarkReauthNagSent("schwab", todayET); err != nil {
+		log.Printf("schwab-reauth: failed to record nag sent: %v", err)
+	}
+	log.Printf("schwab-reauth: nag sent to %s (age=%dd remaining=%dd)", cfg.ExecutionRecipient, daysOld, daysRemaining)
+}
+
+func sameDate(a, b time.Time) bool {
+	ay, am, ad := a.Date()
+	by, bm, bd := b.Date()
+	return ay == by && am == bm && ad == bd
 }
 
 func sendErrorNotification(cfg *config.Config, db *store.Store, emailClient *email.Client, errMsg string) {

@@ -24,6 +24,15 @@ const (
 type TokenStore interface {
 	SaveOAuthToken(provider, accessToken, refreshToken string, expiresAt time.Time) error
 	GetOAuthToken(provider string) (accessToken, refreshToken string, expiresAt time.Time, err error)
+	/*
+		MarkRefreshTokenIssued is called by ExchangeCode (a fresh OAuth
+		consent) and never by the access-token refresh path. Schwab does
+		not rotate refresh tokens on access-token refresh, so the
+		original consent timestamp is what bounds the 7-day lifetime.
+	*/
+	MarkRefreshTokenIssued(provider string, issuedAt time.Time) error
+	GetRefreshTokenIssuedAt(provider string) (issuedAt time.Time, lastNagSentOn time.Time, ok bool, err error)
+	MarkReauthNagSent(provider string, sentOn time.Time) error
 }
 
 type Client struct {
@@ -99,8 +108,26 @@ func (c *Client) ExchangeCode(code string) error {
 	c.mu.Unlock()
 
 	c.persistTokens(tokens.AccessToken, tokens.RefreshToken, c.expiresAt)
+	if err := c.store.MarkRefreshTokenIssued("schwab", time.Now()); err != nil {
+		log.Printf("Schwab: warning: failed to mark refresh-token issuance: %v", err)
+	}
 	log.Println("Schwab: OAuth tokens obtained successfully")
 	return nil
+}
+
+/*
+RefreshTokenIssuedAt returns the timestamp the current refresh token
+was minted (via the OAuth consent flow), and ok=false if it's unknown
+(legacy row pre the issuance-tracking migration, or no token at all).
+The daily expiry-warning cron uses this to decide when to nag.
+*/
+func (c *Client) RefreshTokenIssuedAt() (time.Time, bool) {
+	issuedAt, _, ok, err := c.store.GetRefreshTokenIssuedAt("schwab")
+	if err != nil {
+		log.Printf("Schwab: warning: failed to read refresh-token issuance: %v", err)
+		return time.Time{}, false
+	}
+	return issuedAt, ok
 }
 
 // ValidToken returns a valid access token, refreshing if necessary.

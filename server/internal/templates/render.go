@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_close_receipt.html execute_close_failed.html execute_open_failed.html rollout_auto_execution_live.html rollout_claude_only.html rollout_live_trading_starts.html rollout_basket_and_copy_trading.html rollout_equity_walk_day_one.html
+//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_close_receipt.html execute_close_failed.html execute_open_failed.html rollout_auto_execution_live.html rollout_claude_only.html rollout_live_trading_starts.html rollout_basket_and_copy_trading.html rollout_equity_walk_day_one.html schwab_reauth.html
 var templateFS embed.FS
 
 type Trade struct {
@@ -250,6 +250,26 @@ type ErrorEmailData struct {
 	Subject string
 	Date    string
 	Error   string
+}
+
+/*
+SchwabReauthData drives the operator-only re-auth nag email. Sent
+once-per-day starting when the refresh token is within 2 days of
+Schwab's hard 7-day cap (or already expired). Goes to the
+EXECUTION_RECIPIENT only, not the subscriber list.
+*/
+type SchwabReauthData struct {
+	Subject       string
+	Date          string
+	IssuedAt      string
+	ExpiresAt     string
+	DaysOld       int
+	DaysRemaining int
+	ReauthURL     string
+}
+
+func RenderSchwabReauth(d SchwabReauthData) (string, error) {
+	return renderOne("schwab_reauth.html", d)
 }
 
 // ── Auto-execution emails ──

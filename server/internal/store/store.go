@@ -143,6 +143,16 @@ func migrate(db *sql.DB) error {
 			updated_at TIMESTAMPTZ DEFAULT NOW()
 		);
 
+		/*
+		Schwab refresh tokens have a hard 7-day lifetime from the original
+		consent. The access-token refresh path does NOT rotate them, so
+		issued_at is set only on ExchangeCode and preserved across refreshes.
+		reauth_nag_sent_on dedupes the daily warning email so we don't
+		spam the inbox if the operator ignores the first nag.
+		*/
+		ALTER TABLE oauth_tokens ADD COLUMN IF NOT EXISTS refresh_token_issued_at TIMESTAMPTZ;
+		ALTER TABLE oauth_tokens ADD COLUMN IF NOT EXISTS reauth_nag_sent_on DATE;
+
 		ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS auth_user_id BIGINT;
 		CREATE INDEX IF NOT EXISTS idx_subscribers_auth_user_id ON subscribers(auth_user_id);
 
@@ -517,6 +527,57 @@ func (s *Store) GetOAuthToken(provider string) (accessToken, refreshToken string
 		FROM oauth_tokens WHERE provider = $1
 	`, provider).Scan(&accessToken, &refreshToken, &expiresAt)
 	return
+}
+
+/*
+MarkRefreshTokenIssued stamps the refresh-token mint time. Called only
+from the OAuth authorization-code exchange (a fresh consent), never
+from the access-token refresh path. The expiry-warning cron diffs
+NOW() against this column to decide when to nag the operator.
+*/
+func (s *Store) MarkRefreshTokenIssued(provider string, issuedAt time.Time) error {
+	_, err := s.db.Exec(`
+		UPDATE oauth_tokens
+		SET refresh_token_issued_at = $2,
+		    reauth_nag_sent_on = NULL
+		WHERE provider = $1
+	`, provider, issuedAt)
+	return err
+}
+
+/*
+GetRefreshTokenIssuedAt returns the refresh-token mint time, the date
+of the last re-auth nag (DATE in ET, or zero if never sent), and
+ok=false when no row exists or issued_at is NULL (legacy rows pre
+this migration). The cron skips the nag when ok=false.
+*/
+func (s *Store) GetRefreshTokenIssuedAt(provider string) (issuedAt time.Time, lastNagSentOn time.Time, ok bool, err error) {
+	var issuedAtNull sql.NullTime
+	var lastNagNull sql.NullTime
+	err = s.db.QueryRow(`
+		SELECT refresh_token_issued_at, reauth_nag_sent_on
+		FROM oauth_tokens WHERE provider = $1
+	`, provider).Scan(&issuedAtNull, &lastNagNull)
+	if err == sql.ErrNoRows {
+		return time.Time{}, time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, time.Time{}, false, err
+	}
+	if !issuedAtNull.Valid {
+		return time.Time{}, time.Time{}, false, nil
+	}
+	if lastNagNull.Valid {
+		lastNagSentOn = lastNagNull.Time
+	}
+	return issuedAtNull.Time, lastNagSentOn, true, nil
+}
+
+func (s *Store) MarkReauthNagSent(provider string, sentOn time.Time) error {
+	_, err := s.db.Exec(`
+		UPDATE oauth_tokens SET reauth_nag_sent_on = $2 WHERE provider = $1
+	`, provider, sentOn)
+	return err
 }
 
 /*

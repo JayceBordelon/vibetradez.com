@@ -419,28 +419,31 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		market-data side is reachable (which is what the live quotes /
 		option chain code paths actually depend on).
 
-		Severity is `warn` rather than `fail` for refresh-token rejection.
-		Schwab refresh tokens roll every ~7 days and require manual
-		re-auth at /auth/schwab — a known operational state, not a code
-		defect, and one the deploy pipeline shouldn't block on. The
-		degraded surfaces (chart endpoint, live quotes) already render
-		empty / em-dash placeholders rather than crashing. Detail still
-		surfaces in the consolidated deploy email so it can't be missed.
+		Severity is `fail` on any token issue (rejected refresh, not
+		authorized). The token is shared with auto-execution, so when
+		it's dead the morning cron silently produces picks no one can
+		act on, the dashboard live cards die, and chart endpoints
+		return empty. `warn` masked all of that behind a green-ish
+		health row, so we now surface it as `fail` and let the deploy
+		pipeline gate on it. "Not configured" stays `warn` since
+		that's an env state, not a token state.
 	*/
 	if s.schwab != nil {
 		if s.schwab.IsConnected() {
 			tokStart := time.Now()
 			if _, err := s.schwab.ValidToken(); err != nil {
 				services["schwab_market_data"] = serviceHealth{
-					Status:  "warn",
-					Detail:  "refresh token rejected — visit /auth/schwab to re-authorize: " + err.Error(),
+					Status:  "fail",
+					Detail:  "refresh token rejected, visit /auth/schwab to re-authorize: " + err.Error(),
 					Latency: fmtLatency(time.Since(tokStart)),
 				}
+				allOK = false
 			} else {
 				services["schwab_market_data"] = serviceHealth{Status: "ok", Detail: "Authenticated", Latency: fmtLatency(time.Since(tokStart))}
 			}
 		} else {
-			services["schwab_market_data"] = serviceHealth{Status: "warn", Detail: "Configured but not authorized"}
+			services["schwab_market_data"] = serviceHealth{Status: "fail", Detail: "Configured but not authorized, visit /auth/schwab"}
+			allOK = false
 		}
 	} else {
 		services["schwab_market_data"] = serviceHealth{Status: "warn", Detail: "Not configured"}
@@ -613,26 +616,21 @@ func (s *Server) checkAnthropic() serviceHealth {
 /*
 checkSchwabTrading verifies the OAuth token covers the "Accounts and
 Trading Production" Schwab product. Hits /trader/v1/accounts/
-accountNumbers — the lightest endpoint on the Trader API surface.
+accountNumbers, the lightest endpoint on the Trader API surface.
 
-Severity is conditional on trading mode (executor.Mode):
-  - paper or executor nil: failures are `warn` (trading scope isn't
-    load-bearing yet; the warning is just a heads-up that re-auth is
-    required before flipping live).
-  - live: failures are `fail` so deploys are gated — without trading
-    scope the cron WILL try to place orders and they WILL bounce.
+Any token-related failure (not authorized, refresh rejected, 401/403
+on the scoped probe, non-200 from Schwab) returns `fail` regardless
+of trading mode. Paper vs live is irrelevant for the "is the token
+healthy" question, and a green-looking row when the token is dead
+hid today's outage from the deploy email. "Not configured" stays
+`warn` since that's an env state, not a token state.
 */
 func (s *Server) checkSchwabTrading(ctx context.Context) serviceHealth {
-	failSeverity := "warn"
-	if s.executor != nil && s.executor.Mode() == "live" {
-		failSeverity = "fail"
-	}
-
 	if s.schwab == nil {
 		return serviceHealth{Status: "warn", Detail: "Not configured"}
 	}
 	if !s.schwab.IsConnected() {
-		return serviceHealth{Status: failSeverity, Detail: "Schwab OAuth not authorized — visit /auth/schwab"}
+		return serviceHealth{Status: "fail", Detail: "Schwab OAuth not authorized, visit /auth/schwab"}
 	}
 
 	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -642,7 +640,7 @@ func (s *Server) checkSchwabTrading(ctx context.Context) serviceHealth {
 	start := time.Now()
 	resp, err := s.schwab.AuthenticatedDo("GET", "https://api.schwabapi.com/trader/v1/accounts/accountNumbers", nil)
 	if err != nil {
-		return serviceHealth{Status: failSeverity, Detail: "request failed: " + err.Error(), Latency: fmtLatency(time.Since(start))}
+		return serviceHealth{Status: "fail", Detail: "request failed: " + err.Error(), Latency: fmtLatency(time.Since(start))}
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -656,14 +654,14 @@ func (s *Server) checkSchwabTrading(ctx context.Context) serviceHealth {
 			added later but the token wasn't refreshed via /auth/schwab.
 		*/
 		return serviceHealth{
-			Status:  failSeverity,
-			Detail:  fmt.Sprintf("HTTP %d — token lacks trading scope; re-run /auth/schwab", resp.StatusCode),
+			Status:  "fail",
+			Detail:  fmt.Sprintf("HTTP %d, token lacks trading scope; re-run /auth/schwab", resp.StatusCode),
 			Latency: fmtLatency(time.Since(start)),
 		}
 	default:
 		return serviceHealth{
-			Status:  failSeverity,
-			Detail:  fmt.Sprintf("HTTP %d — Schwab Trader API unreachable", resp.StatusCode),
+			Status:  "fail",
+			Detail:  fmt.Sprintf("HTTP %d, Schwab Trader API unreachable", resp.StatusCode),
 			Latency: fmtLatency(time.Since(start)),
 		}
 	}
