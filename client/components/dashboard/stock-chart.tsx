@@ -456,47 +456,17 @@ export function StockChart({ symbol, timeframe, strikePrice, trade, summary }: S
             )}
 
             {/* Buy/sell drawn as full-height vertical reference lines so the
-                entry/exit moments are unambiguous on the chart, instead of
-                tiny dots that floated above the price line. Strokes use the
-                model brand colors and the labels stay anchored at the top. */}
-            {buyTime !== undefined && (
-              <ReferenceLine
-                yAxisId="price"
-                x={buyTime}
-                stroke="var(--gpt)"
-                strokeWidth={2}
-                strokeDasharray="3 3"
-                label={{
-                  value: buyPrice !== undefined ? `BUY $${buyPrice.toFixed(2)}` : "BUY",
-                  position: "insideTopLeft",
-                  fill: "var(--gpt)",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  offset: 6,
-                }}
-              />
-            )}
+                entry/exit moments are unambiguous on the chart. The price
+                dots at the candle level still anchor the exact buy/sell
+                level; the inline "BUY $XX.XX" / "SELL $XX.XX" text labels
+                were removed because they crowded the chart on mobile.
+                Strokes use the model brand colors. */}
+            {buyTime !== undefined && <ReferenceLine yAxisId="price" x={buyTime} stroke="var(--gpt)" strokeWidth={2} strokeDasharray="3 3" />}
             {buyTime !== undefined && buyPrice !== undefined && (
               <ReferenceDot yAxisId="price" x={buyTime} y={buyPrice} r={5} fill="var(--gpt)" stroke="var(--card)" strokeWidth={2} ifOverflow="extendDomain" />
             )}
 
-            {sellTime !== undefined && (
-              <ReferenceLine
-                yAxisId="price"
-                x={sellTime}
-                stroke="var(--red)"
-                strokeWidth={2}
-                strokeDasharray="3 3"
-                label={{
-                  value: sellPrice !== undefined ? `SELL $${sellPrice.toFixed(2)}` : "SELL",
-                  position: "insideTopRight",
-                  fill: "var(--red)",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  offset: 6,
-                }}
-              />
-            )}
+            {sellTime !== undefined && <ReferenceLine yAxisId="price" x={sellTime} stroke="var(--red)" strokeWidth={2} strokeDasharray="3 3" />}
             {sellTime !== undefined && sellPrice !== undefined && (
               <ReferenceDot yAxisId="price" x={sellTime} y={sellPrice} r={5} fill="var(--red)" stroke="var(--card)" strokeWidth={2} ifOverflow="extendDomain" />
             )}
