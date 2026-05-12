@@ -186,20 +186,25 @@ func migrate(db *sql.DB) error {
 
 		/*
 		Migrate the legacy executions schema (decision_id reference) to
-		the new trade_id reference. Drop the FK first so the column
-		rename doesn't trip the constraint checker, then drop the table
-		that's no longer load-bearing. Safe to run on a fresh DB; the
-		IF EXISTS clauses make every step idempotent.
+		the new trade_id reference. Drop the FK first so subsequent
+		work isn't blocked by the constraint checker, then ensure
+		trade_id exists, copy any decision_id values into trade_id
+		(safe even if both columns coexist in a snapshot from a
+		partially-migrated state), and only THEN drop decision_id.
+		The earlier shape had a rename branch that could lose data if
+		both columns ever existed simultaneously; this shape preserves
+		any non-null decision_id row regardless of how the DB arrived
+		at the pre-migration state. Safe to run on a fresh DB; every
+		step is idempotent.
 		*/
 		ALTER TABLE executions DROP CONSTRAINT IF EXISTS executions_decision_id_fkey;
+		ALTER TABLE executions ADD COLUMN IF NOT EXISTS trade_id INTEGER;
 		DO $$
 		BEGIN
-			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='executions' AND column_name='decision_id')
-				AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='executions' AND column_name='trade_id') THEN
-				ALTER TABLE executions RENAME COLUMN decision_id TO trade_id;
+			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='executions' AND column_name='decision_id') THEN
+				UPDATE executions SET trade_id = decision_id WHERE trade_id IS NULL AND decision_id IS NOT NULL;
 			END IF;
 		END $$;
-		ALTER TABLE executions ADD COLUMN IF NOT EXISTS trade_id INTEGER;
 		ALTER TABLE executions DROP COLUMN IF EXISTS decision_id;
 		DROP INDEX IF EXISTS idx_executions_decision_id;
 		DROP TABLE IF EXISTS execution_decisions;

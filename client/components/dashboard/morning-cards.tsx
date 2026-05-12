@@ -72,11 +72,20 @@ function MorningCard({ dt, liveQuotes, date, execution }: MorningCardProps) {
   const contractDelta = currentContractPrice !== null ? currentContractPrice - trade.estimated_price : null;
   const contractDeltaPct = contractDelta !== null && trade.estimated_price > 0 ? (contractDelta / trade.estimated_price) * 100 : null;
 
+  /*
+  Hide the divergence percent when it crosses into the "Data check"
+  band so the cell stops printing nonsense numbers like +44,000% or
+  -99%. The amber badge below already labels the row as suspect; an
+  inline percent on top of that is just noise that reads as a real
+  return. The dollar Mark stays so the reader can still see the live
+  premium that Schwab is reporting.
+  */
+  const showDeltaPct = contractDeltaPct !== null && Math.abs(contractDeltaPct) <= 500;
   const currentValue =
     currentContractPrice !== null ? (
       <span className={cn("text-sm font-semibold tabular-nums", pnlColor(contractDelta ?? 0))}>
         {fmtMoney(currentContractPrice)}
-        {contractDeltaPct !== null && (
+        {showDeltaPct && contractDeltaPct !== null && (
           <span className="ml-1 text-[11px]">
             ({contractDeltaPct > 0 ? "+" : ""}
             {contractDeltaPct.toFixed(1)}%)

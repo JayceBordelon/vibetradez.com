@@ -133,10 +133,17 @@ func TestHandleQualifyingPick_RejectedPersistsReasonAndEmails(t *testing.T) {
 		t.Fatalf("HandleQualifyingPick: %v", err)
 	}
 
-	if len(store.updates) != 1 {
-		t.Fatalf("expected 1 status update, got %d: %+v", len(store.updates), store.updates)
+	// Expect 2 updates: the orphan-prevention immediate write
+	// (working + orderID, set right after PlaceOrder returns) and the
+	// terminal rejected update after GetOrder confirms the broker
+	// rejection.
+	if len(store.updates) != 2 {
+		t.Fatalf("expected 2 status updates, got %d: %+v", len(store.updates), store.updates)
 	}
-	upd := store.updates[0]
+	if store.updates[0].status != "working" || store.updates[0].orderID != "ORDER-XYZ" {
+		t.Errorf("first update should persist orderID with working status, got %+v", store.updates[0])
+	}
+	upd := store.updates[1]
 	if upd.status != "rejected" {
 		t.Errorf("status: want rejected, got %q", upd.status)
 	}
@@ -182,8 +189,10 @@ func TestHandleQualifyingPick_RejectedFallsBackToRawStatusWhenNoDescription(t *t
 		t.Fatalf("HandleQualifyingPick: %v", err)
 	}
 
-	if len(store.updates) != 1 || store.updates[0].errMessage != "EXPIRED" {
-		t.Fatalf("expected fallback to RawStatus EXPIRED in errMessage, got %+v", store.updates)
+	// 2 updates: orphan-prevention immediate working write, then
+	// terminal rejected with EXPIRED as the fallback errMessage.
+	if len(store.updates) != 2 || store.updates[1].errMessage != "EXPIRED" {
+		t.Fatalf("expected 2 updates with EXPIRED in the rejected errMessage, got %+v", store.updates)
 	}
 }
 
@@ -234,10 +243,14 @@ func TestHandleQualifyingPick_FilledPersistsOrderIDAndSendsReceipt(t *testing.T)
 		t.Fatalf("HandleQualifyingPick: %v", err)
 	}
 
-	if len(store.updates) != 1 {
-		t.Fatalf("expected 1 status update, got %d", len(store.updates))
+	// 2 updates: orphan-prevention working write, then terminal filled.
+	if len(store.updates) != 2 {
+		t.Fatalf("expected 2 status updates, got %d", len(store.updates))
 	}
-	upd := store.updates[0]
+	if store.updates[0].status != "working" || store.updates[0].orderID != "ORDER-FILL" {
+		t.Errorf("first update should persist orderID with working status, got %+v", store.updates[0])
+	}
+	upd := store.updates[1]
 	if upd.status != "filled" || upd.orderID != "ORDER-FILL" {
 		t.Errorf("filled update: want status=filled orderID=ORDER-FILL, got %+v", upd)
 	}
@@ -510,12 +523,17 @@ func TestHandleQualifyingPick_WorkingPersistsOrderID(t *testing.T) {
 	if err := svc.HandleQualifyingPick(context.Background(), sampleTrade(), 5); err != nil {
 		t.Fatalf("HandleQualifyingPick: %v", err)
 	}
-	if len(store.updates) != 1 {
-		t.Fatalf("expected 1 status update, got %d", len(store.updates))
+	// 2 updates: orphan-prevention working write, then redundant
+	// working write after GetOrder confirms broker still working. The
+	// second write is harmless (same row state) and the test asserts
+	// both for clarity.
+	if len(store.updates) != 2 {
+		t.Fatalf("expected 2 status updates, got %d", len(store.updates))
 	}
-	upd := store.updates[0]
-	if upd.status != "working" || upd.orderID != "ORDER-WORK" {
-		t.Errorf("working update: want status=working orderID=ORDER-WORK, got %+v", upd)
+	for i, upd := range store.updates {
+		if upd.status != "working" || upd.orderID != "ORDER-WORK" {
+			t.Errorf("update[%d]: want status=working orderID=ORDER-WORK, got %+v", i, upd)
+		}
 	}
 	if len(mail.sent) != 0 {
 		t.Errorf("expected no email on working state, got %d", len(mail.sent))

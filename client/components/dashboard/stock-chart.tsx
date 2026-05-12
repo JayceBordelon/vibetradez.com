@@ -133,8 +133,33 @@ export function StockChart({ symbol, timeframe, strikePrice, trade, summary }: S
         const points: DataPoint[] = res.candles.map((c) => {
           let optionMark: number | null = null;
           if (trd && entryPremium > 0 && entryUnderlying > 0) {
+            /*
+            Bail out when the candle's underlying drifts more than
+            50% from the entry-anchor underlying. The linear-delta
+            model is only meaningful inside a reasonable band around
+            entry; when the picker saved a stale current_price for
+            the underlying (today's MU/WEN class of bug, where saved
+            entryUnderlying was many multiples off from real
+            candles), the overlay explodes off-axis and crushes the
+            real stock line. Render null instead so the chart only
+            shows the underlying, not a fictional premium curve.
+            */
+            const drift = Math.abs(c.close - entryUnderlying) / entryUnderlying;
+            if (drift > 0.5) {
+              return {
+                time: c.time,
+                label: formatTime(c.time),
+                close: c.close,
+                open: c.open,
+                high: c.high,
+                low: c.low,
+                volume: c.volume,
+                optionMark: null,
+              };
+            }
             const raw = entryPremium + delta * (c.close - entryUnderlying);
-            optionMark = Math.max(0.01, raw * correction);
+            const ceiling = Math.max(entryPremium * 5, Math.abs(c.close - (trd?.strike_price ?? entryUnderlying)) * 1.2);
+            optionMark = Math.min(ceiling, Math.max(0.01, raw * correction));
           }
           return {
             time: c.time,

@@ -1,6 +1,7 @@
 package schwab
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -229,19 +230,7 @@ func (c *Client) tokenRequest(data url.Values) (*tokenResponse, error) {
 
 // AuthenticatedGet performs an authenticated GET request to the Schwab API.
 func (c *Client) AuthenticatedGet(url string) (*http.Response, error) {
-	token, err := c.ValidToken()
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/json")
-
-	return c.httpClient.Do(req)
+	return c.authenticatedRequest("GET", url, nil)
 }
 
 /*
@@ -252,18 +241,82 @@ reader and the Content-Type header gets defaulted to application/json
 so callers don't have to repeat themselves.
 */
 func (c *Client) AuthenticatedDo(method, url string, body io.Reader) (*http.Response, error) {
-	token, err := c.ValidToken()
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest(method, url, body)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/json")
+	return c.authenticatedRequest(method, url, body)
+}
+
+/*
+authenticatedRequest wraps a Schwab API call in a small retry loop
+for transient HTTP failures (429 rate-limited and 5xx gateway). Each
+retry refreshes the access token before reissuing so a token that
+expired mid-basket gets a clean second chance. 401/403 are NOT
+retried (real auth failure, retrying just wastes time). Network
+errors before any response are retried up to maxRetryAttempts as
+well. The basket selector previously aborted on the first transient
+blip from Schwab; with this in place a single rate-limit spike on
+account-hash or place-order no longer kills every remaining pick.
+*/
+func (c *Client) authenticatedRequest(method, url string, body io.Reader) (*http.Response, error) {
+	const (
+		maxRetryAttempts = 3
+		baseBackoff      = 250 * time.Millisecond
+	)
+
+	var bodyBytes []byte
 	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+		var err error
+		bodyBytes, err = io.ReadAll(body)
+		if err != nil {
+			return nil, fmt.Errorf("read request body: %w", err)
+		}
 	}
-	return c.httpClient.Do(req)
+
+	var lastResp *http.Response
+	var lastErr error
+	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
+		token, err := c.ValidToken()
+		if err != nil {
+			return nil, err
+		}
+
+		var reqBody io.Reader
+		if bodyBytes != nil {
+			reqBody = bytes.NewReader(bodyBytes)
+		}
+		req, err := http.NewRequest(method, url, reqBody)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Accept", "application/json")
+		if bodyBytes != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			if attempt < maxRetryAttempts {
+				time.Sleep(baseBackoff * time.Duration(1<<(attempt-1)))
+				continue
+			}
+			return nil, err
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError {
+			_ = resp.Body.Close()
+			lastResp = resp
+			if attempt < maxRetryAttempts {
+				log.Printf("Schwab: retrying %s %s after HTTP %d (attempt %d/%d)", method, url, resp.StatusCode, attempt, maxRetryAttempts)
+				time.Sleep(baseBackoff * time.Duration(1<<(attempt-1)))
+				continue
+			}
+		}
+
+		return resp, nil
+	}
+
+	if lastResp != nil {
+		return lastResp, nil
+	}
+	return nil, lastErr
 }

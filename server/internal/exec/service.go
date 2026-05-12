@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"vibetradez.com/internal/email"
@@ -61,14 +62,27 @@ type ServiceConfig struct {
 
 /*
 Service orchestrates the auto-execution lifecycle. One instance per
-process; safe for concurrent use across goroutines (only mutable state
-is held inside the trader and store, both of which are thread-safe).
+process. Public methods that read/write executions are serialized
+through `mu` because the cron schedule overlaps: at 15:55 ET the
+per-minute reconcile cron AND the position-close cron both fire on
+the same minute (robfig/cron runs each job in its own goroutine),
+and either path can read 'working' positions and then mutate them.
+Without the mutex, the close cron can read positions before the
+reconcile cron flips a just-filled order from 'working' to 'filled',
+which leaves the position open when the close path skips it.
+
+The lock is held across the full method body (including Schwab
+network calls) on purpose: these methods only run sequentially in
+practice (once a minute reconcile, once a day morning/close), so the
+extra latency cost is zero and the simplicity of "one big lock"
+beats trying to scope it tighter.
 */
 type Service struct {
 	store  DecisionStore
 	trader TraderClient
 	mail   MailSender
 	cfg    ServiceConfig
+	mu     sync.Mutex
 }
 
 func NewService(store DecisionStore, trader TraderClient, mail MailSender, cfg ServiceConfig) *Service {
@@ -93,6 +107,8 @@ NOT pre-check available funds — callers needing the cash gate must
 go through HandleQualifyingPicks.
 */
 func (s *Service) HandleQualifyingPick(ctx context.Context, t *trades.Trade, tradeID int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.cfg.Recipient == "" {
 		return errors.New("execution recipient not configured")
 	}
@@ -130,6 +146,8 @@ case where Schwab actually saw the order). Caller logs the count;
 nothing on the success path requires the number.
 */
 func (s *Service) HandleQualifyingPicks(ctx context.Context, picks []trades.Trade) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if len(picks) == 0 {
 		return 0, nil
 	}
@@ -278,6 +296,19 @@ func (s *Service) handleSinglePick(ctx context.Context, t *trades.Trade, tradeID
 		return "", fmt.Errorf("place open order: %w", err)
 	}
 
+	/*
+		Persist the broker order id IMMEDIATELY after PlaceOrder returns,
+		before any further work. If the process crashes between PlaceOrder
+		succeeding at the broker and the GetOrder status write below, the
+		order is live at Schwab but used to be invisible to us, no
+		reconcile, no kill-switch, no close. Flipping the row to
+		'working' with the order id makes the per-minute reconcile cron
+		pick it up on the next tick if anything downstream fails.
+	*/
+	if err := s.store.UpdateExecutionStatus(execID, "working", orderID, nil, 0, ""); err != nil {
+		log.Printf("execution: warning: failed to persist orderID mid-flight (trade_id=%d, order=%s): %v", tradeID, orderID, err)
+	}
+
 	st, err := s.trader.GetOrder(ctx, hash, orderID)
 	if err != nil {
 		_ = s.store.UpdateExecutionStatus(execID, "failed", orderID, nil, 0, err.Error())
@@ -332,6 +363,8 @@ Terminal-not-filled outcomes (REJECTED / CANCELED / EXPIRED) flip to
 propagated, the cron must keep running.
 */
 func (s *Service) ReconcileOpenOrders(ctx context.Context, tradeDate string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("execution: ReconcileOpenOrders top-level panic: %v", r)
@@ -413,6 +446,8 @@ skip, even if the morning open path crashed, this cron will fire as
 long as the binary is up.
 */
 func (s *Service) CloseAllPositionsForDate(ctx context.Context, tradeDate string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("execution: CloseAllPositionsForDate top-level panic: %v", r)
@@ -472,6 +507,12 @@ func (s *Service) closeOne(ctx context.Context, p *OpenPosition) {
 		s.sendCloseFailedEmail(p, fmt.Sprintf("first PlaceOrder: %v", err))
 		return
 	}
+	// Same orphan-prevention rationale as the open path: persist the
+	// broker order id immediately so a crash before pollFilled returns
+	// leaves a 'working' row the reconcile cron can finish.
+	if err := s.store.UpdateExecutionStatus(execID, "working", orderID, nil, 0, ""); err != nil {
+		log.Printf("execution: warning: failed to persist close orderID mid-flight (trade_id=%d, order=%s): %v", p.Execution.TradeID, orderID, err)
+	}
 	if s.pollFilled(ctx, hash, orderID, 8, 15*time.Second) {
 		s.recordCloseAndEmail(ctx, p, execID, hash, orderID)
 		return
@@ -483,6 +524,10 @@ func (s *Service) closeOne(ctx context.Context, p *OpenPosition) {
 		_ = s.store.UpdateExecutionStatus(execID, "failed", orderID, nil, 0, "cancel-replace failed: "+err.Error())
 		s.sendCloseFailedEmail(p, fmt.Sprintf("cancel-replace PlaceOrder: %v", err))
 		return
+	}
+	// Persist the replacement order id immediately, same rationale.
+	if err := s.store.UpdateExecutionStatus(execID, "working", orderID2, nil, 0, ""); err != nil {
+		log.Printf("execution: warning: failed to persist cancel-replace orderID mid-flight (trade_id=%d, order=%s): %v", p.Execution.TradeID, orderID2, err)
 	}
 	if s.pollFilled(ctx, hash, orderID2, 8, 15*time.Second) {
 		s.recordCloseAndEmail(ctx, p, execID, hash, orderID2)

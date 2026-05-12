@@ -25,8 +25,9 @@ REQUIREMENTS:
 - NO SINGLE CONTRACT should cost more than $200 (so strike prices should be chosen accordingly)
 - Include both CALL and PUT opportunities based on sentiment and market analysis
 - Provide a clear thesis for each trade explaining WHY it should be made
-- Use REAL prices from get_stock_quotes for current_price
-- Use REAL option mark prices from get_option_chain for estimated_price, do NOT guess
+- Use REAL prices from get_stock_quotes for current_price. The current_price field MUST come from a get_stock_quotes call you made in THIS conversation, NEVER from your training data or web search. If you do not have a fresh quote for a ticker, call get_stock_quotes again before committing the pick.
+- The chosen strike_price MUST be within 25%% of the current_price you report. A "slightly OTM" strike on a $200 stock means a $200-$220 strike, never a $30 or $500 strike. If your strike is further than 25%% from spot, you are pricing two different worlds; re-query get_stock_quotes and recompute.
+- Use REAL option mark prices from get_option_chain for estimated_price, do NOT guess. The estimated_price MUST come from the matching contract returned by get_option_chain in THIS conversation.
 - Verify earnings dates and any major news events via web search
 
 CONVICTION SCORING:

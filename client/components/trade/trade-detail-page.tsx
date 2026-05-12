@@ -116,7 +116,13 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
   const hasClosedExecution = execution?.state === "closed" && execution.open_price > 0 && execution.close_price > 0;
   const entryPrice = hasClosedExecution ? execution.open_price : (summary?.entry_price ?? 0);
   const closingPrice = hasClosedExecution ? execution.close_price : (summary?.closing_price ?? 0);
-  const pnl = hasClosedExecution ? execution.realized_pnl : summary ? (summary.closing_price - summary.entry_price) * 100 : 0;
+  /*
+  P&L is meaningful only when the entry price is positive. Without
+  this guard, a summary that landed with entry_price=0 (the recent
+  picker stale-quote bug class) renders as pnl = closing_price * 100,
+  a fake profit that turns the EOD badge green.
+  */
+  const pnl = hasClosedExecution ? execution.realized_pnl : summary && summary.entry_price > 0 ? (summary.closing_price - summary.entry_price) * 100 : 0;
   const pctChange = entryPrice > 0 ? ((closingPrice - entryPrice) / entryPrice) * 100 : 0;
   const stockPctChange = summary && summary.stock_open > 0 ? ((summary.stock_close - summary.stock_open) / summary.stock_open) * 100 : 0;
 

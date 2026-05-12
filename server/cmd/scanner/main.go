@@ -466,18 +466,77 @@ func sameDate(a, b time.Time) bool {
 }
 
 /*
+validatePickFields drops picks with malformed required fields. Claude
+sometimes returns picks where required numeric fields decoded as zero
+(missing JSON key, or a literal 0 from a hallucinated response), and
+those rows silently propagate to the DB, the morning email, and the
+auto-executor's quantity/budget math. Reject anything where:
+  - Symbol is empty
+  - ContractType is not CALL or PUT
+  - StrikePrice, EstimatedPrice, or CurrentPrice is non-positive
+  - DTE is negative
+  - Expiration is not a 10-character YYYY-MM-DD string
+*/
+func validatePickFields(picks []trades.Trade) []trades.Trade {
+	keep := make([]trades.Trade, 0, len(picks))
+	for _, p := range picks {
+		reasons := []string{}
+		if p.Symbol == "" {
+			reasons = append(reasons, "empty symbol")
+		}
+		if p.ContractType != "CALL" && p.ContractType != "PUT" {
+			reasons = append(reasons, fmt.Sprintf("contract_type=%q", p.ContractType))
+		}
+		if p.StrikePrice <= 0 {
+			reasons = append(reasons, fmt.Sprintf("strike=%v", p.StrikePrice))
+		}
+		if p.EstimatedPrice <= 0 {
+			reasons = append(reasons, fmt.Sprintf("estimated_price=%v", p.EstimatedPrice))
+		}
+		if p.CurrentPrice <= 0 {
+			reasons = append(reasons, fmt.Sprintf("current_price=%v", p.CurrentPrice))
+		}
+		if p.DTE < 0 {
+			reasons = append(reasons, fmt.Sprintf("dte=%d", p.DTE))
+		}
+		if len(p.Expiration) != 10 {
+			reasons = append(reasons, fmt.Sprintf("expiration=%q", p.Expiration))
+		}
+		if len(reasons) > 0 {
+			log.Printf("pick validation: DROPPING #%d %s (%s)", p.Rank, p.Symbol, strings.Join(reasons, ", "))
+			continue
+		}
+		keep = append(keep, p)
+	}
+	return keep
+}
+
+/*
+renumberRanks restores 1..N contiguous rank ordering after picks are
+dropped by validation. Without this the basket selector and the
+morning email's "#3 of 10" labels both surface gaps that confuse the
+reader. Stable in the order picks arrive: callers rely on the picker
+already emitting picks sorted by Claude's intended rank.
+*/
+func renumberRanks(picks []trades.Trade) []trades.Trade {
+	for i := range picks {
+		picks[i].Rank = i + 1
+	}
+	return picks
+}
+
+/*
 validatePicksAgainstSpot drops picks whose strike is more than 25%
 away from current Schwab spot. Claude has produced internally
 inconsistent picks where its `current_price` field disagrees wildly
 with what Schwab's live feed reports (e.g., picking a $115 strike on
 a name Schwab shows at $750), which then surfaces on the dashboard as
 absurd "Current" marks like +44,000% gains on a deep-ITM contract the
-picker thought was slightly OTM. Cross-checking against the same
-Schwab data source the dashboard reads from catches that class of bug
-before the morning email ships or the executor tries to act on it. A
-nil schwab client (local dev) is a no-op pass-through, as is a
-GetQuotes failure (we prefer shipping unvalidated picks to dropping
-everything on a transient probe error).
+picker thought was slightly OTM. Uses GetQuotesUncached so the guard
+is an independent probe, not a read of the same 45s-cached batch the
+picker tools just warmed. A nil schwab client (local dev) is a no-op
+pass-through, as is a GetQuotes failure (we prefer shipping
+unvalidated picks to dropping everything on a transient probe error).
 */
 func validatePicksAgainstSpot(picks []trades.Trade, schwabClient *schwab.Client) []trades.Trade {
 	const maxStrikeDistance = 0.25
@@ -493,9 +552,9 @@ func validatePicksAgainstSpot(picks []trades.Trade, schwabClient *schwab.Client)
 			symbols = append(symbols, p.Symbol)
 		}
 	}
-	quotes, err := schwabClient.GetQuotes(symbols)
+	quotes, err := schwabClient.GetQuotesUncached(symbols)
 	if err != nil {
-		log.Printf("pick validation: GetQuotes failed, passing picks through unchecked: %v", err)
+		log.Printf("pick validation: GetQuotesUncached failed, passing picks through unchecked: %v", err)
 		return picks
 	}
 
@@ -589,12 +648,14 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 	log.Printf("%s produced %d picks", modelLabel, len(topTrades))
 
 	originalCount := len(topTrades)
+	topTrades = validatePickFields(topTrades)
 	topTrades = validatePicksAgainstSpot(topTrades, schwabClient)
+	topTrades = renumberRanks(topTrades)
 	if dropped := originalCount - len(topTrades); dropped > 0 {
-		log.Printf("pick validation: dropped %d/%d picks with strikes too far from spot", dropped, originalCount)
+		log.Printf("pick validation: dropped %d/%d picks (field validation + strike-spot)", dropped, originalCount)
 		if dropped*2 > originalCount {
 			sendErrorNotification(cfg, db, emailClient, fmt.Sprintf(
-				"Pick validation dropped %d of %d picks (>50%%) for strike-spot divergence. Likely picker saw stale quotes. Check Claude tool logs for the morning run.",
+				"Pick validation dropped %d of %d picks (>50%%). Likely picker saw stale quotes or returned malformed JSON. Check Claude tool logs for the morning run.",
 				dropped, originalCount))
 		}
 	}

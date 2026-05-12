@@ -151,14 +151,30 @@ type priceHistoryRaw struct {
 
 // GetQuotes fetches real-time quotes for the given symbols. Results are cached.
 func (c *Client) GetQuotes(symbols []string) (map[string]StockQuote, error) {
+	return c.getQuotes(symbols, true)
+}
+
+/*
+GetQuotesUncached forces a fresh Schwab fetch, bypassing the 45s cache.
+Used by the pick-validation guard so it acts as an independent
+cross-check on Claude's view of spot rather than reading the same
+cached batch the picker just warmed.
+*/
+func (c *Client) GetQuotesUncached(symbols []string) (map[string]StockQuote, error) {
+	return c.getQuotes(symbols, false)
+}
+
+func (c *Client) getQuotes(symbols []string, useCache bool) (map[string]StockQuote, error) {
 	if len(symbols) == 0 {
 		return nil, nil
 	}
 
 	symbolStr := strings.Join(symbols, ",")
 	cacheKey := "quotes:" + symbolStr
-	if cached, ok := cacheGet(cacheKey); ok {
-		return cached.(map[string]StockQuote), nil
+	if useCache {
+		if cached, ok := cacheGet(cacheKey); ok {
+			return cached.(map[string]StockQuote), nil
+		}
 	}
 
 	u := fmt.Sprintf("%s/quotes?symbols=%s&fields=quote", marketDataBase, url.QueryEscape(symbolStr))

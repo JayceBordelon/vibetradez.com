@@ -110,7 +110,16 @@ export function DashboardShell() {
   once summaries land.
   */
   const loadDay = useCallback(() => {
-    api.getTrades().then(setRawData);
+    api
+      .getTrades()
+      .then(setRawData)
+      .catch(() => {
+        /*
+        Swallow transient fetch failures so a single 5xx doesn't
+        silence the auto-refresh chain. The existing rawData stays
+        rendered; the next interval will retry.
+        */
+      });
   }, []);
 
   useEffect(() => {
@@ -130,24 +139,30 @@ export function DashboardShell() {
     if (hasSummaries) return;
 
     /*
-    Merge new options/quotes over the prior state instead of replacing
-    wholesale. A single poll where one Schwab option-chain call fails
-    omits that contract from the response — replacing the whole map
-    would blank a previously-good "Current" card until the next clean
-    poll. Spreading new over prev means the card keeps its last-known
-    mark when the latest poll didn't return one. Errors from the poll
-    itself are swallowed so the prior state survives the failure too.
+    Merge new options/quotes over the prior state when Schwab is
+    healthy so a single failing chain call doesn't blank a
+    previously-good "Current" card. But when the server reports
+    `connected: false` (Schwab token dead or unconfigured) we replace
+    the maps wholesale, otherwise stale marks from before the token
+    died masquerade as fresh data and the dashboard looks alive when
+    it isn't. Errors from the poll itself are swallowed so the prior
+    state survives a transient HTTP blip.
     */
     const poll = () =>
       api
         .getLiveQuotes()
         .then((next) => {
           if (!next || typeof next !== "object") return;
-          setLiveQuotes((prev) => ({
-            ...next,
-            quotes: { ...(prev?.quotes ?? {}), ...(next.quotes ?? {}) },
-            options: { ...(prev?.options ?? {}), ...(next.options ?? {}) },
-          }));
+          setLiveQuotes((prev) => {
+            if (next.connected === false) {
+              return { ...next, quotes: {}, options: {} };
+            }
+            return {
+              ...next,
+              quotes: { ...(prev?.quotes ?? {}), ...(next.quotes ?? {}) },
+              options: { ...(prev?.options ?? {}), ...(next.options ?? {}) },
+            };
+          });
         })
         .catch(() => {});
     poll();
