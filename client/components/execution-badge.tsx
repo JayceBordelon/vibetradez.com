@@ -17,6 +17,8 @@ State rules:
   - failed: shows "open failed" with neutral styling
 */
 
+import { Minus } from "lucide-react";
+
 import { fmtMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Execution, LiveQuotesResponse, Trade } from "@/types/trade";
@@ -96,7 +98,7 @@ function ExecutionPill({ execution, liveMark, className }: { execution: Executio
   return (
     <span
       className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium", modeColors, className)}
-      title={isLive ? "Real position taken via Schwab" : "Paper-trade — no real money committed"}
+      title={isLive ? "Real position taken via Schwab" : "Paper-trade: no real money committed"}
     >
       <span className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
       <span>{label}</span>
@@ -126,12 +128,12 @@ function ExecutionPanel({ execution, liveMark, className }: { execution: Executi
 
   /*
   Third stat slot is dual-purpose: realized P&L when closed, live
-  unrealized P&L when holding-with-mark, dash otherwise. Using the
-  same column instead of a separate 4th stat keeps the panel layout
-  identical across states.
+  unrealized P&L when holding-with-mark, NoValue placeholder
+  otherwise. Using the same column instead of a separate 4th stat
+  keeps the panel layout identical across states.
   */
   let pnlLabel = "Realized P&L";
-  let pnlValue = "—";
+  let pnlValue: React.ReactNode = <NoValue />;
   let pnlValueClass = "";
   if (state === "closed") {
     pnlValue = `${realized_pnl > 0 ? "+" : ""}${fmtMoney(realized_pnl)}`;
@@ -144,10 +146,10 @@ function ExecutionPanel({ execution, liveMark, className }: { execution: Executi
 
   /*
   Close column shows live mark on holding-with-mark so the user can
-  see the contract is actually moving — otherwise it's an em-dash
-  until the 3:55pm cron lands the real close.
+  see the contract is moving. Otherwise renders the NoValue
+  placeholder until the 3:55pm cron lands the real close.
   */
-  let closeValue = "—";
+  let closeValue: React.ReactNode = <NoValue />;
   if (close_price > 0) {
     closeValue = fmtMoney(close_price);
   } else if (state === "holding" && liveMark != null && liveMark > 0) {
@@ -160,25 +162,35 @@ function ExecutionPanel({ execution, liveMark, className }: { execution: Executi
       <div className={cn("flex items-center justify-between border-b px-4 py-2 text-xs font-semibold uppercase tracking-wider", headerColors)}>
         <span className="inline-flex items-center gap-2">
           <span className="inline-block h-2 w-2 rounded-full bg-current" />
-          {headerLabel} — {mode}
+          {headerLabel} · {mode}
         </span>
         <span>{state}</span>
       </div>
       <div className="grid grid-cols-3 gap-4 p-4">
-        <Stat label="Entry" value={open_price > 0 ? fmtMoney(open_price) : "—"} sub={entrySub} />
+        <Stat label="Entry" value={open_price > 0 ? fmtMoney(open_price) : <NoValue />} sub={entrySub} />
         <Stat label="Close" value={closeValue} sub={closeSubResolved} />
         <Stat label={pnlLabel} value={pnlValue} valueClassName={pnlValueClass} />
       </div>
       {!isLive && (
         <div className="border-t px-4 py-2 text-[11px] text-muted-foreground">
-          Paper-mode position — no real capital is committed. Fill prices use the live Schwab option mark; real-money fills would include slippage and bid/ask spread.
+          Paper-mode position: no real capital is committed. Fill prices use the live Schwab option mark. Real-money fills would include slippage and bid/ask spread.
         </div>
       )}
     </div>
   );
 }
 
-function Stat({ label, value, sub, valueClassName }: { label: string; value: string; sub?: string | null; valueClassName?: string }) {
+/**
+NoValue renders a small low-opacity minus icon as the placeholder for
+"not applicable yet" execution states (submitted but unfilled, holding
+without a live mark, etc.). Distinct from the dashboard's Skeleton
+pulse, which means "live data is loading and will arrive shortly".
+*/
+function NoValue() {
+  return <Minus className="inline-block h-4 w-4 align-middle text-muted-foreground/40" aria-hidden />;
+}
+
+function Stat({ label, value, sub, valueClassName }: { label: string; value: React.ReactNode; sub?: string | null; valueClassName?: string }) {
   return (
     <div>
       <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>

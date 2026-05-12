@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
 import { Metric } from "@/components/ui/metric";
+import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 import { calcBreakeven, calcMaxLoss, calcMoneyness, sentimentColor, sentimentLabel } from "@/lib/calculations";
 import { fmt, fmtMoney, fmtPctDec, fmtPnlInt, pnlColor } from "@/lib/format";
@@ -322,7 +323,7 @@ function LivePanel({ trade, liveQuotes }: { trade: Trade; liveQuotes: LiveQuotes
               currentPrice !== null ? (
                 <span className={cn("text-sm font-semibold tabular-nums", pnlColor(contractDelta ?? 0))}>{fmtMoney(currentPrice)}</span>
               ) : (
-                <span className="text-sm font-medium text-muted-foreground">—</span>
+                <Skeleton className="inline-block h-4 w-16 align-middle" />
               )
             }
           />
@@ -334,7 +335,7 @@ function LivePanel({ trade, liveQuotes }: { trade: Trade; liveQuotes: LiveQuotes
                   {fmtMoney(liveOption.bid)} / {fmtMoney(liveOption.ask)}
                 </span>
               ) : (
-                <span className="text-sm font-medium text-muted-foreground">—</span>
+                <Skeleton className="inline-block h-4 w-20 align-middle" />
               )
             }
           />
@@ -347,13 +348,13 @@ function LivePanel({ trade, liveQuotes }: { trade: Trade; liveQuotes: LiveQuotes
                   {stockDeltaPct !== null && <span className="ml-1 text-xs font-medium text-muted-foreground">({fmtPctDec(stockDeltaPct)})</span>}
                 </span>
               ) : (
-                <span className="text-sm font-medium text-muted-foreground">—</span>
+                <Skeleton className="inline-block h-4 w-20 align-middle" />
               )
             }
           />
           <Metric
             label="Volume"
-            value={liveOption ? <span className="text-sm font-medium tabular-nums">{liveOption.volume.toLocaleString()}</span> : <span className="text-sm font-medium text-muted-foreground">—</span>}
+            value={liveOption ? <span className="text-sm font-medium tabular-nums">{liveOption.volume.toLocaleString()}</span> : <Skeleton className="inline-block h-4 w-14 align-middle" />}
           />
         </div>
 

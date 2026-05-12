@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
+import { AlertTriangle, ArrowRight } from "lucide-react";
 import { motion, type Variants } from "motion/react";
 import Link from "next/link";
 
@@ -8,6 +8,7 @@ import { ExecutionBadge, findExecutionForTrade, liveMarkForTrade } from "@/compo
 import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { calcMoneyness } from "@/lib/calculations";
 import { fmtMoney, fmtMoneyInt, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -59,10 +60,11 @@ function MorningCard({ dt, liveQuotes, date, execution }: MorningCardProps) {
 
   /**
   Live option mark for "current contract price". Backend keys are
-  "<SYMBOL>|<CALL|PUT>|<strike formatted to 2dp>|<expiration>" — see
-  server.go:846 — so reconstruct the same key here. Falls back to
-  null (em-dash) when Schwab isn't connected or the contract dropped
-  off the chain.
+  "<SYMBOL>|<CALL|PUT>|<strike formatted to 2dp>|<expiration>" (see
+  server.go:846), so reconstruct the same key here. Falls back to
+  null when Schwab isn't connected or the contract dropped off the
+  chain; the card then renders a Skeleton pulse so the missing slot
+  reads as "loading" rather than "absent".
   */
   const optionKey = `${trade.symbol}|${trade.contract_type}|${trade.strike_price.toFixed(2)}|${trade.expiration}`;
   const liveOption = liveQuotes?.options?.[optionKey] ?? null;
@@ -82,11 +84,23 @@ function MorningCard({ dt, liveQuotes, date, execution }: MorningCardProps) {
         )}
       </span>
     ) : (
-      <span className="text-sm font-medium text-muted-foreground">—</span>
+      <Skeleton className="inline-block h-7 w-20 align-middle" />
     );
 
   const riskBadgeVariant: "destructive" | "outline" | "secondary" = trade.risk_level === "HIGH" ? "destructive" : trade.risk_level === "MEDIUM" ? "outline" : "secondary";
   const showScore = trade.score > 0;
+  /*
+  Anomaly heuristic: a >500% gain on a short-DTE OTM contract almost
+  always means Schwab's live mark and Claude's saved estimate are
+  pricing different worlds (stale picker quote, mid-day data glitch,
+  or wrong strike). Real legit wins (a 2-3x return on a directional
+  call) stay well under the threshold. Pure decays produce negative
+  deltas so they never trigger this. The picker-side validation drops
+  these picks at save time as of the schwab-live-quote-fixes branch;
+  this badge is the defense-in-depth for picks that slipped through
+  or for live quotes that drift wildly post-save.
+  */
+  const isAnomalousDivergence = contractDeltaPct !== null && contractDeltaPct > 500;
 
   return (
     <Link href={tradeHref(trade.symbol, date)} className="block">
@@ -100,6 +114,16 @@ function MorningCard({ dt, liveQuotes, date, execution }: MorningCardProps) {
             </Badge>
             <Badge variant={moneyness.variant}>{moneyness.label}</Badge>
             <Badge variant={riskBadgeVariant}>{trade.risk_level}</Badge>
+            {isAnomalousDivergence && (
+              <Badge
+                variant="outline"
+                className="gap-1 border-amber-border text-[10px] font-medium text-amber"
+                title="Live mark diverges sharply from the saved entry. Likely stale picker quote or transient data anomaly."
+              >
+                <AlertTriangle className="h-3 w-3" />
+                Data check
+              </Badge>
+            )}
             {execution && <ExecutionBadge execution={execution} liveMark={liveMarkForTrade(liveQuotes, trade)} />}
             {showScore && (
               <div className="ml-auto inline-flex items-center gap-1 rounded-md border bg-muted/40 px-2 py-0.5 text-[11px] font-semibold tabular-nums">
@@ -118,7 +142,9 @@ function MorningCard({ dt, liveQuotes, date, execution }: MorningCardProps) {
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Current</div>
               <div className="mt-0.5 text-2xl font-semibold leading-none tabular-nums">{currentValue}</div>
-              <div className="mt-0.5 text-[11px] text-muted-foreground">{currentContractPrice !== null ? fmtMoneyInt(currentContractPrice * 100) : "—"} / contract</div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">
+                {currentContractPrice !== null ? <>{fmtMoneyInt(currentContractPrice * 100)} / contract</> : <Skeleton className="inline-block h-3 w-24 align-middle" />}
+              </div>
             </div>
           </div>
 

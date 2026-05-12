@@ -247,7 +247,7 @@ func main() {
 			log.Printf("Skipping morning analysis: Market closed (%s)", reason)
 			return
 		}
-		runTradeAnalysis(cfg, db, scraper, claudePicker, emailClient, modelLabel, executor)
+		runTradeAnalysis(cfg, db, scraper, claudePicker, schwabClient, emailClient, modelLabel, executor)
 	}
 
 	closeJob := func() {
@@ -465,6 +465,62 @@ func sameDate(a, b time.Time) bool {
 	return ay == by && am == bm && ad == bd
 }
 
+/*
+validatePicksAgainstSpot drops picks whose strike is more than 25%
+away from current Schwab spot. Claude has produced internally
+inconsistent picks where its `current_price` field disagrees wildly
+with what Schwab's live feed reports (e.g., picking a $115 strike on
+a name Schwab shows at $750), which then surfaces on the dashboard as
+absurd "Current" marks like +44,000% gains on a deep-ITM contract the
+picker thought was slightly OTM. Cross-checking against the same
+Schwab data source the dashboard reads from catches that class of bug
+before the morning email ships or the executor tries to act on it. A
+nil schwab client (local dev) is a no-op pass-through, as is a
+GetQuotes failure (we prefer shipping unvalidated picks to dropping
+everything on a transient probe error).
+*/
+func validatePicksAgainstSpot(picks []trades.Trade, schwabClient *schwab.Client) []trades.Trade {
+	const maxStrikeDistance = 0.25
+
+	if schwabClient == nil || len(picks) == 0 {
+		return picks
+	}
+	seen := make(map[string]bool, len(picks))
+	symbols := make([]string, 0, len(picks))
+	for _, p := range picks {
+		if !seen[p.Symbol] {
+			seen[p.Symbol] = true
+			symbols = append(symbols, p.Symbol)
+		}
+	}
+	quotes, err := schwabClient.GetQuotes(symbols)
+	if err != nil {
+		log.Printf("pick validation: GetQuotes failed, passing picks through unchecked: %v", err)
+		return picks
+	}
+
+	keep := make([]trades.Trade, 0, len(picks))
+	for _, p := range picks {
+		q, ok := quotes[p.Symbol]
+		if !ok || q.LastPrice <= 0 {
+			log.Printf("pick validation: no spot for %s, keeping #%d", p.Symbol, p.Rank)
+			keep = append(keep, p)
+			continue
+		}
+		distance := (p.StrikePrice - q.LastPrice) / q.LastPrice
+		if distance < 0 {
+			distance = -distance
+		}
+		if distance > maxStrikeDistance {
+			log.Printf("pick validation: DROPPING #%d %s %s $%.2f (spot=$%.2f, %.0f%% from spot, claude_current=$%.2f)",
+				p.Rank, p.Symbol, p.ContractType, p.StrikePrice, q.LastPrice, distance*100, p.CurrentPrice)
+			continue
+		}
+		keep = append(keep, p)
+	}
+	return keep
+}
+
 func sendErrorNotification(cfg *config.Config, db *store.Store, emailClient *email.Client, errMsg string) {
 	htmlContent, err := templates.RenderErrorEmail(errMsg)
 	if err != nil {
@@ -493,7 +549,7 @@ func getRecipients(db *store.Store) []string {
 	return emails
 }
 
-func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Scraper, claudePicker *trades.ClaudePicker, emailClient *email.Client, modelLabel string, executor *exec.Service) {
+func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Scraper, claudePicker *trades.ClaudePicker, schwabClient *schwab.Client, emailClient *email.Client, modelLabel string, executor *exec.Service) {
 	if claudePicker == nil {
 		log.Println("Skipping trade analysis: Claude picker not configured (local stub or missing key)")
 		return
@@ -531,6 +587,21 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 		return
 	}
 	log.Printf("%s produced %d picks", modelLabel, len(topTrades))
+
+	originalCount := len(topTrades)
+	topTrades = validatePicksAgainstSpot(topTrades, schwabClient)
+	if dropped := originalCount - len(topTrades); dropped > 0 {
+		log.Printf("pick validation: dropped %d/%d picks with strikes too far from spot", dropped, originalCount)
+		if dropped*2 > originalCount {
+			sendErrorNotification(cfg, db, emailClient, fmt.Sprintf(
+				"Pick validation dropped %d of %d picks (>50%%) for strike-spot divergence. Likely picker saw stale quotes. Check Claude tool logs for the morning run.",
+				dropped, originalCount))
+		}
+	}
+	if len(topTrades) == 0 {
+		log.Println("All picks dropped by validation, skipping email")
+		return
+	}
 
 	date := todayDate()
 	if err := db.SaveMorningTrades(date, topTrades); err != nil {

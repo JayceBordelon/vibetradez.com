@@ -13,7 +13,22 @@ import (
 
 const (
 	marketDataBase = baseURL + "/marketdata/v1"
-	cacheTTL       = 15 * time.Second // shared cache across all sessions
+	/*
+		Cache TTL for GetQuotes / GetOptionChain responses, shared
+		across all sessions. The dashboard polls /api/quotes/live every
+		15s and each poll fires 1 stock-quotes batch + N option-chain
+		calls (one per morning pick = up to 10). With a 15s TTL every
+		poll bypassed the cache and bursted ~11 Schwab calls in a
+		fraction of a second, tripping Schwab's per-second rate limit
+		and returning HTTP 429 for a non-deterministic subset of
+		contracts (live cards then rendered "--" for the rate-limited
+		picks). 45s lets two consecutive polls share the cached chains
+		so we drop steady-state Schwab traffic from ~44/min to ~15/min.
+		Live cards are still effectively realtime since option marks
+		don't move materially in 45s for the cheap weekly OTM contracts
+		this app trades.
+	*/
+	cacheTTL = 45 * time.Second
 )
 
 // ── Stock Quotes ──
