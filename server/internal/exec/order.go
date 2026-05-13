@@ -106,8 +106,8 @@ func OCCSymbol(symbol, expiration, contractType string, strike float64) (string,
 /*
 BuildOpenOrderForTrade returns the LIMIT BUY_TO_OPEN order to submit
 for the morning auto-execution. Hardcodes MaxContracts (1) and
-BUY_TO_OPEN; caller passes the rank-1 Trade, its pre-built OCC symbol,
-and the limit price (see ComputeOpenLimitPrice).
+BUY_TO_OPEN; caller passes the qualifying Trade, its pre-built OCC
+symbol, and the limit price (see ComputeOpenLimitPrice).
 
 Returns ErrInvalidOrder when limitPrice is non-positive — Schwab
 rejects LIMIT orders without a price, so the caller MUST resolve a

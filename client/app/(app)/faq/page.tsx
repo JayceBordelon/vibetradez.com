@@ -36,7 +36,7 @@ const faqs = [
   },
   {
     question: "Is the P&L shown based on real trades?",
-    answer: `Picks 2 through 10: fully hypothetical. The chart assumes you bought one contract at the morning mark price and sold at the closing mark price. Real life has bid-ask spreads, slippage, fills that never fill, and your broker's general mood, none of which are modeled here. Treat the historical P&L like a backtest some guy made on Reddit: directionally interesting, not a guarantee, please do not pay your rent with it. The rank-1 pick is different: it auto-fires as a real live order every weekday at 9:30 ET against my actual Schwab brokerage account, held until 3:55 ET when the close cron exits unconditionally. Those show up with a clearly-labeled badge so there's no ambiguity about which fills are real.`,
+    answer: `Picks 4 through 10: fully hypothetical. The chart assumes you bought one contract at the morning mark price and sold at the closing mark price. Real life has bid-ask spreads, slippage, fills that never fill, and your broker's general mood, none of which are modeled here. Treat the historical P&L like a backtest some guy made on Reddit: directionally interesting, not a guarantee, please do not pay your rent with it. The top 3 picks are different: they auto-fire as real live orders every weekday at 9:30 ET against my actual Schwab brokerage account, held until 3:55 ET when the close cron exits unconditionally. Those show up with a clearly-labeled badge so there's no ambiguity about which fills are real.`,
   },
   {
     question: "Should I trust an LLM with my retirement?",
@@ -44,7 +44,7 @@ const faqs = [
   },
   {
     question: "How does the auto-execution pipeline work?",
-    answer: `Every weekday at 9:30 ET the rank-1 pick fires automatically as a real live order against my actual Schwab brokerage account, with my actual money. There's a hard cap of $5 per share ($500 of capital exposure per contract); anything above that gets skipped for the day, no exceptions. At 3:55 ET (12:55 on half-trading days) the close cron unconditionally sells everything still open, with retry-cancel-replace if the first attempt doesn't fill. There's also a kill-switch endpoint I can hit if the whole thing starts looking sideways before close. Receipt emails go to me, not to subscribers, because nobody else needs to know about my fills.`,
+    answer: `Every weekday at 9:30 ET the top 3 picks fire automatically as real live orders against my actual Schwab brokerage account, with my actual money. Each contract is capped at $5 per share ($500 of capital exposure) and the whole basket is capped at $1,000 of daily exposure — anything that busts either cap gets skipped, no exceptions. The selector walks ranks 1 → 2 → 3 against the basket budget; rank-1 has first claim but otherwise plays by the same rules, so a too-big rank-2 can't starve a smaller rank-3. At 3:55 ET (12:55 on half-trading days) the close cron unconditionally sells everything still open, with retry-cancel-replace if the first attempt doesn't fill. There's also a kill-switch endpoint I can hit if the whole thing starts looking sideways before close. Receipt emails go to me, not to subscribers, because nobody else needs to know about my fills.`,
   },
   {
     question: "Where does the market data come from?",

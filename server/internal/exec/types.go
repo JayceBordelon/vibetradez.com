@@ -3,12 +3,13 @@ package exec
 import "time"
 
 /*
-Execution is one order lifecycle. Every weekday the cron fires a
-single Execution with side='open' for the rank-1 trade. If the open
-fills, the 3:55pm cron creates a second Execution with side='close'.
-PaperTrader fills are synthetic (no SchwabOrderID); LiveTrader fills
-carry the Schwab order id. Each row references the trades.id row that
-spawned it so dashboard queries can join back to the contract spec.
+Execution is one order lifecycle. Every weekday the cron fires up to
+MaxBasketRank Executions with side='open', one per qualifying pick in
+the basket. For each open that fills, the 3:55pm cron creates a
+matching Execution with side='close'. PaperTrader fills are synthetic
+(no SchwabOrderID); LiveTrader fills carry the Schwab order id. Each
+row references the trades.id row that spawned it so dashboard queries
+can join back to the contract spec.
 */
 type Execution struct {
 	ID                int

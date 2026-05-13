@@ -327,12 +327,13 @@ func (s *Service) handleSinglePick(ctx context.Context, t *trades.Trade, tradeID
 RepriceWorkingOpens is the one-shot post-open cron entry point that
 walks every still-WORKING open order and, when the post-open ask has
 moved enough to leave our original LIMIT underwater, cancel-and-
-replaces at a fresh-ask-derived limit. The morning cron's order
-limits are sized from pre-open Schwab quotes (often 0-ask on thin
-contracts, in which case ComputeOpenLimitPrice falls back to Claude's
-modeled premium), so a real-open jump or a Claude mispricing leaves
-orders stranded WORKING for the rest of the day until the broker
-auto-expires them at 16:00 ET. This pass closes that gap.
+replaces at a fresh-ask-derived limit. The morning cron fires at 9:30
+ET against live post-open quotes, so on a typical day this pass is a
+no-op — order limits already track real market. It still exists as a
+defensive belt against Claude mispricings and against contracts whose
+ask runs in the first few minutes after the bell, either of which
+would otherwise leave orders stranded WORKING until the broker auto-
+expires them at 16:00 ET.
 
 Decision tree per working position:
 

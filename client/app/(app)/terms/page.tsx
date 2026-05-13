@@ -98,10 +98,10 @@ export default function TermsPage() {
             <p>By using this platform, you acknowledge that you understand these risks and accept full responsibility for any trading decisions you make.</p>
           </Section>
 
-          <Section id="hypothetical" num={4} title="Hypothetical Performance (picks #2 through #10)">
+          <Section id="hypothetical" num={4} title="Hypothetical Performance (picks #4 through #10)">
             <p>
-              Performance metrics for picks #2 through #10 on VibeTradez are <strong>hypothetical</strong>. They assume that each suggested trade was entered at the estimated market open price and
-              exited at the closing mark price, with one contract per trade. No actual orders are placed for picks #2 through #10. The rank-1 pick is different and is covered in the next section.
+              Performance metrics for picks #4 through #10 on VibeTradez are <strong>hypothetical</strong>. They assume that each suggested trade was entered at the estimated market open price and
+              exited at the closing mark price, with one contract per trade. No actual orders are placed for picks #4 through #10. The top 3 picks are different and are covered in the next section.
             </p>
             <p>
               Hypothetical results have inherent limitations. Unlike actual trading, simulated results do not account for slippage, commissions, margin requirements, the impact of liquidity, or the
@@ -109,11 +109,11 @@ export default function TermsPage() {
             </p>
           </Section>
 
-          <Section id="auto-execution" num={5} title="Auto-Execution Pipeline (rank-1 only)">
+          <Section id="auto-execution" num={5} title="Auto-Execution Pipeline (top 3 picks)">
             <p>
-              The rank-1 pick of each trading day is automatically executed by the platform as a <strong>real live order</strong> against the operator&apos;s personal Schwab brokerage account using
-              the Schwab Trader API. Real money, real fills, real position. The operator (Jayce Bordelon) is the only party with capital at risk on these orders. Subscribers receive informational
-              notifications about the trade but no order is ever placed on a subscriber&apos;s behalf, and subscribers cannot configure or disable the pipeline.
+              The top 3 picks of each trading day are automatically executed by the platform as <strong>real live orders</strong> against the operator&apos;s personal Schwab brokerage account using
+              the Schwab Trader API. Real money, real fills, real positions. The operator (Jayce Bordelon) is the only party with capital at risk on these orders. Subscribers receive informational
+              notifications about the trades but no order is ever placed on a subscriber&apos;s behalf, and subscribers cannot configure or disable the pipeline.
             </p>
             <p>
               The platform retains a <strong>paper-trade mode</strong> as a fallback (configured server-side via an environment variable) used during testing windows or operator absence. When this
@@ -121,8 +121,9 @@ export default function TermsPage() {
               PAPER so the actual mode is never ambiguous; the badge state reflects the real mode the order was placed in, never inferred or extrapolated.
             </p>
             <p>
-              The auto-execution pipeline operates with three hard guardrails regardless of mode: (1) a price cap of $5/share (= $500 of capital exposure per contract); (2) a mandatory close at 3:55
-              PM ET (12:55 PM ET on half-trading days) regardless of P&amp;L; and (3) a single contract per trade, hardcoded at the package level.
+              The auto-execution pipeline operates with four hard guardrails regardless of mode: (1) a per-contract price cap of $5/share (= $500 of capital exposure per contract); (2) a $1,000 daily
+              basket ceiling across all three picks combined, so worst-case daily exposure is bounded regardless of how the picks land; (3) a mandatory close at 3:55 PM ET (12:55 PM ET on half-trading
+              days) regardless of P&amp;L; and (4) a single contract per trade, hardcoded at the package level.
             </p>
           </Section>
 

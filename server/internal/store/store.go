@@ -162,11 +162,11 @@ func migrate(db *sql.DB) error {
 		DROP TABLE IF EXISTS users;
 
 		/*
-		Auto-execution pipeline. The cron fires the rank-1 paper trade
-		(or live, if TRADING_MODE=live) every weekday at 9:30 ET, no
-		user confirmation step. Each row in the executions table is one
-		order lifecycle (open or close), referencing the trades.id row
-		that spawned it.
+		Auto-execution pipeline. The cron fires the basket of qualifying
+		picks (up to MaxBasketRank per day, paper or live depending on
+		TRADING_MODE) every weekday at 9:30 ET, no user confirmation step.
+		Each row in the executions table is one order lifecycle (open or
+		close), referencing the trades.id row that spawned it.
 		*/
 		CREATE TABLE IF NOT EXISTS executions (
 			id                  SERIAL PRIMARY KEY,

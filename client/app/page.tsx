@@ -11,7 +11,7 @@ import { ClaudeLogo } from "@/components/ui/brand-icons";
 export const metadata: Metadata = {
   title: "VibeTradez | AI-Powered Options Picks",
   description:
-    "An LLM ranks 10 options contracts every weekday with live market data and a written rationale for each. The rank-1 pick auto-fires in my actual brokerage account every morning. Free to watch, expensive to run.",
+    "An LLM ranks 10 options contracts every weekday with live market data and a written rationale for each. The top 3 picks auto-fire in my actual brokerage account every morning. Free to watch, expensive to run.",
 };
 
 export default function LandingPage() {
@@ -65,7 +65,7 @@ export default function LandingPage() {
 
           <Reveal effect="rise" delay={280} duration={900}>
             <p className="mx-auto mt-7 max-w-[640px] text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Every weekday at 9:30 ET, an LLM ranks 10 options contracts with live market data and a written essay defending each one. The rank-1 pick auto-fires in my actual brokerage account, with
+              Every weekday at 9:30 ET, an LLM ranks 10 options contracts with live market data and a written essay defending each one. The top 3 picks auto-fire in my actual brokerage account, with
               my actual money. By close you find out whether Claude was right. <span className="italic">It is sometimes.</span>
             </p>
           </Reveal>
@@ -103,10 +103,10 @@ export default function LandingPage() {
             <div className="lg-panel lg-edge-shine overflow-hidden p-6 sm:p-10">
               <div className="flex flex-col gap-2 text-center sm:gap-3">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">The pipeline</span>
-                <h2 className="text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">A real trade fires every weekday. No clicks needed.</h2>
+                <h2 className="text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">Real trades fire every weekday. No clicks needed.</h2>
                 <p className="mx-auto max-w-2xl text-sm text-muted-foreground sm:text-base">
-                  At 9:30 ET sharp, Claude ranks 10 contracts against live post-open quotes and emails the list. The rank-1 contract gets ordered live in my actual Schwab account with my actual money,
-                  held until 3:55 ET, and unconditionally closed before the close. You watch it happen on the dashboard. I watch it happen on the dashboard. Honestly, that&apos;s most of what
+                  At 9:30 ET sharp, Claude ranks 10 contracts against live post-open quotes and emails the list. The top 3 picks get ordered live in my actual Schwab account with my actual money, held
+                  until 3:55 ET, and unconditionally closed before the bell. You watch it happen on the dashboard. I watch it happen on the dashboard. Honestly, that&apos;s most of what
                   &ldquo;oversight&rdquo; means around here.
                 </p>
               </div>
@@ -253,9 +253,9 @@ const pipeline = [
   },
   {
     time: "9:31-9:33 AM ET",
-    title: "Auto-fire rank-1",
+    title: "Auto-fire the basket",
     detail:
-      "Top pick fires live in my actual Schwab account a minute or two after the bell. Real money, real fills. Capped at $10/share so the worst case is a manageable amount of regret on my part.",
+      "The top 3 picks fire live in my actual Schwab account a minute or two after the bell. Real money, real fills. Each contract capped at $5/share, with a $1,000 daily basket ceiling so the worst case is a manageable amount of regret on my part.",
     Icon: Zap,
   },
   {
@@ -285,9 +285,9 @@ const features = [
   },
   {
     Icon: Zap,
-    title: "Auto-fired live trade",
+    title: "Auto-fired live basket",
     description:
-      "The rank-1 pick auto-fires every morning in my actual brokerage account, with my actual money. Capped at $5/share, mandatory close at 3:55 ET. No clicks, no overnight risk, no chance for me to second-guess it.",
+      "The top 3 picks auto-fire every morning in my actual brokerage account, with my actual money. $5/share per contract under a $1,000 daily basket ceiling, mandatory close at 3:55 ET. No clicks, no overnight risk, no chance for me to second-guess it.",
   },
   {
     Icon: Mail,
