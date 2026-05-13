@@ -109,7 +109,7 @@ func Load() *Config {
 
 	return &Config{
 		CronScheduleOpen:   getEnvOrDefault("CRON_SCHEDULE_OPEN", "30 9 * * 1-5"),
-		CronScheduleClose:  getEnvOrDefault("CRON_SCHEDULE_CLOSE", "5 16 * * 1-5"),
+		CronScheduleClose:  getEnvOrDefault("CRON_SCHEDULE_CLOSE", "0 16 * * 1-5"),
 		CronScheduleWeekly: getEnvOrDefault("CRON_SCHEDULE_WEEKLY", "30 16 * * 5"),
 		ResendAPIKey:       resendKey,
 		AnthropicAPIKey:    anthropicKey,

@@ -52,7 +52,7 @@ const faqs = [
   },
   {
     question: "How often are emails sent, and what do they contain?",
-    answer: `Up to three a market day. Morning email (right after 9:30 ET): the headline pick with full contract spec, thesis, catalyst, conviction score, and Claude's whole essay defending the call. EOD email (after 4:05 ET): how every pick actually performed, with entry vs closing price, stock move, per-trade P&L, and day totals. Friday: weekly digest aggregating the whole week. All free, always free, there is no premium tier I'm secretly building. You can unsubscribe whenever; I won't chase you.`,
+    answer: `Up to three a market day. Morning email (right after 9:30 ET): the headline pick with full contract spec, thesis, catalyst, conviction score, and Claude's whole essay defending the call. EOD email (right after 4:00 ET): how every pick actually performed, with entry vs closing price, stock move, per-trade P&L, and day totals. Friday: weekly digest aggregating the whole week. All free, always free, there is no premium tier I'm secretly building. You can unsubscribe whenever; I won't chase you.`,
   },
   {
     question: "Is this even legal?",
