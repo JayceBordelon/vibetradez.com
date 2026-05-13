@@ -51,26 +51,55 @@ func TestQualifyingPicks_StopsAtMaxBasketRank(t *testing.T) {
 }
 
 func TestQualifyingPicks_GreedyRankOrderSkipsTooBig(t *testing.T) {
-	// Rank-1 is privileged (own cap, exempt from basket). Test the
-	// skip-and-continue logic on the rank-2/3 tail where the basket
-	// budget applies: rank-2 = $450 eats $450 of the $500 basket, so
-	// rank-3 at $90 ($60 left) is skipped.
+	// Rank-1 ($350) + Rank-2 ($450) = $800 leaves $200 for rank-3.
+	// Rank-3 at $4.99 ($499) doesn't fit → skipped. Drop in a smaller
+	// pick at rank-3 and it would land. Confirms skip-and-continue
+	// stops at rank-3 once the budget can't fit it.
 	in := []trades.Trade{
-		mkTrade("R1", "CALL", 1, 0.30),
-		mkTrade("BIG2", "CALL", 2, 4.50),
-		mkTrade("SML", "CALL", 3, 0.90),
+		mkTrade("R1", "CALL", 1, 3.50),
+		mkTrade("R2", "CALL", 2, 4.50),
+		mkTrade("BIG3", "CALL", 3, 4.99),
 	}
 	got := QualifyingPicks(in)
-	if want := []string{"R1", "BIG2"}; !reflect.DeepEqual(symbols(got), want) {
+	if want := []string{"R1", "R2"}; !reflect.DeepEqual(symbols(got), want) {
 		t.Fatalf("want %v, got %v", want, symbols(got))
 	}
 }
 
-func TestQualifyingPicks_SkipsAboveRank1Cap(t *testing.T) {
-	// Rank-1 above MaxRank1ContractPremium is dropped. Tail picks
-	// (eligible at MaxContractPremium) still run.
+func TestQualifyingPicks_SkipsAndContinuesWhenMidPickTooBig(t *testing.T) {
+	// Rank-1 ($350). Remaining $650. Rank-2 at $4.99 ($499) fits and
+	// is taken. Rank-3 at $0.90 ($90) fits the remaining $151 and is
+	// taken too. Confirms greedy walk takes all three when they fit.
 	in := []trades.Trade{
-		mkTrade("HUGE", "CALL", 1, MaxRank1ContractPremium+0.01),
+		mkTrade("R1", "CALL", 1, 3.50),
+		mkTrade("R2", "CALL", 2, 4.99),
+		mkTrade("R3", "CALL", 3, 0.90),
+	}
+	got := QualifyingPicks(in)
+	if want := []string{"R1", "R2", "R3"}; !reflect.DeepEqual(symbols(got), want) {
+		t.Fatalf("want %v, got %v", want, symbols(got))
+	}
+}
+
+func TestQualifyingPicks_SkipsRank2ButKeepsRank3WhenRank3Fits(t *testing.T) {
+	// Rank-1 at $5 cap eats $500 of the $1000 basket. Rank-2 at $5 cap
+	// ($500) would just barely fit ($500 remaining), but if rank-2 is
+	// $5.01 it busts the per-contract cap entirely — skipped at the
+	// premium gate, not the budget gate. Rank-3 still fits.
+	in := []trades.Trade{
+		mkTrade("R1", "CALL", 1, MaxContractPremium),
+		mkTrade("HUGE2", "CALL", 2, MaxContractPremium+0.01),
+		mkTrade("R3", "CALL", 3, 1.00),
+	}
+	got := QualifyingPicks(in)
+	if want := []string{"R1", "R3"}; !reflect.DeepEqual(symbols(got), want) {
+		t.Fatalf("want %v, got %v", want, symbols(got))
+	}
+}
+
+func TestQualifyingPicks_SkipsAbovePerContractCap(t *testing.T) {
+	in := []trades.Trade{
+		mkTrade("HUGE", "CALL", 1, MaxContractPremium+0.01),
 		mkTrade("OK1", "CALL", 2, 1.00),
 		mkTrade("OK2", "CALL", 3, 1.00),
 	}
@@ -80,46 +109,17 @@ func TestQualifyingPicks_SkipsAboveRank1Cap(t *testing.T) {
 	}
 }
 
-func TestQualifyingPicks_SkipsAboveTailCapButRank1Survives(t *testing.T) {
-	// Ranks 2 and 3 above MaxContractPremium are skipped; rank-1
-	// stays in even at an elevated premium that ranks 2-3 couldn't take.
+func TestQualifyingPicks_BasketBudgetExhausted(t *testing.T) {
+	// Rank-1 + Rank-2 at the per-contract cap eat the whole $1000
+	// basket. Even a tiny rank-3 is skipped because the budget is
+	// exactly zero.
 	in := []trades.Trade{
-		mkTrade("R1HI", "CALL", 1, 7.00), // over base cap, under rank-1 cap
-		mkTrade("BIG2", "CALL", 2, MaxContractPremium+0.01),
-		mkTrade("OK3", "CALL", 3, 1.00),
-	}
-	got := QualifyingPicks(in)
-	if want := []string{"R1HI", "OK3"}; !reflect.DeepEqual(symbols(got), want) {
-		t.Fatalf("want %v, got %v", want, symbols(got))
-	}
-}
-
-func TestQualifyingPicks_Rank1IsExemptFromBasketBudget(t *testing.T) {
-	// Rank-1 at $8/share = $800 exposure: would blow the $500 basket
-	// if it consumed it. Privileging means rank-2 and rank-3 still get
-	// the full $500 basket after rank-1 lands.
-	in := []trades.Trade{
-		mkTrade("R1", "CALL", 1, 8.00),
-		mkTrade("R2", "CALL", 2, 2.50),
-		mkTrade("R3", "CALL", 3, 2.50),
-	}
-	got := QualifyingPicks(in)
-	if want := []string{"R1", "R2", "R3"}; !reflect.DeepEqual(symbols(got), want) {
-		t.Fatalf("want %v, got %v", want, symbols(got))
-	}
-}
-
-func TestQualifyingPicks_BasketBudgetExhaustedByTail(t *testing.T) {
-	// Rank-2 at the $5 cap eats the whole $500 basket. Rank-3 (even
-	// at $0.10) is then skipped because the tail budget is gone.
-	// Rank-1 still lands.
-	in := []trades.Trade{
-		mkTrade("R1", "CALL", 1, 1.00),
+		mkTrade("MAX1", "CALL", 1, MaxContractPremium),
 		mkTrade("MAX2", "CALL", 2, MaxContractPremium),
 		mkTrade("TINY3", "CALL", 3, 0.10),
 	}
 	got := QualifyingPicks(in)
-	if want := []string{"R1", "MAX2"}; !reflect.DeepEqual(symbols(got), want) {
+	if want := []string{"MAX1", "MAX2"}; !reflect.DeepEqual(symbols(got), want) {
 		t.Fatalf("want %v, got %v", want, symbols(got))
 	}
 }

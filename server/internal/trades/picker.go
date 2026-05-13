@@ -44,8 +44,8 @@ const (
 		429 rate-limited, 5xx gateway). Each tool-conversation round retries
 		independently, so a single transient blip doesn't discard the
 		Schwab tool work already done in earlier rounds. Worst-case wait is
-		~2+4+8+16+30 ≈ 60s, well inside the 5-minute morning-cron budget
-		before the next downstream step.
+		~2+4+8+16+30 ≈ 60s, well inside the 60-minute morning-cron
+		wall-clock budget set by httpRequestTimeout.
 	*/
 	maxPickerAttempts = 5
 	pickerBackoffBase = 2 * time.Second

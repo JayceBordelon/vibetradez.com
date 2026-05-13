@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     template: "%s | VibeTradez",
   },
   description:
-    "Live experiment in letting one silly model trade. Every morning Claude pulls market signals, runs the same prompt against Schwab quotes and web search, and ranks its top 10 contracts with conviction scores. Delivered free before market open.",
+    "Live experiment in letting one silly model trade. Every morning at 9:30 ET sharp, Claude pulls market signals, runs the same prompt against live Schwab quotes and web search, and ranks its top 10 contracts with conviction scores. Delivered free right at the open.",
   keywords: ["options trading", "AI trading", "daily options picks", "trade alerts", "options analytics", "stock options", "day trading"],
   authors: [{ name: "Jayce Bordelon", url: "https://jaycebordelon.com" }],
   openGraph: {
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     url: "https://vibetradez.com",
     siteName: "VibeTradez",
     title: "VibeTradez | AI-Powered Options Picks",
-    description: "One silly model, live market data, conviction-scored picks. Delivered free before the opening bell.",
+    description: "One silly model, live market data, conviction-scored picks. Delivered free right at the open.",
     images: [
       {
         url: "/opengraph-image",
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "VibeTradez | AI-Powered Options Picks",
-    description: "One silly model, live market data, conviction-scored picks. Delivered free before the opening bell.",
+    description: "One silly model, live market data, conviction-scored picks. Delivered free right at the open.",
     creator: "@JayceBordelon",
     images: ["/opengraph-image"],
   },

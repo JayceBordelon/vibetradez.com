@@ -51,7 +51,7 @@ export default function LandingPage() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
               </span>
-              Live now &middot; free daily picks before market open
+              Live now &middot; free daily picks at the open
             </span>
           </Reveal>
 
@@ -65,8 +65,8 @@ export default function LandingPage() {
 
           <Reveal effect="rise" delay={280} duration={900}>
             <p className="mx-auto mt-7 max-w-[640px] text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Every weekday at 9:25 ET, an LLM ranks 10 options contracts with live market data and a written essay defending each one. At 9:30 the rank-1 pick auto-fires in my actual brokerage
-              account, with my actual money. By close you find out whether Claude was right. <span className="italic">It is sometimes.</span>
+              Every weekday at 9:30 ET, an LLM ranks 10 options contracts with live market data and a written essay defending each one. The rank-1 pick auto-fires in my actual brokerage account, with
+              my actual money. By close you find out whether Claude was right. <span className="italic">It is sometimes.</span>
             </p>
           </Reveal>
 
@@ -105,8 +105,9 @@ export default function LandingPage() {
                 <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">The pipeline</span>
                 <h2 className="text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">A real trade fires every weekday. No clicks needed.</h2>
                 <p className="mx-auto max-w-2xl text-sm text-muted-foreground sm:text-base">
-                  Picks land in your inbox before the bell. At 9:30 ET the rank-1 contract gets ordered live in my actual Schwab account with my actual money, held until 3:55 ET, and unconditionally
-                  closed before the close. You watch it happen on the dashboard. I watch it happen on the dashboard. Honestly, that&apos;s most of what &ldquo;oversight&rdquo; means around here.
+                  At 9:30 ET sharp, Claude ranks 10 contracts against live post-open quotes and emails the list. The rank-1 contract gets ordered live in my actual Schwab account with my actual money,
+                  held until 3:55 ET, and unconditionally closed before the close. You watch it happen on the dashboard. I watch it happen on the dashboard. Honestly, that&apos;s most of what
+                  &ldquo;oversight&rdquo; means around here.
                 </p>
               </div>
 
@@ -244,15 +245,17 @@ export default function LandingPage() {
 
 const pipeline = [
   {
-    time: "9:25 AM ET",
-    title: "Claude picks",
-    detail: "Pulls market signals, calls Schwab quotes and option chains, ranks 10 contracts. Whether it 'analyzed' anything is between Claude and its conscience.",
+    time: "9:30 AM ET",
+    title: "Claude picks against the bell",
+    detail:
+      "Right at the open, an LLM pulls market signals, calls Schwab for live quotes and option chains, and ranks 10 contracts with a written rationale for each. Live post-open prices, not pre-market guesses.",
     Icon: Sparkles,
   },
   {
-    time: "9:30 AM ET",
+    time: "9:31-9:33 AM ET",
     title: "Auto-fire rank-1",
-    detail: "Top pick fires live in my actual Schwab account. Real money, real fills. Capped at $5/share so the worst case is a manageable amount of regret on my part.",
+    detail:
+      "Top pick fires live in my actual Schwab account a minute or two after the bell. Real money, real fills. Capped at $10/share so the worst case is a manageable amount of regret on my part.",
     Icon: Zap,
   },
   {
@@ -289,7 +292,7 @@ const features = [
   {
     Icon: Mail,
     title: "Pre-market email",
-    description: "Ranked picks in your inbox before the opening bell. EOD results at close. Friday digest. All free, all automated, unsubscribe whenever.",
+    description: "Ranked picks in your inbox right after the open. EOD results at close. Friday digest. All free, all automated, unsubscribe whenever.",
   },
   {
     Icon: Clock,

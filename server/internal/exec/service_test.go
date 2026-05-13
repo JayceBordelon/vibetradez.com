@@ -116,10 +116,18 @@ func sampleTrade() *trades.Trade {
 	}
 }
 
-func TestHandleQualifyingPick_RejectedPersistsReasonAndEmails(t *testing.T) {
+// runSinglePick wraps handleSinglePick with the ACCT-HASH the test
+// fakes return so per-pick tests don't have to thread the lookup
+// through the full HandleQualifyingPicks basket path. handleSinglePick
+// is the workhorse — same code path the basket loop calls.
+func runSinglePick(svc *Service, tr *trades.Trade, tradeID int) (string, error) {
+	return svc.handleSinglePick(context.Background(), tr, tradeID, "ACCT-HASH")
+}
+
+func TestHandleSinglePick_RejectedPersistsReasonAndEmails(t *testing.T) {
 	store := &fakeStore{}
 	mail := &fakeMail{}
-	trader := &fakeTrader{
+	trader := &countingTrader{fakeTrader: fakeTrader{
 		placeID: "ORDER-XYZ",
 		status: OrderStatus{
 			OrderID:      "ORDER-XYZ",
@@ -127,11 +135,11 @@ func TestHandleQualifyingPick_RejectedPersistsReasonAndEmails(t *testing.T) {
 			Terminal:     true,
 			ErrorMessage: "Buying power insufficient",
 		},
-	}
+	}}
 	svc := newTestService(trader, store, mail)
 
-	if err := svc.HandleQualifyingPick(context.Background(), sampleTrade(), 42); err != nil {
-		t.Fatalf("HandleQualifyingPick: %v", err)
+	if _, err := runSinglePick(svc, sampleTrade(), 42); err != nil {
+		t.Fatalf("handleSinglePick: %v", err)
 	}
 
 	// Expect 2 updates: the orphan-prevention immediate write
@@ -173,21 +181,21 @@ func TestHandleQualifyingPick_RejectedPersistsReasonAndEmails(t *testing.T) {
 	}
 }
 
-func TestHandleQualifyingPick_RejectedFallsBackToRawStatusWhenNoDescription(t *testing.T) {
+func TestHandleSinglePick_RejectedFallsBackToRawStatusWhenNoDescription(t *testing.T) {
 	store := &fakeStore{}
 	mail := &fakeMail{}
-	trader := &fakeTrader{
+	trader := &countingTrader{fakeTrader: fakeTrader{
 		placeID: "ORDER-NODESC",
 		status: OrderStatus{
 			OrderID:   "ORDER-NODESC",
 			RawStatus: "EXPIRED",
 			Terminal:  true,
 		},
-	}
+	}}
 	svc := newTestService(trader, store, mail)
 
-	if err := svc.HandleQualifyingPick(context.Background(), sampleTrade(), 7); err != nil {
-		t.Fatalf("HandleQualifyingPick: %v", err)
+	if _, err := runSinglePick(svc, sampleTrade(), 7); err != nil {
+		t.Fatalf("handleSinglePick: %v", err)
 	}
 
 	// 2 updates: orphan-prevention immediate working write, then
@@ -197,17 +205,16 @@ func TestHandleQualifyingPick_RejectedFallsBackToRawStatusWhenNoDescription(t *t
 	}
 }
 
-func TestHandleQualifyingPick_PlaceErrorEmailsAndPersistsFailed(t *testing.T) {
+func TestHandleSinglePick_PlaceErrorEmailsAndPersistsFailed(t *testing.T) {
 	store := &fakeStore{}
 	mail := &fakeMail{}
-	trader := &fakeTrader{
+	trader := &countingTrader{fakeTrader: fakeTrader{
 		placeErr: errors.New("HTTP 401: token expired"),
-	}
+	}}
 	svc := newTestService(trader, store, mail)
 
-	err := svc.HandleQualifyingPick(context.Background(), sampleTrade(), 9)
-	if err == nil {
-		t.Fatal("expected error from HandleQualifyingPick")
+	if _, err := runSinglePick(svc, sampleTrade(), 9); err == nil {
+		t.Fatal("expected error from handleSinglePick")
 	}
 
 	if len(store.updates) != 1 || store.updates[0].status != "failed" {
@@ -224,10 +231,10 @@ func TestHandleQualifyingPick_PlaceErrorEmailsAndPersistsFailed(t *testing.T) {
 	}
 }
 
-func TestHandleQualifyingPick_FilledPersistsOrderIDAndSendsReceipt(t *testing.T) {
+func TestHandleSinglePick_FilledPersistsOrderIDAndSendsReceipt(t *testing.T) {
 	store := &fakeStore{}
 	mail := &fakeMail{}
-	trader := &fakeTrader{
+	trader := &countingTrader{fakeTrader: fakeTrader{
 		placeID: "ORDER-FILL",
 		status: OrderStatus{
 			OrderID:        "ORDER-FILL",
@@ -237,11 +244,11 @@ func TestHandleQualifyingPick_FilledPersistsOrderIDAndSendsReceipt(t *testing.T)
 			FillPrice:      1.27,
 			FilledQuantity: 1,
 		},
-	}
+	}}
 	svc := newTestService(trader, store, mail)
 
-	if err := svc.HandleQualifyingPick(context.Background(), sampleTrade(), 11); err != nil {
-		t.Fatalf("HandleQualifyingPick: %v", err)
+	if _, err := runSinglePick(svc, sampleTrade(), 11); err != nil {
+		t.Fatalf("handleSinglePick: %v", err)
 	}
 
 	// 2 updates: orphan-prevention working write, then terminal filled.
@@ -260,22 +267,10 @@ func TestHandleQualifyingPick_FilledPersistsOrderIDAndSendsReceipt(t *testing.T)
 	}
 }
 
-// capturingTrader records the Order it was given so tests can assert
-// the LIMIT price, instruction, and shape.
-type capturingTrader struct {
-	fakeTrader
-	captured Order
-}
-
-func (c *capturingTrader) PlaceOrder(ctx context.Context, hash string, o Order) (string, error) {
-	c.captured = o
-	return c.fakeTrader.PlaceOrder(ctx, hash, o)
-}
-
-func TestHandleQualifyingPick_LimitPriceFromLiveAsk(t *testing.T) {
+func TestHandleSinglePick_LimitPriceFromLiveAsk(t *testing.T) {
 	store := &fakeStore{}
 	mail := &fakeMail{}
-	trader := &capturingTrader{fakeTrader: fakeTrader{
+	trader := &countingTrader{fakeTrader: fakeTrader{
 		placeID: "ORDER-LIMIT",
 		status:  OrderStatus{OrderID: "ORDER-LIMIT", RawStatus: "FILLED", Filled: true, Terminal: true, FillPrice: 1.20, FilledQuantity: 1},
 	}}
@@ -284,22 +279,25 @@ func TestHandleQualifyingPick_LimitPriceFromLiveAsk(t *testing.T) {
 	}
 	svc := newTestServiceWithAsk(trader, store, mail, ask)
 
-	if err := svc.HandleQualifyingPick(context.Background(), sampleTrade(), 100); err != nil {
-		t.Fatalf("HandleQualifyingPick: %v", err)
+	if _, err := runSinglePick(svc, sampleTrade(), 100); err != nil {
+		t.Fatalf("handleSinglePick: %v", err)
 	}
-	if trader.captured.OrderType != "LIMIT" {
-		t.Errorf("OrderType: want LIMIT, got %q", trader.captured.OrderType)
+	if len(trader.placed) != 1 {
+		t.Fatalf("expected 1 placed order, got %d", len(trader.placed))
+	}
+	if trader.placed[0].OrderType != "LIMIT" {
+		t.Errorf("OrderType: want LIMIT, got %q", trader.placed[0].OrderType)
 	}
 	// 1.20 * 1.05 = 1.26
-	if trader.captured.Price != 1.26 {
-		t.Errorf("Price: want 1.26, got %.4f", trader.captured.Price)
+	if trader.placed[0].Price != 1.26 {
+		t.Errorf("Price: want 1.26, got %.4f", trader.placed[0].Price)
 	}
 }
 
-func TestHandleQualifyingPick_LimitFallsBackToEstimateOnAskError(t *testing.T) {
+func TestHandleSinglePick_LimitFallsBackToEstimateOnAskError(t *testing.T) {
 	store := &fakeStore{}
 	mail := &fakeMail{}
-	trader := &capturingTrader{fakeTrader: fakeTrader{
+	trader := &countingTrader{fakeTrader: fakeTrader{
 		placeID: "ORDER-FALLBACK",
 		status:  OrderStatus{OrderID: "ORDER-FALLBACK", RawStatus: "WORKING", Working: true},
 	}}
@@ -310,19 +308,19 @@ func TestHandleQualifyingPick_LimitFallsBackToEstimateOnAskError(t *testing.T) {
 
 	tr := sampleTrade()
 	tr.EstimatedPrice = 0.80
-	if err := svc.HandleQualifyingPick(context.Background(), tr, 101); err != nil {
-		t.Fatalf("HandleQualifyingPick: %v", err)
+	if _, err := runSinglePick(svc, tr, 101); err != nil {
+		t.Fatalf("handleSinglePick: %v", err)
 	}
 	// 0.80 * 1.05 = 0.84
-	if trader.captured.Price != 0.84 {
-		t.Errorf("Price: want 0.84 (fallback to estimate), got %.4f", trader.captured.Price)
+	if len(trader.placed) != 1 || trader.placed[0].Price != 0.84 {
+		t.Errorf("Price: want 0.84 (fallback to estimate), got %+v", trader.placed)
 	}
 }
 
-func TestHandleQualifyingPick_LimitClampedToMaxContractPremium(t *testing.T) {
+func TestHandleSinglePick_LimitClampedToMaxContractPremium(t *testing.T) {
 	store := &fakeStore{}
 	mail := &fakeMail{}
-	trader := &capturingTrader{fakeTrader: fakeTrader{
+	trader := &countingTrader{fakeTrader: fakeTrader{
 		placeID: "ORDER-CLAMP",
 		status:  OrderStatus{OrderID: "ORDER-CLAMP", RawStatus: "WORKING", Working: true},
 	}}
@@ -331,18 +329,18 @@ func TestHandleQualifyingPick_LimitClampedToMaxContractPremium(t *testing.T) {
 	}
 	svc := newTestServiceWithAsk(trader, store, mail, ask)
 
-	if err := svc.HandleQualifyingPick(context.Background(), sampleTrade(), 102); err != nil {
-		t.Fatalf("HandleQualifyingPick: %v", err)
+	if _, err := runSinglePick(svc, sampleTrade(), 102); err != nil {
+		t.Fatalf("handleSinglePick: %v", err)
 	}
-	if trader.captured.Price != MaxContractPremium {
-		t.Errorf("Price: want %.2f (clamped), got %.4f", MaxContractPremium, trader.captured.Price)
+	if len(trader.placed) != 1 || trader.placed[0].Price != MaxContractPremium {
+		t.Errorf("Price: want %.2f (clamped), got %+v", MaxContractPremium, trader.placed)
 	}
 }
 
-func TestHandleQualifyingPick_AbortsWhenAskAndEstimateBothZero(t *testing.T) {
+func TestHandleSinglePick_AbortsWhenAskAndEstimateBothZero(t *testing.T) {
 	store := &fakeStore{}
 	mail := &fakeMail{}
-	trader := &capturingTrader{fakeTrader: fakeTrader{placeID: "should-not-be-called"}}
+	trader := &countingTrader{fakeTrader: fakeTrader{placeID: "should-not-be-called"}}
 	ask := func(_ context.Context, _, _, _ string, _ float64) (float64, error) {
 		return 0, errors.New("no quote")
 	}
@@ -350,14 +348,12 @@ func TestHandleQualifyingPick_AbortsWhenAskAndEstimateBothZero(t *testing.T) {
 
 	tr := sampleTrade()
 	tr.EstimatedPrice = 0
-	err := svc.HandleQualifyingPick(context.Background(), tr, 103)
-	if err == nil {
+	if _, err := runSinglePick(svc, tr, 103); err == nil {
 		t.Fatal("expected error when no usable price basis")
 	}
-	// Insert may or may not have happened depending on order; the
-	// hard contract is: no order was placed AND an alert was sent.
-	if trader.captured.OrderType != "" {
-		t.Errorf("expected no PlaceOrder call, but trader captured %+v", trader.captured)
+	// No order reached the broker AND the operator was alerted.
+	if len(trader.placed) != 0 {
+		t.Errorf("expected no PlaceOrder call, but trader captured %+v", trader.placed)
 	}
 	if len(mail.sent) != 1 {
 		t.Fatalf("expected 1 alert email, got %d", len(mail.sent))
@@ -508,21 +504,21 @@ func TestHandleQualifyingPicks_EmptyInputIsNoOp(t *testing.T) {
 	}
 }
 
-func TestHandleQualifyingPick_WorkingPersistsOrderID(t *testing.T) {
+func TestHandleSinglePick_WorkingPersistsOrderID(t *testing.T) {
 	store := &fakeStore{}
 	mail := &fakeMail{}
-	trader := &fakeTrader{
+	trader := &countingTrader{fakeTrader: fakeTrader{
 		placeID: "ORDER-WORK",
 		status: OrderStatus{
 			OrderID:   "ORDER-WORK",
 			RawStatus: "WORKING",
 			Working:   true,
 		},
-	}
+	}}
 	svc := newTestService(trader, store, mail)
 
-	if err := svc.HandleQualifyingPick(context.Background(), sampleTrade(), 5); err != nil {
-		t.Fatalf("HandleQualifyingPick: %v", err)
+	if _, err := runSinglePick(svc, sampleTrade(), 5); err != nil {
+		t.Fatalf("handleSinglePick: %v", err)
 	}
 	// 2 updates: orphan-prevention working write, then redundant
 	// working write after GetOrder confirms broker still working. The
@@ -596,7 +592,7 @@ func (r *repriceTrader) CancelOrder(_ context.Context, _, orderID string) error 
 	return r.cancelErr
 }
 
-func workingPositionFixture(execID int, tradeID int, rank int, orderID string, contractPrice float64) OpenPosition {
+func workingPositionFixture(execID int, tradeID int, orderID string, contractPrice float64) OpenPosition {
 	oid := orderID
 	return OpenPosition{
 		Execution: Execution{
@@ -613,7 +609,6 @@ func workingPositionFixture(execID int, tradeID int, rank int, orderID string, c
 		StrikePrice:   150,
 		Expiration:    "2026-06-19",
 		ContractPrice: contractPrice,
-		Rank:          rank,
 	}
 }
 
@@ -625,7 +620,7 @@ func askFn(price float64, err error) func(context.Context, string, string, strin
 
 func TestRepriceWorkingOpens_NoOpWhenNewLimitNotHigher(t *testing.T) {
 	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 2, "ORDER-OLD", 0.92)},
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 0.92)},
 	}
 	mail := &fakeMail{}
 	trader := &repriceTrader{
@@ -654,7 +649,7 @@ func TestRepriceWorkingOpens_NoOpWhenNewLimitNotHigher(t *testing.T) {
 
 func TestRepriceWorkingOpens_CancelAndReplaceWhenAskMoved(t *testing.T) {
 	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 2, "ORDER-OLD", 0.92)},
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 0.92)},
 	}
 	mail := &fakeMail{}
 	trader := &repriceTrader{
@@ -713,7 +708,7 @@ func TestRepriceWorkingOpens_CancelAndReplaceWhenAskMoved(t *testing.T) {
 
 func TestRepriceWorkingOpens_CancelWithoutReplaceWhenOverCap(t *testing.T) {
 	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 2, "ORDER-OLD", 3.08)},
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 3.08)},
 	}
 	mail := &fakeMail{}
 	trader := &repriceTrader{
@@ -742,8 +737,8 @@ func TestRepriceWorkingOpens_CancelWithoutReplaceWhenOverCap(t *testing.T) {
 	if upd.id != 7 || upd.status != "canceled" || upd.orderID != "ORDER-OLD" {
 		t.Errorf("update: want id=7 canceled ORDER-OLD, got %+v", upd)
 	}
-	if !strings.Contains(upd.errMessage, "exceeds rank-2 cap") {
-		t.Errorf("update reason should mention rank-2 cap exceed, got %q", upd.errMessage)
+	if !strings.Contains(upd.errMessage, "exceeds single-contract cap") {
+		t.Errorf("update reason should mention single-contract cap exceed, got %q", upd.errMessage)
 	}
 	if len(mail.sent) != 1 {
 		t.Fatalf("expected 1 operator email on cap-exceed cancel, got %d", len(mail.sent))
@@ -752,7 +747,7 @@ func TestRepriceWorkingOpens_CancelWithoutReplaceWhenOverCap(t *testing.T) {
 
 func TestRepriceWorkingOpens_LeavesAloneWhenAlreadyFilled(t *testing.T) {
 	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 2, "ORDER-OLD", 0.92)},
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 0.92)},
 	}
 	mail := &fakeMail{}
 	trader := &repriceTrader{
@@ -777,7 +772,7 @@ func TestRepriceWorkingOpens_LeavesAloneWhenAlreadyFilled(t *testing.T) {
 
 func TestRepriceWorkingOpens_LeavesAloneWhenFreshAskMissing(t *testing.T) {
 	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 2, "ORDER-OLD", 0.92)},
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 0.92)},
 	}
 	mail := &fakeMail{}
 	trader := &repriceTrader{
@@ -809,7 +804,7 @@ func TestRepriceWorkingOpens_NoOpWhenNoWorkingPositions(t *testing.T) {
 
 func TestRepriceWorkingOpens_SchwabGetOrderErrorDoesNotPanic(t *testing.T) {
 	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 2, "ORDER-OLD", 0.92)},
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 0.92)},
 	}
 	mail := &fakeMail{}
 	trader := &repriceTrader{
@@ -827,7 +822,7 @@ func TestRepriceWorkingOpens_SchwabGetOrderErrorDoesNotPanic(t *testing.T) {
 
 func TestRepriceWorkingOpens_NoOpWhenOptionAskNotConfigured(t *testing.T) {
 	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 2, "ORDER-OLD", 0.92)},
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 0.92)},
 	}
 	mail := &fakeMail{}
 	trader := &repriceTrader{
@@ -842,71 +837,5 @@ func TestRepriceWorkingOpens_NoOpWhenOptionAskNotConfigured(t *testing.T) {
 
 	if len(trader.canceled) != 0 || len(trader.placedOrders) != 0 || len(store.updates) != 0 {
 		t.Errorf("expected no actions when OptionAsk is nil")
-	}
-}
-
-func TestRepriceWorkingOpens_Rank1UsesHigherCap(t *testing.T) {
-	// Rank-1 with fresh ask × 1.05 = $7.35: over the $5 base cap but
-	// under the $10 rank-1 cap. Must cancel old and replace at new
-	// limit, not bail with a cap-exceed email.
-	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 1, "ORDER-OLD", 3.00)},
-	}
-	mail := &fakeMail{}
-	trader := &repriceTrader{
-		statusByOrder: map[string]OrderStatus{
-			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 3.00},
-		},
-		placeIDs:       []string{"ORDER-NEW"},
-		placeStatusNew: OrderStatus{RawStatus: "WORKING", Working: true},
-	}
-	svc := newTestServiceWithAsk(trader, store, mail, askFn(7.00, nil))
-
-	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
-
-	if got := trader.canceled; len(got) != 1 || got[0] != "ORDER-OLD" {
-		t.Fatalf("expected cancel of ORDER-OLD, got %v", got)
-	}
-	if len(trader.placedOrders) != 1 {
-		t.Fatalf("expected one replacement order, got %d", len(trader.placedOrders))
-	}
-	if got := trader.placedOrders[0].Price; got != 7.35 {
-		t.Errorf("replacement limit: want 7.35, got %.4f", got)
-	}
-	if len(mail.sent) != 0 {
-		t.Errorf("expected no cap-exceed email on rank-1 within elevated cap, got %d", len(mail.sent))
-	}
-}
-
-func TestRepriceWorkingOpens_Rank1CancelsAboveElevatedCap(t *testing.T) {
-	// Rank-1 with fresh ask × 1.05 = $13.65: over even the $10 rank-1
-	// cap. Cancel without replace + operator email.
-	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 1, "ORDER-OLD", 3.00)},
-	}
-	mail := &fakeMail{}
-	trader := &repriceTrader{
-		statusByOrder: map[string]OrderStatus{
-			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 3.00},
-		},
-	}
-	svc := newTestServiceWithAsk(trader, store, mail, askFn(13.00, nil))
-
-	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
-
-	if got := trader.canceled; len(got) != 1 || got[0] != "ORDER-OLD" {
-		t.Fatalf("expected cancel of ORDER-OLD, got %v", got)
-	}
-	if len(trader.placedOrders) != 0 {
-		t.Errorf("expected no replacement when over elevated cap, got %d", len(trader.placedOrders))
-	}
-	if len(store.updates) != 1 {
-		t.Fatalf("expected 1 status update (canceled), got %d (%+v)", len(store.updates), store.updates)
-	}
-	if !strings.Contains(store.updates[0].errMessage, "exceeds rank-1 cap") {
-		t.Errorf("reason should mention rank-1 cap, got %q", store.updates[0].errMessage)
-	}
-	if len(mail.sent) != 1 {
-		t.Errorf("expected 1 operator email, got %d", len(mail.sent))
 	}
 }

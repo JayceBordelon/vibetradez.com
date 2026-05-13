@@ -15,7 +15,7 @@ export function SubscribeModal({ children, open, onOpenChange }: { children?: Re
           <DialogTitle className="text-lg font-extrabold">
             Sign in or <span className="text-gradient-brand">sign up</span>
           </DialogTitle>
-          <DialogDescription>One click with Google gets you the daily picks email, delivered before the opening bell.</DialogDescription>
+          <DialogDescription>One click with Google gets you the daily picks email, delivered right at the open.</DialogDescription>
         </DialogHeader>
 
         <div className="flex gap-2">

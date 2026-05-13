@@ -51,15 +51,15 @@ export function getMarketStatus(now: Date = new Date()): MarketStatus {
     return {
       open: false,
       reason: weekday === 6 ? "It's Saturday. Markets reopen Monday at 9:30 AM ET." : "It's Sunday. Markets reopen Monday at 9:30 AM ET.",
-      nextOpen: `${nextWeekdayLabel(nextDay)} 9:25 AM ET`,
+      nextOpen: `${nextWeekdayLabel(nextDay)} 9:30 AM ET`,
     };
   }
 
   if (minutesIntoDay < openMinutes) {
     return {
       open: false,
-      reason: "Pre-market. Trading opens at 9:30 AM ET, picks publish at 9:25 AM ET.",
-      nextOpen: `Today 9:25 AM ET`,
+      reason: "Pre-market. Trading and daily picks both publish at 9:30 AM ET.",
+      nextOpen: `Today 9:30 AM ET`,
     };
   }
 
@@ -68,13 +68,13 @@ export function getMarketStatus(now: Date = new Date()): MarketStatus {
       return {
         open: false,
         reason: "Markets are closed for the day. Reopens Monday at 9:30 AM ET.",
-        nextOpen: "Monday 9:25 AM ET",
+        nextOpen: "Monday 9:30 AM ET",
       };
     }
     return {
       open: false,
       reason: "Markets are closed for the day. Reopens tomorrow at 9:30 AM ET.",
-      nextOpen: `${nextWeekdayLabel((weekday + 1) % 7)} 9:25 AM ET`,
+      nextOpen: `${nextWeekdayLabel((weekday + 1) % 7)} 9:30 AM ET`,
     };
   }
 

@@ -28,7 +28,7 @@ const faqs = [
   },
   {
     question: "How are the daily trade picks generated?",
-    answer: `Every weekday at 9:25 ET we yeet trending tickers from StockTwits, Yahoo, Finviz, and SEC EDGAR at Claude along with live Schwab quotes, full option chains, and web search as tools. Claude returns 10 ranked picks, each with a 1-10 conviction score and a written rationale defending the call. Whether any of that constitutes "analysis" or "vibes with extra steps" is a philosophical question I am not qualified to answer. The list gets saved, posted to the dashboard, and emailed before the opening bell.`,
+    answer: `Every weekday at 9:30 ET (right at the bell) we yeet trending tickers from StockTwits, Yahoo, Finviz, and SEC EDGAR at Claude along with live Schwab quotes, full option chains, and web search as tools. Claude returns 10 ranked picks, each with a 1-10 conviction score and a written rationale defending the call. Whether any of that constitutes "analysis" or "vibes with extra steps" is a philosophical question I am not qualified to answer. The list gets saved, posted to the dashboard, and emailed a few minutes after the open.`,
   },
   {
     question: "What do the rankings (Top 1, Top 3, Top 5, Top 10) mean?",
@@ -52,7 +52,7 @@ const faqs = [
   },
   {
     question: "How often are emails sent, and what do they contain?",
-    answer: `Up to three a market day. Morning email (before 9:30 ET): the headline pick with full contract spec, thesis, catalyst, conviction score, and Claude's whole essay defending the call. EOD email (after 4:05 ET): how every pick actually performed, with entry vs closing price, stock move, per-trade P&L, and day totals. Friday: weekly digest aggregating the whole week. All free, always free, there is no premium tier I'm secretly building. You can unsubscribe whenever; I won't chase you.`,
+    answer: `Up to three a market day. Morning email (right after 9:30 ET): the headline pick with full contract spec, thesis, catalyst, conviction score, and Claude's whole essay defending the call. EOD email (after 4:05 ET): how every pick actually performed, with entry vs closing price, stock move, per-trade P&L, and day totals. Friday: weekly digest aggregating the whole week. All free, always free, there is no premium tier I'm secretly building. You can unsubscribe whenever; I won't chase you.`,
   },
   {
     question: "Is this even legal?",

@@ -271,7 +271,7 @@ function EmptyState() {
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <CalendarX className="h-12 w-12 text-muted-foreground/50" />
       <h3 className="mt-4 text-base font-semibold">No trades for this date</h3>
-      <p className="mt-1 text-sm text-muted-foreground">Trades publish at 9:25 AM ET on market days.</p>
+      <p className="mt-1 text-sm text-muted-foreground">Trades publish at 9:30 AM ET on market days.</p>
     </div>
   );
 }

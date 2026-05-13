@@ -41,5 +41,4 @@ type OpenPosition struct {
 	StrikePrice   float64
 	Expiration    string
 	ContractPrice float64
-	Rank          int
 }

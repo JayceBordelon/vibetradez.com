@@ -105,7 +105,7 @@ func (s *Store) OpenPositionsForDate(tradeDate string) ([]exec.OpenPosition, err
 		SELECT e.id, e.trade_id, e.mode, e.side, e.schwab_order_id, e.status,
 			e.fill_price, e.filled_quantity, e.requested_quantity,
 			e.submitted_at, e.filled_at, e.error_message, e.created_at,
-			t.symbol, t.contract_type, t.strike_price, t.expiration, t.estimated_price, t.rank
+			t.symbol, t.contract_type, t.strike_price, t.expiration, t.estimated_price
 		FROM executions e
 		INNER JOIN trades t ON t.id = e.trade_id
 		WHERE t.date = $1
@@ -133,7 +133,7 @@ func (s *Store) OpenPositionsForDate(tradeDate string) ([]exec.OpenPosition, err
 			&schwabOrderID, &p.Execution.Status,
 			&fillPrice, &p.Execution.FilledQuantity, &p.Execution.RequestedQuantity,
 			&p.Execution.SubmittedAt, &filledAt, &p.Execution.ErrorMessage, &p.Execution.CreatedAt,
-			&p.Symbol, &p.ContractType, &p.StrikePrice, &p.Expiration, &p.ContractPrice, &p.Rank,
+			&p.Symbol, &p.ContractType, &p.StrikePrice, &p.Expiration, &p.ContractPrice,
 		); err != nil {
 			return nil, fmt.Errorf("scan open position: %w", err)
 		}
@@ -218,7 +218,7 @@ func (s *Store) WorkingOpenPositionsForDate(tradeDate string) ([]exec.OpenPositi
 		SELECT e.id, e.trade_id, e.mode, e.side, e.schwab_order_id, e.status,
 			e.fill_price, e.filled_quantity, e.requested_quantity,
 			e.submitted_at, e.filled_at, e.error_message, e.created_at,
-			t.symbol, t.contract_type, t.strike_price, t.expiration, t.estimated_price, t.rank
+			t.symbol, t.contract_type, t.strike_price, t.expiration, t.estimated_price
 		FROM executions e
 		INNER JOIN trades t ON t.id = e.trade_id
 		WHERE t.date = $1
@@ -245,7 +245,7 @@ func (s *Store) WorkingOpenPositionsForDate(tradeDate string) ([]exec.OpenPositi
 			&schwabOrderID, &p.Execution.Status,
 			&fillPrice, &p.Execution.FilledQuantity, &p.Execution.RequestedQuantity,
 			&p.Execution.SubmittedAt, &filledAt, &p.Execution.ErrorMessage, &p.Execution.CreatedAt,
-			&p.Symbol, &p.ContractType, &p.StrikePrice, &p.Expiration, &p.ContractPrice, &p.Rank,
+			&p.Symbol, &p.ContractType, &p.StrikePrice, &p.Expiration, &p.ContractPrice,
 		); err != nil {
 			return nil, fmt.Errorf("scan working open position: %w", err)
 		}

@@ -542,11 +542,11 @@ func isStubKey(k string) bool {
 }
 
 /*
-checkMorningPicks reports whether today's 9:25 ET trade-picking cron
+checkMorningPicks reports whether today's 9:30 ET trade-picking cron
 ran cleanly. Reads today's saved trades and counts how many came from
 each picker. Severity:
   - ok:   both pickers produced ≥1 pick today, OR the morning run is
-    not yet expected (weekend, or before ~9:40 ET on a weekday)
+    not yet expected (weekend, or before ~9:45 ET on a weekday)
   - warn: exactly one picker produced 0 picks (single-model run), or
     no trades exist for today after the expected run time (also
     covers market holidays — false-positive warns are tolerable
@@ -568,8 +568,8 @@ func (s *Server) checkMorningPicks() serviceHealth {
 		return serviceHealth{Status: "ok", Detail: "No morning run scheduled (weekend)"}
 	}
 
-	// Cron fires at 9:25 ET; pickers take 1–10 minutes. Give 15 min slack.
-	expectedBy := time.Date(now.Year(), now.Month(), now.Day(), 9, 40, 0, 0, loc)
+	// Cron fires at 9:30 ET; pickers take 1–10 minutes. Give 15 min slack.
+	expectedBy := time.Date(now.Year(), now.Month(), now.Day(), 9, 45, 0, 0, loc)
 	morningRunExpected := !now.Before(expectedBy)
 
 	tradesToday, err := s.db.GetMorningTrades(today)
@@ -579,7 +579,7 @@ func (s *Server) checkMorningPicks() serviceHealth {
 
 	if len(tradesToday) == 0 {
 		if !morningRunExpected {
-			return serviceHealth{Status: "ok", Detail: "Morning run not yet expected (cron at 9:25 ET)"}
+			return serviceHealth{Status: "ok", Detail: "Morning run not yet expected (cron at 9:30 ET)"}
 		}
 		return serviceHealth{Status: "warn", Detail: fmt.Sprintf("No trades saved for %s (cron failure or market holiday)", today)}
 	}

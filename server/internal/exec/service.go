@@ -99,32 +99,6 @@ schwab_trading auth failures are fatal (live) or merely a warning
 func (s *Service) Mode() string { return s.cfg.Mode }
 
 /*
-HandleQualifyingPick is the legacy single-pick entry point. The
-morning cron now uses HandleQualifyingPicks (basket of up to
-MaxBasketRank picks with cash-check gating); this method is retained
-for tests and any external caller that wants the old single-shot
-semantics. It is a thin wrapper around handleSinglePick that does
-NOT pre-check available funds — callers needing the cash gate must
-go through HandleQualifyingPicks.
-*/
-func (s *Service) HandleQualifyingPick(ctx context.Context, t *trades.Trade, tradeID int) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.cfg.Recipient == "" {
-		return errors.New("execution recipient not configured")
-	}
-	if tradeID == 0 {
-		return errors.New("tradeID must be set for auto-execution")
-	}
-	hash, err := s.cfg.SchwabAccountHash(ctx)
-	if err != nil {
-		return fmt.Errorf("account hash: %w", err)
-	}
-	_, err = s.handleSinglePick(ctx, t, tradeID, hash)
-	return err
-}
-
-/*
 HandleQualifyingPicks is the basket entry point fired by the morning
 cron with the trades returned by selector.QualifyingPicks. It walks
 the picks in rank order (rank-1 first), and for each:
@@ -174,19 +148,19 @@ func (s *Service) HandleQualifyingPicks(ctx context.Context, picks []trades.Trad
 		return 0, fmt.Errorf("available funds: %w", err)
 	}
 	/*
-		Two separate budgets:
-		  - remainingCashUSD tracks what Schwab will let us spend right
-		    now. Both rank-1 and the rank-2/3 tail decrement it. Schwab
-		    won't refresh available funds mid-basket because option fills
-		    settle T+1, so we decrement locally per submission.
-		  - remainingBasketUSD is the daily policy ceiling on the rank-2/3
-		    tail. Rank-1 is exempt — it gets to use the full cash pool
-		    bounded only by MaxRank1ContractPremium — so a $1000 rank-1
-		    doesn't starve the rank-2/3 basket.
+		Single basket budget: the smaller of MaxDailyBasketUSD and
+		Schwab's reported available cash. Decremented locally per
+		submission since Schwab won't refresh available funds mid-basket
+		(option fills settle T+1). Rank-1 gets first crack at the
+		budget but plays by the same rules — if a pick doesn't fit the
+		remaining budget the selector's skip-and-continue keeps walking
+		so a too-big rank-2 can't starve a smaller rank-3.
 	*/
-	remainingCashUSD := availableUSD
-	remainingBasketUSD := MaxDailyBasketUSD
-	log.Printf("execution: basket budget = cash $%.2f, rank-2/3 tail cap $%.2f (rank-1 spends from cash only)", remainingCashUSD, remainingBasketUSD)
+	remainingUSD := MaxDailyBasketUSD
+	if availableUSD < remainingUSD {
+		remainingUSD = availableUSD
+	}
+	log.Printf("execution: basket budget = $%.2f (Schwab available = $%.2f, basket cap = $%.2f)", remainingUSD, availableUSD, MaxDailyBasketUSD)
 
 	submitted := 0
 	for i := range picks {
@@ -195,21 +169,14 @@ func (s *Service) HandleQualifyingPicks(ctx context.Context, picks []trades.Trad
 			log.Printf("execution: pick rank=%d %s missing trade ID, skipping", t.Rank, t.Symbol)
 			continue
 		}
-		budget := remainingCashUSD
-		if t.Rank != 1 && remainingBasketUSD < budget {
-			budget = remainingBasketUSD
-		}
-		costUSD, ok := s.checkBudgetAndPlace(ctx, t, hash, budget)
+		costUSD, ok := s.checkBudgetAndPlace(ctx, t, hash, remainingUSD)
 		if !ok {
 			continue
 		}
-		remainingCashUSD -= costUSD
-		if t.Rank != 1 {
-			remainingBasketUSD -= costUSD
-		}
+		remainingUSD -= costUSD
 		submitted++
 	}
-	log.Printf("execution: basket complete, submitted %d/%d contracts, remaining cash $%.2f, remaining rank-2/3 tail $%.2f", submitted, len(picks), remainingCashUSD, remainingBasketUSD)
+	log.Printf("execution: basket complete, submitted %d/%d contracts, remaining budget $%.2f", submitted, len(picks), remainingUSD)
 	return submitted, nil
 }
 
@@ -223,8 +190,7 @@ remaining budget. Errors after submission are logged inside
 handleSinglePick; this function only filters by cost.
 */
 func (s *Service) checkBudgetAndPlace(ctx context.Context, t *trades.Trade, hash string, remainingUSD float64) (float64, bool) {
-	cap := PerContractPremiumCap(t.Rank)
-	limitPrice, err := s.resolveLimitPrice(ctx, t, cap)
+	limitPrice, err := s.resolveLimitPrice(ctx, t)
 	if err != nil {
 		occ, _ := OCCSymbol(t.Symbol, t.Expiration, t.ContractType, t.StrikePrice)
 		log.Printf("execution: rank=%d %s pricing failed: %v", t.Rank, t.Symbol, err)
@@ -249,12 +215,10 @@ func (s *Service) checkBudgetAndPlace(ctx context.Context, t *trades.Trade, hash
 /*
 resolveLimitPrice fetches the live ask and returns the LIMIT price
 the open order should carry, falling back to Claude's modeled premium
-when the live quote is missing. maxCap is the per-share ceiling that
-already passed the selector gate (caller threads
-PerContractPremiumCap(rank) here). Returns an error only when
-neither basis is usable — caller treats that as "do not submit".
+when the live quote is missing. Returns an error only when neither
+basis is usable — caller treats that as "do not submit".
 */
-func (s *Service) resolveLimitPrice(ctx context.Context, t *trades.Trade, maxCap float64) (float64, error) {
+func (s *Service) resolveLimitPrice(ctx context.Context, t *trades.Trade) (float64, error) {
 	var askPrice float64
 	if s.cfg.OptionAsk != nil {
 		fetched, askErr := s.cfg.OptionAsk(ctx, t.Symbol, t.Expiration, t.ContractType, t.StrikePrice)
@@ -264,7 +228,7 @@ func (s *Service) resolveLimitPrice(ctx context.Context, t *trades.Trade, maxCap
 			askPrice = fetched
 		}
 	}
-	limitPrice := ComputeOpenLimitPrice(askPrice, t.EstimatedPrice, maxCap)
+	limitPrice := ComputeOpenLimitPrice(askPrice, t.EstimatedPrice)
 	if limitPrice <= 0 {
 		return 0, fmt.Errorf("could not resolve a LIMIT price (ask=%.2f, est=%.2f)", askPrice, t.EstimatedPrice)
 	}
@@ -272,12 +236,11 @@ func (s *Service) resolveLimitPrice(ctx context.Context, t *trades.Trade, maxCap
 }
 
 /*
-handleSinglePick is the per-contract submission body lifted out of
-the old HandleQualifyingPick so HandleQualifyingPicks can call it in
-a loop without re-doing the account-hash lookup. Returns the order
-id from Schwab on success (empty string on early exit). Errors are
-non-nil for "did not reach broker" cases AND for downstream lookup
-failures; the caller decides whether to keep going.
+handleSinglePick is the per-contract submission body that
+HandleQualifyingPicks calls in a loop. Returns the order id from
+Schwab on success (empty string on early exit). Errors are non-nil
+for "did not reach broker" cases AND for downstream lookup failures;
+the caller decides whether to keep going.
 */
 func (s *Service) handleSinglePick(ctx context.Context, t *trades.Trade, tradeID int, hash string) (string, error) {
 	occ, err := OCCSymbol(t.Symbol, t.Expiration, t.ContractType, t.StrikePrice)
@@ -285,7 +248,7 @@ func (s *Service) handleSinglePick(ctx context.Context, t *trades.Trade, tradeID
 		return "", fmt.Errorf("build OCC symbol: %w", err)
 	}
 
-	limitPrice, err := s.resolveLimitPrice(ctx, t, PerContractPremiumCap(t.Rank))
+	limitPrice, err := s.resolveLimitPrice(ctx, t)
 	if err != nil {
 		log.Printf("execution: %s", err.Error())
 		s.sendOpenFailedEmail(t, occ, "", err.Error())
@@ -467,11 +430,10 @@ func (s *Service) repriceOne(ctx context.Context, hash string, p *OpenPosition) 
 	}
 
 	newLimit := math.Round(freshAsk*LimitPriceMultiplier*100) / 100
-	cap := PerContractPremiumCap(p.Rank)
 
 	if oldLimit > 0 && newLimit <= oldLimit {
-		log.Printf("execution: reprice no-op (trade=%d, rank=%d, old_limit=$%.2f, fresh_ask=$%.2f, new_limit=$%.2f)",
-			p.Execution.TradeID, p.Rank, oldLimit, freshAsk, newLimit)
+		log.Printf("execution: reprice no-op (trade=%d, old_limit=$%.2f, fresh_ask=$%.2f, new_limit=$%.2f)",
+			p.Execution.TradeID, oldLimit, freshAsk, newLimit)
 		return
 	}
 
@@ -481,12 +443,11 @@ func (s *Service) repriceOne(ctx context.Context, hash string, p *OpenPosition) 
 		StrikePrice:    p.StrikePrice,
 		Expiration:     p.Expiration,
 		EstimatedPrice: p.ContractPrice,
-		Rank:           p.Rank,
 	}
 	occ, _ := OCCSymbol(p.Symbol, p.Expiration, p.ContractType, p.StrikePrice)
 
-	if newLimit > cap {
-		reason := fmt.Sprintf("post-open ask $%.2f × %.2f = $%.2f exceeds rank-%d cap $%.2f", freshAsk, LimitPriceMultiplier, newLimit, p.Rank, cap)
+	if newLimit > MaxContractPremium {
+		reason := fmt.Sprintf("post-open ask $%.2f × %.2f = $%.2f exceeds single-contract cap $%.2f", freshAsk, LimitPriceMultiplier, newLimit, MaxContractPremium)
 		if cancelErr := s.trader.CancelOrder(ctx, hash, oldOrderID); cancelErr != nil {
 			log.Printf("execution: reprice cancel failed (trade=%d, order=%s): %v", p.Execution.TradeID, oldOrderID, cancelErr)
 			// Continue — record the canceled state in our DB and notify.
@@ -570,7 +531,7 @@ Without this, working rows stay in 'working' forever:
     open contract at the broker past market close.
 
 When a working row reaches FILLED here, we send the same receipt
-email that HandleQualifyingPick would have sent on a same-tick fill.
+email that handleSinglePick would have sent on a same-tick fill.
 Terminal-not-filled outcomes (REJECTED / CANCELED / EXPIRED) flip to
 'rejected' and notify the operator. Errors are logged but never
 propagated, the cron must keep running.

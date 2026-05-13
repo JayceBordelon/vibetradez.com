@@ -130,7 +130,7 @@ func checkClockSkew() {
 		skew = -skew
 	}
 	if skew > maxAcceptableSkew {
-		log.Printf("clock-skew WARNING: local clock differs from cloudflare by %s (threshold %s); the 3:55pm close cron and 5-minute confirmation window WILL fire at the wrong wall-clock time", skew.Truncate(time.Second), maxAcceptableSkew)
+		log.Printf("clock-skew WARNING: local clock differs from cloudflare by %s (threshold %s); the 9:30 morning, 9:35 reprice, and 3:55 close crons WILL fire at the wrong wall-clock time", skew.Truncate(time.Second), maxAcceptableSkew)
 	} else {
 		log.Printf("clock-skew probe: local clock within %s of cloudflare (rtt=%s)", skew.Truncate(time.Millisecond), rtt.Truncate(time.Millisecond))
 	}
@@ -283,7 +283,7 @@ func main() {
 		Daily Schwab refresh-token expiry warning. Schwab caps refresh
 		tokens at 7 days from the original consent and does NOT rotate
 		them on access-token refresh, so without a proactive nag the
-		operator only discovers the dead token when the 9:25 ET cron
+		operator only discovers the dead token when the 9:30 ET cron
 		hard-fails in front of subscribers. Fires at 12:00 ET (mid-day,
 		when the operator is most likely at a desk to act on it), warns
 		starting at 5-days-old, dedupes per ET date so a same-day
@@ -319,17 +319,17 @@ func main() {
 		}
 
 		/*
-			Post-open reprice pass at 9:31 ET. The 9:25 morning cron sizes
-			LIMITs from pre-open Schwab quotes (often 0-ask on thin
-			contracts, falling back to Claude's modeled premium), so any
-			real-open jump or Claude mispricing leaves orders stranded
-			WORKING for the rest of the day until Schwab auto-expires the
-			DAY orders at 16:00 ET. One minute after the bell is enough
-			time for Schwab to populate live asks across the basket; the
-			cancel-and-replace happens once, not every minute, to avoid
-			latency thrash on a healthy limit.
+			Post-open reprice safety net at 9:35 ET. The 9:30 morning cron
+			fires Claude against live post-open quotes — so in the typical
+			case orders are sized at ask × 1.05 against real numbers and
+			this pass is a no-op. It still exists as a defensive belt for
+			Claude mispricings (e.g. picking a deep-ITM put at OTM premium)
+			and for contracts whose ask runs in the first few minutes
+			after the bell. Timed to fire ~5 minutes after the morning
+			cron starts so the Claude tool-use loop + per-pick PlaceOrder
+			calls have settled at the broker before we re-check.
 		*/
-		if _, err := c.AddFunc("31 9 * * 1-5", func() {
+		if _, err := c.AddFunc("35 9 * * 1-5", func() {
 			if open, reason := isMarketOpen(); !open {
 				log.Printf("Skipping post-open reprice: %s", reason)
 				return
@@ -365,7 +365,7 @@ func main() {
 		}); err != nil {
 			log.Fatalf("Failed to add 12:55pm half-day close cron: %v", err)
 		}
-		log.Printf("execution: cron registered (open-reconcile every minute 9-15 ET, post-open reprice 9:31 ET, close 3:55pm or 12:55pm half-days)")
+		log.Printf("execution: cron registered (open-reconcile every minute 9-15 ET, post-open reprice 9:35 ET, close 3:55pm or 12:55pm half-days)")
 	}
 
 	c.Start()

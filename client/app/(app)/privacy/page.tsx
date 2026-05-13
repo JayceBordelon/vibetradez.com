@@ -98,7 +98,7 @@ export default function PrivacyPage() {
             <p>The data above is used for exactly these things, and nothing else:</p>
             <ul>
               <li>Authenticating you on subsequent visits to the dashboard.</li>
-              <li>Sending you the daily picks email at 9:25 AM ET, the EOD summary at 4:05 PM ET, the Friday weekly digest, and occasional one-shot announcements about feature changes.</li>
+              <li>Sending you the daily picks email at 9:30 AM ET, the EOD summary at 4:05 PM ET, the Friday weekly digest, and occasional one-shot announcements about feature changes.</li>
               <li>Keeping subscription state correct (active vs unsubscribed).</li>
               <li>Diagnosing operational issues (e.g. understanding why a particular request 500'd, who saw a particular bug).</li>
             </ul>
