@@ -202,6 +202,7 @@ func (lt *LiveTrader) GetOrder(ctx context.Context, accountHash, orderID string)
 		Quantity:       int(raw.Quantity),
 		FilledQuantity: int(raw.FilledQuantity),
 		FillPrice:      fillPrice,
+		LimitPrice:     raw.Price,
 		UpdatedAt:      time.Now(),
 		ErrorMessage:   raw.StatusDescription,
 	}

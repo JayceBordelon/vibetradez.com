@@ -10,9 +10,10 @@ import (
 )
 
 type fakeStore struct {
-	inserts []Execution
-	updates []storeUpdate
-	nextID  int
+	inserts          []Execution
+	updates          []storeUpdate
+	nextID           int
+	workingPositions []OpenPosition
 }
 
 type storeUpdate struct {
@@ -41,7 +42,7 @@ func (f *fakeStore) OpenPositionsForDate(string) ([]OpenPosition, error) {
 	return nil, nil
 }
 func (f *fakeStore) WorkingOpenPositionsForDate(string) ([]OpenPosition, error) {
-	return nil, nil
+	return f.workingPositions, nil
 }
 
 type fakeMail struct {
@@ -537,5 +538,375 @@ func TestHandleQualifyingPick_WorkingPersistsOrderID(t *testing.T) {
 	}
 	if len(mail.sent) != 0 {
 		t.Errorf("expected no email on working state, got %d", len(mail.sent))
+	}
+}
+
+// ── RepriceWorkingOpens ───────────────────────────────────────────
+
+/*
+repriceTrader is a richer fake than fakeTrader, with per-order status
+lookup, captured cancels, and a queue of PlaceOrder return ids so a
+single test can simulate the cancel-old + place-new round trip.
+*/
+type repriceTrader struct {
+	statusByOrder  map[string]OrderStatus
+	statusGetErr   error
+	canceled       []string
+	cancelErr      error
+	placeIDs       []string
+	placedOrders   []Order
+	placeErr       error
+	placeStatusNew OrderStatus
+}
+
+func (r *repriceTrader) AccountHash(context.Context) (string, error) { return "ACCT-HASH", nil }
+func (r *repriceTrader) AvailableFunds(context.Context, string) (float64, error) {
+	return 1e6, nil
+}
+func (r *repriceTrader) PlaceOrder(_ context.Context, _ string, o Order) (string, error) {
+	if r.placeErr != nil {
+		return "", r.placeErr
+	}
+	if len(r.placeIDs) == 0 {
+		return "", errors.New("repriceTrader: no placeIDs left")
+	}
+	id := r.placeIDs[0]
+	r.placeIDs = r.placeIDs[1:]
+	r.placedOrders = append(r.placedOrders, o)
+	if r.statusByOrder == nil {
+		r.statusByOrder = map[string]OrderStatus{}
+	}
+	st := r.placeStatusNew
+	st.OrderID = id
+	r.statusByOrder[id] = st
+	return id, nil
+}
+func (r *repriceTrader) GetOrder(_ context.Context, _, orderID string) (OrderStatus, error) {
+	if r.statusGetErr != nil {
+		return OrderStatus{}, r.statusGetErr
+	}
+	st, ok := r.statusByOrder[orderID]
+	if !ok {
+		return OrderStatus{}, errors.New("repriceTrader: no status for " + orderID)
+	}
+	return st, nil
+}
+func (r *repriceTrader) CancelOrder(_ context.Context, _, orderID string) error {
+	r.canceled = append(r.canceled, orderID)
+	return r.cancelErr
+}
+
+func workingPositionFixture(execID int, tradeID int, rank int, orderID string, contractPrice float64) OpenPosition {
+	oid := orderID
+	return OpenPosition{
+		Execution: Execution{
+			ID:                execID,
+			TradeID:           tradeID,
+			Mode:              "live",
+			Side:              "open",
+			SchwabOrderID:     &oid,
+			Status:            "working",
+			RequestedQuantity: 1,
+		},
+		Symbol:        "AAPL",
+		ContractType:  "CALL",
+		StrikePrice:   150,
+		Expiration:    "2026-06-19",
+		ContractPrice: contractPrice,
+		Rank:          rank,
+	}
+}
+
+func askFn(price float64, err error) func(context.Context, string, string, string, float64) (float64, error) {
+	return func(context.Context, string, string, string, float64) (float64, error) {
+		return price, err
+	}
+}
+
+func TestRepriceWorkingOpens_NoOpWhenNewLimitNotHigher(t *testing.T) {
+	store := &fakeStore{
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 2, "ORDER-OLD", 0.92)},
+	}
+	mail := &fakeMail{}
+	trader := &repriceTrader{
+		statusByOrder: map[string]OrderStatus{
+			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 0.95},
+		},
+	}
+	// fresh ask × 1.05 = 0.90 × 1.05 = 0.945 → rounds to 0.95, equal to old.
+	svc := newTestServiceWithAsk(trader, store, mail, askFn(0.90, nil))
+
+	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
+
+	if len(trader.canceled) != 0 {
+		t.Errorf("expected no cancels on no-op, got %v", trader.canceled)
+	}
+	if len(trader.placedOrders) != 0 {
+		t.Errorf("expected no replacement orders on no-op, got %d", len(trader.placedOrders))
+	}
+	if len(store.updates) != 0 {
+		t.Errorf("expected no DB writes on no-op, got %d (%+v)", len(store.updates), store.updates)
+	}
+	if len(mail.sent) != 0 {
+		t.Errorf("expected no emails on no-op, got %d", len(mail.sent))
+	}
+}
+
+func TestRepriceWorkingOpens_CancelAndReplaceWhenAskMoved(t *testing.T) {
+	store := &fakeStore{
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 2, "ORDER-OLD", 0.92)},
+	}
+	mail := &fakeMail{}
+	trader := &repriceTrader{
+		statusByOrder: map[string]OrderStatus{
+			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 0.92},
+		},
+		placeIDs:       []string{"ORDER-NEW"},
+		placeStatusNew: OrderStatus{RawStatus: "WORKING", Working: true},
+	}
+	// 2.40 × 1.05 = 2.52 → well above old 0.92 and below the $5 cap.
+	svc := newTestServiceWithAsk(trader, store, mail, askFn(2.40, nil))
+
+	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
+
+	if got := trader.canceled; len(got) != 1 || got[0] != "ORDER-OLD" {
+		t.Fatalf("expected cancel of ORDER-OLD, got %v", got)
+	}
+	if len(trader.placedOrders) != 1 {
+		t.Fatalf("expected one replacement order placed, got %d", len(trader.placedOrders))
+	}
+	if got := trader.placedOrders[0].Price; got != 2.52 {
+		t.Errorf("replacement limit: want 2.52, got %.4f", got)
+	}
+	if got := trader.placedOrders[0].OrderType; got != "LIMIT" {
+		t.Errorf("replacement order type: want LIMIT, got %q", got)
+	}
+
+	if len(store.inserts) != 1 {
+		t.Fatalf("expected one new execution row, got %d", len(store.inserts))
+	}
+	newExec := store.inserts[0]
+	if newExec.TradeID != 42 || newExec.Side != "open" || newExec.Mode != "live" {
+		t.Errorf("new execution shape unexpected: %+v", newExec)
+	}
+
+	// Expected update sequence:
+	//   1. old exec (id=7) → canceled with "repriced post-open ..." reason
+	//   2. new exec (id=1) → working with ORDER-NEW
+	//   3. new exec (id=1) → working with ORDER-NEW (post-place GetOrder confirmation)
+	if len(store.updates) < 2 {
+		t.Fatalf("expected at least 2 status updates, got %d (%+v)", len(store.updates), store.updates)
+	}
+	if store.updates[0].id != 7 || store.updates[0].status != "canceled" || store.updates[0].orderID != "ORDER-OLD" {
+		t.Errorf("update[0]: want id=7 canceled ORDER-OLD, got %+v", store.updates[0])
+	}
+	if !strings.Contains(store.updates[0].errMessage, "repriced post-open") {
+		t.Errorf("update[0] error message should mention repriced post-open, got %q", store.updates[0].errMessage)
+	}
+	if store.updates[1].status != "working" || store.updates[1].orderID != "ORDER-NEW" {
+		t.Errorf("update[1]: want working ORDER-NEW, got %+v", store.updates[1])
+	}
+	if len(mail.sent) != 0 {
+		t.Errorf("expected no emails on healthy reprice, got %d", len(mail.sent))
+	}
+}
+
+func TestRepriceWorkingOpens_CancelWithoutReplaceWhenOverCap(t *testing.T) {
+	store := &fakeStore{
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 2, "ORDER-OLD", 3.08)},
+	}
+	mail := &fakeMail{}
+	trader := &repriceTrader{
+		statusByOrder: map[string]OrderStatus{
+			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 3.08},
+		},
+	}
+	// 14.60 × 1.05 = 15.33 → far above the $5 single-contract cap.
+	svc := newTestServiceWithAsk(trader, store, mail, askFn(14.60, nil))
+
+	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
+
+	if got := trader.canceled; len(got) != 1 || got[0] != "ORDER-OLD" {
+		t.Fatalf("expected cancel of ORDER-OLD, got %v", got)
+	}
+	if len(trader.placedOrders) != 0 {
+		t.Errorf("expected no replacement order when over cap, got %d", len(trader.placedOrders))
+	}
+	if len(store.inserts) != 0 {
+		t.Errorf("expected no new execution row when over cap, got %d", len(store.inserts))
+	}
+	if len(store.updates) != 1 {
+		t.Fatalf("expected 1 status update, got %d (%+v)", len(store.updates), store.updates)
+	}
+	upd := store.updates[0]
+	if upd.id != 7 || upd.status != "canceled" || upd.orderID != "ORDER-OLD" {
+		t.Errorf("update: want id=7 canceled ORDER-OLD, got %+v", upd)
+	}
+	if !strings.Contains(upd.errMessage, "exceeds rank-2 cap") {
+		t.Errorf("update reason should mention rank-2 cap exceed, got %q", upd.errMessage)
+	}
+	if len(mail.sent) != 1 {
+		t.Fatalf("expected 1 operator email on cap-exceed cancel, got %d", len(mail.sent))
+	}
+}
+
+func TestRepriceWorkingOpens_LeavesAloneWhenAlreadyFilled(t *testing.T) {
+	store := &fakeStore{
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 2, "ORDER-OLD", 0.92)},
+	}
+	mail := &fakeMail{}
+	trader := &repriceTrader{
+		statusByOrder: map[string]OrderStatus{
+			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "FILLED", Filled: true, Terminal: true, LimitPrice: 0.92},
+		},
+	}
+	svc := newTestServiceWithAsk(trader, store, mail, askFn(2.40, nil))
+
+	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
+
+	if len(trader.canceled) != 0 {
+		t.Errorf("expected no cancel on already-filled order, got %v", trader.canceled)
+	}
+	if len(trader.placedOrders) != 0 {
+		t.Errorf("expected no replacement on already-filled order, got %d", len(trader.placedOrders))
+	}
+	if len(store.updates) != 0 {
+		t.Errorf("expected no DB writes (reconcile owns the filled flip), got %d", len(store.updates))
+	}
+}
+
+func TestRepriceWorkingOpens_LeavesAloneWhenFreshAskMissing(t *testing.T) {
+	store := &fakeStore{
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 2, "ORDER-OLD", 0.92)},
+	}
+	mail := &fakeMail{}
+	trader := &repriceTrader{
+		statusByOrder: map[string]OrderStatus{
+			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 0.92},
+		},
+	}
+	svc := newTestServiceWithAsk(trader, store, mail, askFn(0, nil))
+
+	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
+
+	if len(trader.canceled) != 0 || len(trader.placedOrders) != 0 || len(store.updates) != 0 {
+		t.Errorf("expected total no-op when fresh ask is 0: canceled=%v placed=%d updates=%v", trader.canceled, len(trader.placedOrders), store.updates)
+	}
+}
+
+func TestRepriceWorkingOpens_NoOpWhenNoWorkingPositions(t *testing.T) {
+	store := &fakeStore{}
+	mail := &fakeMail{}
+	trader := &repriceTrader{}
+	svc := newTestServiceWithAsk(trader, store, mail, askFn(2.40, nil))
+
+	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
+
+	if len(trader.canceled) != 0 || len(trader.placedOrders) != 0 || len(store.updates) != 0 {
+		t.Errorf("expected total no-op with empty positions")
+	}
+}
+
+func TestRepriceWorkingOpens_SchwabGetOrderErrorDoesNotPanic(t *testing.T) {
+	store := &fakeStore{
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 2, "ORDER-OLD", 0.92)},
+	}
+	mail := &fakeMail{}
+	trader := &repriceTrader{
+		statusGetErr: errors.New("schwab 503"),
+	}
+	svc := newTestServiceWithAsk(trader, store, mail, askFn(2.40, nil))
+
+	// Must not panic and must not act when broker status is unreadable.
+	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
+
+	if len(trader.canceled) != 0 || len(trader.placedOrders) != 0 || len(store.updates) != 0 {
+		t.Errorf("expected no actions on Schwab GetOrder error")
+	}
+}
+
+func TestRepriceWorkingOpens_NoOpWhenOptionAskNotConfigured(t *testing.T) {
+	store := &fakeStore{
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 2, "ORDER-OLD", 0.92)},
+	}
+	mail := &fakeMail{}
+	trader := &repriceTrader{
+		statusByOrder: map[string]OrderStatus{
+			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 0.92},
+		},
+	}
+	// OptionAsk left nil — reprice must short-circuit without touching the broker.
+	svc := newTestService(trader, store, mail)
+
+	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
+
+	if len(trader.canceled) != 0 || len(trader.placedOrders) != 0 || len(store.updates) != 0 {
+		t.Errorf("expected no actions when OptionAsk is nil")
+	}
+}
+
+func TestRepriceWorkingOpens_Rank1UsesHigherCap(t *testing.T) {
+	// Rank-1 with fresh ask × 1.05 = $7.35: over the $5 base cap but
+	// under the $10 rank-1 cap. Must cancel old and replace at new
+	// limit, not bail with a cap-exceed email.
+	store := &fakeStore{
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 1, "ORDER-OLD", 3.00)},
+	}
+	mail := &fakeMail{}
+	trader := &repriceTrader{
+		statusByOrder: map[string]OrderStatus{
+			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 3.00},
+		},
+		placeIDs:       []string{"ORDER-NEW"},
+		placeStatusNew: OrderStatus{RawStatus: "WORKING", Working: true},
+	}
+	svc := newTestServiceWithAsk(trader, store, mail, askFn(7.00, nil))
+
+	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
+
+	if got := trader.canceled; len(got) != 1 || got[0] != "ORDER-OLD" {
+		t.Fatalf("expected cancel of ORDER-OLD, got %v", got)
+	}
+	if len(trader.placedOrders) != 1 {
+		t.Fatalf("expected one replacement order, got %d", len(trader.placedOrders))
+	}
+	if got := trader.placedOrders[0].Price; got != 7.35 {
+		t.Errorf("replacement limit: want 7.35, got %.4f", got)
+	}
+	if len(mail.sent) != 0 {
+		t.Errorf("expected no cap-exceed email on rank-1 within elevated cap, got %d", len(mail.sent))
+	}
+}
+
+func TestRepriceWorkingOpens_Rank1CancelsAboveElevatedCap(t *testing.T) {
+	// Rank-1 with fresh ask × 1.05 = $13.65: over even the $10 rank-1
+	// cap. Cancel without replace + operator email.
+	store := &fakeStore{
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, 1, "ORDER-OLD", 3.00)},
+	}
+	mail := &fakeMail{}
+	trader := &repriceTrader{
+		statusByOrder: map[string]OrderStatus{
+			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 3.00},
+		},
+	}
+	svc := newTestServiceWithAsk(trader, store, mail, askFn(13.00, nil))
+
+	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
+
+	if got := trader.canceled; len(got) != 1 || got[0] != "ORDER-OLD" {
+		t.Fatalf("expected cancel of ORDER-OLD, got %v", got)
+	}
+	if len(trader.placedOrders) != 0 {
+		t.Errorf("expected no replacement when over elevated cap, got %d", len(trader.placedOrders))
+	}
+	if len(store.updates) != 1 {
+		t.Fatalf("expected 1 status update (canceled), got %d (%+v)", len(store.updates), store.updates)
+	}
+	if !strings.Contains(store.updates[0].errMessage, "exceeds rank-1 cap") {
+		t.Errorf("reason should mention rank-1 cap, got %q", store.updates[0].errMessage)
+	}
+	if len(mail.sent) != 1 {
+		t.Errorf("expected 1 operator email, got %d", len(mail.sent))
 	}
 }

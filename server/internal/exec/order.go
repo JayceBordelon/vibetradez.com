@@ -24,13 +24,18 @@ const LimitPriceMultiplier = 1.05
 /*
 ComputeOpenLimitPrice picks the LIMIT price for a morning open order:
 askPrice × LimitPriceMultiplier, rounded to nearest cent, clamped to
-MaxContractPremium. Falls back to estimatedPrice (Claude's modeled
-premium at pick time) when askPrice is unavailable or zero — typical
-pre-open Schwab market data sometimes returns 0 ask on thin contracts.
+maxCap. Falls back to estimatedPrice (Claude's modeled premium at
+pick time) when askPrice is unavailable or zero — typical pre-open
+Schwab market data sometimes returns 0 ask on thin contracts.
 Returns 0 if neither basis is usable; callers treat 0 as "do not
 submit".
+
+The maxCap is the per-share ceiling that already passed the selector
+gate — callers thread PerContractPremiumCap(rank) here so rank-1
+clamps at MaxRank1ContractPremium and ranks 2-3 clamp at
+MaxContractPremium.
 */
-func ComputeOpenLimitPrice(askPrice, estimatedPrice float64) float64 {
+func ComputeOpenLimitPrice(askPrice, estimatedPrice, maxCap float64) float64 {
 	basis := askPrice
 	if basis <= 0 {
 		basis = estimatedPrice
@@ -39,8 +44,8 @@ func ComputeOpenLimitPrice(askPrice, estimatedPrice float64) float64 {
 		return 0
 	}
 	limit := math.Round(basis*LimitPriceMultiplier*100) / 100
-	if limit > MaxContractPremium {
-		limit = MaxContractPremium
+	if maxCap > 0 && limit > maxCap {
+		limit = maxCap
 	}
 	return limit
 }

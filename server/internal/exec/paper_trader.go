@@ -50,6 +50,7 @@ type paperOrder struct {
 	occSymbol      string
 	side           string // BUY_TO_OPEN | SELL_TO_CLOSE
 	quantity       int
+	limitPrice     float64
 	fillPrice      float64
 	filledAt       time.Time
 	status         string // FILLED | CANCELED
@@ -110,6 +111,7 @@ func (pt *PaperTrader) PlaceOrder(ctx context.Context, _ string, order Order) (s
 			occSymbol:      occ,
 			side:           leg.Instruction,
 			quantity:       leg.Quantity,
+			limitPrice:     order.Price,
 			status:         "REJECTED",
 			rejectedReason: err.Error(),
 		}
@@ -120,12 +122,13 @@ func (pt *PaperTrader) PlaceOrder(ctx context.Context, _ string, order Order) (s
 	id := newPaperOrderID()
 	pt.mu.Lock()
 	pt.orders[id] = paperOrder{
-		occSymbol: occ,
-		side:      leg.Instruction,
-		quantity:  leg.Quantity,
-		fillPrice: mark,
-		filledAt:  time.Now(),
-		status:    "FILLED",
+		occSymbol:  occ,
+		side:       leg.Instruction,
+		quantity:   leg.Quantity,
+		limitPrice: order.Price,
+		fillPrice:  mark,
+		filledAt:   time.Now(),
+		status:     "FILLED",
 	}
 	pt.mu.Unlock()
 	return id, nil
@@ -144,6 +147,7 @@ func (pt *PaperTrader) GetOrder(_ context.Context, _, orderID string) (OrderStat
 		Quantity:       o.quantity,
 		FilledQuantity: 0,
 		FillPrice:      o.fillPrice,
+		LimitPrice:     o.limitPrice,
 		UpdatedAt:      time.Now(),
 		ErrorMessage:   o.rejectedReason,
 	}

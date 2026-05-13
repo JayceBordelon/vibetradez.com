@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -172,11 +173,20 @@ func (s *Service) HandleQualifyingPicks(ctx context.Context, picks []trades.Trad
 		log.Printf("execution: AvailableFunds lookup failed, skipping basket: %v", err)
 		return 0, fmt.Errorf("available funds: %w", err)
 	}
-	remainingUSD := MaxDailyBasketUSD
-	if availableUSD < remainingUSD {
-		remainingUSD = availableUSD
-	}
-	log.Printf("execution: basket budget = $%.2f (Schwab available = $%.2f, basket cap = $%.2f)", remainingUSD, availableUSD, MaxDailyBasketUSD)
+	/*
+		Two separate budgets:
+		  - remainingCashUSD tracks what Schwab will let us spend right
+		    now. Both rank-1 and the rank-2/3 tail decrement it. Schwab
+		    won't refresh available funds mid-basket because option fills
+		    settle T+1, so we decrement locally per submission.
+		  - remainingBasketUSD is the daily policy ceiling on the rank-2/3
+		    tail. Rank-1 is exempt — it gets to use the full cash pool
+		    bounded only by MaxRank1ContractPremium — so a $1000 rank-1
+		    doesn't starve the rank-2/3 basket.
+	*/
+	remainingCashUSD := availableUSD
+	remainingBasketUSD := MaxDailyBasketUSD
+	log.Printf("execution: basket budget = cash $%.2f, rank-2/3 tail cap $%.2f (rank-1 spends from cash only)", remainingCashUSD, remainingBasketUSD)
 
 	submitted := 0
 	for i := range picks {
@@ -185,14 +195,21 @@ func (s *Service) HandleQualifyingPicks(ctx context.Context, picks []trades.Trad
 			log.Printf("execution: pick rank=%d %s missing trade ID, skipping", t.Rank, t.Symbol)
 			continue
 		}
-		costUSD, ok := s.checkBudgetAndPlace(ctx, t, hash, remainingUSD)
+		budget := remainingCashUSD
+		if t.Rank != 1 && remainingBasketUSD < budget {
+			budget = remainingBasketUSD
+		}
+		costUSD, ok := s.checkBudgetAndPlace(ctx, t, hash, budget)
 		if !ok {
 			continue
 		}
-		remainingUSD -= costUSD
+		remainingCashUSD -= costUSD
+		if t.Rank != 1 {
+			remainingBasketUSD -= costUSD
+		}
 		submitted++
 	}
-	log.Printf("execution: basket complete, submitted %d/%d contracts, remaining budget $%.2f", submitted, len(picks), remainingUSD)
+	log.Printf("execution: basket complete, submitted %d/%d contracts, remaining cash $%.2f, remaining rank-2/3 tail $%.2f", submitted, len(picks), remainingCashUSD, remainingBasketUSD)
 	return submitted, nil
 }
 
@@ -206,7 +223,8 @@ remaining budget. Errors after submission are logged inside
 handleSinglePick; this function only filters by cost.
 */
 func (s *Service) checkBudgetAndPlace(ctx context.Context, t *trades.Trade, hash string, remainingUSD float64) (float64, bool) {
-	limitPrice, err := s.resolveLimitPrice(ctx, t)
+	cap := PerContractPremiumCap(t.Rank)
+	limitPrice, err := s.resolveLimitPrice(ctx, t, cap)
 	if err != nil {
 		occ, _ := OCCSymbol(t.Symbol, t.Expiration, t.ContractType, t.StrikePrice)
 		log.Printf("execution: rank=%d %s pricing failed: %v", t.Rank, t.Symbol, err)
@@ -215,13 +233,13 @@ func (s *Service) checkBudgetAndPlace(ctx context.Context, t *trades.Trade, hash
 	}
 	costUSD := limitPrice * 100 * float64(MaxContracts)
 	if costUSD > remainingUSD {
-		log.Printf("execution: rank=%d %s skipped, cost $%.2f exceeds remaining basket $%.2f", t.Rank, t.Symbol, costUSD, remainingUSD)
+		log.Printf("execution: rank=%d %s skipped, cost $%.2f exceeds remaining budget $%.2f", t.Rank, t.Symbol, costUSD, remainingUSD)
 		return 0, false
 	}
 	if _, err := s.handleSinglePick(ctx, t, t.ID, hash); err != nil {
 		log.Printf("execution: rank=%d %s submit failed: %v", t.Rank, t.Symbol, err)
 		// Even on submission failure, the contract reached the broker
-		// (or tried to) — count the cost against the basket so a
+		// (or tried to) — count the cost against the budget so a
 		// retry storm can't blow through the daily cap.
 		return costUSD, true
 	}
@@ -231,10 +249,12 @@ func (s *Service) checkBudgetAndPlace(ctx context.Context, t *trades.Trade, hash
 /*
 resolveLimitPrice fetches the live ask and returns the LIMIT price
 the open order should carry, falling back to Claude's modeled premium
-when the live quote is missing. Returns an error only when neither
-basis is usable — caller treats that as "do not submit".
+when the live quote is missing. maxCap is the per-share ceiling that
+already passed the selector gate (caller threads
+PerContractPremiumCap(rank) here). Returns an error only when
+neither basis is usable — caller treats that as "do not submit".
 */
-func (s *Service) resolveLimitPrice(ctx context.Context, t *trades.Trade) (float64, error) {
+func (s *Service) resolveLimitPrice(ctx context.Context, t *trades.Trade, maxCap float64) (float64, error) {
 	var askPrice float64
 	if s.cfg.OptionAsk != nil {
 		fetched, askErr := s.cfg.OptionAsk(ctx, t.Symbol, t.Expiration, t.ContractType, t.StrikePrice)
@@ -244,7 +264,7 @@ func (s *Service) resolveLimitPrice(ctx context.Context, t *trades.Trade) (float
 			askPrice = fetched
 		}
 	}
-	limitPrice := ComputeOpenLimitPrice(askPrice, t.EstimatedPrice)
+	limitPrice := ComputeOpenLimitPrice(askPrice, t.EstimatedPrice, maxCap)
 	if limitPrice <= 0 {
 		return 0, fmt.Errorf("could not resolve a LIMIT price (ask=%.2f, est=%.2f)", askPrice, t.EstimatedPrice)
 	}
@@ -265,7 +285,7 @@ func (s *Service) handleSinglePick(ctx context.Context, t *trades.Trade, tradeID
 		return "", fmt.Errorf("build OCC symbol: %w", err)
 	}
 
-	limitPrice, err := s.resolveLimitPrice(ctx, t)
+	limitPrice, err := s.resolveLimitPrice(ctx, t, PerContractPremiumCap(t.Rank))
 	if err != nil {
 		log.Printf("execution: %s", err.Error())
 		s.sendOpenFailedEmail(t, occ, "", err.Error())
@@ -338,6 +358,199 @@ func (s *Service) handleSinglePick(ctx context.Context, t *trades.Trade, tradeID
 		log.Printf("execution: open order working (trade_id=%d, order=%s, status=%s)", tradeID, orderID, st.RawStatus)
 	}
 	return orderID, nil
+}
+
+/*
+RepriceWorkingOpens is the one-shot post-open cron entry point that
+walks every still-WORKING open order and, when the post-open ask has
+moved enough to leave our original LIMIT underwater, cancel-and-
+replaces at a fresh-ask-derived limit. The morning cron's order
+limits are sized from pre-open Schwab quotes (often 0-ask on thin
+contracts, in which case ComputeOpenLimitPrice falls back to Claude's
+modeled premium), so a real-open jump or a Claude mispricing leaves
+orders stranded WORKING for the rest of the day until the broker
+auto-expires them at 16:00 ET. This pass closes that gap.
+
+Decision tree per working position:
+
+  - GetOrder at the broker first. If it has already filled or
+    terminally rejected since the last reconcile tick, do nothing —
+    the per-minute reconcile cron will pick up the new state on its
+    next pass.
+  - Fetch a fresh ask via cfg.OptionAsk. If unavailable, leave the
+    order alone (the original limit might still fill on a pullback).
+  - newLimit = round(freshAsk × LimitPriceMultiplier, cents).
+  - If newLimit ≤ existing broker-side LIMIT (within rounding), leave
+    the order alone. Cancel+replace at the same price is pure round-
+    trip latency for zero benefit, plus a thin no-order-at-broker
+    window in which a fast spike could miss.
+  - If newLimit > MaxContractPremium, the post-open premium has run
+    past the single-contract cap. Cancel the working order, mark the
+    execution 'canceled', and email the operator. The pick is dead
+    for the day.
+  - Otherwise cancel the old order, mark the original execution row
+    'canceled' with a "repriced post-open" reason, insert a new
+    execution row for the replacement, and place a new LIMIT order at
+    newLimit. The new row carries the same trade_id so the dashboard
+    open-position join still points at the live order.
+
+Errors are logged but never propagate — one bad pick must not block
+the rest of the basket. Wrapped in s.mu so concurrent reconcile ticks
+serialize behind us.
+*/
+func (s *Service) RepriceWorkingOpens(ctx context.Context, tradeDate string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("execution: RepriceWorkingOpens top-level panic: %v", r)
+		}
+	}()
+
+	if s.cfg.OptionAsk == nil {
+		return
+	}
+
+	positions, err := s.store.WorkingOpenPositionsForDate(tradeDate)
+	if err != nil {
+		log.Printf("execution: reprice: working positions: %v", err)
+		return
+	}
+	if len(positions) == 0 {
+		return
+	}
+
+	hash, err := s.cfg.SchwabAccountHash(ctx)
+	if err != nil {
+		log.Printf("execution: reprice: account hash: %v", err)
+		return
+	}
+
+	log.Printf("execution: reprice pass for %d working open(s)", len(positions))
+	for i := range positions {
+		s.repriceOne(ctx, hash, &positions[i])
+	}
+}
+
+func (s *Service) repriceOne(ctx context.Context, hash string, p *OpenPosition) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("execution: repriceOne panic for trade %d: %v", p.Execution.TradeID, r)
+		}
+	}()
+
+	if p.Execution.SchwabOrderID == nil || *p.Execution.SchwabOrderID == "" {
+		return
+	}
+	oldOrderID := *p.Execution.SchwabOrderID
+
+	st, err := s.trader.GetOrder(ctx, hash, oldOrderID)
+	if err != nil {
+		log.Printf("execution: reprice GetOrder (trade=%d, order=%s): %v", p.Execution.TradeID, oldOrderID, err)
+		return
+	}
+	if !st.Working {
+		// Already filled, canceled, or terminally rejected. The reconcile
+		// cron owns the DB flip; reprice does nothing.
+		return
+	}
+	oldLimit := st.LimitPrice
+
+	freshAsk, err := s.cfg.OptionAsk(ctx, p.Symbol, p.Expiration, p.ContractType, p.StrikePrice)
+	if err != nil {
+		log.Printf("execution: reprice ask lookup failed (trade=%d, %s %s %.2f): %v", p.Execution.TradeID, p.Symbol, p.ContractType, p.StrikePrice, err)
+		return
+	}
+	if freshAsk <= 0 {
+		log.Printf("execution: reprice: fresh ask is %.2f, leaving order alone (trade=%d)", freshAsk, p.Execution.TradeID)
+		return
+	}
+
+	newLimit := math.Round(freshAsk*LimitPriceMultiplier*100) / 100
+	cap := PerContractPremiumCap(p.Rank)
+
+	if oldLimit > 0 && newLimit <= oldLimit {
+		log.Printf("execution: reprice no-op (trade=%d, rank=%d, old_limit=$%.2f, fresh_ask=$%.2f, new_limit=$%.2f)",
+			p.Execution.TradeID, p.Rank, oldLimit, freshAsk, newLimit)
+		return
+	}
+
+	syntheticTrade := &trades.Trade{
+		Symbol:         p.Symbol,
+		ContractType:   p.ContractType,
+		StrikePrice:    p.StrikePrice,
+		Expiration:     p.Expiration,
+		EstimatedPrice: p.ContractPrice,
+		Rank:           p.Rank,
+	}
+	occ, _ := OCCSymbol(p.Symbol, p.Expiration, p.ContractType, p.StrikePrice)
+
+	if newLimit > cap {
+		reason := fmt.Sprintf("post-open ask $%.2f × %.2f = $%.2f exceeds rank-%d cap $%.2f", freshAsk, LimitPriceMultiplier, newLimit, p.Rank, cap)
+		if cancelErr := s.trader.CancelOrder(ctx, hash, oldOrderID); cancelErr != nil {
+			log.Printf("execution: reprice cancel failed (trade=%d, order=%s): %v", p.Execution.TradeID, oldOrderID, cancelErr)
+			// Continue — record the canceled state in our DB and notify.
+			// If the broker rejected the cancel because the order already
+			// filled, the next reconcile tick will correct to 'filled'.
+		}
+		_ = s.store.UpdateExecutionStatus(p.Execution.ID, "canceled", oldOrderID, nil, 0, reason)
+		s.sendOpenFailedEmail(syntheticTrade, occ, oldOrderID, reason)
+		log.Printf("execution: reprice canceled — over cap (trade=%d, order=%s, %s)", p.Execution.TradeID, oldOrderID, reason)
+		return
+	}
+
+	if cancelErr := s.trader.CancelOrder(ctx, hash, oldOrderID); cancelErr != nil {
+		log.Printf("execution: reprice cancel failed, leaving original order in place (trade=%d, order=%s): %v", p.Execution.TradeID, oldOrderID, cancelErr)
+		return
+	}
+	_ = s.store.UpdateExecutionStatus(p.Execution.ID, "canceled", oldOrderID, nil, 0, fmt.Sprintf("repriced post-open from $%.2f to $%.2f", oldLimit, newLimit))
+
+	order, err := BuildOpenOrderForTrade(syntheticTrade, occ, newLimit)
+	if err != nil {
+		log.Printf("execution: reprice build order (trade=%d): %v", p.Execution.TradeID, err)
+		return
+	}
+
+	newExecRow := Execution{
+		TradeID:           p.Execution.TradeID,
+		Mode:              s.cfg.Mode,
+		Side:              "open",
+		Status:            "pending",
+		RequestedQuantity: MaxContracts,
+	}
+	newExecID, err := s.store.InsertExecution(newExecRow)
+	if err != nil {
+		log.Printf("execution: reprice insert new execution (trade=%d): %v", p.Execution.TradeID, err)
+		return
+	}
+
+	newOrderID, err := s.trader.PlaceOrder(ctx, hash, order)
+	if err != nil {
+		_ = s.store.UpdateExecutionStatus(newExecID, "failed", "", nil, 0, err.Error())
+		s.sendOpenFailedEmail(syntheticTrade, occ, "", err.Error())
+		log.Printf("execution: reprice replace PlaceOrder failed (trade=%d): %v", p.Execution.TradeID, err)
+		return
+	}
+	_ = s.store.UpdateExecutionStatus(newExecID, "working", newOrderID, nil, 0, "")
+
+	if newSt, sErr := s.trader.GetOrder(ctx, hash, newOrderID); sErr == nil {
+		switch {
+		case newSt.Filled:
+			fp := newSt.FillPrice
+			_ = s.store.UpdateExecutionStatus(newExecID, "filled", newOrderID, &fp, newSt.FilledQuantity, "")
+			s.sendReceiptEmail(syntheticTrade, occ, newOrderID, newSt.FillPrice)
+		case newSt.Terminal:
+			reason := newSt.ErrorMessage
+			if reason == "" {
+				reason = newSt.RawStatus
+			}
+			_ = s.store.UpdateExecutionStatus(newExecID, "rejected", newOrderID, nil, 0, reason)
+			s.sendOpenFailedEmail(syntheticTrade, occ, newOrderID, reason)
+		}
+	}
+
+	log.Printf("execution: reprice replaced (trade=%d, old=%s @$%.2f → new=%s @$%.2f, fresh_ask=$%.2f)",
+		p.Execution.TradeID, oldOrderID, oldLimit, newOrderID, newLimit, freshAsk)
 }
 
 /*

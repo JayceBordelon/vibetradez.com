@@ -318,6 +318,27 @@ func main() {
 			log.Fatalf("Failed to add open-order reconcile cron: %v", err)
 		}
 
+		/*
+			Post-open reprice pass at 9:31 ET. The 9:25 morning cron sizes
+			LIMITs from pre-open Schwab quotes (often 0-ask on thin
+			contracts, falling back to Claude's modeled premium), so any
+			real-open jump or Claude mispricing leaves orders stranded
+			WORKING for the rest of the day until Schwab auto-expires the
+			DAY orders at 16:00 ET. One minute after the bell is enough
+			time for Schwab to populate live asks across the basket; the
+			cancel-and-replace happens once, not every minute, to avoid
+			latency thrash on a healthy limit.
+		*/
+		if _, err := c.AddFunc("31 9 * * 1-5", func() {
+			if open, reason := isMarketOpen(); !open {
+				log.Printf("Skipping post-open reprice: %s", reason)
+				return
+			}
+			executor.RepriceWorkingOpens(ctxBg, todayDate())
+		}); err != nil {
+			log.Fatalf("Failed to add post-open reprice cron: %v", err)
+		}
+
 		if _, err := c.AddFunc("55 15 * * 1-5", func() {
 			if open, reason := isMarketOpen(); !open {
 				log.Printf("Skipping 3:55pm close: %s", reason)
@@ -344,7 +365,7 @@ func main() {
 		}); err != nil {
 			log.Fatalf("Failed to add 12:55pm half-day close cron: %v", err)
 		}
-		log.Printf("execution: cron registered (open-reconcile every minute 9-15 ET, close 3:55pm or 12:55pm half-days)")
+		log.Printf("execution: cron registered (open-reconcile every minute 9-15 ET, post-open reprice 9:31 ET, close 3:55pm or 12:55pm half-days)")
 	}
 
 	c.Start()

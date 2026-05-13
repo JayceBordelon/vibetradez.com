@@ -126,19 +126,22 @@ func TestComputeOpenLimitPrice(t *testing.T) {
 	cases := []struct {
 		name     string
 		ask, est float64
+		cap      float64
 		want     float64
 	}{
-		{"ask used, rounded to cent", 1.20, 0, 1.26}, // 1.20*1.05 = 1.26
-		{"ask zero falls back to estimate", 0, 0.80, 0.84},
-		{"both zero returns zero", 0, 0, 0},
-		{"both negative returns zero", -1, -1, 0},
-		{"clamped to MaxContractPremium", 6.00, 0, MaxContractPremium},
-		{"ask preferred over estimate", 2.00, 99.00, 2.10},
-		{"rounds up at half-cent", 1.234, 0, 1.30}, // 1.234*1.05 = 1.2957 → 1.30
+		{"ask used, rounded to cent", 1.20, 0, MaxContractPremium, 1.26}, // 1.20*1.05 = 1.26
+		{"ask zero falls back to estimate", 0, 0.80, MaxContractPremium, 0.84},
+		{"both zero returns zero", 0, 0, MaxContractPremium, 0},
+		{"both negative returns zero", -1, -1, MaxContractPremium, 0},
+		{"clamped to default cap", 6.00, 0, MaxContractPremium, MaxContractPremium},
+		{"clamped to rank-1 cap when over higher ceiling", 11.00, 0, MaxRank1ContractPremium, MaxRank1ContractPremium},
+		{"under rank-1 cap not clamped", 7.00, 0, MaxRank1ContractPremium, 7.35}, // 7.00*1.05 = 7.35
+		{"ask preferred over estimate", 2.00, 99.00, MaxContractPremium, 2.10},
+		{"rounds up at half-cent", 1.234, 0, MaxContractPremium, 1.30}, // 1.234*1.05 = 1.2957 → 1.30
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := ComputeOpenLimitPrice(tc.ask, tc.est)
+			got := ComputeOpenLimitPrice(tc.ask, tc.est, tc.cap)
 			if got != tc.want {
 				t.Errorf("got %.4f want %.4f", got, tc.want)
 			}

@@ -98,6 +98,7 @@ type OrderStatus struct {
 	FilledQuantity int
 	Quantity       int
 	FillPrice      float64 // average fill price; 0 if not filled
+	LimitPrice     float64 // the LIMIT price the order was placed at; 0 for MARKET orders or when the broker doesn't surface it. Used by the post-open reprice path to compare against a fresh-ask-derived limit before deciding to cancel+replace.
 	UpdatedAt      time.Time
 	ErrorMessage   string // populated on REJECTED
 }
