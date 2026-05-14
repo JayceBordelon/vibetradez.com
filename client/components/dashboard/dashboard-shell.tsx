@@ -1,7 +1,6 @@
 "use client";
 
 // NavBar moved to app/(app)/layout.tsx
-import { CalendarX } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { DashboardSkeleton } from "@/components/layout/dashboard-skeleton";
@@ -10,24 +9,26 @@ import { Section } from "@/components/layout/section";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
 import { computeTradePnl } from "@/lib/calculations";
-import { getMarketStatus } from "@/lib/market-status";
-import type { DashboardResponse, DashboardTrade, Execution, LiveQuotesResponse } from "@/types/trade";
+import type { ChartParams, DashboardResponse, DashboardTrade, Execution, LiveQuotesResponse } from "@/types/trade";
 
 import { ActiveTickerChip } from "./active-ticker-chip";
 import { ExposurePanel } from "./exposure-panel";
-import { MarketsClosed } from "./markets-closed";
 import { MorningCards } from "./morning-cards";
+import { NoTradesToday } from "./no-trades-today";
 import { PnlChart } from "./pnl-chart";
 import { StatsGrid } from "./stats-grid";
 import { StockChart } from "./stock-chart";
 import { SymbolTabs } from "./symbol-tabs";
-import { TIMEFRAME_PRESETS, type TimeframePreset, TimeframeToggle } from "./timeframe-toggle";
 import { TopNFilter } from "./top-n-filter";
 import { TradeTable } from "./trade-table";
 
 const STORAGE_KEY = "jt_dash_v3";
 const REFRESH_SECONDS = 60;
 const LIVE_POLL_SECONDS = 15;
+
+// Dashboard chart is locked to intraday minute candles — only the day
+// the position was held is meaningful for a single-day live view.
+const INTRADAY_CHART_PARAMS: ChartParams = { period: 1, ptype: "day", ftype: "minute", freq: 5 };
 
 function filterByRank(data: DashboardResponse, topFilter: number): DashboardResponse {
   /**
@@ -83,7 +84,6 @@ export function DashboardShell() {
   const [rawData, setRawData] = useState<DashboardResponse | null>(null);
   const [liveQuotes, setLiveQuotes] = useState<LiveQuotesResponse | null>(null);
   const [activeSymbol, setActiveSymbol] = useState("");
-  const [timeframe, setTimeframe] = useState<TimeframePreset>(() => TIMEFRAME_PRESETS.find((p) => p.id === "5D") ?? TIMEFRAME_PRESETS[0]);
 
   // Restore Top-N from localStorage
   useEffect(() => {
@@ -182,8 +182,6 @@ export function DashboardShell() {
   const filtered = rawData ? filterByRank(rawData, effectiveTopFilter) : null;
   const executions = rawData?.executions ?? null;
   const stats = filtered?.trades ? computeStats(filtered.trades, executions) : null;
-  const liveTimeframe = TIMEFRAME_PRESETS[0];
-  const marketStatus = getMarketStatus();
 
   // Set first symbol when data loads
   useEffect(() => {
@@ -209,24 +207,17 @@ export function DashboardShell() {
         {!rawData ? (
           <DashboardSkeleton />
         ) : !filtered?.trades?.length ? (
-          marketStatus.open ? (
-            <EmptyState />
-          ) : (
-            <MarketsClosed reason={marketStatus.reason} nextOpen={marketStatus.nextOpen} />
-          )
+          <NoTradesToday />
         ) : stats?.hasSummaries ? (
           <>
             <StatsGrid totalPnl={stats.totalPnl} winRate={stats.winRate} profitFactor={stats.profitFactor} bestPnl={stats.bestPnl} bestSym={stats.bestSym} />
             <Section title="Price Chart" className="mt-8" actions={<ActiveTickerChip trades={filtered.trades} activeSymbol={activeSymbol} executions={executions} />}>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                <SymbolTabs trades={filtered.trades} activeSymbol={activeSymbol} onSelect={setActiveSymbol} executions={executions} />
-                <TimeframeToggle value={timeframe.id} onChange={setTimeframe} />
-              </div>
+              <SymbolTabs trades={filtered.trades} activeSymbol={activeSymbol} onSelect={setActiveSymbol} executions={executions} />
               <div className="lg-card mt-3 h-[280px] overflow-hidden p-1.5 sm:h-[360px] lg:h-[420px]">
                 {activeSymbol &&
                   (() => {
                     const dt = filtered.trades.find((t) => t.trade.symbol === activeSymbol);
-                    return <StockChart symbol={activeSymbol} timeframe={timeframe.params} strikePrice={dt?.trade.strike_price} trade={dt?.trade} summary={dt?.summary ?? undefined} />;
+                    return <StockChart symbol={activeSymbol} timeframe={INTRADAY_CHART_PARAMS} strikePrice={dt?.trade.strike_price} trade={dt?.trade} summary={dt?.summary ?? undefined} />;
                   })()}
               </div>
             </Section>
@@ -249,7 +240,7 @@ export function DashboardShell() {
                 {activeSymbol &&
                   (() => {
                     const dt = filtered.trades.find((t) => t.trade.symbol === activeSymbol);
-                    return <StockChart symbol={activeSymbol} timeframe={liveTimeframe.params} strikePrice={dt?.trade.strike_price} trade={dt?.trade} summary={dt?.summary ?? undefined} />;
+                    return <StockChart symbol={activeSymbol} timeframe={INTRADAY_CHART_PARAMS} strikePrice={dt?.trade.strike_price} trade={dt?.trade} summary={dt?.summary ?? undefined} />;
                   })()}
               </div>
             </Section>
@@ -262,16 +253,6 @@ export function DashboardShell() {
           </>
         )}
       </div>
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <CalendarX className="h-12 w-12 text-muted-foreground/50" />
-      <h3 className="mt-4 text-base font-semibold">No trades for this date</h3>
-      <p className="mt-1 text-sm text-muted-foreground">Trades publish at 9:30 AM ET on market days.</p>
     </div>
   );
 }
