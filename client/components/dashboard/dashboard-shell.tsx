@@ -6,7 +6,6 @@ import { useCallback, useEffect, useState } from "react";
 import { DashboardSkeleton } from "@/components/layout/dashboard-skeleton";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { Section } from "@/components/layout/section";
-import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
 import { computeTradePnl } from "@/lib/calculations";
 import type { DashboardResponse, DashboardTrade, Execution, LiveQuotesResponse } from "@/types/trade";
@@ -195,14 +194,13 @@ export function DashboardShell() {
         ) : stats?.hasSummaries ? (
           <>
             <StatsGrid totalPnl={stats.totalPnl} winRate={stats.winRate} profitFactor={stats.profitFactor} bestPnl={stats.bestPnl} bestSym={stats.bestSym} />
-            <Section title="P&L by Trade" subtitle="Per-contract performance, sorted" className="mt-8">
+            <Section title="P&L by Trade" subtitle="Per-contract performance, sorted" className="mt-10 border-t border-border/40 pt-8">
               <PnlChart trades={filtered.trades} executions={executions} />
             </Section>
-            <Separator />
-            <Section title="Trade Details" subtitle="Click any row to view the single-contract page">
+            <Section title="Trade Details" subtitle="Click any row to view the single-contract page" className="mt-10 border-t border-border/40 pt-8">
               <TradeTable trades={filtered.trades} executions={executions} date={filtered.date} />
             </Section>
-            <Section title="Exposure" subtitle="How capital was deployed today. For long options, max loss is the premium paid.">
+            <Section title="Exposure" subtitle="How capital was deployed today. For long options, max loss is the premium paid." className="mt-10 border-t border-border/40 pt-8">
               <ExposurePanel trades={filtered.trades} executions={executions} hasSummaries />
             </Section>
           </>
@@ -211,7 +209,7 @@ export function DashboardShell() {
             <Section title="Today's Picks" subtitle={`${filtered.trades.length} ranked plays · click any pick for the full single-contract view`}>
               <MorningCards trades={filtered.trades} liveQuotes={liveQuotes} date={filtered.date} executions={executions} />
             </Section>
-            <Section title="Exposure" subtitle="Capital at risk for today's picks. For long options, max loss is the premium paid.">
+            <Section title="Exposure" subtitle="Capital at risk for today's picks. For long options, max loss is the premium paid." className="mt-10 border-t border-border/40 pt-8">
               <ExposurePanel trades={filtered.trades} executions={null} hasSummaries={false} />
             </Section>
           </>

@@ -1,5 +1,4 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { Metric } from "@/components/ui/metric";
+import { Stat, StatStrip } from "@/components/layout/stat-strip";
 import { computeTradePnl } from "@/lib/calculations";
 import { fmt, fmtMoney, fmtMoneyInt, fmtPctDec } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -17,11 +16,7 @@ export function ExposurePanel({ trades, hasSummaries, executions }: ExposurePane
   /*
   Capital deployed prefers actual broker entry fills when available,
   falling back to Claude's modeled summary entry_price, then to the
-  morning estimate. Same priority for capital returned: real close
-  fill → modeled close → 0. Without this, a basket-day exposure card
-  would show modeled deployment ($1.25 × 100) when real capital was
-  $1.73 × 100, and the ROC line would silently disagree with the
-  trade-table P&L column.
+  morning estimate.
   */
   const totalExposure = trades.reduce((sum, dt) => {
     const result = computeTradePnl(dt, executions);
@@ -32,7 +27,6 @@ export function ExposurePanel({ trades, hasSummaries, executions }: ExposurePane
   }, 0);
 
   const avgPremium = count > 0 ? totalExposure / count / 100 : 0;
-
   const avgDte = count > 0 ? trades.reduce((sum, dt) => sum + dt.trade.dte, 0) / count : 0;
 
   let totalReturned = 0;
@@ -49,13 +43,10 @@ export function ExposurePanel({ trades, hasSummaries, executions }: ExposurePane
     roc = totalExposure > 0 ? (netPnl / totalExposure) * 100 : 0;
   }
 
-  const rocColor = roc === null ? "" : roc > 0 ? "text-green" : roc < 0 ? "text-red" : "text-muted-foreground";
+  const rocTone: "positive" | "negative" | "neutral" = roc === null ? "neutral" : roc > 0 ? "positive" : roc < 0 ? "negative" : "neutral";
 
   /**
-  Both bars share a common scale so they're visually comparable: whichever
-  is larger fills 100%, the other fills proportionally less. Without this
-  the deployed bar always pinned to 100% and a winning day pushed the
-  returned bar past its container, making every day look identical.
+  Both bars share a common scale so they're visually comparable.
   */
   const barMax = Math.max(totalExposure, totalReturned);
   const deployedPct = barMax > 0 ? (totalExposure / barMax) * 100 : 0;
@@ -63,59 +54,49 @@ export function ExposurePanel({ trades, hasSummaries, executions }: ExposurePane
   const returnedBarColor = totalReturned >= totalExposure ? "bg-green" : "bg-red";
 
   return (
-    <Card className="lg-card">
-      <CardContent className="space-y-5 p-5">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Metric label="Capital at Risk" value={fmtMoneyInt(totalExposure)} />
-          <Metric label="Avg Premium" value={fmtMoney(avgPremium)} />
-          <Metric label="Avg DTE" value={fmt(avgDte, 1)} />
-          {hasSummaries && roc !== null && <Metric label="ROC" value={<span className={cn("text-sm font-semibold tabular-nums", rocColor)}>{fmtPctDec(roc)}</span>} />}
-        </div>
+    <div className="space-y-6">
+      <StatStrip cols={hasSummaries && roc !== null ? 4 : 3}>
+        <Stat label="Capital at Risk" value={fmtMoneyInt(totalExposure)} />
+        <Stat label="Avg Premium" value={fmtMoney(avgPremium)} />
+        <Stat label="Avg DTE" value={fmt(avgDte, 1)} />
+        {hasSummaries && roc !== null && <Stat label="ROC" value={fmtPctDec(roc)} tone={rocTone} />}
+      </StatStrip>
 
-        {hasSummaries && totalExposure > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Deployed vs Returned</span>
-              <span className="tabular-nums">
-                {fmtMoneyInt(totalExposure)} &rarr; {fmtMoneyInt(totalReturned)}
-              </span>
+      {hasSummaries && totalExposure > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Deployed vs Returned</span>
+            <span className="tabular-nums">
+              {fmtMoneyInt(totalExposure)} → {fmtMoneyInt(totalReturned)}
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-amber transition-all" style={{ width: `${deployedPct}%` }} />
             </div>
-            <div className="space-y-1.5">
-              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-amber transition-all" style={{ width: `${deployedPct}%` }} />
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                <div className={cn("h-full rounded-full transition-all", returnedBarColor)} style={{ width: `${returnedPct}%` }} />
-              </div>
-            </div>
-            <div className="flex justify-between text-[11px] text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 rounded-full bg-amber" />
-                Deployed
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className={cn("inline-block h-2 w-2 rounded-full", returnedBarColor)} />
-                Returned
-              </span>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div className={cn("h-full rounded-full transition-all", returnedBarColor)} style={{ width: `${returnedPct}%` }} />
             </div>
           </div>
-        )}
+          <div className="flex justify-between text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-2 w-2 rounded-full bg-amber" />
+              Deployed
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className={cn("inline-block h-2 w-2 rounded-full", returnedBarColor)} />
+              Returned
+            </span>
+          </div>
+        </div>
+      )}
 
-        {/* Morning mode (no EOD summaries yet): risk-level capital
-            distribution so the section has substance instead of sitting
-            empty until 4pm. */}
-        {!hasSummaries && totalExposure > 0 && <MorningBreakdown trades={trades} totalExposure={totalExposure} />}
-      </CardContent>
-    </Card>
+      {!hasSummaries && totalExposure > 0 && <MorningBreakdown trades={trades} totalExposure={totalExposure} />}
+    </div>
   );
 }
 
 function MorningBreakdown({ trades, totalExposure }: { trades: DashboardTrade[]; totalExposure: number }) {
-  /**
-  Risk-level capital share, computed from premium paid per pick. Long
-  options can only lose the premium so total premium == capital at risk
-  for the bucket.
-  */
   const buckets = { LOW: 0, MEDIUM: 0, HIGH: 0 } as Record<"LOW" | "MEDIUM" | "HIGH", number>;
   for (const dt of trades) {
     const level = (dt.trade.risk_level ?? "MEDIUM") as keyof typeof buckets;

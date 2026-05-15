@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { ExecutionBadge, findExecutionForTrade, liveMarkForTrade } from "@/components/execution-badge";
+import { Stat, StatStrip } from "@/components/layout/stat-strip";
 import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
-import { Card, CardContent } from "@/components/ui/card";
 import { Metric } from "@/components/ui/metric";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
@@ -55,9 +55,13 @@ export function TradeDetailPage({ symbol, date }: { symbol: string; date?: strin
     <div className="mx-auto min-w-0 max-w-[1100px] px-4 py-6 sm:px-7">
       <BackLink />
       {state.kind === "loading" && <LoadingPanel symbol={symbol} />}
-      {state.kind === "error" && <Panel tone="error" title="Couldn't load that trade" body={state.message} />}
+      {state.kind === "error" && <StatusBlock tone="error" title="Couldn't load that trade" body={state.message} />}
       {state.kind === "not-found" && (
-        <Panel tone="muted" title={`No $${symbol} pick on ${state.tried}`} body="The dashboard only shows picks for trading days the system ran. Try a different date or head back to the dashboard." />
+        <StatusBlock
+          tone="muted"
+          title={`No $${symbol} pick on ${state.tried}`}
+          body="The dashboard only shows picks for trading days the system ran. Try a different date or head back to the dashboard."
+        />
       )}
       {state.kind === "found" && <TradeDetailBody dt={state.dt} resolvedDate={state.resolvedDate} execution={state.execution} />}
     </div>
@@ -66,7 +70,7 @@ export function TradeDetailPage({ symbol, date }: { symbol: string; date?: strin
 
 function BackLink() {
   return (
-    <Link href="/dashboard" className="mb-4 inline-flex min-h-9 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
+    <Link href="/dashboard" className="mb-6 inline-flex min-h-9 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
       <ArrowLeft className="h-4 w-4" />
       Back to dashboard
     </Link>
@@ -75,24 +79,32 @@ function BackLink() {
 
 function LoadingPanel({ symbol }: { symbol: string }) {
   return (
-    <Card className="lg-card">
-      <CardContent className="space-y-3 p-6">
-        <div className="text-sm text-muted-foreground">Loading ${symbol}…</div>
-        <div className="h-6 w-1/3 animate-pulse rounded bg-muted/60" />
-        <div className="h-4 w-2/3 animate-pulse rounded bg-muted/60" />
-      </CardContent>
-    </Card>
+    <div className="space-y-3">
+      <div className="text-sm text-muted-foreground">Loading ${symbol}…</div>
+      <div className="h-8 w-1/3 animate-pulse rounded bg-muted/60" />
+      <div className="h-4 w-2/3 animate-pulse rounded bg-muted/60" />
+    </div>
   );
 }
 
-function Panel({ tone, title, body }: { tone: "error" | "muted"; title: string; body: string }) {
+function StatusBlock({ tone, title, body }: { tone: "error" | "muted"; title: string; body: string }) {
   return (
-    <Card className="lg-card">
-      <CardContent className="space-y-2 p-6">
-        <h2 className={cn("text-lg font-semibold", tone === "error" ? "text-red" : "text-foreground")}>{title}</h2>
-        <p className="text-sm text-muted-foreground">{body}</p>
-      </CardContent>
-    </Card>
+    <div className="space-y-2">
+      <h2 className={cn("text-xl font-semibold", tone === "error" ? "text-red" : "text-foreground")}>{title}</h2>
+      <p className="text-sm text-muted-foreground">{body}</p>
+    </div>
+  );
+}
+
+function SectionHead({ title, right, eyebrow }: { title: string; right?: React.ReactNode; eyebrow?: React.ReactNode }) {
+  return (
+    <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3 border-t border-border/40 pt-8">
+      <div className="flex items-baseline gap-2">
+        {eyebrow}
+        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+      </div>
+      {right}
+    </div>
   );
 }
 
@@ -103,144 +115,120 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
   const maxLoss = calcMaxLoss(trade);
 
   /*
-  P&L preference for the EOD result block: when a closed live execution
+  P&L preference for the EOD block: when a closed live execution
   exists, prefer its realized_pnl + actual broker fill prices over
-  Claude's modeled summary. The summary uses Claude's morning estimate
-  for entry and an EOD re-quote for close — both can drift from the real
-  broker fill (which often differs by tens of cents on liquid options),
-  so the modeled number occasionally over- or understates real P&L by
-  10-20%. The badge already shows the correct broker number; this
-  alignment removes the user-visible mismatch between the dashboard
-  card and the EOD result block on the same trade.
+  Claude's modeled summary.
   */
   const hasClosedExecution = execution?.state === "closed" && execution.open_price > 0 && execution.close_price > 0;
   const entryPrice = hasClosedExecution ? execution.open_price : (summary?.entry_price ?? 0);
   const closingPrice = hasClosedExecution ? execution.close_price : (summary?.closing_price ?? 0);
-  /*
-  P&L is meaningful only when the entry price is positive. Without
-  this guard, a summary that landed with entry_price=0 (the recent
-  picker stale-quote bug class) renders as pnl = closing_price * 100,
-  a fake profit that turns the EOD badge green.
-  */
   const pnl = hasClosedExecution ? execution.realized_pnl : summary && summary.entry_price > 0 ? (summary.closing_price - summary.entry_price) * 100 : 0;
   const pctChange = entryPrice > 0 ? ((closingPrice - entryPrice) / entryPrice) * 100 : 0;
   const stockPctChange = summary && summary.stock_open > 0 ? ((summary.stock_close - summary.stock_open) / summary.stock_open) * 100 : 0;
 
-  /*
-  Only poll live quotes for unsettled trades — once an EOD summary
-  lands the contract is closed for the day and the EOD block already
-  shows realized P&L. Server only returns live data for today's
-  morning picks anyway, so historical dates render no live block.
-  */
   const liveQuotes = useLiveQuotes(!summary);
 
   return (
-    <div className="space-y-5">
-      {execution && <ExecutionBadge execution={execution} variant="full" liveMark={liveMarkForTrade(liveQuotes, trade)} />}
-      {!summary && <LivePanel trade={trade} liveQuotes={liveQuotes} />}
-      {/* Header: ticker + badges + price */}
-      <Card className="lg-card">
-        <CardContent className="space-y-4 p-5 sm:p-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="font-mono text-2xl font-bold tabular-nums text-foreground sm:text-3xl">${trade.symbol}</h1>
-            <Badge variant="outline" className={cn(trade.contract_type === "CALL" ? "border-green-border text-green" : "border-red-border text-red")}>
-              {trade.contract_type}
-            </Badge>
-            <Badge variant={moneyness.variant}>{moneyness.label}</Badge>
-            <Badge variant="secondary">Rank #{trade.rank}</Badge>
-            <Badge variant="secondary" className="text-xs">
-              {trade.risk_level}
-            </Badge>
-            {summary && <Badge variant={pnl > 0 ? "default" : pnl < 0 ? "destructive" : "secondary"}>EOD {fmtPnlInt(pnl)}</Badge>}
-            <span className="ml-auto text-xs text-muted-foreground">{resolvedDate}</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 md:grid-cols-4">
-            <Metric label="Strike" value={fmtMoney(trade.strike_price)} />
-            <Metric label="Expiration" value={`${trade.expiration} (${trade.dte}d)`} />
-            <Metric label="Entry" value={fmtMoney(trade.estimated_price)} />
-            <Metric
-              label="Target"
-              value={<span className={cn("text-sm font-semibold tabular-nums", trade.contract_type === "CALL" ? "text-green" : "text-red")}>{fmtMoney(trade.target_price)}</span>}
-            />
-            <Metric label="Stop loss" value={fmtMoney(trade.stop_loss)} />
-            <Metric label="Breakeven" value={fmtMoney(breakeven)} />
-            <Metric label="Max loss" value={<span className="text-sm font-semibold tabular-nums text-red">{fmtPnlInt(-maxLoss)}</span>} />
-            <Metric
-              label="Sentiment"
-              value={
-                <span className={cn("text-sm font-semibold tabular-nums", sentimentColor(trade.sentiment_score))}>
-                  {sentimentLabel(trade.sentiment_score)} ({fmt(trade.sentiment_score, 2)})
-                </span>
-              }
-            />
-            <Metric label="Mentions" value={String(trade.mention_count)} />
-            <Metric label="Stock at entry" value={fmtMoney(trade.current_price)} />
-          </div>
-
-          {trade.catalyst && (
-            <div className="rounded-md bg-amber-bg px-3 py-2 text-sm">
-              <span className="font-semibold text-amber">Catalyst:</span> {trade.catalyst}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Picker rationale */}
-      {trade.rationale && (
-        <Card className="lg-card">
-          <CardContent className="space-y-3 p-5 sm:p-6">
-            <div className="flex items-center gap-2">
-              <ClaudeLogo className="h-5 w-5" />
-              <span className="text-base font-semibold text-claude">Claude's read</span>
-              {trade.score > 0 && (
-                <Badge variant="secondary" className="tabular-nums">
-                  {trade.score}/10
-                </Badge>
-              )}
-            </div>
-            <p className="text-sm leading-relaxed text-muted-foreground">{trade.rationale}</p>
-          </CardContent>
-        </Card>
+    <div className="space-y-2">
+      {execution && (
+        <div className="mb-4">
+          <ExecutionBadge execution={execution} variant="full" liveMark={liveMarkForTrade(liveQuotes, trade)} />
+        </div>
       )}
 
-      {/* EOD result if settled */}
+      {/* Ticker header — flat, no card */}
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="font-mono text-3xl font-bold tabular-nums text-foreground sm:text-4xl">${trade.symbol}</h1>
+        <Badge variant="outline" className={cn(trade.contract_type === "CALL" ? "border-green-border text-green" : "border-red-border text-red")}>
+          {trade.contract_type}
+        </Badge>
+        <Badge variant={moneyness.variant}>{moneyness.label}</Badge>
+        <Badge variant="secondary">Rank #{trade.rank}</Badge>
+        <Badge variant="secondary" className="text-xs">
+          {trade.risk_level}
+        </Badge>
+        {summary && <Badge variant={pnl > 0 ? "default" : pnl < 0 ? "destructive" : "secondary"}>EOD {fmtPnlInt(pnl)}</Badge>}
+        <span className="ml-auto text-xs text-muted-foreground">{resolvedDate}</span>
+      </div>
+
+      {/* Catalyst — soft tinted prose container, NOT a full card */}
+      {trade.catalyst && (
+        <div className="mt-5 rounded-md border border-amber-border/40 bg-amber-bg/60 px-4 py-3 text-sm">
+          <span className="font-semibold text-amber">Catalyst:</span> <span className="text-foreground/90">{trade.catalyst}</span>
+        </div>
+      )}
+
+      {/* Contract properties — properties grid, no card */}
+      <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3 md:grid-cols-4">
+        <Metric label="Strike" value={fmtMoney(trade.strike_price)} />
+        <Metric label="Expiration" value={`${trade.expiration} (${trade.dte}d)`} />
+        <Metric label="Entry" value={fmtMoney(trade.estimated_price)} />
+        <Metric label="Target" value={<span className={cn("text-sm font-semibold tabular-nums", trade.contract_type === "CALL" ? "text-green" : "text-red")}>{fmtMoney(trade.target_price)}</span>} />
+        <Metric label="Stop loss" value={fmtMoney(trade.stop_loss)} />
+        <Metric label="Breakeven" value={fmtMoney(breakeven)} />
+        <Metric label="Max loss" value={<span className="text-sm font-semibold tabular-nums text-red">{fmtPnlInt(-maxLoss)}</span>} />
+        <Metric
+          label="Sentiment"
+          value={
+            <span className={cn("text-sm font-semibold tabular-nums", sentimentColor(trade.sentiment_score))}>
+              {sentimentLabel(trade.sentiment_score)} ({fmt(trade.sentiment_score, 2)})
+            </span>
+          }
+        />
+        <Metric label="Mentions" value={String(trade.mention_count)} />
+        <Metric label="Stock at entry" value={fmtMoney(trade.current_price)} />
+      </div>
+
+      {/* Live block — flat section, StatStrip metrics */}
+      {!summary && <LiveSection trade={trade} liveQuotes={liveQuotes} />}
+
+      {/* EOD result — flat section */}
       {summary && (
-        <Card className="lg-card">
-          <CardContent className="space-y-4 p-5 sm:p-6">
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <div className="flex items-baseline gap-2">
-                <h2 className="text-base font-semibold">End-of-day result</h2>
-                {hasClosedExecution && (
-                  <Badge variant="secondary" className="text-[10px]">
-                    actual fill
-                  </Badge>
-                )}
-              </div>
-              <span className={cn("text-2xl font-bold tabular-nums", pnl > 0 ? "text-green" : pnl < 0 ? "text-red" : "text-muted-foreground")}>
+        <>
+          <SectionHead
+            title="End-of-day result"
+            eyebrow={
+              hasClosedExecution ? (
+                <Badge variant="secondary" className="text-[10px]">
+                  actual fill
+                </Badge>
+              ) : null
+            }
+            right={
+              <span className={cn("text-3xl font-bold tabular-nums leading-none", pnl > 0 ? "text-green" : pnl < 0 ? "text-red" : "text-muted-foreground")}>
                 {fmtPnlInt(pnl)}
                 <span className="ml-2 text-sm font-medium text-muted-foreground">{fmtPctDec(pctChange)}</span>
               </span>
-            </div>
+            }
+          />
+          <StatStrip cols={4}>
+            <Stat label="Contract entry" value={fmtMoney(entryPrice)} />
+            <Stat label="Contract close" value={fmtMoney(closingPrice)} tone={pnl > 0 ? "positive" : pnl < 0 ? "negative" : "neutral"} />
+            <Stat label="Stock open" value={fmtMoney(summary.stock_open)} />
+            <Stat
+              label="Stock close"
+              value={fmtMoney(summary.stock_close)}
+              sub={<span className={cn(stockPctChange > 0 ? "text-green" : stockPctChange < 0 ? "text-red" : "")}>{fmtPctDec(stockPctChange)}</span>}
+            />
+          </StatStrip>
+          {summary.notes && <p className="mt-4 rounded-md border border-border/50 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">{summary.notes}</p>}
+        </>
+      )}
 
-            <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-              <Metric label="Contract entry" value={fmtMoney(entryPrice)} />
-              <Metric label="Contract close" value={<span className={cn("text-sm font-semibold tabular-nums", pnl > 0 ? "text-green" : pnl < 0 ? "text-red" : "")}>{fmtMoney(closingPrice)}</span>} />
-              <Metric label="Stock open" value={fmtMoney(summary.stock_open)} />
-              <Metric
-                label="Stock close"
-                value={
-                  <span className={cn("text-sm font-semibold tabular-nums", stockPctChange > 0 ? "text-green" : stockPctChange < 0 ? "text-red" : "")}>
-                    {fmtMoney(summary.stock_close)}
-                    <span className="ml-1 text-xs font-medium text-muted-foreground">({fmtPctDec(stockPctChange)})</span>
-                  </span>
-                }
-              />
-            </div>
-
-            {summary.notes && <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">{summary.notes}</p>}
-          </CardContent>
-        </Card>
+      {/* Claude's read — soft tinted prose container */}
+      {trade.rationale && (
+        <div className="mt-10 rounded-lg border border-claude-border/40 bg-claude-light px-5 py-4">
+          <div className="mb-2 flex items-center gap-2">
+            <ClaudeLogo className="h-4 w-4" />
+            <span className="text-sm font-semibold text-claude">Claude's read</span>
+            {trade.score > 0 && (
+              <Badge variant="secondary" className="tabular-nums">
+                {trade.score}/10
+              </Badge>
+            )}
+          </div>
+          <p className="text-sm leading-relaxed text-foreground/85">{trade.rationale}</p>
+        </div>
       )}
     </div>
   );
@@ -248,8 +236,8 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
 
 /*
 Polls /api/quotes/live on the same 15s cadence the dashboard uses, with
-the same merge-over-prior semantics so a single transient miss on the
-contract's option chain doesn't blank the live panel.
+the same merge-over-prior semantics so a single transient miss doesn't
+blank the live panel.
 */
 function useLiveQuotes(enabled: boolean): LiveQuotesResponse | null {
   const [liveQuotes, setLiveQuotes] = useState<LiveQuotesResponse | null>(null);
@@ -276,13 +264,10 @@ function useLiveQuotes(enabled: boolean): LiveQuotesResponse | null {
   return liveQuotes;
 }
 
-function LivePanel({ trade, liveQuotes }: { trade: Trade; liveQuotes: LiveQuotesResponse | null }) {
+function LiveSection({ trade, liveQuotes }: { trade: Trade; liveQuotes: LiveQuotesResponse | null }) {
   /*
-  Reconstruct the same option key the server emits in handleLiveQuotes
-  (server.go: "<SYMBOL>|<CALL|PUT>|<strike .2f>|<expiration>"). When the
-  contract isn't in the response — historical date, market closed,
-  Schwab disconnected — render nothing so the page doesn't lead with a
-  table of em-dashes.
+  Reconstruct the same option key the server emits (server.go ~846):
+  "<SYMBOL>|<CALL|PUT>|<strike .2f>|<expiration>".
   */
   const optionKey = `${trade.symbol}|${trade.contract_type}|${trade.strike_price.toFixed(2)}|${trade.expiration}`;
   const liveOption = liveQuotes?.options?.[optionKey] ?? null;
@@ -299,75 +284,54 @@ function LivePanel({ trade, liveQuotes }: { trade: Trade; liveQuotes: LiveQuotes
   const stockDeltaPct = stockDelta !== null && trade.current_price > 0 ? (stockDelta / trade.current_price) * 100 : null;
 
   return (
-    <Card className="lg-card">
-      <CardContent className="space-y-4 p-5 sm:p-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
-            </span>
-            <h2 className="text-base font-semibold">Live</h2>
-            {liveQuotes?.market_open === false && (
-              <Badge variant="secondary" className="text-[10px]">
-                Market closed
-              </Badge>
-            )}
-          </div>
-          {livePnl !== null && (
-            <span className={cn("text-2xl font-bold tabular-nums", pnlColor(livePnl))}>
+    <>
+      <SectionHead
+        title="Live"
+        eyebrow={
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
+          </span>
+        }
+        right={
+          livePnl !== null ? (
+            <span className={cn("text-3xl font-bold tabular-nums leading-none", pnlColor(livePnl))}>
               {fmtPnlInt(livePnl)}
               {contractDeltaPct !== null && <span className="ml-2 text-sm font-medium text-muted-foreground">{fmtPctDec(contractDeltaPct)}</span>}
             </span>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-          <Metric
-            label="Contract mark"
-            value={
-              currentPrice !== null ? (
-                <span className={cn("text-sm font-semibold tabular-nums", pnlColor(contractDelta ?? 0))}>{fmtMoney(currentPrice)}</span>
-              ) : (
-                <Skeleton className="inline-block h-4 w-16 align-middle" />
-              )
-            }
-          />
-          <Metric
-            label="Bid / Ask"
-            value={
-              liveOption ? (
-                <span className="text-sm font-medium tabular-nums">
-                  {fmtMoney(liveOption.bid)} / {fmtMoney(liveOption.ask)}
-                </span>
-              ) : (
-                <Skeleton className="inline-block h-4 w-20 align-middle" />
-              )
-            }
-          />
-          <Metric
-            label="Stock"
-            value={
-              liveStock ? (
-                <span className={cn("text-sm font-semibold tabular-nums", pnlColor(stockDelta ?? 0))}>
-                  {fmtMoney(liveStock.last_price)}
-                  {stockDeltaPct !== null && <span className="ml-1 text-xs font-medium text-muted-foreground">({fmtPctDec(stockDeltaPct)})</span>}
-                </span>
-              ) : (
-                <Skeleton className="inline-block h-4 w-20 align-middle" />
-              )
-            }
-          />
-          <Metric
-            label="Volume"
-            value={liveOption ? <span className="text-sm font-medium tabular-nums">{liveOption.volume.toLocaleString()}</span> : <Skeleton className="inline-block h-4 w-14 align-middle" />}
-          />
-        </div>
-
-        <p className="text-[11px] text-muted-foreground">
-          Refreshes every {LIVE_POLL_SECONDS}s · entry was {fmtMoney(trade.estimated_price)}.
-        </p>
-      </CardContent>
-    </Card>
+          ) : liveQuotes?.market_open === false ? (
+            <Badge variant="secondary" className="text-[10px]">
+              Market closed
+            </Badge>
+          ) : null
+        }
+      />
+      <StatStrip cols={4}>
+        <Stat
+          label="Contract mark"
+          value={
+            currentPrice !== null ? (
+              <span style={{ color: contractDelta != null && contractDelta > 0 ? "var(--green)" : contractDelta != null && contractDelta < 0 ? "var(--red)" : undefined }}>
+                {fmtMoney(currentPrice)}
+              </span>
+            ) : (
+              <Skeleton className="inline-block h-6 w-16 align-middle" />
+            )
+          }
+        />
+        <Stat label="Bid / Ask" value={liveOption ? `${fmtMoney(liveOption.bid)} / ${fmtMoney(liveOption.ask)}` : <Skeleton className="inline-block h-6 w-20 align-middle" />} />
+        <Stat
+          label="Stock"
+          value={liveStock ? fmtMoney(liveStock.last_price) : <Skeleton className="inline-block h-6 w-20 align-middle" />}
+          sub={
+            stockDeltaPct !== null ? <span className={cn(stockDelta && stockDelta > 0 ? "text-green" : stockDelta && stockDelta < 0 ? "text-red" : "")}>{fmtPctDec(stockDeltaPct)}</span> : undefined
+          }
+        />
+        <Stat label="Volume" value={liveOption ? liveOption.volume.toLocaleString() : <Skeleton className="inline-block h-6 w-14 align-middle" />} />
+      </StatStrip>
+      <p className="mt-3 text-[11px] text-muted-foreground">
+        Refreshes every {LIVE_POLL_SECONDS}s · entry was {fmtMoney(trade.estimated_price)}.
+      </p>
+    </>
   );
 }

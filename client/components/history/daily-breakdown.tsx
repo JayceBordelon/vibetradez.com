@@ -10,44 +10,27 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { formatDayName, formatMonthDay } from "@/lib/date-utils";
 import { fmtMoney, fmtPctDec, fmtPnlInt, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { Execution } from "@/types/trade";
+
+import type { DayMultiStat, TradeDetail } from "./history-shell";
+import { TIER_COLORS, TIER_KEYS, TIER_LABELS, type TierKey } from "./tiers";
 
 const PAGE_SIZE = 25;
 
-interface TradeDetail {
-  symbol: string;
-  type: string;
-  strike: number;
-  entry: number;
-  close: number;
-  pnl: number;
-  pct: number;
-  result: string;
-}
+export function DailyBreakdown({ days }: { days: DayMultiStat[] }) {
+  const maxAbsPnl = useMemo(() => {
+    let m = 1;
+    for (const d of days) {
+      for (const tier of TIER_KEYS) {
+        const v = Math.abs(d.tiers[tier].pnl);
+        if (v > m) m = v;
+      }
+    }
+    return m;
+  }, [days]);
 
-interface DayStat {
-  date: string;
-  pnl: number;
-  winners: number;
-  losers: number;
-  trades: number;
-  hasSummaries: boolean;
-  invested: number;
-  returned: number;
-  executions: Execution[];
-  details: TradeDetail[];
-}
-
-export function DailyBreakdown({ dayStats }: { dayStats: DayStat[] }) {
-  const maxAbsPnl = useMemo(() => Math.max(...dayStats.map((d) => Math.abs(d.pnl)), 1), [dayStats]);
-  const totalPages = Math.max(1, Math.ceil(dayStats.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(days.length / PAGE_SIZE));
   const [page, setPage] = useState(0);
 
-  /**
-  Reset to the first page whenever the underlying range changes (mode
-  toggle, date-range nav). Otherwise the page index could exceed the
-  new shorter list.
-  */
   useEffect(() => {
     setPage(0);
   }, []);
@@ -56,22 +39,22 @@ export function DailyBreakdown({ dayStats }: { dayStats: DayStat[] }) {
   }, [page, totalPages]);
 
   const start = page * PAGE_SIZE;
-  const end = Math.min(start + PAGE_SIZE, dayStats.length);
-  const visible = dayStats.slice(start, end);
-  const showPagination = dayStats.length > PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, days.length);
+  const visible = days.slice(start, end);
+  const showPagination = days.length > PAGE_SIZE;
 
   return (
     <div className="space-y-3">
       <div className="space-y-1">
-        {visible.map((ds) => (
-          <DayRow key={ds.date} ds={ds} maxAbsPnl={maxAbsPnl} />
+        {visible.map((d) => (
+          <DayRow key={d.date} day={d} maxAbsPnl={maxAbsPnl} />
         ))}
       </div>
 
       {showPagination ? (
         <div className="flex flex-col items-center justify-between gap-2 pt-2 sm:flex-row">
           <div className="text-[11px] text-muted-foreground tabular-nums">
-            Showing {start + 1}–{end} of {dayStats.length} days
+            Showing {start + 1}–{end} of {days.length} days
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -110,65 +93,106 @@ export function DailyBreakdown({ dayStats }: { dayStats: DayStat[] }) {
   );
 }
 
-function DayRow({ ds, maxAbsPnl }: { ds: DayStat; maxAbsPnl: number }) {
-  const barWidth = Math.round((Math.abs(ds.pnl) / maxAbsPnl) * 100);
-  const isPositive = ds.pnl >= 0;
+function TierBar({ tier, pnl, maxAbsPnl }: { tier: TierKey; pnl: number; maxAbsPnl: number }) {
+  const width = Math.round((Math.abs(pnl) / maxAbsPnl) * 100);
+  const color = TIER_COLORS[tier];
+  const positive = pnl >= 0;
+  return (
+    <div className="flex items-center gap-2">
+      <span className="hidden w-12 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:inline">{TIER_LABELS[tier]}</span>
+      <span className="inline-flex h-2 w-2 shrink-0 rounded-full sm:hidden" style={{ backgroundColor: color }} aria-hidden />
+      <div className="relative h-2.5 flex-1 overflow-hidden rounded-sm bg-muted/40">
+        <div
+          className="h-full"
+          style={{
+            width: `${width}%`,
+            backgroundColor: color,
+            opacity: positive ? 0.85 : 0.55,
+          }}
+        />
+      </div>
+      <span className={cn("w-16 shrink-0 text-right text-[11px] font-semibold tabular-nums", pnlColor(pnl))}>{fmtPnlInt(pnl)}</span>
+    </div>
+  );
+}
+
+function DayRow({ day, maxAbsPnl }: { day: DayMultiStat; maxAbsPnl: number }) {
+  const top10 = day.tiers.top10;
 
   return (
     <Collapsible className="animate-in fade-in fill-mode-backwards duration-200">
-      <CollapsibleTrigger className={cn("lg-control group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50")}>
+      <CollapsibleTrigger className={cn("group flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-muted/40")}>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
 
         <div className="w-20 shrink-0">
-          <div className="text-sm font-semibold">{formatDayName(ds.date)}</div>
-          <div className="text-[11px] text-muted-foreground">{formatMonthDay(ds.date)}</div>
+          <div className="text-sm font-semibold">{formatDayName(day.date)}</div>
+          <div className="text-[11px] text-muted-foreground">{formatMonthDay(day.date)}</div>
         </div>
 
-        <div className="hidden w-32 shrink-0 text-[11px] text-muted-foreground sm:block">
-          {ds.trades} trades
-          {ds.hasSummaries ? ` \u00B7 ${ds.winners}W/${ds.losers}L` : ""}
+        <div className="hidden w-32 shrink-0 text-[11px] text-muted-foreground md:block">
+          {day.totalTrades} picks
+          {top10.hasSummaries ? ` · ${top10.winners}W/${top10.losers}L` : ""}
         </div>
 
-        <div className="relative h-8 flex-1 overflow-hidden rounded-md bg-muted/40">
-          <div className={cn("h-full", isPositive ? "bg-green/60" : "bg-red/60")} style={{ width: `${barWidth}%` }} />
+        <div className="flex-1 space-y-1">
+          {TIER_KEYS.map((tier) => (
+            <TierBar key={tier} tier={tier} pnl={day.tiers[tier].pnl} maxAbsPnl={maxAbsPnl} />
+          ))}
         </div>
 
-        {ds.executions.length > 0 && (
+        {day.executions.length > 0 && (
           <div className="hidden shrink-0 items-center gap-1 sm:flex">
-            {ds.executions.map((e, i) => (
-              <ExecutionBadge key={`${ds.date}-exec-${i}`} execution={e} />
+            {day.executions.map((e, i) => (
+              <ExecutionBadge key={`${day.date}-exec-${i}`} execution={e} />
             ))}
           </div>
         )}
-
-        <div className={cn("w-20 shrink-0 text-right text-sm font-semibold tabular-nums", pnlColor(ds.pnl))}>{fmtPnlInt(ds.pnl)}</div>
       </CollapsibleTrigger>
 
       <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
-        <div className="mt-1 rounded-md border bg-muted/30 px-4 py-3">
-          {ds.details.length > 0 ? (
-            <div className="space-y-2">
-              {ds.details.map((t, j) => (
-                <TradeRow key={`${ds.date}-${j}`} trade={t} date={ds.date} />
-              ))}
-            </div>
-          ) : (
-            <div className="py-2 text-center text-[11px] text-muted-foreground">No trade details available for this day.</div>
-          )}
+        <div className="ml-7 mt-1 border-l border-border/50 pl-4 py-2">
+          {top10.details.length > 0 ? <TradeList details={top10.details} date={day.date} /> : <div className="py-2 text-[11px] text-muted-foreground">No trade details available for this day.</div>}
         </div>
       </CollapsibleContent>
     </Collapsible>
   );
 }
 
+function tierForRank(rank: number): TierKey {
+  if (rank === 1) return "top1";
+  if (rank <= 3) return "top3";
+  return "top10";
+}
+
+function TradeList({ details, date }: { details: TradeDetail[]; date: string }) {
+  const sorted = useMemo(() => [...details].sort((a, b) => a.rank - b.rank), [details]);
+  return (
+    <div className="space-y-1.5">
+      {sorted.map((t, j) => (
+        <TradeRow key={`${date}-${j}`} trade={t} date={date} />
+      ))}
+    </div>
+  );
+}
+
 function TradeRow({ trade: t, date }: { trade: TradeDetail; date: string }) {
   const href = `/trade/${encodeURIComponent(t.symbol)}?date=${encodeURIComponent(date)}`;
+  const tier = tierForRank(t.rank);
+  const tierColor = TIER_COLORS[tier];
   return (
     <Link
       href={href}
       className="-mx-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 py-1.5 text-[13px] transition-colors hover:bg-muted/60 sm:flex-nowrap"
       aria-label={`Open ${t.symbol} ${t.type} ${date} detail`}
     >
+      <span
+        className="inline-flex h-5 w-7 shrink-0 items-center justify-center rounded-sm text-[10px] font-semibold text-white"
+        style={{ backgroundColor: tierColor }}
+        title={`Rank ${t.rank} · ${TIER_LABELS[tier]}`}
+      >
+        #{t.rank}
+      </span>
+
       <span className="w-14 shrink-0 font-semibold">${t.symbol}</span>
 
       <Badge variant="outline" className={cn("w-11 justify-center text-[11px]", t.type === "CALL" ? "border-green/40 text-green" : "border-red/40 text-red")}>

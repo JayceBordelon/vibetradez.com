@@ -1,49 +1,69 @@
 "use client";
 
+import { useMemo } from "react";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { formatMonthDay } from "@/lib/date-utils";
 import { fmtPnlInt } from "@/lib/format";
 
-export interface EquityPoint {
-  date: string;
-  cumPnl: number;
-}
+import type { DayMultiStat } from "./history-shell";
+import { TIER_COLORS, TIER_KEYS, TIER_LABELS } from "./tiers";
 
 const chartConfig: ChartConfig = {
-  cumPnl: { label: "Cumulative P&L", color: "var(--chart-3)" },
+  top1: { label: TIER_LABELS.top1, color: TIER_COLORS.top1 },
+  top3: { label: TIER_LABELS.top3, color: TIER_COLORS.top3 },
+  top10: { label: TIER_LABELS.top10, color: TIER_COLORS.top10 },
 };
 
-export function EquityCurveChart({ data }: { data: EquityPoint[] }) {
+export function EquityCurveChart({ days }: { days: DayMultiStat[] }) {
+  const data = useMemo(
+    () =>
+      days.map((d) => ({
+        date: d.date,
+        top1: d.tiers.top1.cumPnl,
+        top3: d.tiers.top3.cumPnl,
+        top10: d.tiers.top10.cumPnl,
+      })),
+    [days]
+  );
+
   return (
-    <Card className="lg-card">
-      <CardHeader>
-        <CardTitle className="text-base">Equity Curve</CardTitle>
-        <CardDescription>Cumulative P&amp;L over time</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ChartContainer config={chartConfig} className="min-h-[280px] w-full">
-          <LineChart data={data} accessibilityLayer>
-            <CartesianGrid vertical={false} />
-            <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(v: string) => formatMonthDay(v)} />
-            <YAxis tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(v: number) => fmtPnlInt(v)} />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  labelFormatter={(_, payload) => {
-                    const item = payload?.[0]?.payload as { date: string } | undefined;
-                    return item ? formatMonthDay(item.date) : "";
-                  }}
-                  formatter={(value) => fmtPnlInt(Number(value))}
-                />
-              }
+    <ChartContainer config={chartConfig} className="min-h-[300px] w-full">
+      <LineChart data={data} accessibilityLayer margin={{ left: 4, right: 8, top: 4, bottom: 4 }}>
+        <CartesianGrid vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
+        <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(v: string) => formatMonthDay(v)} />
+        <YAxis tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(v: number) => fmtPnlInt(v)} />
+        <ChartTooltip
+          content={
+            <ChartTooltipContent
+              labelFormatter={(_, payload) => {
+                const item = payload?.[0]?.payload as { date: string } | undefined;
+                return item ? formatMonthDay(item.date) : "";
+              }}
+              formatter={(value, name) => (
+                <div className="flex w-full items-center justify-between gap-3">
+                  <span className="text-muted-foreground">{TIER_LABELS[name as keyof typeof TIER_LABELS] ?? String(name)}</span>
+                  <span className="font-mono font-medium tabular-nums">{fmtPnlInt(Number(value))}</span>
+                </div>
+              )}
             />
-            <Line type="monotone" dataKey="cumPnl" name="Cumulative P&L" stroke="var(--chart-3)" strokeWidth={2.5} dot={false} />
-          </LineChart>
-        </ChartContainer>
-      </CardContent>
-    </Card>
+          }
+        />
+        <ChartLegend content={<ChartLegendContent />} />
+        {TIER_KEYS.map((tier) => (
+          <Line
+            key={tier}
+            type="monotone"
+            dataKey={tier}
+            name={TIER_LABELS[tier]}
+            stroke={TIER_COLORS[tier]}
+            strokeWidth={tier === "top1" ? 2.5 : tier === "top3" ? 2 : 1.75}
+            dot={false}
+            isAnimationActive={false}
+          />
+        ))}
+      </LineChart>
+    </ChartContainer>
   );
 }

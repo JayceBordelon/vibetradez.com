@@ -35,13 +35,13 @@ export function PnlChart({ trades, executions }: PnlChartProps) {
   }, [trades, executions]);
 
   if (data.length === 0) {
-    return <div className="lg-card flex h-48 items-center justify-center text-sm text-muted-foreground">No closed trades to chart</div>;
+    return <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">No closed trades to chart</div>;
   }
 
   const chartHeight = Math.max(200, data.length * 40);
 
   return (
-    <div className="lg-card p-4">
+    <div>
       <ChartContainer config={chartConfig} className="w-full" style={{ height: chartHeight }}>
         <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
           <XAxis type="number" tickFormatter={(v: number) => fmtPnlInt(v)} fontSize={11} />

@@ -1,85 +1,92 @@
 "use client";
 
 import { useMemo } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from "recharts";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { formatMonthDay } from "@/lib/date-utils";
 import { fmtPnlInt } from "@/lib/format";
 
-const GREEN = "var(--green)";
-const RED = "var(--red)";
+import type { DayMultiStat } from "./history-shell";
+import { TIER_COLORS, TIER_KEYS, TIER_LABELS } from "./tiers";
 
-/**
-mondayKey returns the Monday-of-week (YYYY-MM-DD) for a YYYY-MM-DD date,
-so a year/all-time series can be aggregated into weekly bars instead of
-hundreds of unreadable daily ticks.
-*/
+type Granularity = "daily" | "weekly";
+
+interface SeriesRow {
+  date: string;
+  top1: number;
+  top3: number;
+  top10: number;
+}
+
 function mondayKey(dateStr: string): string {
-  // Parse as UTC noon to dodge DST edges; result formatted as YYYY-MM-DD.
   const d = new Date(`${dateStr}T12:00:00Z`);
-  const dow = d.getUTCDay(); // 0 = Sun, 1 = Mon, ...
-  const offset = dow === 0 ? -6 : 1 - dow; // shift back to Monday
+  const dow = d.getUTCDay();
+  const offset = dow === 0 ? -6 : 1 - dow;
   d.setUTCDate(d.getUTCDate() + offset);
   return d.toISOString().slice(0, 10);
 }
 
-function aggregateWeekly(rows: { date: string; pnl: number }[]): { date: string; pnl: number }[] {
-  const buckets = new Map<string, number>();
-  for (const r of rows) {
-    const k = mondayKey(r.date);
-    buckets.set(k, (buckets.get(k) ?? 0) + r.pnl);
+function buildSeries(days: DayMultiStat[], granularity: Granularity): SeriesRow[] {
+  if (granularity === "daily") {
+    return days.map((d) => ({
+      date: d.date,
+      top1: d.tiers.top1.pnl,
+      top3: d.tiers.top3.pnl,
+      top10: d.tiers.top10.pnl,
+    }));
   }
-  return Array.from(buckets.entries())
-    .map(([date, pnl]) => ({ date, pnl }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const buckets = new Map<string, SeriesRow>();
+  for (const d of days) {
+    const k = mondayKey(d.date);
+    const existing = buckets.get(k) ?? { date: k, top1: 0, top3: 0, top10: 0 };
+    existing.top1 += d.tiers.top1.pnl;
+    existing.top3 += d.tiers.top3.pnl;
+    existing.top10 += d.tiers.top10.pnl;
+    buckets.set(k, existing);
+  }
+  return Array.from(buckets.values()).sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export function DailyPnlChart({ data, granularity = "daily" }: { data: { date: string; pnl: number }[]; granularity?: "daily" | "weekly" }) {
-  const series = useMemo(() => (granularity === "weekly" ? aggregateWeekly(data) : data), [data, granularity]);
+export function DailyPnlChart({ days, granularity = "daily" }: { days: DayMultiStat[]; granularity?: Granularity }) {
+  const series = useMemo(() => buildSeries(days, granularity), [days, granularity]);
   const isWeekly = granularity === "weekly";
 
   const chartConfig: ChartConfig = {
-    pnl: {
-      label: isWeekly ? "Weekly P&L" : "Daily P&L",
-      color: GREEN,
-    },
+    top1: { label: TIER_LABELS.top1, color: TIER_COLORS.top1 },
+    top3: { label: TIER_LABELS.top3, color: TIER_COLORS.top3 },
+    top10: { label: TIER_LABELS.top10, color: TIER_COLORS.top10 },
   };
 
   return (
-    <Card className="lg-card">
-      <CardHeader>
-        <CardTitle className="text-base">{isWeekly ? "Weekly P&L" : "Daily P&L"}</CardTitle>
-        <CardDescription>{isWeekly ? "Net P&L per trading week (Monday–Friday)" : "Net P&L per trading day"}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ChartContainer config={chartConfig} className="min-h-[260px] w-full">
-          <BarChart data={series} accessibilityLayer>
-            <CartesianGrid vertical={false} />
-            <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(v: string) => formatMonthDay(v)} />
-            <YAxis tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(v: number) => fmtPnlInt(v)} />
-            <ReferenceLine y={0} stroke="var(--border)" />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  labelFormatter={(_, payload) => {
-                    const item = payload?.[0]?.payload as { date: string } | undefined;
-                    if (!item) return "";
-                    return isWeekly ? `Week of ${formatMonthDay(item.date)}` : formatMonthDay(item.date);
-                  }}
-                  formatter={(value) => fmtPnlInt(value as number)}
-                />
-              }
+    <ChartContainer config={chartConfig} className="min-h-[280px] w-full">
+      <BarChart data={series} accessibilityLayer margin={{ left: 4, right: 8, top: 4, bottom: 4 }}>
+        <CartesianGrid vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
+        <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(v: string) => formatMonthDay(v)} />
+        <YAxis tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(v: number) => fmtPnlInt(v)} />
+        <ReferenceLine y={0} stroke="var(--border)" />
+        <ChartTooltip
+          content={
+            <ChartTooltipContent
+              labelFormatter={(_, payload) => {
+                const item = payload?.[0]?.payload as { date: string } | undefined;
+                if (!item) return "";
+                return isWeekly ? `Week of ${formatMonthDay(item.date)}` : formatMonthDay(item.date);
+              }}
+              formatter={(value, name) => (
+                <div className="flex w-full items-center justify-between gap-3">
+                  <span className="text-muted-foreground">{TIER_LABELS[name as keyof typeof TIER_LABELS] ?? String(name)}</span>
+                  <span className="font-mono font-medium tabular-nums">{fmtPnlInt(Number(value))}</span>
+                </div>
+              )}
             />
-            <Bar dataKey="pnl" radius={[3, 3, 0, 0]}>
-              {series.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? GREEN : RED} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ChartContainer>
-      </CardContent>
-    </Card>
+          }
+        />
+        <ChartLegend content={<ChartLegendContent />} />
+        {TIER_KEYS.map((tier) => (
+          <Bar key={tier} dataKey={tier} name={TIER_LABELS[tier]} fill={TIER_COLORS[tier]} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+        ))}
+      </BarChart>
+    </ChartContainer>
   );
 }

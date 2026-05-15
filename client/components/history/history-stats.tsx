@@ -1,14 +1,13 @@
-import { Activity, ArrowDownRight, ArrowUpRight, Percent, Scale, Sigma, Target, TrendingDown, TrendingUp } from "lucide-react";
+import { Activity, Percent, Scale, Sigma, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { motion, type Variants } from "motion/react";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { StatCard } from "@/components/ui/stat-card";
-import { fmt, fmtPctDec, fmtPnlInt, percentHueColor, pnlColor } from "@/lib/format";
+import { Stat, StatStrip } from "@/components/layout/stat-strip";
+import { fmt, fmtPctDec, fmtPnlInt, percentHueColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const containerVariants: Variants = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.05 } },
+  show: { transition: { staggerChildren: 0.04 } },
 };
 
 const itemVariants: Variants = {
@@ -59,97 +58,56 @@ export function HistoryStats({
   totalLosers,
   totalTrades,
 }: HistoryStatsProps) {
-  const profitFactorValue = profitFactor === Number.POSITIVE_INFINITY ? "\u221E" : `${fmt(profitFactor, 2)}x`;
+  const profitFactorValue = profitFactor === Number.POSITIVE_INFINITY ? "∞" : `${fmt(profitFactor, 2)}x`;
 
   return (
     <div>
       <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Performance Snapshot</div>
 
-      {/* Primary stats */}
-      <motion.div className="grid grid-cols-2 gap-3 sm:grid-cols-4" variants={containerVariants} initial="hidden" animate="show">
-        <motion.div variants={itemVariants}>
-          <StatCard label="Net P&L" value={fmtPnlInt(totalPnl)} sub={`${totalTrades} trades`} tone={signTone(totalPnl)} icon={totalPnl >= 0 ? TrendingUp : TrendingDown} />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <StatCard label="Win Rate" value={`${winRate.toFixed(0)}%`} sub={`${totalWinners}W \u00B7 ${totalLosers}L`} valueColor={percentHueColor(winRate)} icon={Target} />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <StatCard label="Return on Capital" value={fmtPctDec(roc)} sub="ROC" tone={signTone(roc)} icon={Percent} tooltip="Net P&L / total capital deployed" />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <StatCard label="Profit Factor" value={profitFactorValue} tone="neutral" icon={Scale} tooltip="Profit Factor = gross wins / gross losses" />
-        </motion.div>
+      <motion.div variants={containerVariants} initial="hidden" animate="show">
+        <StatStrip cols={4}>
+          <motion.div variants={itemVariants}>
+            <Stat label="Net P&L" value={fmtPnlInt(totalPnl)} sub={`${totalTrades} trades`} tone={signTone(totalPnl)} icon={totalPnl >= 0 ? TrendingUp : TrendingDown} />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <Stat label="Win Rate" value={`${winRate.toFixed(0)}%`} sub={`${totalWinners}W · ${totalLosers}L`} valueColor={percentHueColor(winRate)} icon={Target} />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <Stat label="Return on Capital" value={fmtPctDec(roc)} sub="Net P&L / capital deployed" tone={signTone(roc)} icon={Percent} />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <Stat label="Profit Factor" value={profitFactorValue} sub="gross wins / gross losses" icon={Scale} />
+          </motion.div>
+        </StatStrip>
+
+        <StatStrip cols={4} className="mt-3 sm:mt-4">
+          <motion.div variants={itemVariants}>
+            <Stat label="Avg Win" value={`+$${fmt(avgWin, 0)}`} tone="positive" />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <Stat label="Avg Loss" value={`-$${fmt(avgLoss, 0)}`} tone="negative" />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <Stat label="Expectancy" value={fmtPnlInt(expectancy)} sub="per trade" tone={signTone(expectancy)} icon={Sigma} />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <Stat label="Sharpe" value={fmt(sharpe, 2)} sub={`Max DD ${fmt(maxDrawdown, 1)}%`} icon={Activity} />
+          </motion.div>
+        </StatStrip>
       </motion.div>
 
-      {/* Secondary stats */}
-      <motion.div className="mt-3 grid grid-cols-1 gap-3 sm:mt-4 sm:grid-cols-2 xl:grid-cols-4" variants={containerVariants} initial="hidden" animate="show">
-        <motion.div variants={itemVariants}>
-          <DualMetricCard label="Avg Win / Loss" left={{ value: `+$${fmt(avgWin, 0)}`, hint: "Win", positive: true }} right={{ value: `-$${fmt(avgLoss, 0)}`, hint: "Loss", positive: false }} />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <StatCard
-            label="Expectancy"
-            value={fmtPnlInt(expectancy)}
-            sub="Per trade"
-            tone={signTone(expectancy)}
-            icon={Sigma}
-            tooltip="Expected $ per trade = (winRate × avgWin) − (lossRate × avgLoss)"
-          />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <StatCard
-            label="Sharpe / Drawdown"
-            value={fmt(sharpe, 2)}
-            sub={`Max DD ${fmt(maxDrawdown, 1)}%`}
-            tone="neutral"
-            icon={Activity}
-            tooltip="Sharpe: annualized risk-adjusted return. Max DD: largest peak-to-trough decline"
-          />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <DualMetricCard
-            label="Best / Worst Trade"
-            left={{ value: fmtPnlInt(bestPnl), hint: bestSym ? `$${bestSym}` : "·", positive: bestPnl >= 0 }}
-            right={{ value: fmtPnlInt(worstPnl), hint: worstSym ? `$${worstSym}` : "·", positive: worstPnl >= 0 }}
-          />
-        </motion.div>
-      </motion.div>
-    </div>
-  );
-}
-
-interface DualMetricCardProps {
-  label: string;
-  left: { value: string; hint: string; positive: boolean };
-  right: { value: string; hint: string; positive: boolean };
-}
-
-function DualMetricCard({ label, left, right }: DualMetricCardProps) {
-  return (
-    <Card className="lg-card group gap-0 py-0 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
-      <CardContent className="p-5">
-        <div className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
-        </div>
-        <div className="mt-2 grid grid-cols-2 gap-3">
-          <DualSide value={left.value} hint={left.hint} positive={left.positive} icon={ArrowUpRight} />
-          <DualSide value={right.value} hint={right.hint} positive={right.positive} icon={ArrowDownRight} />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function DualSide({ value, hint, positive, icon: Icon }: { value: string; hint: string; positive: boolean; icon: typeof ArrowUpRight }) {
-  const pnlValue = Number(value.replace(/[^\d.-]/g, ""));
-  return (
-    <div>
-      <div className={cn("flex items-center gap-1 text-[19px] font-semibold tabular-nums leading-tight sm:text-[22px]", pnlColor(positive ? Math.abs(pnlValue) || 1 : -Math.abs(pnlValue) - 1))}>
-        <Icon className="h-3.5 w-3.5 shrink-0 opacity-60" />
-        {value}
+      <div className="mt-4 flex flex-wrap items-baseline gap-x-6 gap-y-1 text-[12px] text-muted-foreground">
+        <span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider">Best</span>{" "}
+          <span className={cn("font-semibold tabular-nums", bestPnl >= 0 ? "text-green" : "text-foreground")}>{fmtPnlInt(bestPnl)}</span>
+          {bestSym && <span className="ml-1 font-mono">${bestSym}</span>}
+        </span>
+        <span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider">Worst</span>{" "}
+          <span className={cn("font-semibold tabular-nums", worstPnl < 0 ? "text-red" : "text-foreground")}>{fmtPnlInt(worstPnl)}</span>
+          {worstSym && <span className="ml-1 font-mono">${worstSym}</span>}
+        </span>
       </div>
-      <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>
     </div>
   );
 }

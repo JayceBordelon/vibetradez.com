@@ -99,7 +99,7 @@ export function TradeTable({ trades, date, executions, liveQuotes }: TradeTableP
   return (
     <div className="min-w-0">
       {/* Desktop table */}
-      <div className="lg-card hidden overflow-hidden p-2 md:block">
+      <div className="hidden overflow-hidden md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -203,7 +203,12 @@ function TradeRowCard({ dt, date, executions, liveQuotes }: { dt: DashboardTrade
 
   return (
     <Link href={tradeHref(trade.symbol, date)} className="block">
-      <Card className={cn("lg-card animate-in fade-in fill-mode-backwards duration-200 border-l-2 transition-colors hover:bg-muted/40", row.accentBorder)}>
+      <Card
+        className={cn(
+          "animate-in fade-in fill-mode-backwards rounded-lg border border-border/60 bg-card/30 shadow-none duration-200 border-l-2 transition-colors hover:border-foreground/30 hover:bg-card/60",
+          row.accentBorder
+        )}
+      >
         <CardContent className="space-y-3 p-4">
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant="secondary">#{trade.rank}</Badge>

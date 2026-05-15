@@ -3,7 +3,7 @@
 import { Percent, Target, TrendingDown, TrendingUp, Trophy } from "lucide-react";
 import { motion, type Variants } from "motion/react";
 
-import { StatCard } from "@/components/ui/stat-card";
+import { Stat, StatStrip } from "@/components/layout/stat-strip";
 import { useCountUp } from "@/hooks/use-count-up";
 import { fmtPnlInt, percentHueColor } from "@/lib/format";
 
@@ -29,27 +29,28 @@ export function StatsGrid({ totalPnl, winRate, profitFactor, bestPnl, bestSym }:
   const animatedPnl = useCountUp(totalPnl);
 
   const pnlTone: "positive" | "negative" | "neutral" = totalPnl > 0 ? "positive" : totalPnl < 0 ? "negative" : "neutral";
-
   const pnlIcon = totalPnl >= 0 ? TrendingUp : TrendingDown;
 
   const isInfinite = profitFactor === Number.POSITIVE_INFINITY;
-  const profitFactorValue = isInfinite ? "\u221E" : `${profitFactor.toFixed(2)}x`;
-  const profitFactorSub = isInfinite ? "(no losses yet)" : undefined;
+  const profitFactorValue = isInfinite ? "∞" : `${profitFactor.toFixed(2)}x`;
+  const profitFactorSub = isInfinite ? "no losses yet" : "gross wins / gross losses";
 
   return (
-    <motion.div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4" variants={containerVariants} initial="hidden" animate="show">
-      <motion.div variants={itemVariants}>
-        <StatCard label="Net P&L" value={fmtPnlInt(animatedPnl)} tone={pnlTone} icon={pnlIcon} />
-      </motion.div>
-      <motion.div variants={itemVariants}>
-        <StatCard label="Win Rate" value={`${winRate.toFixed(0)}%`} valueColor={percentHueColor(winRate)} icon={Target} tooltip="Winning trades / total closed trades" />
-      </motion.div>
-      <motion.div variants={itemVariants}>
-        <StatCard label="Profit Factor" value={profitFactorValue} sub={profitFactorSub} tone="neutral" icon={Percent} tooltip="Profit Factor = gross wins / gross losses" />
-      </motion.div>
-      <motion.div variants={itemVariants}>
-        <StatCard label="Best Trade" value={fmtPnlInt(bestPnl)} sub={`$${bestSym}`} tone={bestPnl > 0 ? "positive" : bestPnl < 0 ? "negative" : "neutral"} icon={Trophy} />
-      </motion.div>
+    <motion.div variants={containerVariants} initial="hidden" animate="show">
+      <StatStrip cols={4}>
+        <motion.div variants={itemVariants}>
+          <Stat label="Net P&L" value={fmtPnlInt(animatedPnl)} tone={pnlTone} icon={pnlIcon} />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <Stat label="Win Rate" value={`${winRate.toFixed(0)}%`} sub="winners / closed" valueColor={percentHueColor(winRate)} icon={Target} />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <Stat label="Profit Factor" value={profitFactorValue} sub={profitFactorSub} icon={Percent} />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <Stat label="Best Trade" value={fmtPnlInt(bestPnl)} sub={bestSym ? `$${bestSym}` : undefined} tone={bestPnl > 0 ? "positive" : bestPnl < 0 ? "negative" : "neutral"} icon={Trophy} />
+        </motion.div>
+      </StatStrip>
     </motion.div>
   );
 }
