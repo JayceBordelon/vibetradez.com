@@ -9,26 +9,19 @@ import { Section } from "@/components/layout/section";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
 import { computeTradePnl } from "@/lib/calculations";
-import type { ChartParams, DashboardResponse, DashboardTrade, Execution, LiveQuotesResponse } from "@/types/trade";
+import type { DashboardResponse, DashboardTrade, Execution, LiveQuotesResponse } from "@/types/trade";
 
-import { ActiveTickerChip } from "./active-ticker-chip";
 import { ExposurePanel } from "./exposure-panel";
 import { MorningCards } from "./morning-cards";
 import { NoTradesToday } from "./no-trades-today";
 import { PnlChart } from "./pnl-chart";
 import { StatsGrid } from "./stats-grid";
-import { StockChart } from "./stock-chart";
-import { SymbolTabs } from "./symbol-tabs";
 import { TopNFilter } from "./top-n-filter";
 import { TradeTable } from "./trade-table";
 
 const STORAGE_KEY = "jt_dash_v3";
 const REFRESH_SECONDS = 60;
 const LIVE_POLL_SECONDS = 15;
-
-// Dashboard chart is locked to intraday minute candles — only the day
-// the position was held is meaningful for a single-day live view.
-const INTRADAY_CHART_PARAMS: ChartParams = { period: 1, ptype: "day", ftype: "minute", freq: 5 };
 
 function filterByRank(data: DashboardResponse, topFilter: number): DashboardResponse {
   /**
@@ -83,7 +76,6 @@ export function DashboardShell() {
   const [topFilter, setTopFilter] = useState(10);
   const [rawData, setRawData] = useState<DashboardResponse | null>(null);
   const [liveQuotes, setLiveQuotes] = useState<LiveQuotesResponse | null>(null);
-  const [activeSymbol, setActiveSymbol] = useState("");
 
   // Restore Top-N from localStorage
   useEffect(() => {
@@ -173,22 +165,14 @@ export function DashboardShell() {
   /*
   hasSummaries is computed off the unfiltered raw data so it stays
   stable regardless of TopN selection. On live (morning) days the
-  Top-N filter and timeframe toggle are hidden because the only
-  meaningful view is "today's 10 picks on a 1D chart" — anything
-  else is noise before EOD lands.
+  Top-N filter is hidden because the only meaningful view is
+  "today's 10 picks" — anything else is noise before EOD lands.
   */
   const hasSummaries = !!rawData?.trades?.some((t) => t.summary);
   const effectiveTopFilter = hasSummaries ? topFilter : 10;
   const filtered = rawData ? filterByRank(rawData, effectiveTopFilter) : null;
   const executions = rawData?.executions ?? null;
   const stats = filtered?.trades ? computeStats(filtered.trades, executions) : null;
-
-  // Set first symbol when data loads
-  useEffect(() => {
-    if (filtered?.trades?.length && !activeSymbol) {
-      setActiveSymbol(filtered.trades[0].trade.symbol);
-    }
-  }, [filtered, activeSymbol]);
 
   return (
     <div className="animate-in fade-in duration-300">
@@ -211,44 +195,24 @@ export function DashboardShell() {
         ) : stats?.hasSummaries ? (
           <>
             <StatsGrid totalPnl={stats.totalPnl} winRate={stats.winRate} profitFactor={stats.profitFactor} bestPnl={stats.bestPnl} bestSym={stats.bestSym} />
-            <Section title="Price Chart" className="mt-8" actions={<ActiveTickerChip trades={filtered.trades} activeSymbol={activeSymbol} executions={executions} />}>
-              <SymbolTabs trades={filtered.trades} activeSymbol={activeSymbol} onSelect={setActiveSymbol} executions={executions} />
-              <div className="lg-card mt-3 h-[280px] overflow-hidden p-1.5 sm:h-[360px] lg:h-[420px]">
-                {activeSymbol &&
-                  (() => {
-                    const dt = filtered.trades.find((t) => t.trade.symbol === activeSymbol);
-                    return <StockChart symbol={activeSymbol} timeframe={INTRADAY_CHART_PARAMS} strikePrice={dt?.trade.strike_price} trade={dt?.trade} summary={dt?.summary ?? undefined} />;
-                  })()}
-              </div>
-            </Section>
-            <Section title="Exposure" subtitle="How capital was deployed today. For long options, max loss is the premium paid.">
-              <ExposurePanel trades={filtered.trades} executions={executions} hasSummaries />
-            </Section>
-            <Section title="P&L by Trade" subtitle="Per-contract performance, sorted">
+            <Section title="P&L by Trade" subtitle="Per-contract performance, sorted" className="mt-8">
               <PnlChart trades={filtered.trades} executions={executions} />
             </Section>
             <Separator />
             <Section title="Trade Details" subtitle="Click any row to view the single-contract page">
               <TradeTable trades={filtered.trades} executions={executions} date={filtered.date} />
             </Section>
+            <Section title="Exposure" subtitle="How capital was deployed today. For long options, max loss is the premium paid.">
+              <ExposurePanel trades={filtered.trades} executions={executions} hasSummaries />
+            </Section>
           </>
         ) : (
           <>
-            <Section title="Price Chart" actions={<ActiveTickerChip trades={filtered.trades} activeSymbol={activeSymbol} />}>
-              <SymbolTabs trades={filtered.trades} activeSymbol={activeSymbol} onSelect={setActiveSymbol} />
-              <div className="lg-card mt-3 h-[280px] overflow-hidden p-1.5 sm:h-[360px] lg:h-[420px]">
-                {activeSymbol &&
-                  (() => {
-                    const dt = filtered.trades.find((t) => t.trade.symbol === activeSymbol);
-                    return <StockChart symbol={activeSymbol} timeframe={INTRADAY_CHART_PARAMS} strikePrice={dt?.trade.strike_price} trade={dt?.trade} summary={dt?.summary ?? undefined} />;
-                  })()}
-              </div>
+            <Section title="Today's Picks" subtitle={`${filtered.trades.length} ranked plays · click any pick for the full single-contract view`}>
+              <MorningCards trades={filtered.trades} liveQuotes={liveQuotes} date={filtered.date} executions={executions} />
             </Section>
             <Section title="Exposure" subtitle="Capital at risk for today's picks. For long options, max loss is the premium paid.">
               <ExposurePanel trades={filtered.trades} executions={null} hasSummaries={false} />
-            </Section>
-            <Section title="Today's Picks" subtitle={`${filtered.trades.length} ranked plays · click any pick for the full single-contract view`}>
-              <MorningCards trades={filtered.trades} liveQuotes={liveQuotes} date={filtered.date} executions={executions} />
             </Section>
           </>
         )}

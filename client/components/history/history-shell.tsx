@@ -1,28 +1,24 @@
 "use client";
 
 import { BarChart3 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
-import { TopNFilter } from "@/components/dashboard/top-n-filter";
 import { HistorySkeleton } from "@/components/layout/dashboard-skeleton";
-import { PageToolbar } from "@/components/layout/page-toolbar";
 import { Section } from "@/components/layout/section";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/lib/api";
 import { computeTradePnl } from "@/lib/calculations";
-import { getRangeBounds, getRangeLabel, maxRangeOffset } from "@/lib/date-utils";
+import { toDateStr } from "@/lib/date-utils";
 import type { WeekResponse } from "@/types/trade";
 
 import { CapitalEfficiency } from "./capital-efficiency";
 import { DailyBreakdown } from "./daily-breakdown";
 import { DailyPnlChart } from "./daily-pnl-chart";
-import { DateRangeNav } from "./date-range-nav";
 import { EquityCurveChart } from "./equity-curve-chart";
 import { ExposureReturnsChart } from "./exposure-returns-chart";
 import { HistoryStats } from "./history-stats";
-import { ModeToggle } from "./mode-toggle";
 
-const STORAGE_KEY = "jt_hist_v2";
+const ALL_TIME_START = "2020-01-01";
 
 type DayStat = {
   date: string;
@@ -45,24 +41,6 @@ type DayStat = {
     result: string;
   }[];
 };
-
-function filterByRank(data: WeekResponse, topFilter: number): WeekResponse {
-  /**
-  Server should always return an empty array, but be defensive in case
-  an older deployment or a transient error path emits null days.
-  */
-  const days = data.days ?? [];
-  if (topFilter >= 10) return { ...data, days };
-  return {
-    ...data,
-    days: days
-      .map((day) => ({
-        ...day,
-        trades: (day.trades ?? []).filter((t) => t.trade.rank >= 1 && t.trade.rank <= topFilter),
-      }))
-      .filter((day) => day.trades.length > 0),
-  };
-}
 
 function computeAggregates(data: WeekResponse) {
   let totalPnl = 0;
@@ -201,156 +179,35 @@ function computeAggregates(data: WeekResponse) {
   };
 }
 
-/**
-buildMultiEquityPoints replays the same date range under all four Top-N
-pick-set selections (1 / 3 / 5 / 10) and merges the cumulative P&L series
-into one row per date with one column per series. The Equity Curve always
-renders this multi-line view so the user can compare strategies without
-toggling the toolbar filter.
-*/
-function buildMultiEquityPoints(data: WeekResponse): {
-  date: string;
-  top1: number;
-  top3: number;
-  top5: number;
-  top10: number;
-}[] {
-  const filters: { key: "top1" | "top3" | "top5" | "top10"; n: number }[] = [
-    { key: "top1", n: 1 },
-    { key: "top3", n: 3 },
-    { key: "top5", n: 5 },
-    { key: "top10", n: 10 },
-  ];
-
-  const merged = new Map<
-    string,
-    {
-      date: string;
-      top1: number;
-      top3: number;
-      top5: number;
-      top10: number;
-    }
-  >();
-
-  for (const f of filters) {
-    const filtered = filterByRank(data, f.n);
-    if (!filtered.days?.length) continue;
-    const points = computeAggregates(filtered).equityPoints;
-    for (const p of points) {
-      const row = merged.get(p.date) ?? {
-        date: p.date,
-        top1: 0,
-        top3: 0,
-        top5: 0,
-        top10: 0,
-      };
-      row[f.key] = p.cumPnl;
-      merged.set(p.date, row);
-    }
-  }
-
-  return Array.from(merged.values()).sort((a, b) => a.date.localeCompare(b.date));
-}
-
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <BarChart3 className="h-12 w-12 text-muted-foreground/60" aria-hidden />
-      <h3 className="mt-4 text-base font-semibold">No trades this period</h3>
-      <p className="mt-1 text-sm text-muted-foreground">Navigate to a period with trading activity.</p>
+      <h3 className="mt-4 text-base font-semibold">No trades yet</h3>
+      <p className="mt-1 text-sm text-muted-foreground">Once trades land, you'll see them here.</p>
     </div>
   );
 }
 
 export function HistoryShell() {
-  const [mode, setMode] = useState("week");
-  const [rangeOffset, setRangeOffset] = useState(0);
-  const [topFilter, setTopFilter] = useState(10);
-  const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [rawData, setRawData] = useState<WeekResponse | null>(null);
 
-  // Restore state
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const saved = JSON.parse(raw);
-        if (saved.mode) setMode(saved.mode);
-        if (saved.rangeOffset != null) setRangeOffset(saved.rangeOffset);
-        if (saved.topFilter && [1, 3, 5, 10].includes(saved.topFilter)) setTopFilter(saved.topFilter);
-      }
-    } catch {}
+    api
+      .getWeekTrades(ALL_TIME_START, toDateStr(new Date()))
+      .then(setRawData)
+      .catch(() => {});
   }, []);
 
-  // Save state
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ mode, rangeOffset, topFilter }));
-    } catch {}
-  }, [mode, rangeOffset, topFilter]);
-
-  // Load dates
-  useEffect(() => {
-    api.getTradeDates(365).then((res) => {
-      if (res.dates?.length) setAvailableDates(res.dates);
-    });
-  }, []);
-
-  // Load range data
-  const loadRange = useCallback(() => {
-    const b = getRangeBounds(mode, rangeOffset);
-    api.getWeekTrades(b.start, b.end).then(setRawData);
-  }, [mode, rangeOffset]);
-
-  useEffect(() => {
-    loadRange();
-  }, [loadRange]);
-
-  const filtered = rawData ? filterByRank(rawData, topFilter) : null;
-  const agg = filtered?.days?.length ? computeAggregates(filtered) : null;
-
-  /**
-  Equity curve always shows all four Top-N strategies overlaid, regardless
-  of which one is currently selected by the toolbar's TopNFilter. This
-  lets the user compare how each pick-set would have performed at a
-  glance without having to toggle the filter.
-  */
-  const multiEquityPoints = rawData ? buildMultiEquityPoints(rawData) : [];
-
-  const maxOffset = maxRangeOffset(mode, availableDates);
-  const label = getRangeLabel(mode, rangeOffset);
-
+  const agg = rawData?.days?.length ? computeAggregates(rawData) : null;
   const daysWithPnl = agg?.dayStats.filter((d) => d.hasSummaries) ?? [];
 
   return (
     <div className="animate-in fade-in duration-300">
-      <PageToolbar
-        leftControls={
-          <>
-            <ModeToggle
-              mode={mode}
-              onChange={(m) => {
-                setMode(m);
-                setRangeOffset(0);
-              }}
-            />
-            <DateRangeNav
-              label={label}
-              canPrev={mode !== "all" && rangeOffset < maxOffset}
-              canNext={mode !== "all" && rangeOffset > 0}
-              onPrev={() => setRangeOffset((o) => o + 1)}
-              onNext={() => setRangeOffset((o) => o - 1)}
-            />
-          </>
-        }
-        rightSlot={agg && agg.totalWinners + agg.totalLosers > 0 ? <TopNFilter value={topFilter} onChange={setTopFilter} /> : null}
-      />
-
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-7">
         {!rawData ? (
           <HistorySkeleton />
-        ) : !filtered?.days?.length ? (
+        ) : !rawData.days?.length ? (
           <EmptyState />
         ) : agg ? (
           <>
@@ -358,17 +215,15 @@ export function HistoryShell() {
               <>
                 <HistoryStats {...agg} />
 
-                {multiEquityPoints.length > 1 && (
+                {agg.equityPoints.length > 1 && (
                   <Section className="mt-8">
-                    <EquityCurveChart data={multiEquityPoints} activeTopN={topFilter} />
+                    <EquityCurveChart data={agg.equityPoints} />
                   </Section>
                 )}
 
                 {daysWithPnl.length > 1 && (
                   <Section>
-                    {/* Year and all-time windows roll up into weekly bars so
-                        the chart isn't a forest of toothpicks. */}
-                    <DailyPnlChart data={daysWithPnl} granularity={mode === "year" || mode === "all" ? "weekly" : "daily"} />
+                    <DailyPnlChart data={daysWithPnl} granularity="weekly" />
                   </Section>
                 )}
 

@@ -80,10 +80,9 @@ ORDER BY t.rank;
 ## What you can test
 
 - **Dashboard at `/`** — most recent date is in "morning picks" mode (no summaries). The previous day will switch to "EOD results" mode with stats grid, P&L chart, and trade table.
-- **Date navigation** — prev/next arrows to walk through 10 days of seeded history
-- **Top N filter** — toggle between Top 1, 3, 5, and 10 picks; localStorage persistence works
-- **Historical analytics at `/history`** — full equity curve, daily P&L bars, exposure vs returns charts, capital efficiency panel, daily breakdown with expandable rows
-- **Mode toggle** — Week / Month / Year / All time on the history page
+- **Date navigation** — prev/next arrows on the dashboard to walk through 10 days of seeded history
+- **Top N filter** — dashboard EOD mode shows a Top 1 / 3 / 5 / 10 selector; localStorage persistence works
+- **Historical analytics at `/history`** — locked to all-time, top 10. Equity curve, daily P&L bars (weekly buckets), exposure vs returns, capital efficiency panel, daily breakdown with expandable rows
 - **Subscribe modal** — opens via the top bar button. Submitting writes to the local subscribers table.
 - **Terms & FAQ** — `/terms` and `/faq` pages
 - **API protection** — `curl http://localhost:8080/api/trades/today` returns 403 (missing `X-VT-Source`); the frontend includes the header automatically
@@ -93,7 +92,6 @@ ORDER BY t.rank;
 - **Cron jobs** — pushed to Sunday so they never fire
 - **Anthropic / Schwab / Resend** — stub keys; the server starts but never makes real calls
 - **Live quotes (`/api/quotes/live`)** — returns `connected: false` since Schwab is unauthorized; the frontend gracefully degrades to "market closed" freshness
-- **Stock chart (`/api/chart/{symbol}`)** — returns 503; the chart panel shows "Chart unavailable"
 
 ## Files in this directory
 

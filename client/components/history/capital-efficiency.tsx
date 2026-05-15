@@ -15,7 +15,7 @@ export function CapitalEfficiency({ totalInvested, totalReturn, totalPnl, roc }:
     <Card className="lg-card">
       <CardHeader>
         <h3 className="text-base font-semibold">Capital Efficiency</h3>
-        <p className="text-sm text-muted-foreground">How efficiently capital was deployed across this period</p>
+        <p className="text-sm text-muted-foreground">How efficiently capital has been deployed all-time</p>
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Metric label="Total Deployed" value={fmtMoneyInt(totalInvested)} />

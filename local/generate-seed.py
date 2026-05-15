@@ -10,7 +10,7 @@ unrealized-P&L coloring on first boot.
 Equity-walk semantics (mirrors src/internal/exec/selector.go on prod):
   - 10 ranked picks per trading day (rank 1..10).
   - Auto-executor walks ranks 1, 2, 3 in order and buys each whose
-    estimated_price * 100 fits in the remaining $500 daily basket
+    estimated_price * 100 fits in the remaining $1000 daily basket
     budget. Anything that doesn't fit is skipped.
   - Open fill at 9:30 ET, close fill at 3:55 ET (intraday only).
   - Per-contract premium capped at $5/share (max $500/contract).
@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import datetime as dt
 import random
-from typing import List, Tuple
+from typing import List
 
 RNG = random.Random(20260508)
 
@@ -96,7 +96,7 @@ CREATE INDEX IF NOT EXISTS idx_summaries_date ON summaries(date);
 
 CREATE TABLE IF NOT EXISTS executions (
     id SERIAL PRIMARY KEY,
-    trade_id INTEGER,
+    trade_id INTEGER REFERENCES trades(id),
     mode TEXT NOT NULL,
     side TEXT NOT NULL,
     schwab_order_id TEXT,
@@ -118,10 +118,12 @@ CREATE TABLE IF NOT EXISTS subscribers (
     email TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL DEFAULT '',
     active BOOLEAN NOT NULL DEFAULT true,
+    auth_user_id BIGINT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     unsubscribed_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_subscribers_active ON subscribers(active);
+CREATE INDEX IF NOT EXISTS idx_subscribers_auth_user_id ON subscribers(auth_user_id);
 
 CREATE TABLE IF NOT EXISTS oauth_tokens (
     id SERIAL PRIMARY KEY,
@@ -129,6 +131,8 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
     access_token TEXT NOT NULL,
     refresh_token TEXT NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
+    refresh_token_issued_at TIMESTAMPTZ,
+    reauth_nag_sent_on DATE,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -249,11 +253,10 @@ def gen_pick(rank: int, day: dt.date) -> dict:
     # for auto-execution per server-side per-contract cap.
     estimated_price = round(RNG.uniform(0.3, 4.5), 2)
     # Special case: today's top-3 picks get cheaper premiums so the
-    # equity-walk basket actually picks all three (rather than blowing
-    # through the $500 cap on rank-1 alone). Keeps the dashboard demo
-    # showing 3 holding cards with the new green/red coloring on first
-    # boot. Past days stay random.
-    if day == dt.date(2026, 5, 8) and rank <= 3:
+    # equity-walk basket reliably picks all three. Keeps the dashboard
+    # demo showing 3 holding cards with the new green/red coloring on
+    # first boot. Past days stay random.
+    if day == dt.date(2026, 5, 15) and rank <= 3:
         estimated_price = round(RNG.uniform(0.7, 1.5), 2)
 
     # Score 4-9, anti-correlated with rank.
@@ -320,7 +323,7 @@ def simulate_close(estimated: float) -> float:
 
 
 def main() -> None:
-    today = dt.date(2026, 5, 8)
+    today = dt.date(2026, 5, 15)
     start = today - dt.timedelta(days=365)
     days = trading_days(start, today)
 
@@ -332,7 +335,7 @@ def main() -> None:
     summary_inserts: List[str] = []
     execution_inserts: List[str] = []
 
-    daily_basket_cap_usd = 500.0
+    daily_basket_cap_usd = 1000.0
     per_contract_cap_usd = 5.0
 
     for day in days:
