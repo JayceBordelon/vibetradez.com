@@ -91,7 +91,7 @@ export function Testimonials() {
             const stagger = (col + row) * 90;
             return (
               <Reveal key={t.name} effect="rise" delay={stagger} duration={700}>
-                <article className="lg-panel lg-edge-shine group flex h-full flex-col gap-4 p-6 transition-transform duration-300 hover:-translate-y-0.5">
+                <article className="group flex h-full flex-col gap-4 rounded-2xl border border-foreground/[0.08] bg-foreground/[0.015] p-6 transition-all duration-300 hover:-translate-y-0.5 hover:border-foreground/20 hover:bg-foreground/[0.04] dark:border-white/[0.06] dark:bg-white/[0.015] dark:hover:border-white/15 dark:hover:bg-white/[0.04]">
                   <div className="flex items-center justify-between gap-3">
                     <Stars rating={t.rating} />
                     <Quote className="h-4 w-4 shrink-0 text-foreground/20" aria-hidden />

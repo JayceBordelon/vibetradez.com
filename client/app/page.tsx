@@ -19,7 +19,7 @@ export default function LandingPage() {
     <div className="relative min-h-dvh overflow-hidden bg-background text-foreground">
       <AmbientBackground position="absolute" />
 
-      {/* ── Glass nav ── */}
+      {/* ── Floating glass nav (kept — it's a fixed surface, not a content card) ── */}
       <nav className="fixed top-3 left-1/2 z-50 w-[calc(100%-1.5rem)] -translate-x-1/2 sm:top-4 sm:max-w-5xl">
         <div className="lg-panel lg-edge-shine flex items-center justify-between px-4 py-2 sm:px-5 sm:py-2.5">
           <Link href="/" className="inline-flex min-h-11 items-center text-xl font-extrabold tracking-tight sm:min-h-9">
@@ -79,7 +79,7 @@ export default function LandingPage() {
                 View live dashboard
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <SubscribeCTA className="lg-panel lg-edge-shine inline-flex h-12 items-center justify-center gap-2 rounded-full px-7 text-[15px] font-semibold text-foreground transition-transform hover:-translate-y-0.5">
+              <SubscribeCTA className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-foreground/10 bg-foreground/[0.03] px-7 text-[15px] font-semibold text-foreground transition-colors hover:border-foreground/25 hover:bg-foreground/[0.06]">
                 <LogIn className="h-4 w-4" />
                 Sign in or sign up
               </SubscribeCTA>
@@ -96,47 +96,58 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Auto-execution timeline panel ── */}
-      <section className="relative px-5 pb-20 sm:px-6 sm:pb-28">
-        <div className="relative z-10 mx-auto max-w-5xl">
+      {/* ── Pipeline as a flat horizontal timeline ── */}
+      <section className="relative px-5 pb-24 sm:px-6 sm:pb-32">
+        <div className="relative z-10 mx-auto max-w-6xl">
           <Reveal effect="rise" duration={700}>
-            <div className="lg-panel lg-edge-shine overflow-hidden p-6 sm:p-10">
-              <div className="flex flex-col gap-2 text-center sm:gap-3">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">The pipeline</span>
-                <h2 className="text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">Real trades fire every weekday. No clicks needed.</h2>
-                <p className="mx-auto max-w-2xl text-sm text-muted-foreground sm:text-base">
-                  At 9:30 ET sharp, Claude ranks 10 contracts against live post-open quotes and emails the list. The top 3 picks get ordered live in my actual Schwab account with my actual money, held
-                  until 3:55 ET, and unconditionally closed before the bell. You watch it happen on the dashboard. I watch it happen on the dashboard. Honestly, that&apos;s most of what
-                  &ldquo;oversight&rdquo; means around here.
-                </p>
-              </div>
-
-              <div className="mt-10 grid gap-4 sm:grid-cols-4">
-                {pipeline.map((p, i) => (
-                  <Reveal key={p.time} effect="rise" delay={i * 90} duration={600}>
-                    <div className="lg-panel-strong relative h-full rounded-2xl border border-foreground/5 p-4 dark:border-white/5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{p.time}</span>
-                        <span className="rounded-full bg-foreground/5 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground dark:bg-white/5">{String(i + 1).padStart(2, "0")}</span>
-                      </div>
-                      <div className="mt-3 flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand text-background">
-                        <p.Icon className="h-4 w-4" />
-                      </div>
-                      <h3 className="mt-3 text-sm font-bold text-foreground">{p.title}</h3>
-                      <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{p.detail}</p>
-                    </div>
-                  </Reveal>
-                ))}
-              </div>
+            <div className="mx-auto max-w-2xl text-center">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">The pipeline</span>
+              <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">Real trades fire every weekday. No clicks needed.</h2>
+              <p className="mx-auto mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
+                At 9:30 ET sharp, Claude ranks 10 contracts against live post-open quotes and emails the list. The top 3 picks get ordered live in my actual Schwab account, held until 3:55 ET, and
+                unconditionally closed before the bell.
+              </p>
             </div>
           </Reveal>
+
+          {/* Timeline — connecting hairline runs through the middle of the row on desktop;
+              vertical accent line on mobile. */}
+          <div className="relative mt-14">
+            <div className="absolute top-[34px] left-[12.5%] hidden h-px w-[75%] bg-gradient-to-r from-transparent via-foreground/15 to-transparent md:block" aria-hidden />
+            <div className="absolute top-0 bottom-0 left-[14px] w-px bg-gradient-to-b from-transparent via-foreground/15 to-transparent md:hidden" aria-hidden />
+
+            <ol className="grid grid-cols-1 gap-10 md:grid-cols-4 md:gap-6">
+              {pipeline.map((p, i) => (
+                <Reveal key={p.time} effect="rise" delay={i * 100} duration={600}>
+                  <li className="relative flex gap-4 md:block">
+                    {/* Numbered dot — sits on the timeline */}
+                    <div className="flex shrink-0 flex-col items-center md:items-start">
+                      <span className="relative inline-flex h-8 w-8 items-center justify-center rounded-full bg-background text-xs font-bold ring-1 ring-foreground/15">
+                        <span className="absolute -inset-[5px] rounded-full bg-gradient-brand opacity-10" aria-hidden />
+                        <span className="relative">{String(i + 1).padStart(2, "0")}</span>
+                      </span>
+                    </div>
+
+                    <div className="min-w-0 flex-1 md:mt-5">
+                      <div className="flex items-center gap-2">
+                        <p.Icon className="h-3.5 w-3.5 text-foreground/60" aria-hidden />
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{p.time}</span>
+                      </div>
+                      <h3 className="mt-2 text-base font-bold tracking-tight text-foreground">{p.title}</h3>
+                      <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">{p.detail}</p>
+                    </div>
+                  </li>
+                </Reveal>
+              ))}
+            </ol>
+          </div>
         </div>
       </section>
 
-      {/* ── Features ── */}
-      <section className="relative px-5 pb-20 sm:px-6 sm:pb-28">
-        <div className="relative z-10 mx-auto max-w-6xl">
-          <Reveal effect="blur" duration={1000} className="mx-auto mb-12 max-w-2xl text-center sm:mb-14">
+      {/* ── Features — flat 3-col flow with hairline dividers, no card chrome ── */}
+      <section className="relative border-t border-foreground/5 px-5 pb-24 sm:px-6 sm:pb-32 dark:border-white/5">
+        <div className="relative z-10 mx-auto max-w-6xl pt-20 sm:pt-24">
+          <Reveal effect="blur" duration={1000} className="mx-auto mb-14 max-w-2xl text-center sm:mb-16">
             <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">What you get</span>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
               Built to <span className="text-gradient-brand">show its work</span>
@@ -147,18 +158,18 @@ export default function LandingPage() {
             </p>
           </Reveal>
 
-          <div className="grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-x-10 gap-y-12 sm:grid-cols-2 lg:grid-cols-3 lg:gap-x-12 lg:gap-y-14">
             {features.map((f, i) => {
               const col = i % 3;
               const row = Math.floor(i / 3);
               const stagger = (col + row) * 90;
               return (
                 <Reveal key={f.title} effect="rise" delay={stagger} duration={750}>
-                  <div className="lg-panel lg-edge-shine group h-full p-6 transition-transform duration-300 hover:-translate-y-0.5">
-                    <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-foreground/5 dark:bg-white/5">
-                      <f.Icon className="h-5 w-5 text-foreground/80" />
+                  <div className="group h-full">
+                    <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-foreground/5 text-foreground/80 transition-colors group-hover:bg-foreground/10 dark:bg-white/5">
+                      <f.Icon className="h-5 w-5" />
                     </div>
-                    <h3 className="mt-4 text-base font-bold tracking-tight">{f.title}</h3>
+                    <h3 className="mt-5 text-base font-bold tracking-tight">{f.title}</h3>
                     <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{f.description}</p>
                   </div>
                 </Reveal>
@@ -168,37 +179,36 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Testimonials (clearly-satirical) ── */}
+      {/* ── Testimonials ── */}
       <Testimonials />
 
-      {/* ── Subscribe CTA ── */}
-      <section className="relative px-5 pb-20 sm:px-6 sm:pb-28">
-        <div className="relative z-10 mx-auto max-w-3xl">
+      {/* ── Subscribe CTA — flat hero-style block, no outer panel ── */}
+      <section className="relative px-5 pb-24 sm:px-6 sm:pb-32">
+        <div className="relative z-10 mx-auto max-w-3xl text-center">
+          <div className="lg-orb lg-orb-claude absolute h-[420px] w-[420px] -top-24 -left-24 opacity-30" aria-hidden />
+          <div className="lg-orb lg-orb-cyan absolute h-[360px] w-[360px] -bottom-24 -right-20 opacity-30" aria-hidden />
           <Reveal effect="blur" duration={1000}>
-            <div className="lg-panel lg-edge-shine relative overflow-hidden p-8 text-center sm:p-12">
-              <div className="lg-orb lg-orb-claude absolute h-[420px] w-[420px] -top-24 -left-24 opacity-40" aria-hidden />
-              <div className="lg-orb lg-orb-cyan absolute h-[360px] w-[360px] -bottom-24 -right-20 opacity-40" aria-hidden />
-              <div className="relative">
-                <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-                  Start getting <span className="text-gradient-brand">picks</span>
-                </h2>
-                <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-                  Completely free. No credit card. No premium tier I&apos;m secretly building. One silly model doing its best, one human absolutely hoping it knows what it&apos;s doing. Unsubscribe
-                  any time &mdash; I won&apos;t email you a sad cat photo.
-                </p>
-                <div className="mt-7 flex w-full flex-col items-center justify-center gap-3 sm:flex-row">
-                  <SubscribeCTA className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gradient-brand px-7 text-[15px] font-semibold text-white shadow-lg transition-opacity hover:opacity-90">
-                    <LogIn className="h-4 w-4" />
-                    Sign in or sign up
-                  </SubscribeCTA>
-                  <Link
-                    href="/dashboard"
-                    className="lg-panel lg-edge-shine inline-flex h-12 items-center justify-center gap-2 rounded-full px-7 text-[15px] font-semibold text-foreground transition-transform hover:-translate-y-0.5"
-                  >
-                    Open dashboard
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </div>
+            <div className="relative">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Free, forever</span>
+              <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
+                Start getting <span className="text-gradient-brand">picks</span>
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
+                Completely free. No credit card. No premium tier I&apos;m secretly building. One silly model doing its best, one human absolutely hoping it knows what it&apos;s doing. Unsubscribe any
+                time &mdash; I won&apos;t email you a sad cat photo.
+              </p>
+              <div className="mt-8 flex w-full flex-col items-center justify-center gap-3 sm:flex-row">
+                <SubscribeCTA className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gradient-brand px-7 text-[15px] font-semibold text-white shadow-lg transition-opacity hover:opacity-90">
+                  <LogIn className="h-4 w-4" />
+                  Sign in or sign up
+                </SubscribeCTA>
+                <Link
+                  href="/dashboard"
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-foreground/10 bg-foreground/[0.03] px-7 text-[15px] font-semibold text-foreground transition-colors hover:border-foreground/25 hover:bg-foreground/[0.06]"
+                >
+                  Open dashboard
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
               </div>
             </div>
           </Reveal>
