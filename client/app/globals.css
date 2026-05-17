@@ -576,4 +576,51 @@ body {
   .prose-terms a:hover {
     color: var(--foreground);
   }
+
+  /*
+  Infinite horizontal scroller. The consumer doubles its child list and
+  this animation translates exactly one copy's width (50% of total)
+  before looping back, so the seam is invisible. Hovering pauses so
+  readers can land on a wordmark.
+  */
+  .animate-marquee {
+    animation: marquee 65s linear infinite;
+  }
+  .animate-marquee:hover {
+    animation-play-state: paused;
+  }
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  /*
+  Vertical sibling for the testimonial wall. Same doubled-track trick
+  as .animate-marquee, just on the Y axis. Speed is set per-column via
+  inline animation-duration so columns parallax against each other.
+  */
+  .animate-marquee-up {
+    animation: marquee-up 50s linear infinite;
+  }
+  .animate-marquee-up:hover {
+    animation-play-state: paused;
+  }
+  @keyframes marquee-up {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-50%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-marquee,
+    .animate-marquee-up {
+      animation: none;
+    }
+  }
 }

@@ -220,7 +220,7 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
         <div className="mt-10 rounded-lg border border-claude-border/40 bg-claude-light px-5 py-4">
           <div className="mb-2 flex items-center gap-2">
             <ClaudeLogo className="h-4 w-4" />
-            <span className="text-sm font-semibold text-claude">Claude's read</span>
+            <span className="text-sm font-semibold text-claude">Claudia's read</span>
             {trade.score > 0 && (
               <Badge variant="secondary" className="tabular-nums">
                 {trade.score}/10

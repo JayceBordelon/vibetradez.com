@@ -28,11 +28,11 @@ const faqs = [
   },
   {
     question: "How are the daily trade picks generated?",
-    answer: `Every weekday at 9:30 ET (right at the bell) we yeet trending tickers from StockTwits, Yahoo, Finviz, and SEC EDGAR at Claude along with live Schwab quotes, full option chains, and web search as tools. Claude returns 10 ranked picks, each with a 1-10 conviction score and a written rationale defending the call. Whether any of that constitutes "analysis" or "vibes with extra steps" is a philosophical question I am not qualified to answer. The list gets saved, posted to the dashboard, and emailed a few minutes after the open.`,
+    answer: `Every weekday at 9:30 ET (right at the bell) we yeet trending tickers from StockTwits, Yahoo, Finviz, and SEC EDGAR at Claudia along with live Schwab quotes, full option chains, and web search as tools. Claudia returns 10 ranked picks, each with a 1-10 conviction score and a written rationale defending the call. Whether any of that constitutes "analysis" or "vibes with extra steps" is a philosophical question I am not qualified to answer. The list gets saved, posted to the dashboard, and emailed a few minutes after the open.`,
   },
   {
     question: "What do the rankings (Top 1, Top 3, Top 5, Top 10) mean?",
-    answer: `Rank 1 is the trade Claude is most willing to die on a hill for. Rank 10 is "sure, why not." The Top N filter narrows the visible picks to the highest-ranked entries, and the /history page recalculates every metric (win rate, P&L, Sharpe, drawdown, etc.) based on your selection, so you can ask "would I have made money if I only listened when Claude was really sure?" and find out for yourself. I'm not going to spoil the answer.`,
+    answer: `Rank 1 is the trade Claudia is most willing to die on a hill for. Rank 10 is "sure, why not." The Top N filter narrows the visible picks to the highest-ranked entries, and the /history page recalculates every metric (win rate, P&L, Sharpe, drawdown, etc.) based on your selection, so you can ask "would I have made money if I only listened when Claudia was really sure?" and find out for yourself. I'm not going to spoil the answer.`,
   },
   {
     question: "Is the P&L shown based on real trades?",
@@ -48,11 +48,11 @@ const faqs = [
   },
   {
     question: "Where does the market data come from?",
-    answer: `Schwab Market Data API for quotes and option chains (bid, ask, mark, greeks, open interest, volume). All real prices, OAuth-gated. Sentiment and trending tickers come from StockTwits, Yahoo Finance, Finviz, and SEC EDGAR. Claude calls all of these as actual function tools, so the prices it sees are real and not hallucinated. That said: the LLM still picks the trades, so "the data is real" is doing a lot of heavy lifting in that sentence.`,
+    answer: `Schwab Market Data API for quotes and option chains (bid, ask, mark, greeks, open interest, volume). All real prices, OAuth-gated. Sentiment and trending tickers come from StockTwits, Yahoo Finance, Finviz, and SEC EDGAR. Claudia calls all of these as actual function tools, so the prices it sees are real and not hallucinated. That said: the LLM still picks the trades, so "the data is real" is doing a lot of heavy lifting in that sentence.`,
   },
   {
     question: "How often are emails sent, and what do they contain?",
-    answer: `Up to three a market day. Morning email (right after 9:30 ET): the headline pick with full contract spec, thesis, catalyst, conviction score, and Claude's whole essay defending the call. EOD email (right after 4:00 ET): how every pick actually performed, with entry vs closing price, stock move, per-trade P&L, and day totals. Friday: weekly digest aggregating the whole week. All free, always free, there is no premium tier I'm secretly building. You can unsubscribe whenever; I won't chase you.`,
+    answer: `Up to three a market day. Morning email (right after 9:30 ET): the headline pick with full contract spec, thesis, catalyst, conviction score, and Claudia's whole essay defending the call. EOD email (right after 4:00 ET): how every pick actually performed, with entry vs closing price, stock move, per-trade P&L, and day totals. Friday: weekly digest aggregating the whole week. All free, always free, there is no premium tier I'm secretly building. You can unsubscribe whenever; I won't chase you.`,
   },
   {
     question: "Is this even legal?",

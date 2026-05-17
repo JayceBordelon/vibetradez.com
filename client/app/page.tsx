@@ -1,4 +1,4 @@
-import { ArrowRight, Clock, Eye, LogIn, Mail, Shield, Sparkles, TrendingUp, Zap } from "lucide-react";
+import { ArrowRight, Clock, Eye, LogIn, Sparkles, Zap } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AmbientBackground } from "@/components/landing/ambient-background";
@@ -6,6 +6,7 @@ import { LandingNavAccount } from "@/components/landing/nav-account";
 import { Reveal } from "@/components/landing/reveal";
 import { SubscribeCTA } from "@/components/landing/subscribe-cta";
 import { Testimonials } from "@/components/landing/testimonials";
+import { TrustedBy } from "@/components/landing/trusted-by";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 
 export const metadata: Metadata = {
@@ -65,8 +66,8 @@ export default function LandingPage() {
 
           <Reveal effect="rise" delay={280} duration={900}>
             <p className="mx-auto mt-7 max-w-[640px] text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Every weekday at 9:30 ET, an LLM ranks 10 options contracts with live market data and a written essay defending each one. The top 3 picks auto-fire in my actual brokerage account, with
-              my actual money. By close you find out whether Claude was right. <span className="italic">It is sometimes.</span>
+              Every weekday at 9:30 ET, a language model ranks 10 options contracts and auto-fires the top 3 in my real brokerage account. By close, you see whether Claudia was right.{" "}
+              <span className="italic">(She is sometimes.)</span>
             </p>
           </Reveal>
 
@@ -90,7 +91,7 @@ export default function LandingPage() {
             <div className="mt-12 flex items-center justify-center gap-2 text-[13px] text-muted-foreground">
               <span className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground/70">Powered by</span>
               <ClaudeLogo className="h-4 w-4" />
-              <span className="font-medium">Claude</span>
+              <span className="font-medium">Claudia</span>
             </div>
           </Reveal>
         </div>
@@ -102,11 +103,9 @@ export default function LandingPage() {
           <Reveal effect="rise" duration={700}>
             <div className="mx-auto max-w-2xl text-center">
               <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">The pipeline</span>
-              <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">Real trades fire every weekday. No clicks needed.</h2>
-              <p className="mx-auto mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
-                At 9:30 ET sharp, Claude ranks 10 contracts against live post-open quotes and emails the list. The top 3 picks get ordered live in my actual Schwab account, held until 3:55 ET, and
-                unconditionally closed before the bell.
-              </p>
+              <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
+                Real trades fire every weekday. <span className="text-gradient-brand">No clicks needed.</span>
+              </h2>
             </div>
           </Reveal>
 
@@ -144,43 +143,11 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Features — flat 3-col flow with hairline dividers, no card chrome ── */}
-      <section className="relative border-t border-foreground/5 px-5 pb-24 sm:px-6 sm:pb-32 dark:border-white/5">
-        <div className="relative z-10 mx-auto max-w-6xl pt-20 sm:pt-24">
-          <Reveal effect="blur" duration={1000} className="mx-auto mb-14 max-w-2xl text-center sm:mb-16">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">What you get</span>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
-              Built to <span className="text-gradient-brand">show its work</span>
-            </h2>
-            <p className="mt-3 text-muted-foreground">
-              Every pick comes with the contract spec, a 1-10 conviction score, and Claude&apos;s whole essay defending it. We don&apos;t cherry-pick the wins because we don&apos;t actually know which
-              ones will be wins.
-            </p>
-          </Reveal>
-
-          <div className="grid grid-cols-1 gap-x-10 gap-y-12 sm:grid-cols-2 lg:grid-cols-3 lg:gap-x-12 lg:gap-y-14">
-            {features.map((f, i) => {
-              const col = i % 3;
-              const row = Math.floor(i / 3);
-              const stagger = (col + row) * 90;
-              return (
-                <Reveal key={f.title} effect="rise" delay={stagger} duration={750}>
-                  <div className="group h-full">
-                    <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-foreground/5 text-foreground/80 transition-colors group-hover:bg-foreground/10 dark:bg-white/5">
-                      <f.Icon className="h-5 w-5" />
-                    </div>
-                    <h3 className="mt-5 text-base font-bold tracking-tight">{f.title}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{f.description}</p>
-                  </div>
-                </Reveal>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
       {/* ── Testimonials ── */}
       <Testimonials />
+
+      {/* ── Trusted-by parody marquee (warm-up before the subscribe CTA) ── */}
+      <TrustedBy />
 
       {/* ── Subscribe CTA — flat hero-style block, no outer panel ── */}
       <section className="relative px-5 pb-24 sm:px-6 sm:pb-32">
@@ -194,8 +161,7 @@ export default function LandingPage() {
                 Start getting <span className="text-gradient-brand">picks</span>
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-                Completely free. No credit card. No premium tier I&apos;m secretly building. One silly model doing its best, one human absolutely hoping it knows what it&apos;s doing. Unsubscribe any
-                time &mdash; I won&apos;t email you a sad cat photo.
+                Free, no credit card, no premium tier. Unsubscribe any time. <span className="italic">(I won&apos;t email you a sad cat photo.)</span>
               </p>
               <div className="mt-8 flex w-full flex-col items-center justify-center gap-3 sm:flex-row">
                 <SubscribeCTA className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gradient-brand px-7 text-[15px] font-semibold text-white shadow-lg transition-opacity hover:opacity-90">
@@ -256,7 +222,7 @@ export default function LandingPage() {
 const pipeline = [
   {
     time: "9:30 AM ET",
-    title: "Claude picks against the bell",
+    title: "Claudia picks against the bell",
     detail:
       "Right at the open, an LLM pulls market signals, calls Schwab for live quotes and option chains, and ranks 10 contracts with a written rationale for each. Live post-open prices, not pre-market guesses.",
     Icon: Sparkles,
@@ -264,8 +230,7 @@ const pipeline = [
   {
     time: "9:31-9:33 AM ET",
     title: "Auto-fire the basket",
-    detail:
-      "The top 3 picks fire live in my actual Schwab account a minute or two after the bell. Real money, real fills. Each contract capped at $5/share, with a $1,000 daily basket ceiling so the worst case is a manageable amount of regret on my part.",
+    detail: "The top 3 picks fire live in my actual Schwab account a minute or two after the bell. Real money, real fills. Capped at $5/share per contract, $1,000 daily basket limit.",
     Icon: Zap,
   },
   {
@@ -277,41 +242,7 @@ const pipeline = [
   {
     time: "3:55 PM ET",
     title: "Mandatory close",
-    detail: "Position is unconditionally closed five minutes before the bell. No overnight risk. No 'let it ride' improvisation.",
+    detail: "Position is unconditionally closed five minutes before the bell. No overnight risk.",
     Icon: Clock,
-  },
-];
-
-const features = [
-  {
-    Icon: Sparkles,
-    title: "Conviction-scored picks",
-    description: "Every pick has a 1-10 conviction score and a written rationale defending it. Claude is opinionated. Sometimes that's a good thing.",
-  },
-  {
-    Icon: TrendingUp,
-    title: "Live market data",
-    description: "Real-time quotes and full option chains from Schwab. Claude calls tools mid-analysis instead of hallucinating prices, which is a genuine upgrade from 'making it up'.",
-  },
-  {
-    Icon: Zap,
-    title: "Auto-fired live basket",
-    description:
-      "The top 3 picks auto-fire every morning in my actual brokerage account, with my actual money. $5/share per contract under a $1,000 daily basket ceiling, mandatory close at 3:55 ET. No clicks, no overnight risk, no chance for me to second-guess it.",
-  },
-  {
-    Icon: Mail,
-    title: "Pre-market email",
-    description: "Ranked picks in your inbox right after the open. EOD results at close. Friday digest. All free, all automated, unsubscribe whenever.",
-  },
-  {
-    Icon: Clock,
-    title: "End-of-day tracking",
-    description: "Every pick tracked to close. Win rate, P&L, Sharpe, drawdown — all computed honestly. No 'trust me bro' screenshots, no quietly-removed losers.",
-  },
-  {
-    Icon: Shield,
-    title: "Completely free",
-    description: "No paywalls. No premium tier. No 'pro plan'. A live experiment in letting one model trade. You watch, you judge, you bring your own popcorn.",
   },
 ];

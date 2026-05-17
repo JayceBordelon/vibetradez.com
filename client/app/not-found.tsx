@@ -14,7 +14,7 @@ const SUGGESTIONS = [
   {
     href: "/",
     label: "Live Dashboard",
-    description: "Today's picks ranked by Claude's conviction score.",
+    description: "Today's picks ranked by Claudia's conviction score.",
     Icon: BarChart3,
   },
   {

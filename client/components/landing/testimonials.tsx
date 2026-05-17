@@ -43,7 +43,7 @@ const TESTIMONIALS: Testimonial[] = [
     title: "Chief Vibe Officer, X/AI/SpaceX/Boring/Tesla/Neuralink",
     initials: "EM",
     rating: 3,
-    quote: "I bought 420 calls expiring 4/20 because Claude told me to. Should've read the disclaimer. Would have been five stars but my Cybertruck ran out of options premium.",
+    quote: "I bought 420 calls expiring 4/20 because Claudia told me to. Should've read the disclaimer. Would have been five stars but my Cybertruck ran out of options premium.",
     avatarClass: "bg-gradient-to-br from-rose-400 to-fuchsia-500 text-white",
   },
   {
@@ -70,7 +70,103 @@ const TESTIMONIALS: Testimonial[] = [
     quote: "I asked Copilot to subscribe. It bought seventeen contracts on a ticker that doesn't exist. Bullish. Half star off because Clippy didn't get a kickback.",
     avatarClass: "bg-gradient-to-br from-cyan-400 to-blue-500 text-white",
   },
+  {
+    name: "Donald Trump",
+    title: "Former, Future, Current President (Depending)",
+    initials: "DT",
+    rating: 5,
+    quote: "TREMENDOUS picks. The best options. Made four trillion dollars in my mind alone. Sad I didn't think of it first. Five out of four stars.",
+    avatarClass: "bg-gradient-to-br from-red-400 to-amber-500 text-white",
+  },
+  {
+    name: "Taylor Swift",
+    title: "Billionaire by Sheer Force of Friendship Bracelets",
+    initials: "TS",
+    rating: 5,
+    quote: "Read Claudia's rationale and the third letter of each sentence spelled 'TS'. Dropping a re-recorded album about a covered call gone wrong. Stream it.",
+    avatarClass: "bg-gradient-to-br from-pink-400 to-rose-500 text-white",
+  },
+  {
+    name: "Tim Cook",
+    title: "CEO, Apple (Allegedly Still Sells iPhones)",
+    initials: "TC",
+    rating: 4,
+    quote: "VibeTradez integrates beautifully with our ecosystem. We are patenting the swipe-down gesture for rejecting Claudia's worst picks. Coming to iOS 19, probably.",
+    avatarClass: "bg-gradient-to-br from-slate-400 to-zinc-500 text-white",
+  },
+  {
+    name: "Jensen Huang",
+    title: "Founder, NVIDIA (Owns Three Datacenters Personally)",
+    initials: "JH",
+    rating: 5,
+    quote: "Bought 9 calls. They were going to be H100s but the supply chain is constrained. Claudia says it doesn't matter. Leather jacket noted.",
+    avatarClass: "bg-gradient-to-br from-lime-400 to-green-500 text-white",
+  },
+  {
+    name: "Larry Ellison",
+    title: "Chairman, Oracle (Currently on the Yacht)",
+    initials: "LE",
+    rating: 4.5,
+    quote: "Parked the yacht at the dock and asked Claudia what to buy. It said Oracle. I am reporting myself to myself for insider tips.",
+    avatarClass: "bg-gradient-to-br from-blue-400 to-sky-500 text-white",
+  },
+  {
+    name: "Satya Nadella",
+    title: "CEO, Microsoft (Empathetic Vibes Quarter)",
+    initials: "SN",
+    rating: 4,
+    quote: "Copilot tried to subscribe but the form refused to autofill from Edge. We have added 'autofill' to our Q4 OKRs. Bullish on synergies.",
+    avatarClass: "bg-gradient-to-br from-indigo-400 to-blue-500 text-white",
+  },
+  {
+    name: "Mr Beast",
+    title: "CEO, Beast Burger / Feastables / Beast Philanthropy",
+    initials: "MB",
+    rating: 5,
+    quote: "Gave 100 strangers $10,000 each and told them to follow VibeTradez. 99 went broke. The 100th bought MAGS calls. Subscribe to my channel.",
+    avatarClass: "bg-gradient-to-br from-orange-400 to-red-500 text-white",
+  },
+  {
+    name: "Snoop Dogg",
+    title: "Doggfather (Diversified Holdings)",
+    initials: "SD",
+    rating: 4.5,
+    quote: "Claudia said sell. I told her to drop a chart. The chart was bullish. We are now business partners in a vape company.",
+    avatarClass: "bg-gradient-to-br from-purple-400 to-indigo-500 text-white",
+  },
+  {
+    name: "Marc Andreessen",
+    title: "GP, Andreessen Horowitz (Tweeting Through It)",
+    initials: "MA",
+    rating: 5,
+    quote: "Software is eating the world. Claudia is eating software. I am eating optimism. We are so back. (a16z is also so back.)",
+    avatarClass: "bg-gradient-to-br from-zinc-400 to-neutral-500 text-white",
+  },
+  {
+    name: "Vitalik Buterin",
+    title: "Co-founder, Ethereum (Currently in Argentina)",
+    initials: "VB",
+    rating: 5,
+    quote: "Claudia proposed an EIP for option premiums on Layer 2. Vibrant intellectual energy. The merge will resolve all losing positions retroactively.",
+    avatarClass: "bg-gradient-to-br from-fuchsia-400 to-violet-500 text-white",
+  },
 ];
+
+/*
+Round-robin testimonials into 3 columns so adding new entries keeps
+distribution balanced automatically. Each column then animates at a
+different speed for a parallax wall effect. On mobile the wall
+collapses to a static stack since vertical auto-scroll inside a
+vertically-scrolling page is hostile UX.
+*/
+const COLUMN_GROUPS: Testimonial[][] = (() => {
+  const cols: Testimonial[][] = [[], [], []];
+  TESTIMONIALS.forEach((t, i) => {
+    cols[i % 3].push(t);
+  });
+  return cols;
+})();
+const COLUMN_DURATIONS = ["68s", "54s", "78s"];
 
 export function Testimonials() {
   return (
@@ -84,32 +180,22 @@ export function Testimonials() {
           <p className="mt-3 text-sm text-muted-foreground sm:text-base">Loved by titans of industry. Allegedly.</p>
         </Reveal>
 
-        <div className="grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
-          {TESTIMONIALS.map((t, i) => {
-            const col = i % 3;
-            const row = Math.floor(i / 3);
-            const stagger = (col + row) * 90;
-            return (
-              <Reveal key={t.name} effect="rise" delay={stagger} duration={700}>
-                <article className="group flex h-full flex-col gap-4 rounded-2xl border border-foreground/[0.08] bg-foreground/[0.015] p-6 transition-all duration-300 hover:-translate-y-0.5 hover:border-foreground/20 hover:bg-foreground/[0.04] dark:border-white/[0.06] dark:bg-white/[0.015] dark:hover:border-white/15 dark:hover:bg-white/[0.04]">
-                  <div className="flex items-center justify-between gap-3">
-                    <Stars rating={t.rating} />
-                    <Quote className="h-4 w-4 shrink-0 text-foreground/20" aria-hidden />
-                  </div>
-                  <p className="flex-1 text-[15px] leading-relaxed text-foreground/85">&ldquo;{t.quote}&rdquo;</p>
-                  <div className="flex items-start gap-3 border-t border-foreground/5 pt-4 dark:border-white/5">
-                    <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-bold", t.avatarClass)} aria-hidden>
-                      {t.initials}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold tracking-tight">{t.name}</div>
-                      <div className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">{t.title}</div>
-                    </div>
-                  </div>
-                </article>
-              </Reveal>
-            );
-          })}
+        {/* Mobile: static stack */}
+        <div className="space-y-4 sm:hidden">
+          {TESTIMONIALS.map((t) => (
+            <TestimonialCard key={t.name} t={t} />
+          ))}
+        </div>
+
+        {/* Desktop: scrolling parallax columns */}
+        <div className="relative hidden h-[640px] gap-5 overflow-hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 [mask-image:linear-gradient(to_bottom,transparent,black_10%,black_90%,transparent)] [-webkit-mask-image:linear-gradient(to_bottom,transparent,black_10%,black_90%,transparent)]">
+          {COLUMN_GROUPS.map((col, idx) => (
+            <div key={`col-${idx}`} className={cn("flex animate-marquee-up flex-col gap-5", idx === 2 && "hidden lg:flex")} style={{ animationDuration: COLUMN_DURATIONS[idx] }}>
+              {[...col, ...col].map((t, i) => (
+                <TestimonialCard key={`${t.name}-${i}`} t={t} hidden={i >= col.length} />
+              ))}
+            </div>
+          ))}
         </div>
 
         <Reveal effect="fade" duration={800} delay={300} className="mt-8 text-center">
@@ -119,6 +205,30 @@ export function Testimonials() {
         </Reveal>
       </div>
     </section>
+  );
+}
+
+function TestimonialCard({ t, hidden }: { t: Testimonial; hidden?: boolean }) {
+  return (
+    <article
+      aria-hidden={hidden || undefined}
+      className="group flex shrink-0 flex-col gap-4 rounded-2xl border border-foreground/[0.08] bg-foreground/[0.015] p-6 transition-all duration-300 hover:border-foreground/20 hover:bg-foreground/[0.04] dark:border-white/[0.06] dark:bg-white/[0.015] dark:hover:border-white/15 dark:hover:bg-white/[0.04]"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <Stars rating={t.rating} />
+        <Quote className="h-4 w-4 shrink-0 text-foreground/20" aria-hidden />
+      </div>
+      <p className="text-[15px] leading-relaxed text-foreground/85">&ldquo;{t.quote}&rdquo;</p>
+      <div className="flex items-start gap-3 border-t border-foreground/5 pt-4 dark:border-white/5">
+        <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-bold", t.avatarClass)} aria-hidden>
+          {t.initials}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold tracking-tight">{t.name}</div>
+          <div className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">{t.title}</div>
+        </div>
+      </div>
+    </article>
   );
 }
 

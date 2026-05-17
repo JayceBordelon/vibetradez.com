@@ -249,7 +249,7 @@ export function findClosedExecutionForTrade(executions: Execution[] | null | und
 liveMarkForTrade looks up the current option mark for a trade from
 the dashboard live-quotes payload. The server keys the options map
 as "<SYMBOL>|<CALL|PUT>|<strike to 2dp>|<expiration>" (see
-server.go:846 / morning-cards:67), so we mirror that key here.
+server.go:846 / morning-layout:32), so we mirror that key here.
 Returns null when the live feed isn't connected, the contract dropped
 off the chain, or the mark is non-positive.
 */

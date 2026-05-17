@@ -11,7 +11,7 @@ import { computeTradePnl } from "@/lib/calculations";
 import type { DashboardResponse, DashboardTrade, Execution, LiveQuotesResponse } from "@/types/trade";
 
 import { ExposurePanel } from "./exposure-panel";
-import { MorningCards } from "./morning-cards";
+import { MorningLayout } from "./morning-layout";
 import { NoTradesToday } from "./no-trades-today";
 import { PnlChart } from "./pnl-chart";
 import { StatsGrid } from "./stats-grid";
@@ -207,7 +207,7 @@ export function DashboardShell() {
         ) : (
           <>
             <Section title="Today's Picks" subtitle={`${filtered.trades.length} ranked plays · click any pick for the full single-contract view`}>
-              <MorningCards trades={filtered.trades} liveQuotes={liveQuotes} date={filtered.date} executions={executions} />
+              <MorningLayout trades={filtered.trades} liveQuotes={liveQuotes} date={filtered.date} executions={executions} />
             </Section>
             <Section title="Exposure" subtitle="Capital at risk for today's picks. For long options, max loss is the premium paid." className="mt-10 border-t border-border/40 pt-8">
               <ExposurePanel trades={filtered.trades} executions={null} hasSummaries={false} />
