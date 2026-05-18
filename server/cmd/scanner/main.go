@@ -694,26 +694,30 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 
 	/*
 		Auto-execution gate: only runs if TRADING_ENABLED. The selector
-		walks the top MaxBasketRank ranks greedily — including each pick
-		whose modeled premium fits in the remaining MaxDailyBasketUSD
-		budget, skip-and-continue when a contract is too big — and the
-		service places those orders sequentially after a Schwab cash
-		check. Score is not a gate; rank order is the only signal.
+		runs two phases: (1) unconditionally include the top
+		GuaranteedBasketRank picks at qty=1 each, (2) greedily fill
+		ranks 1..GreedyFillMaxRank with additional contracts (duplicates
+		merged into qty=N) until MaxDailyBasketUSD is exhausted. The
+		service then places one quantity=N order per BasketEntry after
+		a Schwab cash check. Score is not a gate; rank order is the
+		only ordering signal.
 	*/
 	if executor != nil {
-		picks := exec.QualifyingPicks(topTrades)
-		if len(picks) > 0 {
-			summary := make([]string, 0, len(picks))
-			for _, p := range picks {
-				summary = append(summary, fmt.Sprintf("rank=%d %s %s@%.2f", p.Rank, p.Symbol, p.ContractType, p.EstimatedPrice))
+		basket := exec.QualifyingBasket(topTrades)
+		if len(basket) > 0 {
+			summary := make([]string, 0, len(basket))
+			totalQty := 0
+			for _, b := range basket {
+				summary = append(summary, fmt.Sprintf("rank=%d %s %s@%.2f×%d", b.Trade.Rank, b.Trade.Symbol, b.Trade.ContractType, b.Trade.EstimatedPrice, b.Quantity))
+				totalQty += b.Quantity
 			}
-			log.Printf("execution: basket of %d pick(s) selected [%s] (mode=%s)", len(picks), strings.Join(summary, ", "), executor.Mode())
-			if _, err := executor.HandleQualifyingPicks(ctx, picks); err != nil {
+			log.Printf("execution: basket of %d entry(ies)/%d contract(s) selected [%s] (mode=%s)", len(basket), totalQty, strings.Join(summary, ", "), executor.Mode())
+			if _, err := executor.HandleQualifyingPicks(ctx, basket); err != nil {
 				log.Printf("execution: handle qualifying picks: %v", err)
 			}
 		} else {
-			log.Printf("execution: no qualifying picks today (top-%d ranks missing, all premium > $%.2f cap, or basket cap $%.2f exhausted)",
-				exec.MaxBasketRank, exec.MaxContractPremium, exec.MaxDailyBasketUSD)
+			log.Printf("execution: no qualifying basket today (no ranks 1..%d eligible under $%.2f per-contract cap)",
+				exec.GreedyFillMaxRank, exec.MaxContractPremium)
 		}
 	}
 

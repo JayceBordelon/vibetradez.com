@@ -175,10 +175,11 @@ type dashboardResponse struct {
 		Executions surfaces every position taken (paper or live) on a
 		trade from this date. Empty when no qualifying pick converted to
 		an actual execution that day. The basket auto-executor can fire
-		up to exec.MaxBasketRank per day, so the frontend matches each
-		entry to its trade card by symbol + contract_type + strike to
-		render badges and to source realized P&L from broker truth
-		instead of Claude's modeled summary numbers.
+		multiple per day (top 3 guaranteed phase + greedy fill from
+		ranks 1..10), so the frontend matches each entry to its trade
+		card by symbol + contract_type + strike to render badges and to
+		source realized P&L from broker truth instead of Claudia's
+		modeled summary numbers.
 	*/
 	Executions []*store.ExecutionView `json:"executions,omitempty"`
 }

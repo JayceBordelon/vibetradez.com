@@ -163,10 +163,12 @@ func migrate(db *sql.DB) error {
 
 		/*
 		Auto-execution pipeline. The cron fires the basket of qualifying
-		picks (up to MaxBasketRank per day, paper or live depending on
-		TRADING_MODE) every weekday at 9:30 ET, no user confirmation step.
-		Each row in the executions table is one order lifecycle (open or
-		close), referencing the trades.id row that spawned it.
+		picks every weekday at 9:30 ET, no user confirmation step. The
+		selector runs two phases (top 3 unconditionally, then a greedy
+		fill of additional contracts from ranks 1..10 toward a $1k
+		exposure target), so a row in this table represents one order
+		lifecycle (open or close) and its requested_quantity column
+		can be > 1 when the greedy fill duplicated a rank.
 		*/
 		CREATE TABLE IF NOT EXISTS executions (
 			id                  SERIAL PRIMARY KEY,

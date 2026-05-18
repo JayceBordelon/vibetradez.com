@@ -1,3 +1,4 @@
+import { executionQuantity, findExecutionForTrade } from "@/components/execution-badge";
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
 import { computeTradePnl } from "@/lib/calculations";
 import { fmt, fmtMoney, fmtMoneyInt, fmtPctDec } from "@/lib/format";
@@ -14,19 +15,24 @@ export function ExposurePanel({ trades, hasSummaries, executions }: ExposurePane
   const count = trades.length;
 
   /*
-  Capital deployed prefers actual broker entry fills when available,
-  falling back to Claude's modeled summary entry_price, then to the
-  morning estimate.
+  Capital deployed multiplies the entry premium by the executed
+  contract count (quantity > 1 happens when the greedy fill duplicates
+  a rank). When no execution exists the pick is hypothetical at qty 1,
+  matching the "what if you bought one contract" model the summary
+  represents.
   */
   const totalExposure = trades.reduce((sum, dt) => {
+    const exec = findExecutionForTrade(executions, dt.trade);
+    const qty = executionQuantity(exec);
     const result = computeTradePnl(dt, executions);
     if (result.hasData && result.entryPrice > 0) {
-      return sum + result.entryPrice * 100;
+      return sum + result.entryPrice * 100 * qty;
     }
-    return sum + (dt.trade.estimated_price ?? 0) * 100;
+    return sum + (dt.trade.estimated_price ?? 0) * 100 * qty;
   }, 0);
 
-  const avgPremium = count > 0 ? totalExposure / count / 100 : 0;
+  const totalContracts = trades.reduce((sum, dt) => sum + executionQuantity(findExecutionForTrade(executions, dt.trade)), 0);
+  const avgPremium = totalContracts > 0 ? totalExposure / totalContracts / 100 : 0;
   const avgDte = count > 0 ? trades.reduce((sum, dt) => sum + dt.trade.dte, 0) / count : 0;
 
   let totalReturned = 0;
@@ -35,9 +41,11 @@ export function ExposurePanel({ trades, hasSummaries, executions }: ExposurePane
 
   if (hasSummaries) {
     totalReturned = trades.reduce((sum, dt) => {
+      const exec = findExecutionForTrade(executions, dt.trade);
+      const qty = executionQuantity(exec);
       const result = computeTradePnl(dt, executions);
       if (!result.hasData) return sum;
-      return sum + result.closingPrice * 100;
+      return sum + result.closingPrice * 100 * qty;
     }, 0);
     netPnl = totalReturned - totalExposure;
     roc = totalExposure > 0 ? (netPnl / totalExposure) * 100 : 0;
@@ -91,19 +99,21 @@ export function ExposurePanel({ trades, hasSummaries, executions }: ExposurePane
         </div>
       )}
 
-      {!hasSummaries && totalExposure > 0 && <MorningBreakdown trades={trades} totalExposure={totalExposure} />}
+      {!hasSummaries && totalExposure > 0 && <MorningBreakdown trades={trades} totalExposure={totalExposure} executions={executions} />}
     </div>
   );
 }
 
-function MorningBreakdown({ trades, totalExposure }: { trades: DashboardTrade[]; totalExposure: number }) {
+function MorningBreakdown({ trades, totalExposure, executions }: { trades: DashboardTrade[]; totalExposure: number; executions?: Execution[] | null }) {
   const buckets = { LOW: 0, MEDIUM: 0, HIGH: 0 } as Record<"LOW" | "MEDIUM" | "HIGH", number>;
   for (const dt of trades) {
+    const qty = executionQuantity(findExecutionForTrade(executions, dt.trade));
     const level = (dt.trade.risk_level ?? "MEDIUM") as keyof typeof buckets;
+    const cost = (dt.trade.estimated_price ?? 0) * 100 * qty;
     if (level in buckets) {
-      buckets[level] += (dt.trade.estimated_price ?? 0) * 100;
+      buckets[level] += cost;
     } else {
-      buckets.MEDIUM += (dt.trade.estimated_price ?? 0) * 100;
+      buckets.MEDIUM += cost;
     }
   }
   const lowPct = totalExposure > 0 ? (buckets.LOW / totalExposure) * 100 : 0;

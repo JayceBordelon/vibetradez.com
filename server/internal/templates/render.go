@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_close_receipt.html execute_close_failed.html execute_open_failed.html rollout_auto_execution_live.html rollout_claude_only.html rollout_live_trading_starts.html rollout_basket_and_copy_trading.html rollout_equity_walk_day_one.html schwab_reauth.html
+//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_close_receipt.html execute_close_failed.html execute_open_failed.html rollout_execution_rewrite.html schwab_reauth.html
 var templateFS embed.FS
 
 type Trade struct {
@@ -349,62 +349,16 @@ func RenderExecuteOpenFailed(d ExecuteOpenFailedData) (string, error) {
 }
 
 /*
-RenderRolloutAutoExecutionLive renders the v1 rollout email
-announcing the auto-execution feature. Static content, no
-parameters, just a Subject string for the <title> tag.
+RenderRolloutExecutionRewrite renders the v6 rollout email announcing
+the selector + executor rewrite: top 3 picks always fire (no $500 cap
+holding back high-conviction picks), then a greedy fill from picks
+1-10 to a $1,000 daily exposure target, with the per-contract premium
+ceiling raised from $5 to $10. Static content, no parameters beyond
+the Subject string.
 */
-func RenderRolloutAutoExecutionLive() (string, error) {
-	return renderOne("rollout_auto_execution_live.html", map[string]string{
-		"Subject": "VibeTradez can now execute trades",
-	})
-}
-
-/*
-RenderRolloutClaudeOnly renders the v2 rollout email announcing the
-removal of the dual-model pipeline in favour of a single Claude-only
-picker. Static content, no parameters beyond the Subject string.
-*/
-func RenderRolloutClaudeOnly() (string, error) {
-	return renderOne("rollout_claude_only.html", map[string]string{
-		"Subject": "We benched ChatGPT. Claude takes the floor.",
-	})
-}
-
-/*
-RenderRolloutLiveTradingStarts renders the v3 rollout email announcing
-the flip from paper trading to live trading. Static content, no
-parameters beyond the Subject string.
-*/
-func RenderRolloutLiveTradingStarts() (string, error) {
-	return renderOne("rollout_live_trading_starts.html", map[string]string{
-		"Subject": "Tomorrow: trades go LIVE — real money on a 1-contract leash",
-	})
-}
-
-/*
-RenderRolloutBasketAndCopyTrading renders the v4 rollout email
-announcing today's +$435.67 single-trade win, the upcoming basket
-auto-execution (top-3 ranks, $500 daily cap with Schwab cash check),
-and the copy-trading-beta intent. Numbers in the template are
-specific to today (May 8, 2026) — never re-purpose this rollout for
-a future P&L; create a new slug instead.
-*/
-func RenderRolloutBasketAndCopyTrading() (string, error) {
-	return renderOne("rollout_basket_and_copy_trading.html", map[string]string{
-		"Subject": "+$435 today, and what's coming next on VibeTradez",
-	})
-}
-
-/*
-RenderRolloutEquityWalkDayOne renders the v5 rollout email announcing
-the pre-May-8 history wipe, the "Equity Walk Experiment" rules
-(top-3 picks/day under a $500 daily cap, intraday-only, real Schwab
-fills), and disclosure of the close-fill-price bug + fix. Numbers
-and dates are specific to May 8, 2026 — never re-purpose this slug.
-*/
-func RenderRolloutEquityWalkDayOne() (string, error) {
-	return renderOne("rollout_equity_walk_day_one.html", map[string]string{
-		"Subject": "Day 1: clean slate, real money, public equity walk",
+func RenderRolloutExecutionRewrite() (string, error) {
+	return renderOne("rollout_execution_rewrite.html", map[string]string{
+		"Subject": "Selector rewrite: top 3 always fire, basket fills to $1k",
 	})
 }
 

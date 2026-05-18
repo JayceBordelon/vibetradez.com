@@ -48,6 +48,7 @@ export function ExecutionBadge({ execution, variant = "compact", liveMark, class
 function ExecutionPill({ execution, liveMark, className }: { execution: Execution; liveMark?: number | null; className?: string }) {
   const { mode, state } = execution;
   const isLive = mode === "live";
+  const qty = execution.quantity || 1;
 
   const holdingPnl = computeHoldingPnl(execution, liveMark);
 
@@ -60,17 +61,24 @@ function ExecutionPill({ execution, liveMark, className }: { execution: Executio
     modeColors = isLive ? "border-red-border bg-red-bg text-red" : "border-amber-border bg-amber-bg text-amber";
   }
 
+  /*
+  qtyPrefix surfaces multi-contract positions ("Holding 3 @ $1.50",
+  "Closed 2× +$120"). Single-contract pills omit the prefix so the
+  legacy one-contract baseline reads identically to the pre-rewrite UI.
+  */
+  const qtyPrefix = qty > 1 ? `${qty} ` : "";
+
   let label: React.ReactNode;
   if (state === "failed") {
-    label = <>Open failed</>;
+    label = <>{qty > 1 ? `Open failed (${qty} contracts)` : "Open failed"}</>;
   } else if (state === "submitted") {
-    label = <>Order working at broker</>;
+    label = <>{qty > 1 ? `${qty} contracts working at broker` : "Order working at broker"}</>;
   } else if (state === "closed") {
     const pnl = execution.realized_pnl;
     const pnlColor = pnl > 0 ? "text-green" : pnl < 0 ? "text-red" : "text-foreground";
     label = (
       <>
-        Closed{" "}
+        Closed{qty > 1 ? ` ${qty}×` : ""}{" "}
         <span className={cn("font-semibold", pnlColor)}>
           {pnl > 0 ? "+" : ""}
           {fmtMoney(pnl)}
@@ -80,7 +88,7 @@ function ExecutionPill({ execution, liveMark, className }: { execution: Executio
   } else if (holdingPnl !== null) {
     label = (
       <>
-        Holding @ <span className="font-semibold">{fmtMoney(execution.open_price)}</span>
+        Holding {qtyPrefix}@ <span className="font-semibold">{fmtMoney(execution.open_price)}</span>
         <span className="ml-1 font-semibold">
           ({holdingPnl > 0 ? "+" : ""}
           {fmtMoney(holdingPnl)})
@@ -90,7 +98,7 @@ function ExecutionPill({ execution, liveMark, className }: { execution: Executio
   } else {
     label = (
       <>
-        Holding @ <span className="font-semibold">{fmtMoney(execution.open_price)}</span>
+        Holding {qtyPrefix}@ <span className="font-semibold">{fmtMoney(execution.open_price)}</span>
       </>
     );
   }
@@ -157,12 +165,15 @@ function ExecutionPanel({ execution, liveMark, className }: { execution: Executi
   }
   const closeSubResolved = state === "holding" && liveMark != null && liveMark > 0 && !closed_at ? "live mark" : closeSub;
 
+  const qty = execution.quantity || 1;
+
   return (
     <div className={cn("rounded-lg border", className)}>
       <div className={cn("flex items-center justify-between border-b px-4 py-2 text-xs font-semibold uppercase tracking-wider", headerColors)}>
         <span className="inline-flex items-center gap-2">
           <span className="inline-block h-2 w-2 rounded-full bg-current" />
           {headerLabel} · {mode}
+          {qty > 1 && <span className="ml-1 rounded-md border border-current/40 px-1.5 py-0.5 text-[10px] font-bold tabular-nums normal-case tracking-normal">{qty}× contracts</span>}
         </span>
         <span>{state}</span>
       </div>
@@ -253,6 +264,17 @@ server.go:846 / morning-layout:32), so we mirror that key here.
 Returns null when the live feed isn't connected, the contract dropped
 off the chain, or the mark is non-positive.
 */
+/**
+executionQuantity returns the contract count for an execution row,
+defaulting to 1 when the field is missing or zero. Centralizes the
+"legacy single-contract rows have quantity unset" defensive fallback
+so callers (exposure panel, P&L math) don't each reimplement it.
+*/
+export function executionQuantity(execution: Execution | null | undefined): number {
+  if (!execution || !execution.quantity || execution.quantity < 1) return 1;
+  return execution.quantity;
+}
+
 export function liveMarkForTrade(liveQuotes: LiveQuotesResponse | null | undefined, trade: Pick<Trade, "symbol" | "contract_type" | "strike_price" | "expiration">): number | null {
   if (!liveQuotes?.options) return null;
   const key = `${trade.symbol}|${trade.contract_type}|${trade.strike_price.toFixed(2)}|${trade.expiration}`;
@@ -277,5 +299,6 @@ function computeHoldingPnl(execution: Execution, liveMark: number | null | undef
   if (execution.mode !== "live") return null;
   if (liveMark == null || liveMark <= 0) return null;
   if (execution.open_price <= 0) return null;
-  return (liveMark - execution.open_price) * 100;
+  const qty = execution.quantity || 1;
+  return (liveMark - execution.open_price) * 100 * qty;
 }

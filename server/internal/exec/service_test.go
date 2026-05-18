@@ -116,12 +116,14 @@ func sampleTrade() *trades.Trade {
 	}
 }
 
-// runSinglePick wraps handleSinglePick with the ACCT-HASH the test
+// runSinglePick wraps handleSingleEntry with the ACCT-HASH the test
 // fakes return so per-pick tests don't have to thread the lookup
-// through the full HandleQualifyingPicks basket path. handleSinglePick
-// is the workhorse — same code path the basket loop calls.
+// through the full HandleQualifyingPicks basket path. handleSingleEntry
+// is the workhorse — same code path the basket loop calls. Defaults
+// to qty=1 so the original per-pick tests keep their original meaning.
 func runSinglePick(svc *Service, tr *trades.Trade, tradeID int) (string, error) {
-	return svc.handleSinglePick(context.Background(), tr, tradeID, "ACCT-HASH")
+	entry := &BasketEntry{Trade: *tr, Quantity: 1}
+	return svc.handleSingleEntry(context.Background(), entry, tradeID, "ACCT-HASH")
 }
 
 func TestHandleSinglePick_RejectedPersistsReasonAndEmails(t *testing.T) {
@@ -325,7 +327,7 @@ func TestHandleSinglePick_LimitClampedToMaxContractPremium(t *testing.T) {
 		status:  OrderStatus{OrderID: "ORDER-CLAMP", RawStatus: "WORKING", Working: true},
 	}}
 	ask := func(_ context.Context, _, _, _ string, _ float64) (float64, error) {
-		return 4.95, nil // 4.95 * 1.05 = 5.1975 → clamp to 5.00
+		return 9.90, nil // 9.90 * 1.05 = 10.395 → clamp to MaxContractPremium (10.00)
 	}
 	svc := newTestServiceWithAsk(trader, store, mail, ask)
 
@@ -390,6 +392,17 @@ func basketSampleTrade(symbol string, rank int, est float64) trades.Trade {
 	}
 }
 
+// basketFromTrades wraps each trade as a qty=1 BasketEntry, so the
+// existing basket-shape tests keep their original semantics under the
+// new BasketEntry-based HandleQualifyingPicks signature.
+func basketFromTrades(picks []trades.Trade) []BasketEntry {
+	out := make([]BasketEntry, len(picks))
+	for i, p := range picks {
+		out[i] = BasketEntry{Trade: p, Quantity: 1}
+	}
+	return out
+}
+
 func TestHandleQualifyingPicks_PlacesEachWhenBasketFits(t *testing.T) {
 	store := &fakeStore{}
 	mail := &fakeMail{}
@@ -404,7 +417,7 @@ func TestHandleQualifyingPicks_PlacesEachWhenBasketFits(t *testing.T) {
 		basketSampleTrade("IREN", 3, 1.65),
 	}
 
-	count, err := svc.HandleQualifyingPicks(context.Background(), picks)
+	count, err := svc.HandleQualifyingPicks(context.Background(), basketFromTrades(picks))
 	if err != nil {
 		t.Fatalf("HandleQualifyingPicks: %v", err)
 	}
@@ -433,7 +446,7 @@ func TestHandleQualifyingPicks_StopsWhenSchwabCashIsLow(t *testing.T) {
 		basketSampleTrade("IREN", 3, 1.65),
 	}
 
-	count, err := svc.HandleQualifyingPicks(context.Background(), picks)
+	count, err := svc.HandleQualifyingPicks(context.Background(), basketFromTrades(picks))
 	if err != nil {
 		t.Fatalf("HandleQualifyingPicks: %v", err)
 	}
@@ -456,7 +469,7 @@ func TestHandleQualifyingPicks_AvailableFundsErrorAbortsBasket(t *testing.T) {
 		basketSampleTrade("AKAM", 1, 1.25),
 	}
 
-	count, err := svc.HandleQualifyingPicks(context.Background(), picks)
+	count, err := svc.HandleQualifyingPicks(context.Background(), basketFromTrades(picks))
 	if err == nil {
 		t.Fatal("expected error when AvailableFunds fails")
 	}
@@ -483,7 +496,7 @@ func TestHandleQualifyingPicks_SkipsContractsWithoutTradeID(t *testing.T) {
 		basketSampleTrade("IREN", 3, 1.65),
 	}
 
-	count, _ := svc.HandleQualifyingPicks(context.Background(), picks)
+	count, _ := svc.HandleQualifyingPicks(context.Background(), basketFromTrades(picks))
 	if count != 2 {
 		t.Errorf("submitted: want 2 (middle pick skipped for missing ID), got %d", count)
 	}

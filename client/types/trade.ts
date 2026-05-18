@@ -51,6 +51,13 @@ export interface Execution {
   open_price: number;
   close_price: number;
   realized_pnl: number;
+  /**
+   * Number of contracts this position covers. The two-phase selector
+   * can fire a quantity > 1 order when the greedy fill duplicates a
+   * rank — UI multiplies live-holding P&L and exposure by this. Legacy
+   * single-contract executions report 1.
+   */
+  quantity: number;
   executed_at?: string | null;
   closed_at?: string | null;
 }

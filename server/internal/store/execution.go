@@ -340,16 +340,25 @@ can render a badge from. State is derived server-side so the client
 never has to reason about partial fills or the close cron's lifecycle.
 */
 type ExecutionView struct {
-	Mode         string     `json:"mode"`
-	State        string     `json:"state"`
-	Symbol       string     `json:"symbol"`
-	ContractType string     `json:"contract_type"`
-	StrikePrice  float64    `json:"strike_price"`
-	OpenPrice    float64    `json:"open_price"`
-	ClosePrice   float64    `json:"close_price"`
-	RealizedPnL  float64    `json:"realized_pnl"`
-	ExecutedAt   *time.Time `json:"executed_at,omitempty"`
-	ClosedAt     *time.Time `json:"closed_at,omitempty"`
+	Mode         string  `json:"mode"`
+	State        string  `json:"state"`
+	Symbol       string  `json:"symbol"`
+	ContractType string  `json:"contract_type"`
+	StrikePrice  float64 `json:"strike_price"`
+	OpenPrice    float64 `json:"open_price"`
+	ClosePrice   float64 `json:"close_price"`
+	RealizedPnL  float64 `json:"realized_pnl"`
+	/*
+		Quantity is the number of contracts this execution covers. The
+		two-phase selector can produce quantity > 1 when the greedy
+		fill duplicates the same rank, so realized P&L and per-card
+		"holding N" badges multiply by it. Prefer the open execution's
+		filled_quantity, fall back to requested_quantity, fall back to
+		1 for legacy single-contract rows that pre-date the rewrite.
+	*/
+	Quantity   int        `json:"quantity"`
+	ExecutedAt *time.Time `json:"executed_at,omitempty"`
+	ClosedAt   *time.Time `json:"closed_at,omitempty"`
 }
 
 /*
@@ -360,7 +369,7 @@ Mode field carries the distinction. Failed open executions DO surface
 (with state='failed') so the dashboard can show what didn't work.
 
 Plural by design: the basket auto-executor can fire up to
-exec.MaxBasketRank contracts in a single morning, and the frontend
+multiple contracts in a single morning (top 3 phase + greedy fill), and the frontend
 needs to find the matching execution per trade card to source
 realized P&L from broker truth instead of the modeled EOD summary.
 */
@@ -370,7 +379,8 @@ func (s *Store) GetExecutionsForDate(date string) ([]*ExecutionView, error) {
 			t.symbol, t.contract_type, t.strike_price,
 			openX.mode, openX.status,
 			COALESCE(openX.fill_price, 0), openX.filled_at,
-			COALESCE(closeX.fill_price, 0), closeX.filled_at, closeX.status
+			COALESCE(closeX.fill_price, 0), closeX.filled_at, closeX.status,
+			COALESCE(NULLIF(openX.filled_quantity, 0), NULLIF(openX.requested_quantity, 0), 1)
 		FROM executions openX
 		INNER JOIN trades t ON t.id = openX.trade_id
 		LEFT JOIN LATERAL (
@@ -414,7 +424,8 @@ func (s *Store) GetExecutionsForDateRange(start, end string) (map[string][]*Exec
 			t.symbol, t.contract_type, t.strike_price,
 			openX.mode, openX.status,
 			COALESCE(openX.fill_price, 0), openX.filled_at,
-			COALESCE(closeX.fill_price, 0), closeX.filled_at, closeX.status
+			COALESCE(closeX.fill_price, 0), closeX.filled_at, closeX.status,
+			COALESCE(NULLIF(openX.filled_quantity, 0), NULLIF(openX.requested_quantity, 0), 1)
 		FROM executions openX
 		INNER JOIN trades t ON t.id = openX.trade_id
 		LEFT JOIN LATERAL (
@@ -443,6 +454,7 @@ func (s *Store) GetExecutionsForDateRange(start, end string) (map[string][]*Exec
 			&v.Mode, &openStatus,
 			&v.OpenPrice, &executedAt,
 			&v.ClosePrice, &closedAt, &closeStatus,
+			&v.Quantity,
 		); err != nil {
 			return nil, fmt.Errorf("scan execution range row: %w", err)
 		}
@@ -455,8 +467,11 @@ func (s *Store) GetExecutionsForDateRange(start, end string) (map[string][]*Exec
 			t := closedAt.Time
 			v.ClosedAt = &t
 		}
+		if v.Quantity < 1 {
+			v.Quantity = 1
+		}
 		if v.State == "closed" && v.OpenPrice > 0 && v.ClosePrice > 0 {
-			v.RealizedPnL = (v.ClosePrice - v.OpenPrice) * 100
+			v.RealizedPnL = (v.ClosePrice - v.OpenPrice) * 100 * float64(v.Quantity)
 		}
 		if v.State == "" {
 			continue
@@ -481,6 +496,7 @@ func scanExecutionViewRow(rows *sql.Rows) (*ExecutionView, error) {
 		&v.Mode, &openStatus,
 		&v.OpenPrice, &executedAt,
 		&v.ClosePrice, &closedAt, &closeStatus,
+		&v.Quantity,
 	); err != nil {
 		return nil, fmt.Errorf("scan execution row: %w", err)
 	}
@@ -496,8 +512,11 @@ func scanExecutionViewRow(rows *sql.Rows) (*ExecutionView, error) {
 		t := closedAt.Time
 		v.ClosedAt = &t
 	}
+	if v.Quantity < 1 {
+		v.Quantity = 1
+	}
 	if v.State == "closed" && v.OpenPrice > 0 && v.ClosePrice > 0 {
-		v.RealizedPnL = (v.ClosePrice - v.OpenPrice) * 100
+		v.RealizedPnL = (v.ClosePrice - v.OpenPrice) * 100 * float64(v.Quantity)
 	}
 	return v, nil
 }

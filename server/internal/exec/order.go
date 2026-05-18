@@ -46,12 +46,13 @@ func ComputeOpenLimitPrice(askPrice, estimatedPrice float64) float64 {
 }
 
 /*
-MaxContracts is the per-trade contract count cap. Hardcoded at 1 so
-no caller can ever submit a multi-contract order — even if a future
-bug computed N>1, BuildOpenOrder would panic. Modify here AND in the
-task plan + email templates if this ever needs to change.
+Contract count is now per-entry: the selector returns BasketEntry
+values carrying their own quantity, the open path passes it through
+into the order leg, the close path reads it back off the open
+execution row. There is no fixed contract-count constant any more.
+The two governors are MaxContractPremium (per-share ceiling) and
+MaxDailyBasketUSD (phase-2 fill target), both defined in selector.go.
 */
-const MaxContracts = 1
 
 /*
 OCCSymbol builds the 21-character OCC OSI symbol that Schwab's Trader
@@ -105,15 +106,16 @@ func OCCSymbol(symbol, expiration, contractType string, strike float64) (string,
 
 /*
 BuildOpenOrderForTrade returns the LIMIT BUY_TO_OPEN order to submit
-for the morning auto-execution. Hardcodes MaxContracts (1) and
-BUY_TO_OPEN; caller passes the qualifying Trade, its pre-built OCC
-symbol, and the limit price (see ComputeOpenLimitPrice).
+for the morning auto-execution. Caller passes the qualifying Trade,
+its pre-built OCC symbol, the limit price (see ComputeOpenLimitPrice),
+and the contract quantity (from the selector's BasketEntry, which can
+be > 1 when phase-2 greedy-fills duplicate the same pick).
 
-Returns ErrInvalidOrder when limitPrice is non-positive — Schwab
-rejects LIMIT orders without a price, so the caller MUST resolve a
-price (live ask or fallback estimate) before invoking this.
+Returns ErrInvalidOrder when limitPrice is non-positive or quantity
+is < 1 — Schwab rejects LIMIT orders without a price, and qty 0
+orders are nonsensical.
 */
-func BuildOpenOrderForTrade(t *trades.Trade, occSymbol string, limitPrice float64) (Order, error) {
+func BuildOpenOrderForTrade(t *trades.Trade, occSymbol string, limitPrice float64, quantity int) (Order, error) {
 	if t == nil {
 		return Order{}, ErrInvalidOrder
 	}
@@ -123,6 +125,9 @@ func BuildOpenOrderForTrade(t *trades.Trade, occSymbol string, limitPrice float6
 	if limitPrice <= 0 {
 		return Order{}, fmt.Errorf("limit price must be positive (got %.2f)", limitPrice)
 	}
+	if quantity < 1 {
+		return Order{}, fmt.Errorf("quantity must be >= 1 (got %d)", quantity)
+	}
 	return Order{
 		OrderType:         "LIMIT",
 		Session:           "NORMAL",
@@ -131,7 +136,7 @@ func BuildOpenOrderForTrade(t *trades.Trade, occSymbol string, limitPrice float6
 		Price:             limitPrice,
 		OrderLegCollection: []OrderLeg{{
 			Instruction: "BUY_TO_OPEN",
-			Quantity:    MaxContracts,
+			Quantity:    quantity,
 			Instrument: Instrument{
 				Symbol:    occSymbol,
 				AssetType: "OPTION",
@@ -142,14 +147,18 @@ func BuildOpenOrderForTrade(t *trades.Trade, occSymbol string, limitPrice float6
 
 /*
 BuildCloseOrderForPosition mirrors BuildOpenOrderForTrade for the
-3:55pm mandatory close. Same hardcoded contract count + market order,
-only the instruction differs (SELL_TO_CLOSE). Caller passes an
-OpenPosition (joined trade + execution row) so the OCC symbol is
-rebuilt from the trade's contract spec.
+3:55pm mandatory close. SELL_TO_CLOSE the same number of contracts
+that the open execution recorded, so callers pass the
+Execution.RequestedQuantity (or FilledQuantity once available) from
+the open row. Quantity < 1 is rejected to avoid leaving open
+contracts at the broker after a malformed close attempt.
 */
-func BuildCloseOrderForPosition(p *OpenPosition) (Order, error) {
+func BuildCloseOrderForPosition(p *OpenPosition, quantity int) (Order, error) {
 	if p == nil {
 		return Order{}, ErrInvalidOrder
+	}
+	if quantity < 1 {
+		return Order{}, fmt.Errorf("quantity must be >= 1 (got %d)", quantity)
 	}
 	occ, err := OCCSymbol(p.Symbol, p.Expiration, p.ContractType, p.StrikePrice)
 	if err != nil {
@@ -162,7 +171,7 @@ func BuildCloseOrderForPosition(p *OpenPosition) (Order, error) {
 		OrderStrategyType: "SINGLE",
 		OrderLegCollection: []OrderLeg{{
 			Instruction: "SELL_TO_CLOSE",
-			Quantity:    MaxContracts,
+			Quantity:    quantity,
 			Instrument: Instrument{
 				Symbol:    occ,
 				AssetType: "OPTION",

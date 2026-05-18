@@ -100,30 +100,36 @@ func (s *Service) Mode() string { return s.cfg.Mode }
 
 /*
 HandleQualifyingPicks is the basket entry point fired by the morning
-cron with the trades returned by selector.QualifyingPicks. It walks
-the picks in rank order (rank-1 first), and for each:
+cron with the basket returned by selector.QualifyingBasket. Each
+BasketEntry carries a (trade, quantity) pair; the selector has
+already merged duplicates so the executor fires exactly one
+quantity=N order per entry. Entries arrive in rank-ascending order.
+
+For each entry:
 
   - resolves the LIMIT price from the live ask (or estimate fallback)
-  - checks that the order's worst-case cost (limit price × 100) fits
-    BOTH the remaining daily basket budget AND Schwab's reported
-    available funds — re-queried on the first contract only, then
-    locally decremented per submission since Schwab balance won't
-    refresh until fills land
-  - submits via handleSinglePick on success, decrements remaining
-    budget, moves on; or skips and tries the next rank when the
-    contract is too big for either gate
+  - checks the entry's full cost (limit price × 100 × quantity) fits
+    in the remaining Schwab cash (polled once at basket open and
+    decremented locally per submission, since Schwab balance won't
+    refresh until fills settle T+1)
+  - submits the order via handleSingleEntry, decrements remaining
+    cash, moves on; or skips when the entry exceeds remaining cash
 
-Per-pick errors are logged and don't abort the basket: if rank-1's
-ask call fails or its order is rejected, rank-2 still gets its turn
-with the local budget intact. Returns the count of contracts the
-service successfully submitted (filled, working, or rejected — every
-case where Schwab actually saw the order). Caller logs the count;
-nothing on the success path requires the number.
+The selector already enforced MaxDailyBasketUSD for phase-2 fills,
+so the only governor on this layer is Schwab cash availability —
+phase 1 (top 3) is guaranteed by the selector and will fire here as
+long as the account has cash to cover it. Per-entry errors are
+logged and don't abort the basket: rank-1's pricing failure can't
+prevent rank-2 from firing.
+
+Returns the count of orders the service successfully submitted
+(filled, working, or rejected — every case where Schwab actually
+saw the order). Caller logs the count.
 */
-func (s *Service) HandleQualifyingPicks(ctx context.Context, picks []trades.Trade) (int, error) {
+func (s *Service) HandleQualifyingPicks(ctx context.Context, basket []BasketEntry) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(picks) == 0 {
+	if len(basket) == 0 {
 		return 0, nil
 	}
 	if s.cfg.Recipient == "" {
@@ -139,7 +145,7 @@ func (s *Service) HandleQualifyingPicks(ctx context.Context, picks []trades.Trad
 		broker won't decrement available funds until a previous order
 		actually fills (and for options that's typically T+1 settlement
 		anyway), so re-querying mid-basket would over-report and risk
-		double-spending the same cash across contracts. Local budget
+		double-spending the same cash across contracts. Local cash
 		accounting is the source of truth from this point on.
 	*/
 	availableUSD, err := s.trader.AvailableFunds(ctx, hash)
@@ -147,49 +153,40 @@ func (s *Service) HandleQualifyingPicks(ctx context.Context, picks []trades.Trad
 		log.Printf("execution: AvailableFunds lookup failed, skipping basket: %v", err)
 		return 0, fmt.Errorf("available funds: %w", err)
 	}
-	/*
-		Single basket budget: the smaller of MaxDailyBasketUSD and
-		Schwab's reported available cash. Decremented locally per
-		submission since Schwab won't refresh available funds mid-basket
-		(option fills settle T+1). Rank-1 gets first crack at the
-		budget but plays by the same rules — if a pick doesn't fit the
-		remaining budget the selector's skip-and-continue keeps walking
-		so a too-big rank-2 can't starve a smaller rank-3.
-	*/
-	remainingUSD := MaxDailyBasketUSD
-	if availableUSD < remainingUSD {
-		remainingUSD = availableUSD
-	}
-	log.Printf("execution: basket budget = $%.2f (Schwab available = $%.2f, basket cap = $%.2f)", remainingUSD, availableUSD, MaxDailyBasketUSD)
+	log.Printf("execution: basket has %d entries, Schwab available = $%.2f, daily fill target = $%.2f", len(basket), availableUSD, MaxDailyBasketUSD)
 
+	remainingCash := availableUSD
 	submitted := 0
-	for i := range picks {
-		t := &picks[i]
+	for i := range basket {
+		entry := &basket[i]
+		t := &entry.Trade
 		if t.ID == 0 {
-			log.Printf("execution: pick rank=%d %s missing trade ID, skipping", t.Rank, t.Symbol)
+			log.Printf("execution: rank=%d %s qty=%d missing trade ID, skipping", t.Rank, t.Symbol, entry.Quantity)
 			continue
 		}
-		costUSD, ok := s.checkBudgetAndPlace(ctx, t, hash, remainingUSD)
+		costUSD, ok := s.checkCashAndPlace(ctx, entry, hash, remainingCash)
 		if !ok {
 			continue
 		}
-		remainingUSD -= costUSD
+		remainingCash -= costUSD
 		submitted++
 	}
-	log.Printf("execution: basket complete, submitted %d/%d contracts, remaining budget $%.2f", submitted, len(picks), remainingUSD)
+	log.Printf("execution: basket complete, submitted %d/%d orders, remaining cash $%.2f", submitted, len(basket), remainingCash)
 	return submitted, nil
 }
 
 /*
-checkBudgetAndPlace resolves the LIMIT price and submits the order
-when it fits remainingUSD. Returns (cost, true) on submit (so the
-caller can decrement its local budget) or (0, false) when the pick
-was skipped — either because pricing failed (already alerted via
-sendOpenFailedEmail) or because the contract's cost exceeded the
-remaining budget. Errors after submission are logged inside
-handleSinglePick; this function only filters by cost.
+checkCashAndPlace resolves the LIMIT price for one BasketEntry and
+submits the order when its full cost (price × 100 × quantity) fits
+in remainingCash. Returns (cost, true) on submit (so the caller can
+decrement its local cash counter) or (0, false) when the entry was
+skipped because pricing failed (already alerted via
+sendOpenFailedEmail) or because cost exceeded remaining cash.
+Errors after submission are logged inside handleSingleEntry; this
+function only filters by cost.
 */
-func (s *Service) checkBudgetAndPlace(ctx context.Context, t *trades.Trade, hash string, remainingUSD float64) (float64, bool) {
+func (s *Service) checkCashAndPlace(ctx context.Context, entry *BasketEntry, hash string, remainingCash float64) (float64, bool) {
+	t := &entry.Trade
 	limitPrice, err := s.resolveLimitPrice(ctx, t)
 	if err != nil {
 		occ, _ := OCCSymbol(t.Symbol, t.Expiration, t.ContractType, t.StrikePrice)
@@ -197,16 +194,16 @@ func (s *Service) checkBudgetAndPlace(ctx context.Context, t *trades.Trade, hash
 		s.sendOpenFailedEmail(t, occ, "", err.Error())
 		return 0, false
 	}
-	costUSD := limitPrice * 100 * float64(MaxContracts)
-	if costUSD > remainingUSD {
-		log.Printf("execution: rank=%d %s skipped, cost $%.2f exceeds remaining budget $%.2f", t.Rank, t.Symbol, costUSD, remainingUSD)
+	costUSD := limitPrice * 100 * float64(entry.Quantity)
+	if costUSD > remainingCash {
+		log.Printf("execution: rank=%d %s qty=%d skipped, cost $%.2f exceeds remaining cash $%.2f", t.Rank, t.Symbol, entry.Quantity, costUSD, remainingCash)
 		return 0, false
 	}
-	if _, err := s.handleSinglePick(ctx, t, t.ID, hash); err != nil {
-		log.Printf("execution: rank=%d %s submit failed: %v", t.Rank, t.Symbol, err)
+	if _, err := s.handleSingleEntry(ctx, entry, t.ID, hash); err != nil {
+		log.Printf("execution: rank=%d %s qty=%d submit failed: %v", t.Rank, t.Symbol, entry.Quantity, err)
 		// Even on submission failure, the contract reached the broker
-		// (or tried to) — count the cost against the budget so a
-		// retry storm can't blow through the daily cap.
+		// (or tried to) — count the cost against remaining cash so a
+		// retry storm can't blow through the account.
 		return costUSD, true
 	}
 	return costUSD, true
@@ -236,13 +233,15 @@ func (s *Service) resolveLimitPrice(ctx context.Context, t *trades.Trade) (float
 }
 
 /*
-handleSinglePick is the per-contract submission body that
-HandleQualifyingPicks calls in a loop. Returns the order id from
-Schwab on success (empty string on early exit). Errors are non-nil
-for "did not reach broker" cases AND for downstream lookup failures;
-the caller decides whether to keep going.
+handleSingleEntry is the per-entry submission body that
+HandleQualifyingPicks calls in a loop. Submits one quantity=N order
+for the given BasketEntry. Returns the order id from Schwab on
+success (empty string on early exit). Errors are non-nil for "did
+not reach broker" cases AND for downstream lookup failures; the
+caller decides whether to keep going.
 */
-func (s *Service) handleSinglePick(ctx context.Context, t *trades.Trade, tradeID int, hash string) (string, error) {
+func (s *Service) handleSingleEntry(ctx context.Context, entry *BasketEntry, tradeID int, hash string) (string, error) {
+	t := &entry.Trade
 	occ, err := OCCSymbol(t.Symbol, t.Expiration, t.ContractType, t.StrikePrice)
 	if err != nil {
 		return "", fmt.Errorf("build OCC symbol: %w", err)
@@ -255,7 +254,7 @@ func (s *Service) handleSinglePick(ctx context.Context, t *trades.Trade, tradeID
 		return "", err
 	}
 
-	order, err := BuildOpenOrderForTrade(t, occ, limitPrice)
+	order, err := BuildOpenOrderForTrade(t, occ, limitPrice, entry.Quantity)
 	if err != nil {
 		return "", fmt.Errorf("build open order: %w", err)
 	}
@@ -265,7 +264,7 @@ func (s *Service) handleSinglePick(ctx context.Context, t *trades.Trade, tradeID
 		Mode:              s.cfg.Mode,
 		Side:              "open",
 		Status:            "pending",
-		RequestedQuantity: MaxContracts,
+		RequestedQuantity: entry.Quantity,
 	}
 	execID, err := s.store.InsertExecution(execRow)
 	if err != nil {
@@ -303,8 +302,8 @@ func (s *Service) handleSinglePick(ctx context.Context, t *trades.Trade, tradeID
 	case st.Filled:
 		fp := st.FillPrice
 		_ = s.store.UpdateExecutionStatus(execID, "filled", orderID, &fp, st.FilledQuantity, "")
-		s.sendReceiptEmail(t, occ, orderID, st.FillPrice)
-		log.Printf("execution: open filled (trade_id=%d, mode=%s, fill=%.2f, order=%s)", tradeID, s.cfg.Mode, st.FillPrice, orderID)
+		s.sendReceiptEmail(t, occ, orderID, st.FillPrice, entry.Quantity)
+		log.Printf("execution: open filled (trade_id=%d, qty=%d, mode=%s, fill=%.2f, order=%s)", tradeID, entry.Quantity, s.cfg.Mode, st.FillPrice, orderID)
 	case st.Terminal:
 		// Terminal-but-not-filled: REJECTED, CANCELED, EXPIRED, REPLACED.
 		// Persist the broker's reason and alert the operator — silent
@@ -315,10 +314,10 @@ func (s *Service) handleSinglePick(ctx context.Context, t *trades.Trade, tradeID
 		}
 		_ = s.store.UpdateExecutionStatus(execID, "rejected", orderID, nil, 0, reason)
 		s.sendOpenFailedEmail(t, occ, orderID, reason)
-		log.Printf("execution: open order rejected (trade_id=%d, order=%s, status=%s, reason=%q)", tradeID, orderID, st.RawStatus, reason)
+		log.Printf("execution: open order rejected (trade_id=%d, qty=%d, order=%s, status=%s, reason=%q)", tradeID, entry.Quantity, orderID, st.RawStatus, reason)
 	default:
 		_ = s.store.UpdateExecutionStatus(execID, "working", orderID, nil, 0, "")
-		log.Printf("execution: open order working (trade_id=%d, order=%s, status=%s)", tradeID, orderID, st.RawStatus)
+		log.Printf("execution: open order working (trade_id=%d, qty=%d, order=%s, status=%s)", tradeID, entry.Quantity, orderID, st.RawStatus)
 	}
 	return orderID, nil
 }
@@ -467,7 +466,11 @@ func (s *Service) repriceOne(ctx context.Context, hash string, p *OpenPosition) 
 	}
 	_ = s.store.UpdateExecutionStatus(p.Execution.ID, "canceled", oldOrderID, nil, 0, fmt.Sprintf("repriced post-open from $%.2f to $%.2f", oldLimit, newLimit))
 
-	order, err := BuildOpenOrderForTrade(syntheticTrade, occ, newLimit)
+	carriedQty := p.Execution.RequestedQuantity
+	if carriedQty < 1 {
+		carriedQty = 1
+	}
+	order, err := BuildOpenOrderForTrade(syntheticTrade, occ, newLimit, carriedQty)
 	if err != nil {
 		log.Printf("execution: reprice build order (trade=%d): %v", p.Execution.TradeID, err)
 		return
@@ -478,7 +481,7 @@ func (s *Service) repriceOne(ctx context.Context, hash string, p *OpenPosition) 
 		Mode:              s.cfg.Mode,
 		Side:              "open",
 		Status:            "pending",
-		RequestedQuantity: MaxContracts,
+		RequestedQuantity: carriedQty,
 	}
 	newExecID, err := s.store.InsertExecution(newExecRow)
 	if err != nil {
@@ -500,7 +503,7 @@ func (s *Service) repriceOne(ctx context.Context, hash string, p *OpenPosition) 
 		case newSt.Filled:
 			fp := newSt.FillPrice
 			_ = s.store.UpdateExecutionStatus(newExecID, "filled", newOrderID, &fp, newSt.FilledQuantity, "")
-			s.sendReceiptEmail(syntheticTrade, occ, newOrderID, newSt.FillPrice)
+			s.sendReceiptEmail(syntheticTrade, occ, newOrderID, newSt.FillPrice, carriedQty)
 		case newSt.Terminal:
 			reason := newSt.ErrorMessage
 			if reason == "" {
@@ -598,8 +601,12 @@ func (s *Service) reconcileOne(ctx context.Context, hash string, p *OpenPosition
 	case st.Filled:
 		fp := st.FillPrice
 		_ = s.store.UpdateExecutionStatus(p.Execution.ID, "filled", orderID, &fp, st.FilledQuantity, "")
-		s.sendReceiptEmail(syntheticTrade, occ, orderID, st.FillPrice)
-		log.Printf("execution: reconcile open filled (trade=%d, mode=%s, fill=%.2f, order=%s)", p.Execution.TradeID, p.Execution.Mode, st.FillPrice, orderID)
+		filledQty := st.FilledQuantity
+		if filledQty < 1 {
+			filledQty = positionCloseQuantity(p)
+		}
+		s.sendReceiptEmail(syntheticTrade, occ, orderID, st.FillPrice, filledQty)
+		log.Printf("execution: reconcile open filled (trade=%d, qty=%d, mode=%s, fill=%.2f, order=%s)", p.Execution.TradeID, filledQty, p.Execution.Mode, st.FillPrice, orderID)
 	case st.Terminal:
 		reason := st.ErrorMessage
 		if reason == "" {
@@ -656,7 +663,8 @@ func (s *Service) closeOne(ctx context.Context, p *OpenPosition) {
 		return
 	}
 
-	order, err := BuildCloseOrderForPosition(p)
+	closeQty := positionCloseQuantity(p)
+	order, err := BuildCloseOrderForPosition(p, closeQty)
 	if err != nil {
 		s.sendCloseFailedEmail(p, fmt.Sprintf("build close order: %v", err))
 		return
@@ -667,7 +675,7 @@ func (s *Service) closeOne(ctx context.Context, p *OpenPosition) {
 		Mode:              s.cfg.Mode,
 		Side:              "close",
 		Status:            "pending",
-		RequestedQuantity: MaxContracts,
+		RequestedQuantity: closeQty,
 	}
 	execID, err := s.store.InsertExecution(execRow)
 	if err != nil {
@@ -749,7 +757,15 @@ func (s *Service) recordCloseAndEmail(ctx context.Context, p *OpenPosition, exec
 	if err == nil && open != nil && open.FillPrice != nil {
 		openPrice = *open.FillPrice
 	}
-	realized := (st.FillPrice - openPrice) * 100 * float64(MaxContracts)
+	// Use the broker's filled_quantity if Schwab reported one (qty=N
+	// closes can partially fill in theory), otherwise fall back to the
+	// quantity we requested. The open and close quantities will match
+	// for any clean lifecycle.
+	closedQty := st.FilledQuantity
+	if closedQty < 1 {
+		closedQty = positionCloseQuantity(p)
+	}
+	realized := (st.FillPrice - openPrice) * 100 * float64(closedQty)
 
 	data := templates.ExecuteCloseReceiptData{
 		Subject:            fmt.Sprintf("[%s] Position closed: %s %s, P&L $%.2f", strings.ToUpper(s.cfg.Mode), p.Symbol, p.ContractType, realized),
@@ -774,9 +790,12 @@ func (s *Service) recordCloseAndEmail(ctx context.Context, p *OpenPosition, exec
 	}
 }
 
-func (s *Service) sendReceiptEmail(t *trades.Trade, occSymbol, orderID string, fillPrice float64) {
+func (s *Service) sendReceiptEmail(t *trades.Trade, occSymbol, orderID string, fillPrice float64, quantity int) {
+	if quantity < 1 {
+		quantity = 1
+	}
 	data := templates.ExecuteReceiptData{
-		Subject:            fmt.Sprintf("[%s] Order filled: %s %s @ $%.2f", strings.ToUpper(s.cfg.Mode), t.Symbol, t.ContractType, fillPrice),
+		Subject:            fmt.Sprintf("[%s] Order filled: %s %s ×%d @ $%.2f", strings.ToUpper(s.cfg.Mode), t.Symbol, t.ContractType, quantity, fillPrice),
 		Date:               time.Now().In(easternTime()).Format("Monday, Jan 2 (3:04 PM ET)"),
 		Mode:               s.cfg.Mode,
 		Symbol:             t.Symbol,
@@ -785,7 +804,7 @@ func (s *Service) sendReceiptEmail(t *trades.Trade, occSymbol, orderID string, f
 		Expiration:         t.Expiration,
 		OCCSymbol:          occSymbol,
 		FillPrice:          fillPrice,
-		Quantity:           MaxContracts,
+		Quantity:           quantity,
 		OrderID:            orderID,
 		SchwabPositionsURL: schwabPositionsURL,
 	}
@@ -856,6 +875,23 @@ func (s *Service) sendCloseFailedEmail(p *OpenPosition, errMsg string) {
 	if err := s.mail.SendTradeEmail(s.cfg.EmailFrom, []string{s.cfg.Recipient}, data.Subject, html); err != nil {
 		log.Printf("execution: send close-failed email: %v", err)
 	}
+}
+
+/*
+positionCloseQuantity returns the number of contracts the close path
+should sell for this position. Prefers the open execution's actually-
+filled quantity over the requested quantity; falls back to 1 if both
+are zero/unset (defensive against legacy rows pre-dating multi-
+contract baskets).
+*/
+func positionCloseQuantity(p *OpenPosition) int {
+	if p.Execution.FilledQuantity >= 1 {
+		return p.Execution.FilledQuantity
+	}
+	if p.Execution.RequestedQuantity >= 1 {
+		return p.Execution.RequestedQuantity
+	}
+	return 1
 }
 
 /*

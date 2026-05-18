@@ -32,17 +32,15 @@ type Rollout struct {
 }
 
 /*
-Registry is the ordered list of all rollouts ever defined for this
-service. Entries should never be removed or have their slugs renamed
-(both would defeat the once-only guarantee). New rollouts go at the
-END of the list.
+Registry is the ordered list of currently-pending rollouts. Once a
+rollout has been sent it can be retired by removing its entry here
+and deleting the file: the slug stays recorded in sent_rollouts
+forever so the once-only guarantee still holds if a future deploy
+ever reintroduces the slug. Retired rollouts v1..v5 each lived here
+once and have all been recorded as sent on production.
 */
 var Registry = []Rollout{
-	autoExecutionLiveV1,
-	claudeOnlyV2,
-	liveTradingStartsV3,
-	basketAndCopyTradingV4,
-	equityWalkDayOneV5,
+	executionRewriteV6,
 }
 
 /*
