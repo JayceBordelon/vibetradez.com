@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"log"
@@ -14,7 +15,10 @@ import (
 	"vibetradez.com/internal/authclient"
 )
 
-const ssoStateCookie = "vt_sso_state"
+const (
+	ssoStateCookie    = "vt_sso_state"
+	ssoVerifierCookie = "vt_sso_verifier"
+)
 
 type userCtxKey struct{}
 
@@ -80,9 +84,33 @@ func (s *Server) handleSSOStart(w http.ResponseWriter, r *http.Request) {
 	}
 	state := base64.RawURLEncoding.EncodeToString(b)
 
+	// PKCE (RFC 7636 S256). The verifier is a high-entropy URL-safe
+	// random string; the challenge is its base64url-sha256. The auth
+	// service stores the challenge with the auth code and verifies the
+	// verifier at /oauth/token. Without PKCE a leaked auth code that
+	// also gets the consumer secret would be redeemable; with PKCE the
+	// verifier (held only in this browser session) is required too.
+	vBytes := make([]byte, 32)
+	if _, err := rand.Read(vBytes); err != nil {
+		http.Error(w, "sso start failed", http.StatusInternalServerError)
+		return
+	}
+	codeVerifier := base64.RawURLEncoding.EncodeToString(vBytes)
+	challengeBytes := sha256.Sum256([]byte(codeVerifier))
+	codeChallenge := base64.RawURLEncoding.EncodeToString(challengeBytes[:])
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     ssoStateCookie,
 		Value:    state,
+		Path:     "/auth/sso",
+		MaxAge:   600,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     ssoVerifierCookie,
+		Value:    codeVerifier,
 		Path:     "/auth/sso",
 		MaxAge:   600,
 		HttpOnly: true,
@@ -95,6 +123,8 @@ func (s *Server) handleSSOStart(w http.ResponseWriter, r *http.Request) {
 	q.Set("redirect_uri", s.ssoRedirectURI)
 	q.Set("state", state)
 	q.Set("return_to", returnTo)
+	q.Set("code_challenge", codeChallenge)
+	q.Set("code_challenge_method", "S256")
 	http.Redirect(w, r, s.ssoPublicURL+"/oauth/authorize?"+q.Encode(), http.StatusFound)
 }
 
@@ -118,8 +148,27 @@ func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid sso state", http.StatusBadRequest)
 		return
 	}
+
+	// PKCE verifier was minted at /auth/sso/start and stashed in a
+	// host-scoped cookie. Empty cookie + new auth-service deploy is a
+	// state mismatch (challenge stored but verifier absent); the auth
+	// service will reject token exchange.
+	var codeVerifier string
+	if vc, vErr := r.Cookie(ssoVerifierCookie); vErr == nil {
+		codeVerifier = vc.Value
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     ssoStateCookie,
+		Value:    "",
+		Path:     "/auth/sso",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     ssoVerifierCookie,
 		Value:    "",
 		Path:     "/auth/sso",
 		MaxAge:   -1,
@@ -131,7 +180,7 @@ func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	tok, err := s.auth.Exchange(ctx, code)
+	tok, err := s.auth.Exchange(ctx, code, codeVerifier)
 	if err != nil {
 		log.Printf("handleSSOCallback: exchange: %v", err)
 		http.Error(w, "token exchange failed", http.StatusInternalServerError)

@@ -84,12 +84,18 @@ func (c *Client) RedirectURI() string { return c.redirectURI }
 func (c *Client) ClientID() string    { return c.clientID }
 
 // Exchange swaps a one-shot auth code for an access token + user info.
-func (c *Client) Exchange(ctx context.Context, code string) (*TokenResponse, error) {
+// codeVerifier is the PKCE verifier the consumer minted at /auth/sso/start
+// (empty for the legacy non-PKCE path; the auth service accepts empty
+// only when the code was minted without a challenge).
+func (c *Client) Exchange(ctx context.Context, code, codeVerifier string) (*TokenResponse, error) {
 	form := url.Values{}
 	form.Set("code", code)
 	form.Set("client_id", c.clientID)
 	form.Set("client_secret", c.clientSecret)
 	form.Set("redirect_uri", c.redirectURI)
+	if codeVerifier != "" {
+		form.Set("code_verifier", codeVerifier)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/oauth/token", strings.NewReader(form.Encode()))
 	if err != nil {
