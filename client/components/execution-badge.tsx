@@ -71,6 +71,11 @@ function ExecutionPill({ execution, liveMark, className }: { execution: Executio
   let label: React.ReactNode;
   if (state === "failed") {
     label = <>{qty > 1 ? `Open failed (${qty} contracts)` : "Open failed"}</>;
+  } else if (state === "close_failed") {
+    // Position is filled at the broker but auto-close attempt
+    // terminated in a non-filled state. Operator needs to verify and
+    // close manually. Surface this loudly rather than masking as "Holding".
+    label = <>Close failed (verify position)</>;
   } else if (state === "submitted") {
     label = <>{qty > 1 ? `${qty} contracts working at broker` : "Order working at broker"}</>;
   } else if (state === "closed") {
