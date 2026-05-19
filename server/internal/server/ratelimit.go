@@ -12,26 +12,35 @@ import (
 
 /*
 ipLimiter is a per-source-IP token-bucket rate limiter built on
-golang.org/x/time/rate. One bucket per IP, identified by either the
-X-Forwarded-For first hop (Traefik sets this) or the request's
-RemoteAddr.
+golang.org/x/time/rate. One bucket per IP, identified by the right-
+most X-Forwarded-For hop (Traefik's value) or the request's
+RemoteAddr if XFF is absent.
 
-Trusted-proxy assumption: the trading server runs behind Traefik in
-production, so X-Forwarded-For is set by infrastructure we control.
-A direct external request that spoofs XFF would still be limited
-because we use ONLY the leftmost token, which Traefik will overwrite
-or append to.
+Trusted-proxy semantics: the trading server runs behind Traefik in
+production. Traefik APPENDS to whatever X-Forwarded-For a client
+sent, so the LEFTmost entry is attacker-controlled and trusting it
+lets a client spoof their source IP and bypass rate limits by
+rotating values. The right-most entry is the last hop Traefik
+recorded — that's the actual remote peer Traefik saw.
 
-Buckets are kept indefinitely in-memory. At single-server scale with
-a small subscriber population this is fine; if the trading server
-ever gets meaningful unauthenticated traffic the map needs a janitor.
+Buckets are reaped lazily during `limiterFor` whenever the map
+exceeds a soft cap; entries older than `bucketTTL` get dropped.
+Without this, a stream of distinct IPs (or a single client rotating
+RemoteAddr ports) inflates the map until process restart.
 */
+const (
+	bucketTTL       = 30 * time.Minute
+	bucketSoftMax   = 2048
+	bucketReapEvery = 10 * time.Minute
+)
+
 type ipLimiter struct {
 	mu       sync.Mutex
 	buckets  map[string]*rate.Limiter
+	lastSeen map[string]time.Time
+	lastReap time.Time
 	rate     rate.Limit
 	burst    int
-	lastSeen map[string]time.Time
 }
 
 func newIPLimiter(perMinute float64, burst int) *ipLimiter {
@@ -40,12 +49,14 @@ func newIPLimiter(perMinute float64, burst int) *ipLimiter {
 		lastSeen: make(map[string]time.Time),
 		rate:     rate.Limit(perMinute / 60.0),
 		burst:    burst,
+		lastReap: time.Now(),
 	}
 }
 
 func (l *ipLimiter) limiterFor(ip string) *rate.Limiter {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.maybeReapLocked()
 	lim, ok := l.buckets[ip]
 	if !ok {
 		lim = rate.NewLimiter(l.rate, l.burst)
@@ -53,6 +64,27 @@ func (l *ipLimiter) limiterFor(ip string) *rate.Limiter {
 	}
 	l.lastSeen[ip] = time.Now()
 	return lim
+}
+
+/*
+maybeReapLocked sweeps stale entries when either bucketReapEvery has
+elapsed since the last sweep OR the map has grown past bucketSoftMax.
+The combined condition guards against pathological growth on a
+high-traffic minute that wouldn't otherwise tick the time-based
+sweeper. Caller must hold l.mu.
+*/
+func (l *ipLimiter) maybeReapLocked() {
+	if time.Since(l.lastReap) < bucketReapEvery && len(l.buckets) < bucketSoftMax {
+		return
+	}
+	cutoff := time.Now().Add(-bucketTTL)
+	for ip, seen := range l.lastSeen {
+		if seen.Before(cutoff) {
+			delete(l.buckets, ip)
+			delete(l.lastSeen, ip)
+		}
+	}
+	l.lastReap = time.Now()
 }
 
 /*
@@ -74,16 +106,21 @@ func (l *ipLimiter) middleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 /*
-clientIP extracts the originating client IP from an http.Request,
-preferring the leftmost X-Forwarded-For hop (Traefik's value) and
-falling back to RemoteAddr. Strips port from RemoteAddr because Go
-formats it as "ip:port".
+clientIP extracts the originating client IP from an http.Request.
+Uses the RIGHTmost X-Forwarded-For entry (the last hop our trusted
+proxy recorded) and falls back to RemoteAddr. The leftmost entry is
+attacker-controlled — Traefik appends to whatever the client sent
+— so trusting it lets a client rotate XFF values to bypass per-IP
+rate limits.
 */
 func clientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		parts := strings.Split(xff, ",")
-		if first := strings.TrimSpace(parts[0]); first != "" {
-			return first
+		// Walk right-to-left for the last non-empty entry.
+		for i := len(parts) - 1; i >= 0; i-- {
+			if v := strings.TrimSpace(parts[i]); v != "" {
+				return v
+			}
 		}
 	}
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
