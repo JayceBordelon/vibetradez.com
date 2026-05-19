@@ -29,6 +29,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"log"
@@ -56,6 +57,11 @@ func main() {
 	schwabKey := mustEnv("SCHWAB_APP_KEY")
 	schwabSecret := mustEnv("SCHWAB_SECRET")
 	schwabCallback := mustEnv("SCHWAB_CALLBACK_URL")
+	schwabTokenKeyB64 := mustEnv("SCHWAB_TOKEN_ENCRYPTION_KEY")
+	schwabTokenKey, err := base64.StdEncoding.DecodeString(schwabTokenKeyB64)
+	if err != nil || len(schwabTokenKey) != 32 {
+		log.Fatalf("SCHWAB_TOKEN_ENCRYPTION_KEY must be base64-encoded 32 bytes (decoded len=%d, err=%v)", len(schwabTokenKey), err)
+	}
 
 	db, err := store.New(databaseURL)
 	if err != nil {
@@ -80,7 +86,7 @@ func main() {
 	log.Printf("loaded execution: id=%d trade_id=%d side=%s status=%s schwab_order=%s current_fill_price=%s",
 		row.ID, row.TradeID, row.Side, row.Status, *row.SchwabOrderID, currentFP)
 
-	schwabClient := schwab.NewClient(schwabKey, schwabSecret, schwabCallback, db)
+	schwabClient := schwab.NewClient(schwabKey, schwabSecret, schwabCallback, schwabTokenKey, db)
 	if !schwabClient.IsConnected() {
 		log.Fatalf("schwab client not connected — re-authorize via the website before running this CLI")
 	}

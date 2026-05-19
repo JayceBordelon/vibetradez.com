@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"log"
 	"net/http"
@@ -112,7 +113,8 @@ func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c, err := r.Cookie(ssoStateCookie)
-	if err != nil || c.Value == "" || c.Value != state {
+	if err != nil || c.Value == "" || state == "" ||
+		subtle.ConstantTimeCompare([]byte(c.Value), []byte(state)) != 1 {
 		http.Error(w, "invalid sso state", http.StatusBadRequest)
 		return
 	}

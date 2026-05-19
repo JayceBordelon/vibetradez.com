@@ -191,7 +191,7 @@ func main() {
 
 	var schwabClient *schwab.Client
 	if cfg.SchwabAppKey != "" && cfg.SchwabSecret != "" {
-		schwabClient = schwab.NewClient(cfg.SchwabAppKey, cfg.SchwabSecret, cfg.SchwabCallbackURL, db)
+		schwabClient = schwab.NewClient(cfg.SchwabAppKey, cfg.SchwabSecret, cfg.SchwabCallbackURL, cfg.SchwabTokenKey, db)
 		if schwabClient.IsConnected() {
 			log.Println("Schwab: connected (tokens loaded)")
 		} else {

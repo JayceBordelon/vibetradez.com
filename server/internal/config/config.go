@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"log"
 	"os"
 	"strconv"
@@ -21,6 +22,20 @@ type Config struct {
 	SchwabAppKey       string
 	SchwabSecret       string
 	SchwabCallbackURL  string
+	/*
+		Token-at-rest encryption key for Schwab persisted access/refresh
+		tokens. Loaded from SCHWAB_TOKEN_ENCRYPTION_KEY (base64-encoded
+		32 bytes — generate with `openssl rand -base64 32`). Previously
+		the schwab client derived its AES key from sha256(SchwabSecret),
+		which collapsed the encryption boundary onto the credential the
+		token authenticates against — a DB backup + leaked secret would
+		yield usable refresh tokens. The new env var is independent
+		from SchwabSecret and can be rotated separately.
+
+		Required only when SchwabAppKey + SchwabSecret are set; the
+		market-data-only mode that runs without OAuth doesn't need it.
+	*/
+	SchwabTokenKey []byte
 	/*
 		Auth service (auth.jaycebordelon.com) client credentials. Trading
 		server delegates sign-in to the centralized auth service and talks
@@ -107,6 +122,29 @@ func Load() *Config {
 		}
 	}
 
+	schwabAppKey := os.Getenv("SCHWAB_APP_KEY")
+	schwabSecret := os.Getenv("SCHWAB_SECRET")
+	var schwabTokenKey []byte
+	if raw := os.Getenv("SCHWAB_TOKEN_ENCRYPTION_KEY"); raw != "" {
+		decoded, err := base64.StdEncoding.DecodeString(raw)
+		if err != nil {
+			log.Fatalf("SCHWAB_TOKEN_ENCRYPTION_KEY must be base64-encoded 32 bytes: %v", err)
+		}
+		if len(decoded) != 32 {
+			log.Fatalf("SCHWAB_TOKEN_ENCRYPTION_KEY must decode to exactly 32 bytes (AES-256), got %d", len(decoded))
+		}
+		schwabTokenKey = decoded
+	} else if schwabAppKey != "" && schwabSecret != "" {
+		// Migration path: OAuth flow is enabled but the new env var is
+		// not set yet. The schwab client falls back to the legacy
+		// sha256(SchwabSecret) key for both encrypt and decrypt. This
+		// keeps prod working on first deploy; setting the env var on
+		// the next deploy switches to the new key with a transparent
+		// re-encrypt of persisted tokens. Warn loudly so the operator
+		// notices the gap.
+		log.Println("WARN: SCHWAB_TOKEN_ENCRYPTION_KEY unset; falling back to legacy sha256(SCHWAB_SECRET) for token-at-rest. Run `openssl rand -base64 32` and set the env var to close the audit gap.")
+	}
+
 	return &Config{
 		CronScheduleOpen:   getEnvOrDefault("CRON_SCHEDULE_OPEN", "30 9 * * 1-5"),
 		CronScheduleClose:  getEnvOrDefault("CRON_SCHEDULE_CLOSE", "0 16 * * 1-5"),
@@ -122,9 +160,10 @@ func Load() *Config {
 			Schwab market data is optional, live quotes degrade gracefully when
 			keys are unset.
 		*/
-		SchwabAppKey:       os.Getenv("SCHWAB_APP_KEY"),
-		SchwabSecret:       os.Getenv("SCHWAB_SECRET"),
+		SchwabAppKey:       schwabAppKey,
+		SchwabSecret:       schwabSecret,
 		SchwabCallbackURL:  getEnvOrDefault("SCHWAB_CALLBACK_URL", "https://vibetradez.com/auth/callback"),
+		SchwabTokenKey:     schwabTokenKey,
 		AuthBaseURL:        authBaseURL,
 		AuthPublicURL:      getEnvOrDefault("VT_AUTH_PUBLIC_URL", "https://auth.jaycebordelon.com"),
 		AuthClientID:       authClientID,
