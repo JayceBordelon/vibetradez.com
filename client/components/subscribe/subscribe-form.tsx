@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { signInWithGoogle, useSession } from "@/lib/session";
 
 function GoogleIcon({ className }: { className?: string }) {
@@ -64,9 +64,21 @@ export function UnsubscribeForm() {
         setStatus("error");
         setMessage(res.message || "Something went wrong.");
       }
-    } catch {
+    } catch (err) {
+      // ApiError carries the server's JSON body verbatim. For
+      // 4xx responses the body is `{ok, message}` and we surface the
+      // human message; otherwise fall through to a generic notice.
       setStatus("error");
-      setMessage("Connection error.");
+      if (err instanceof ApiError && err.body) {
+        try {
+          const parsed = JSON.parse(err.body) as { message?: string };
+          setMessage(parsed.message || "Something went wrong.");
+        } catch {
+          setMessage("Connection error.");
+        }
+      } else {
+        setMessage("Connection error.");
+      }
     }
   }
 

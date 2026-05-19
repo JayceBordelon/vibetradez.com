@@ -20,8 +20,8 @@ export function SubscribeModal({ children, open, onOpenChange }: { children?: Re
 
         <div className="flex gap-2">
           <div className="flex-1 rounded-lg border bg-muted p-2.5 text-center">
-            <div className="font-mono text-lg font-extrabold text-primary">2</div>
-            <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">AI Pickers</div>
+            <div className="font-mono text-lg font-extrabold text-primary">10</div>
+            <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Daily Picks</div>
           </div>
           <div className="flex-1 rounded-lg border bg-muted p-2.5 text-center">
             <div className="font-mono text-lg font-extrabold text-primary">2x</div>

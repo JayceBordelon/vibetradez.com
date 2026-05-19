@@ -17,12 +17,70 @@ const HEADERS: Record<string, string> = {
 
 const SERVER_API_BASE = process.env.API_URL || "http://trading-server:8080";
 
+/*
+ApiError carries enough structure for callers to render distinct UI
+states for transport failures vs server errors vs malformed bodies.
+Status 0 means we never reached the server (network blip, parse
+error). The original Response is exposed for callers who want
+headers, redirected URLs, etc.
+*/
+export class ApiError extends Error {
+  status: number;
+  statusText: string;
+  body: string;
+  url: string;
+  constructor(message: string, init: { status: number; statusText: string; body: string; url: string }) {
+    super(message);
+    this.name = "ApiError";
+    this.status = init.status;
+    this.statusText = init.statusText;
+    this.body = init.body;
+    this.url = init.url;
+  }
+}
+
+/*
+parseResponse centralizes the "did we actually get JSON back from a
+2xx" check. Without this, a 502 from Traefik or a 401 redirect to an
+HTML login page would throw inside res.json() with a useless
+"Unexpected token < in JSON" SyntaxError — callers had no way to
+distinguish that from a real malformed body. Now every non-2xx
+throws ApiError, and a body that fails to parse as JSON throws
+ApiError too (rather than the obscure SyntaxError).
+*/
+async function parseResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let body = "";
+    try {
+      body = await res.text();
+    } catch {
+      // ignore read failures; body stays empty
+    }
+    throw new ApiError(`HTTP ${res.status} ${res.statusText} for ${res.url}`, {
+      status: res.status,
+      statusText: res.statusText,
+      body,
+      url: res.url,
+    });
+  }
+  try {
+    return (await res.json()) as T;
+  } catch (err) {
+    throw new ApiError(`malformed JSON body from ${res.url}: ${(err as Error).message}`, {
+      status: res.status,
+      statusText: res.statusText,
+      body: "",
+      url: res.url,
+    });
+  }
+}
+
 export async function serverFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${SERVER_API_BASE}${path}`, {
     ...options,
     headers: { ...HEADERS, ...options?.headers },
   });
-  return res.json();
+  return parseResponse<T>(res);
 }
 
 export async function clientFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -31,7 +89,7 @@ export async function clientFetch<T>(path: string, options?: RequestInit): Promi
     ...options,
     headers: { ...HEADERS, ...options?.headers },
   });
-  return res.json();
+  return parseResponse<T>(res);
 }
 
 async function authFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -39,7 +97,7 @@ async function authFetch<T>(path: string, options?: RequestInit): Promise<T> {
     credentials: "include",
     ...options,
   });
-  return res.json();
+  return parseResponse<T>(res);
 }
 
 export const api = {

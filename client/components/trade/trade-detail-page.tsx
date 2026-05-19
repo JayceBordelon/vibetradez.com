@@ -2,7 +2,7 @@
 
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { ExecutionBadge, findExecutionForTrade, liveMarkForTrade } from "@/components/execution-badge";
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { Metric } from "@/components/ui/metric";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useVisiblePoll } from "@/hooks/use-visible-poll";
 import { api } from "@/lib/api";
 import { calcBreakeven, calcMaxLoss, calcMoneyness, sentimentColor, sentimentLabel } from "@/lib/calculations";
 import { fmt, fmtMoney, fmtPctDec, fmtPnlInt, pnlColor } from "@/lib/format";
@@ -237,29 +238,26 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
 /*
 Polls /api/quotes/live on the same 15s cadence the dashboard uses, with
 the same merge-over-prior semantics so a single transient miss doesn't
-blank the live panel.
+blank the live panel. Pauses while the tab is hidden so a backgrounded
+trade-detail tab doesn't hammer the Schwab-backed endpoint indefinitely.
 */
 function useLiveQuotes(enabled: boolean): LiveQuotesResponse | null {
   const [liveQuotes, setLiveQuotes] = useState<LiveQuotesResponse | null>(null);
 
-  useEffect(() => {
-    if (!enabled) return;
-    const poll = () =>
-      api
-        .getLiveQuotes()
-        .then((next) => {
-          if (!next || typeof next !== "object") return;
-          setLiveQuotes((prev) => ({
-            ...next,
-            quotes: { ...(prev?.quotes ?? {}), ...(next.quotes ?? {}) },
-            options: { ...(prev?.options ?? {}), ...(next.options ?? {}) },
-          }));
-        })
-        .catch(() => {});
-    poll();
-    const interval = setInterval(poll, LIVE_POLL_SECONDS * 1000);
-    return () => clearInterval(interval);
-  }, [enabled]);
+  const poll = useCallback(() => {
+    api
+      .getLiveQuotes()
+      .then((next) => {
+        if (!next || typeof next !== "object") return;
+        setLiveQuotes((prev) => ({
+          ...next,
+          quotes: { ...(prev?.quotes ?? {}), ...(next.quotes ?? {}) },
+          options: { ...(prev?.options ?? {}), ...(next.options ?? {}) },
+        }));
+      })
+      .catch(() => {});
+  }, []);
+  useVisiblePoll(poll, LIVE_POLL_SECONDS * 1000, enabled);
 
   return liveQuotes;
 }
