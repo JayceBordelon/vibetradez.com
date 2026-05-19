@@ -70,26 +70,34 @@ func Run(db *store.Store, mail *email.Client, from string, isStubKey bool) {
 	}
 
 	for _, r := range Registry {
-		sent, err := db.IsRolloutSent(r.Slug)
-		if err != nil {
-			log.Printf("rollouts: %s: check sent: %v", r.Slug, err)
-			continue
-		}
-		if sent {
-			continue
-		}
-
+		// Render BEFORE claim so a render error doesn't waste the slug.
 		html, err := r.Render()
 		if err != nil {
 			log.Printf("rollouts: %s: render failed (will retry next deploy): %v", r.Slug, err)
 			continue
 		}
-		if err := mail.SendTradeEmail(from, emails, r.Subject, html); err != nil {
-			log.Printf("rollouts: %s: send failed (will retry next deploy): %v", r.Slug, err)
+
+		// Atomic claim: exactly one concurrent process gets won=true.
+		// The previous IsRolloutSent → Send → MarkSent flow let two
+		// boots both pass the read check and both bulk-email every
+		// subscriber before either wrote the mark.
+		won, err := db.ClaimRollout(r.Slug, len(emails))
+		if err != nil {
+			log.Printf("rollouts: %s: claim failed (will retry next deploy): %v", r.Slug, err)
 			continue
 		}
-		if err := db.MarkRolloutSent(r.Slug, len(emails)); err != nil {
-			log.Printf("rollouts: %s: SENT but mark-sent failed (CRITICAL — re-deploy may resend): %v", r.Slug, err)
+		if !won {
+			// Another process already claimed and is responsible for the send.
+			continue
+		}
+
+		if err := mail.SendTradeEmail(from, emails, r.Subject, html); err != nil {
+			// Slug is now permanently claimed but the email never landed.
+			// We deliberately do NOT roll back the claim — re-opening the
+			// race would risk double-mass-email on the next boot, which
+			// is strictly worse than a single missed send. Operator can
+			// `DELETE FROM sent_rollouts WHERE slug=...` to retry.
+			log.Printf("rollouts: %s: CLAIMED but send failed — slug is now inert, delete the row to retry: %v", r.Slug, err)
 			continue
 		}
 		log.Printf("rollouts: %s sent to %d subscribers", r.Slug, len(emails))
