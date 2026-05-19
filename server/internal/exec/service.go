@@ -464,6 +464,35 @@ func (s *Service) repriceOne(ctx context.Context, hash string, p *OpenPosition) 
 		log.Printf("execution: reprice cancel failed, leaving original order in place (trade=%d, order=%s): %v", p.Execution.TradeID, oldOrderID, cancelErr)
 		return
 	}
+
+	/*
+		Re-poll the original order after the cancel. The race we are
+		closing: the original order can fill between the initial
+		GetOrder probe and the CancelOrder call. Schwab's CancelOrder
+		on an already-filled order returns success but the position is
+		already at the broker. Without this check the reprice path
+		would then InsertExecution + PlaceOrder a replacement and we
+		would hold the position twice. If the original is filled (or
+		any non-canceled terminal state) we abandon the reprice; the
+		reconcile cron picks the original up on its next tick.
+	*/
+	postCancel, err := s.trader.GetOrder(ctx, hash, oldOrderID)
+	if err != nil {
+		log.Printf("execution: reprice post-cancel GetOrder failed (trade=%d, order=%s): %v — abandoning reprice to avoid duplicate fill", p.Execution.TradeID, oldOrderID, err)
+		return
+	}
+	if postCancel.Filled {
+		fp := postCancel.FillPrice
+		_ = s.store.UpdateExecutionStatus(p.Execution.ID, "filled", oldOrderID, &fp, postCancel.FilledQuantity, "filled mid-reprice; replacement skipped")
+		log.Printf("execution: reprice race — original order %s filled mid-cancel (trade=%d); replacement skipped", oldOrderID, p.Execution.TradeID)
+		return
+	}
+	if postCancel.Terminal && postCancel.RawStatus != "CANCELED" && postCancel.RawStatus != "REPLACED" {
+		_ = s.store.UpdateExecutionStatus(p.Execution.ID, "rejected", oldOrderID, nil, 0, fmt.Sprintf("terminal mid-reprice as %s; replacement skipped", postCancel.RawStatus))
+		log.Printf("execution: reprice race — original order %s terminal as %s (trade=%d); replacement skipped", oldOrderID, postCancel.RawStatus, p.Execution.TradeID)
+		return
+	}
+
 	_ = s.store.UpdateExecutionStatus(p.Execution.ID, "canceled", oldOrderID, nil, 0, fmt.Sprintf("repriced post-open from $%.2f to $%.2f", oldLimit, newLimit))
 
 	carriedQty := p.Execution.RequestedQuantity
@@ -702,6 +731,30 @@ func (s *Service) closeOne(ctx context.Context, p *OpenPosition) {
 	}
 
 	_ = s.trader.CancelOrder(ctx, hash, orderID)
+
+	/*
+		Re-poll after the cancel. The race we are closing: the first
+		SELL_TO_CLOSE order can fill between pollFilled returning
+		false and CancelOrder reaching the broker. Schwab's
+		CancelOrder on a filled order returns success but the position
+		is already closed. Without this check we would submit a
+		second SELL_TO_CLOSE on a position that no longer exists,
+		creating a short option (writer) position the operator never
+		intended to hold. If the first order is now filled (or any
+		non-canceled terminal), record it and skip the replacement.
+	*/
+	if postCancel, gErr := s.trader.GetOrder(ctx, hash, orderID); gErr == nil {
+		if postCancel.Filled {
+			s.recordCloseAndEmail(ctx, p, execID, hash, orderID)
+			return
+		}
+		if postCancel.Terminal && postCancel.RawStatus != "CANCELED" && postCancel.RawStatus != "REPLACED" {
+			_ = s.store.UpdateExecutionStatus(execID, "failed", orderID, nil, 0, fmt.Sprintf("close terminal mid-cancel as %s; cancel-replace skipped", postCancel.RawStatus))
+			s.sendCloseFailedEmail(p, fmt.Sprintf("first close order ended as %s mid-cancel; manual review", postCancel.RawStatus))
+			return
+		}
+	}
+
 	orderID2, err := s.trader.PlaceOrder(ctx, hash, order)
 	if err != nil {
 		_ = s.store.UpdateExecutionStatus(execID, "failed", orderID, nil, 0, "cancel-replace failed: "+err.Error())

@@ -562,6 +562,7 @@ type repriceTrader struct {
 	statusGetErr   error
 	canceled       []string
 	cancelErr      error
+	cancelHook     func(orderID string)
 	placeIDs       []string
 	placedOrders   []Order
 	placeErr       error
@@ -602,6 +603,9 @@ func (r *repriceTrader) GetOrder(_ context.Context, _, orderID string) (OrderSta
 }
 func (r *repriceTrader) CancelOrder(_ context.Context, _, orderID string) error {
 	r.canceled = append(r.canceled, orderID)
+	if r.cancelHook != nil {
+		r.cancelHook(orderID)
+	}
 	return r.cancelErr
 }
 
@@ -830,6 +834,99 @@ func TestRepriceWorkingOpens_SchwabGetOrderErrorDoesNotPanic(t *testing.T) {
 
 	if len(trader.canceled) != 0 || len(trader.placedOrders) != 0 || len(store.updates) != 0 {
 		t.Errorf("expected no actions on Schwab GetOrder error")
+	}
+}
+
+/*
+TestRepriceWorkingOpens_AbortsWhenOriginalFilledMidCancel guards the
+race we are closing in service.go: the original order can fill
+between the initial GetOrder probe and CancelOrder reaching Schwab.
+The cancel returns success on a filled order, and without a post-
+cancel re-poll we would then InsertExecution + PlaceOrder a
+replacement and hold the position twice. The fix re-polls and bails.
+*/
+func TestRepriceWorkingOpens_AbortsWhenOriginalFilledMidCancel(t *testing.T) {
+	store := &fakeStore{
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 0.92)},
+	}
+	mail := &fakeMail{}
+	trader := &repriceTrader{
+		statusByOrder: map[string]OrderStatus{
+			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 0.92},
+		},
+	}
+	// Cancel-hook flips the order to FILLED, simulating the race.
+	trader.cancelHook = func(orderID string) {
+		trader.statusByOrder[orderID] = OrderStatus{
+			OrderID:        orderID,
+			RawStatus:      "FILLED",
+			Filled:         true,
+			Terminal:       true,
+			FillPrice:      0.95,
+			FilledQuantity: 1,
+		}
+	}
+	svc := newTestServiceWithAsk(trader, store, mail, askFn(2.40, nil))
+
+	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
+
+	if len(trader.canceled) != 1 || trader.canceled[0] != "ORDER-OLD" {
+		t.Fatalf("expected exactly one cancel of ORDER-OLD, got %v", trader.canceled)
+	}
+	if len(trader.placedOrders) != 0 {
+		t.Fatalf("expected NO replacement order when original filled mid-cancel, got %d placed", len(trader.placedOrders))
+	}
+	if len(store.inserts) != 0 {
+		t.Fatalf("expected no new execution row, got %d", len(store.inserts))
+	}
+	// Original execution row should be flipped to 'filled' with the
+	// observed fill price (so the dashboard reflects broker truth).
+	if len(store.updates) != 1 {
+		t.Fatalf("expected exactly one update (original → filled), got %d (%+v)", len(store.updates), store.updates)
+	}
+	upd := store.updates[0]
+	if upd.id != 7 || upd.status != "filled" || upd.orderID != "ORDER-OLD" {
+		t.Errorf("update[0]: want id=7 filled ORDER-OLD, got %+v", upd)
+	}
+}
+
+/*
+TestRepriceWorkingOpens_AbortsWhenOriginalTerminalMidCancel covers
+the non-FILLED terminal case (REJECTED/EXPIRED mid-cancel). Same
+fix: no replacement order; the existing row gets marked rejected.
+*/
+func TestRepriceWorkingOpens_AbortsWhenOriginalTerminalMidCancel(t *testing.T) {
+	store := &fakeStore{
+		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 0.92)},
+	}
+	mail := &fakeMail{}
+	trader := &repriceTrader{
+		statusByOrder: map[string]OrderStatus{
+			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 0.92},
+		},
+	}
+	trader.cancelHook = func(orderID string) {
+		trader.statusByOrder[orderID] = OrderStatus{
+			OrderID:   orderID,
+			RawStatus: "REJECTED",
+			Terminal:  true,
+		}
+	}
+	svc := newTestServiceWithAsk(trader, store, mail, askFn(2.40, nil))
+
+	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
+
+	if len(trader.placedOrders) != 0 {
+		t.Fatalf("expected NO replacement order when original rejected mid-cancel, got %d placed", len(trader.placedOrders))
+	}
+	if len(store.inserts) != 0 {
+		t.Fatalf("expected no new execution row, got %d", len(store.inserts))
+	}
+	if len(store.updates) != 1 {
+		t.Fatalf("expected exactly one update (original → rejected), got %d", len(store.updates))
+	}
+	if store.updates[0].status != "rejected" {
+		t.Errorf("expected status=rejected, got %q", store.updates[0].status)
 	}
 }
 
