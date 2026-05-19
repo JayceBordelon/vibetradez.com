@@ -2,6 +2,9 @@ package server
 
 import (
 	"context"
+	crand "crypto/rand"
+	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -106,7 +109,10 @@ func (s *Server) routes() {
 
 	s.mux.HandleFunc("/health", s.handleHealth)
 	s.mux.HandleFunc("/auth/schwab", authLimit.middleware(s.handleSchwabAuth))
-	s.mux.HandleFunc("/auth/callback", s.handleSchwabCallback)
+	// Callback is gated by the state-cookie check inside the handler, but
+	// also rate-limited so a flood of bogus callbacks can't churn the
+	// token-exchange path.
+	s.mux.HandleFunc("/auth/callback", authLimit.middleware(s.handleSchwabCallback))
 	s.mux.HandleFunc("/auth/sso/start", authLimit.middleware(s.handleSSOStart))
 	s.mux.HandleFunc("/auth/sso/callback", s.handleSSOCallback)
 	s.mux.HandleFunc("/auth/logout", s.handleLogout)
@@ -821,12 +827,40 @@ func (s *Server) syntheticCandles(symbol string, days, freqMinutes int) []schwab
 
 // ── Schwab OAuth ──
 
+const schwabStateCookie = "vt_schwab_state"
+
+/*
+handleSchwabAuth kicks off the Schwab OAuth flow. Mints a 32-byte
+state token, double-submits it as a host-scoped cookie (Path=/auth so
+it's readable on /auth/callback), and includes it in the URL Schwab
+will redirect to. Without this, a crafted /auth/callback?code=...
+link can rebind the production trader to an attacker's Schwab
+account if the operator ever clicks it.
+*/
 func (s *Server) handleSchwabAuth(w http.ResponseWriter, r *http.Request) {
 	if s.schwab == nil {
 		writeJSON(w, http.StatusServiceUnavailable, apiResponse{OK: false, Message: "Schwab not configured"})
 		return
 	}
-	http.Redirect(w, r, s.schwab.AuthorizationURL(), http.StatusFound)
+
+	b := make([]byte, 32)
+	if _, err := crand.Read(b); err != nil {
+		http.Error(w, "schwab auth init failed", http.StatusInternalServerError)
+		return
+	}
+	state := base64.RawURLEncoding.EncodeToString(b)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     schwabStateCookie,
+		Value:    state,
+		Path:     "/auth",
+		MaxAge:   600,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.Redirect(w, r, s.schwab.AuthorizationURL(state), http.StatusFound)
 }
 
 func (s *Server) handleSchwabCallback(w http.ResponseWriter, r *http.Request) {
@@ -836,11 +870,32 @@ func (s *Server) handleSchwabCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	code := r.URL.Query().Get("code")
+	state := r.URL.Query().Get("state")
 	if code == "" {
 		log.Printf("Schwab callback: no code param. Full query: %s", r.URL.RawQuery)
 		http.Error(w, "missing authorization code", http.StatusBadRequest)
 		return
 	}
+
+	c, err := r.Cookie(schwabStateCookie)
+	if err != nil || c.Value == "" || state == "" ||
+		subtle.ConstantTimeCompare([]byte(c.Value), []byte(state)) != 1 {
+		log.Printf("Schwab callback: state mismatch (cookie_present=%v, query_state_present=%v)", err == nil && c != nil && c.Value != "", state != "")
+		http.Error(w, "invalid oauth state", http.StatusBadRequest)
+		return
+	}
+
+	// Burn the state cookie regardless of token-exchange outcome —
+	// states are one-shot.
+	http.SetCookie(w, &http.Cookie{
+		Name:     schwabStateCookie,
+		Value:    "",
+		Path:     "/auth",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
 
 	log.Printf("Schwab callback: received code (%d chars), exchanging for tokens...", len(code))
 	if err := s.schwab.ExchangeCode(code); err != nil {

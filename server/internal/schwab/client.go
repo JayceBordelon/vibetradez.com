@@ -40,6 +40,7 @@ type Client struct {
 	appKey      string
 	secret      string
 	callbackURL string
+	tokenKey    []byte
 	store       TokenStore
 	httpClient  *http.Client
 
@@ -49,28 +50,67 @@ type Client struct {
 	expiresAt   time.Time
 }
 
-func NewClient(appKey, secret, callbackURL string, store TokenStore) *Client {
+/*
+NewClient builds a Schwab client. tokenKey is the dedicated 32-byte
+AES key for token-at-rest encryption (sourced from
+SCHWAB_TOKEN_ENCRYPTION_KEY in config). All NEW persisted tokens go
+through this key. Persisted tokens that pre-date the migration get
+decrypted with the legacy sha256(SchwabSecret) key and immediately
+re-persisted under the new key.
+*/
+func NewClient(appKey, secret, callbackURL string, tokenKey []byte, store TokenStore) *Client {
 	c := &Client{
 		appKey:      appKey,
 		secret:      secret,
 		callbackURL: callbackURL,
+		tokenKey:    tokenKey,
 		store:       store,
 		httpClient:  &http.Client{Timeout: 15 * time.Second},
 	}
-	// Load persisted tokens on startup (stored encrypted).
+	// Load persisted tokens on startup (stored encrypted). Try the new
+	// dedicated key first; fall back to the legacy sha256(secret) key
+	// so rows persisted before the migration still decrypt. After a
+	// successful legacy decrypt, re-persist with the new key.
 	if encAT, encRT, exp, err := store.GetOAuthToken("schwab"); err == nil && encRT != "" {
-		at, errA := Decrypt(encAT, secret)
-		rt, errR := Decrypt(encRT, secret)
-		if errA == nil && errR == nil {
+		at, atUsedLegacy, atErr := tryDecrypt(encAT, c.tokenKey, secret)
+		rt, rtUsedLegacy, rtErr := tryDecrypt(encRT, c.tokenKey, secret)
+		switch {
+		case atErr == nil && rtErr == nil:
 			c.accessToken = at
 			c.refreshTok = rt
 			c.expiresAt = exp
 			log.Printf("Schwab: loaded persisted tokens (expires %s)", exp.Format(time.RFC3339))
-		} else {
-			log.Printf("Schwab: failed to decrypt persisted tokens, re-authorization required")
+			if atUsedLegacy || rtUsedLegacy {
+				log.Println("Schwab: persisted tokens were encrypted with legacy key — re-encrypting with SCHWAB_TOKEN_ENCRYPTION_KEY")
+				c.persistTokens(c.accessToken, c.refreshTok, c.expiresAt)
+			}
+		default:
+			log.Printf("Schwab: failed to decrypt persisted tokens, re-authorization required (at_err=%v, rt_err=%v)", atErr, rtErr)
 		}
 	}
 	return c
+}
+
+/*
+tryDecrypt prefers the new dedicated key but falls back to the
+legacy sha256(secret) key when the new key fails. Returns the
+plaintext, whether the legacy path was used (so the caller can
+trigger re-encryption), and the final error.
+*/
+func tryDecrypt(encoded string, newKey []byte, legacySecret string) (string, bool, error) {
+	if len(newKey) == 32 {
+		if pt, err := DecryptWithKey(encoded, newKey); err == nil {
+			return pt, false, nil
+		}
+	}
+	if legacySecret == "" {
+		return "", false, fmt.Errorf("no decryption key available")
+	}
+	pt, err := Decrypt(encoded, legacySecret)
+	if err != nil {
+		return "", false, err
+	}
+	return pt, true, nil
 }
 
 // IsConnected returns true if we have a refresh token (may still need refreshing).
@@ -80,12 +120,21 @@ func (c *Client) IsConnected() bool {
 	return c.refreshTok != ""
 }
 
-// AuthorizationURL returns the URL to redirect the user to for OAuth authorization.
-func (c *Client) AuthorizationURL() string {
-	return fmt.Sprintf("%s%s?response_type=code&client_id=%s&redirect_uri=%s",
+/*
+AuthorizationURL returns the URL to redirect the user to for OAuth
+authorization. `state` is the CSRF token the caller minted and
+double-submitted as a host-scoped cookie; Schwab will echo it back on
+the callback. Without binding initiation to callback via state, a
+crafted /auth/callback?code=... URL on this host can rebind the
+production trader to an attacker's Schwab account once the operator
+clicks it.
+*/
+func (c *Client) AuthorizationURL(state string) string {
+	return fmt.Sprintf("%s%s?response_type=code&client_id=%s&redirect_uri=%s&state=%s",
 		baseURL, authPath,
 		url.QueryEscape(c.appKey),
 		url.QueryEscape(c.callbackURL),
+		url.QueryEscape(state),
 	)
 }
 
@@ -232,10 +281,23 @@ func (c *Client) doRefresh(refreshToken string) (string, error) {
 }
 
 func (c *Client) persistTokens(accessToken, refreshToken string, expiresAt time.Time) {
-	encAT, errA := Encrypt(accessToken, c.secret)
-	encRT, errR := Encrypt(refreshToken, c.secret)
+	var (
+		encAT, encRT string
+		errA, errR   error
+	)
+	if len(c.tokenKey) == 32 {
+		encAT, errA = EncryptWithKey(accessToken, c.tokenKey)
+		encRT, errR = EncryptWithKey(refreshToken, c.tokenKey)
+	} else {
+		// Migration mode: SCHWAB_TOKEN_ENCRYPTION_KEY not set yet.
+		// Fall back to the legacy sha256(secret) key so refreshes still
+		// persist. Once the operator sets the env var on next deploy,
+		// the load path migrates rows transparently.
+		encAT, errA = Encrypt(accessToken, c.secret)
+		encRT, errR = Encrypt(refreshToken, c.secret)
+	}
 	if errA != nil || errR != nil {
-		log.Printf("Schwab: warning: failed to encrypt tokens for storage")
+		log.Printf("Schwab: warning: failed to encrypt tokens for storage (at_err=%v, rt_err=%v)", errA, errR)
 		return
 	}
 	if err := c.store.SaveOAuthToken("schwab", encAT, encRT, expiresAt); err != nil {
