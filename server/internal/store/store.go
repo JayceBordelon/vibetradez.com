@@ -29,6 +29,20 @@ func New(databaseURL string) (*Store, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
+	/*
+		database/sql defaults to unlimited open connections. DO Managed
+		Postgres has a hard per-database cap (25 on the cheapest tier),
+		and the auth-service ping-on-every-request path means a burst of
+		API requests + the live-quotes poll + a cron tick can saturate
+		that cap and stall every other query. SetConnMaxLifetime also
+		ensures stale TCP that survived DO pooler restarts gets cycled
+		instead of returning "read: connection reset by peer" for hours.
+	*/
+	db.SetMaxOpenConns(20)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(30 * time.Minute)
+	db.SetConnMaxIdleTime(5 * time.Minute)
+
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
