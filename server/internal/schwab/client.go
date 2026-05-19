@@ -251,15 +251,28 @@ retry refreshes the access token before reissuing so a token that
 expired mid-basket gets a clean second chance. 401/403 are NOT
 retried (real auth failure, retrying just wastes time). Network
 errors before any response are retried up to maxRetryAttempts as
-well. The basket selector previously aborted on the first transient
-blip from Schwab; with this in place a single rate-limit spike on
-account-hash or place-order no longer kills every remaining pick.
+well.
+
+POST is NOT retried because it is not idempotent: Schwab Trader's
+POST /accounts/{hash}/orders accepts the order on the broker side
+before the response body is read, and a 5xx during response read +
+automatic retry will submit a duplicate real-money order. For POST
+the caller gets exactly one attempt and must reconcile broker state
+itself (the reconcile cron picks up orphan orders if the response
+fails after broker acceptance). GET / DELETE / PUT are safe to retry
+under HTTP semantics; PATCH is also idempotent in practice for the
+Schwab endpoints we touch (none today).
 */
 func (c *Client) authenticatedRequest(method, url string, body io.Reader) (*http.Response, error) {
 	const (
 		maxRetryAttempts = 3
 		baseBackoff      = 250 * time.Millisecond
 	)
+
+	maxAttempts := maxRetryAttempts
+	if method == http.MethodPost {
+		maxAttempts = 1
+	}
 
 	var bodyBytes []byte
 	if body != nil {
@@ -272,7 +285,7 @@ func (c *Client) authenticatedRequest(method, url string, body io.Reader) (*http
 
 	var lastResp *http.Response
 	var lastErr error
-	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		token, err := c.ValidToken()
 		if err != nil {
 			return nil, err
@@ -295,7 +308,7 @@ func (c *Client) authenticatedRequest(method, url string, body io.Reader) (*http
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			lastErr = err
-			if attempt < maxRetryAttempts {
+			if attempt < maxAttempts {
 				time.Sleep(baseBackoff * time.Duration(1<<(attempt-1)))
 				continue
 			}
@@ -305,8 +318,8 @@ func (c *Client) authenticatedRequest(method, url string, body io.Reader) (*http
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError {
 			_ = resp.Body.Close()
 			lastResp = resp
-			if attempt < maxRetryAttempts {
-				log.Printf("Schwab: retrying %s %s after HTTP %d (attempt %d/%d)", method, url, resp.StatusCode, attempt, maxRetryAttempts)
+			if attempt < maxAttempts {
+				log.Printf("Schwab: retrying %s %s after HTTP %d (attempt %d/%d)", method, url, resp.StatusCode, attempt, maxAttempts)
 				time.Sleep(baseBackoff * time.Duration(1<<(attempt-1)))
 				continue
 			}
