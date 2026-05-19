@@ -166,7 +166,10 @@ func main() {
 
 	if len(cfg.EmailRecipients) > 0 {
 		for _, email := range cfg.EmailRecipients {
-			if err := db.AddSubscriber(email, ""); err != nil {
+			// EnsureSubscriberExists preserves prior unsubscribes;
+			// AddSubscriber would silently re-subscribe opted-out
+			// addresses on every container restart.
+			if err := db.EnsureSubscriberExists(email, ""); err != nil {
 				log.Printf("Warning: failed to seed subscriber %s: %v", email, err)
 			}
 		}

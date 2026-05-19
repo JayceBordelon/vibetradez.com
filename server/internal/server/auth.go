@@ -138,8 +138,10 @@ func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
 
 	email := strings.ToLower(strings.TrimSpace(tok.User.Email))
 	if email != "" {
-		if err := s.db.AddSubscriber(email, tok.User.Name); err != nil {
-			log.Printf("handleSSOCallback: add subscriber: %v", err)
+		// EnsureSubscriberExists, not AddSubscriber: a sign-in does not
+		// re-subscribe a previously opted-out user.
+		if err := s.db.EnsureSubscriberExists(email, tok.User.Name); err != nil {
+			log.Printf("handleSSOCallback: ensure subscriber: %v", err)
 		}
 		if err := s.db.LinkSubscriberAuthUser(tok.User.ID, email); err != nil {
 			log.Printf("handleSSOCallback: link subscriber: %v", err)
