@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -9,6 +10,16 @@ import (
 
 	_ "github.com/lib/pq"
 )
+
+/*
+ErrTradesAlreadyExecuted is returned by SaveMorningTrades when the
+date already has executions referencing its trade rows. The morning
+cron must not rewrite trade ids out from under the executor — those
+rows reflect real broker activity (paper or live) and the executions
+table's FK would dangle. Callers should treat this as "the cron
+already ran today" and bail out of the rest of the morning flow.
+*/
+var ErrTradesAlreadyExecuted = errors.New("morning trades already have executions for this date")
 
 type Store struct {
 	db *sql.DB
@@ -365,6 +376,14 @@ func (s *Store) GetActiveEmails() ([]string, error) {
 SaveMorningTrades replaces all rows for `date` with `tradeList` and
 populates each Trade's ID field with the inserted row id so the
 caller can pass it to the executor.
+
+If any executions exist for the date's existing trade rows, returns
+ErrTradesAlreadyExecuted instead of rewriting them. The morning cron
+firing twice (RUN_ON_START=true left on, container restart at 9:29:55
+ET, DST edge) would otherwise wipe the trade ids the executor's
+in-flight rows point at, breaking the dashboard view of broker
+truth. The caller is expected to log + bail; today's picks are
+already in flight.
 */
 func (s *Store) SaveMorningTrades(date string, tradeList []trades.Trade) error {
 	tx, err := s.db.Begin()
@@ -372,6 +391,18 @@ func (s *Store) SaveMorningTrades(date string, tradeList []trades.Trade) error {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+
+	var execCount int
+	if err := tx.QueryRow(`
+		SELECT COUNT(*) FROM executions e
+		INNER JOIN trades t ON t.id = e.trade_id
+		WHERE t.date = $1
+	`, date).Scan(&execCount); err != nil {
+		return fmt.Errorf("failed to check executions for date: %w", err)
+	}
+	if execCount > 0 {
+		return ErrTradesAlreadyExecuted
+	}
 
 	if _, err := tx.Exec("DELETE FROM trades WHERE date = $1", date); err != nil {
 		return fmt.Errorf("failed to clear existing trades: %w", err)

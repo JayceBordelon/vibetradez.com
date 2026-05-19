@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -702,6 +703,15 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 
 	date := todayDate()
 	if err := db.SaveMorningTrades(date, topTrades); err != nil {
+		if errors.Is(err, store.ErrTradesAlreadyExecuted) {
+			// The 9:30 cron fired twice (e.g. RUN_ON_START left on, container
+			// restart at 9:29:55 ET) and the first run's picks already have
+			// execution rows. Rewriting trade ids would leave the
+			// executions table pointing at deleted rows. Bail entirely — the
+			// first run's email is already out and the basket is in flight.
+			log.Printf("Morning cron re-fired for %s; first-run executions exist — skipping save + email + executor", date)
+			return
+		}
 		log.Printf("Error saving trades to database: %v", err)
 		return
 	}

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"testing"
 
 	"vibetradez.com/internal/trades"
@@ -15,10 +16,13 @@ func setupTestDB(t *testing.T) *Store {
 		t.Fatalf("Failed to connect to test database: %v", err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	// Clean tables for test isolation
+	// Clean tables for test isolation. Executions must go before trades
+	// because of the FK; subscribers and summaries are independent.
+	_, _ = s.db.Exec("DELETE FROM executions")
 	_, _ = s.db.Exec("DELETE FROM subscribers")
 	_, _ = s.db.Exec("DELETE FROM trades")
 	_, _ = s.db.Exec("DELETE FROM summaries")
+	_, _ = s.db.Exec("DELETE FROM sent_rollouts")
 	return s
 }
 
@@ -168,6 +172,88 @@ func TestEnsureSubscriberExists_PreservesName(t *testing.T) {
 	subs, _ := s.GetActiveSubscribers()
 	if len(subs) != 1 || subs[0].Name != "Carol Authored" {
 		t.Fatalf("name clobbered by empty seed: %+v", subs)
+	}
+}
+
+/*
+TestSaveMorningTrades_GuardsAgainstReRunWithExecutions covers the
+audit fix: the morning cron firing twice (RUN_ON_START, container
+restart at 9:29:55 ET) must not wipe trade ids that executions
+reference. The second call should return ErrTradesAlreadyExecuted
+and leave both tables untouched.
+*/
+func TestSaveMorningTrades_GuardsAgainstReRunWithExecutions(t *testing.T) {
+	s := setupTestDB(t)
+
+	first := []trades.Trade{
+		{Symbol: "AAPL", ContractType: "CALL", StrikePrice: 150.0, Expiration: "2025-04-18", DTE: 5, EstimatedPrice: 3.5, RiskLevel: "LOW"},
+		{Symbol: "TSLA", ContractType: "PUT", StrikePrice: 200.0, Expiration: "2025-04-18", DTE: 5, EstimatedPrice: 4.0, RiskLevel: "MEDIUM"},
+	}
+	if err := s.SaveMorningTrades("2025-04-13", first); err != nil {
+		t.Fatalf("first save: %v", err)
+	}
+	if first[0].ID == 0 {
+		t.Fatal("first save did not populate ID")
+	}
+
+	// Simulate an execution row referencing the first save's trade id.
+	if _, err := s.db.Exec(`
+		INSERT INTO executions (trade_id, mode, side, status, requested_quantity)
+		VALUES ($1, 'paper', 'open', 'filled', 1)
+	`, first[0].ID); err != nil {
+		t.Fatalf("seed execution: %v", err)
+	}
+
+	second := []trades.Trade{
+		{Symbol: "NVDA", ContractType: "CALL", StrikePrice: 700.0, Expiration: "2025-04-18", DTE: 5, EstimatedPrice: 6.0, RiskLevel: "HIGH"},
+	}
+	err := s.SaveMorningTrades("2025-04-13", second)
+	if !errors.Is(err, ErrTradesAlreadyExecuted) {
+		t.Fatalf("want ErrTradesAlreadyExecuted, got: %v", err)
+	}
+
+	// Confirm the original trades survived the rejected rewrite.
+	loaded, err := s.GetMorningTrades("2025-04-13")
+	if err != nil {
+		t.Fatalf("GetMorningTrades: %v", err)
+	}
+	if len(loaded) != 2 {
+		t.Fatalf("first-save trades clobbered: got %d, want 2", len(loaded))
+	}
+	if loaded[0].Symbol == "NVDA" {
+		t.Fatalf("first-save trades replaced with second-save trades")
+	}
+}
+
+/*
+TestSaveMorningTrades_AllowsRewriteWhenNoExecutions verifies the
+guard isn't overzealous: re-runs on the same date are fine when no
+execution rows reference the existing trades (e.g. paper-only stub
+mode or pre-executor crash). The second save replaces the first.
+*/
+func TestSaveMorningTrades_AllowsRewriteWhenNoExecutions(t *testing.T) {
+	s := setupTestDB(t)
+
+	first := []trades.Trade{
+		{Symbol: "AAPL", ContractType: "CALL", StrikePrice: 150.0, Expiration: "2025-04-18", DTE: 5, EstimatedPrice: 3.5, RiskLevel: "LOW"},
+	}
+	if err := s.SaveMorningTrades("2025-04-13", first); err != nil {
+		t.Fatalf("first save: %v", err)
+	}
+
+	second := []trades.Trade{
+		{Symbol: "NVDA", ContractType: "CALL", StrikePrice: 700.0, Expiration: "2025-04-18", DTE: 5, EstimatedPrice: 6.0, RiskLevel: "HIGH"},
+	}
+	if err := s.SaveMorningTrades("2025-04-13", second); err != nil {
+		t.Fatalf("second save with no executions should succeed, got: %v", err)
+	}
+
+	loaded, err := s.GetMorningTrades("2025-04-13")
+	if err != nil {
+		t.Fatalf("GetMorningTrades: %v", err)
+	}
+	if len(loaded) != 1 || loaded[0].Symbol != "NVDA" {
+		t.Fatalf("second save did not replace first: %+v", loaded)
 	}
 }
 
