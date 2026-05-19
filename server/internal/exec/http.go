@@ -32,6 +32,17 @@ func (s *Service) HandleCancelAll(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, cancelAllResponse{Message: "method not allowed"})
 		return
 	}
+	/*
+		Take the same s.mu the cron paths take. Without this, an
+		operator pressing the kill switch during CloseAllPositionsForDate
+		would walk the same open-positions list concurrently with the
+		cron, and both iterations would submit SELL_TO_CLOSE — one
+		fills against the real long, the second becomes a short option
+		(writer) position the operator never intended.
+	*/
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
 

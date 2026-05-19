@@ -84,6 +84,93 @@ func TestRemoveNonexistentSubscriber(t *testing.T) {
 	}
 }
 
+/*
+TestEnsureSubscriberExists_PreservesUnsubscribe guards the audit fix:
+side-effect paths (SSO callback, EMAIL_RECIPIENTS startup seed) must
+NOT silently re-subscribe a user who has previously opted out. The
+original AddSubscriber upsert flipped active=true on every call.
+*/
+func TestEnsureSubscriberExists_PreservesUnsubscribe(t *testing.T) {
+	s := setupTestDB(t)
+
+	// 1. User signs up explicitly.
+	if err := s.AddSubscriber("alice@example.com", "Alice"); err != nil {
+		t.Fatalf("initial AddSubscriber failed: %v", err)
+	}
+
+	// 2. User unsubscribes.
+	if err := s.RemoveSubscriber("alice@example.com"); err != nil {
+		t.Fatalf("RemoveSubscriber failed: %v", err)
+	}
+	emails, _ := s.GetActiveEmails()
+	if len(emails) != 0 {
+		t.Fatalf("post-unsub: expected 0 active, got %d", len(emails))
+	}
+
+	// 3. Side-effect path runs (SSO sign-in, or seed at container boot).
+	// EnsureSubscriberExists must NOT re-subscribe.
+	if err := s.EnsureSubscriberExists("alice@example.com", "Alice"); err != nil {
+		t.Fatalf("EnsureSubscriberExists failed: %v", err)
+	}
+
+	emails, _ = s.GetActiveEmails()
+	if len(emails) != 0 {
+		t.Fatalf("EnsureSubscriberExists revived unsubscribe: %d active (should be 0)", len(emails))
+	}
+
+	// 4. User then explicitly re-signs-up. AddSubscriber WILL revive them.
+	if err := s.AddSubscriber("alice@example.com", "Alice"); err != nil {
+		t.Fatalf("explicit re-AddSubscriber failed: %v", err)
+	}
+	emails, _ = s.GetActiveEmails()
+	if len(emails) != 1 {
+		t.Fatalf("explicit re-signup did not revive: %d active (should be 1)", len(emails))
+	}
+}
+
+/*
+TestEnsureSubscriberExists_NewUserBecomesActive: for a user we have
+never seen before, EnsureSubscriberExists inserts them as active=true
+(default state for new rows is opt-in, since they're being added by
+us explicitly through a side-effect path that has reasonable
+expectation they want the mails — e.g. EMAIL_RECIPIENTS).
+*/
+func TestEnsureSubscriberExists_NewUserBecomesActive(t *testing.T) {
+	s := setupTestDB(t)
+
+	if err := s.EnsureSubscriberExists("bob@example.com", "Bob"); err != nil {
+		t.Fatalf("EnsureSubscriberExists failed: %v", err)
+	}
+
+	emails, _ := s.GetActiveEmails()
+	if len(emails) != 1 || emails[0] != "bob@example.com" {
+		t.Fatalf("new user not active: %v", emails)
+	}
+}
+
+/*
+TestEnsureSubscriberExists_PreservesName: if a user already has a
+non-empty name on file, a seed run with empty name must not clobber
+it. Only fills in name when previously empty.
+*/
+func TestEnsureSubscriberExists_PreservesName(t *testing.T) {
+	s := setupTestDB(t)
+
+	if err := s.AddSubscriber("carol@example.com", "Carol Authored"); err != nil {
+		t.Fatalf("AddSubscriber failed: %v", err)
+	}
+
+	// Seed path with empty name — must NOT overwrite.
+	if err := s.EnsureSubscriberExists("carol@example.com", ""); err != nil {
+		t.Fatalf("EnsureSubscriberExists failed: %v", err)
+	}
+
+	subs, _ := s.GetActiveSubscribers()
+	if len(subs) != 1 || subs[0].Name != "Carol Authored" {
+		t.Fatalf("name clobbered by empty seed: %+v", subs)
+	}
+}
+
 func TestTradesPersistence(t *testing.T) {
 	s := setupTestDB(t)
 

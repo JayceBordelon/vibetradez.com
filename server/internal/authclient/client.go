@@ -37,6 +37,18 @@ type VerifyResponse struct {
 	User     User   `json:"user"`
 }
 
+/*
+verifyCacheSoftMax and verifyCacheReapEvery bound the in-memory
+verify cache. Entries are reaped opportunistically inside Verify
+whenever either threshold is crossed; without this, a stream of
+distinct tokens (real or attacker-probed) grows the map until
+process restart.
+*/
+const (
+	verifyCacheSoftMax   = 4096
+	verifyCacheReapEvery = 10 * time.Minute
+)
+
 type Client struct {
 	baseURL      string
 	clientID     string
@@ -44,9 +56,10 @@ type Client struct {
 	redirectURI  string
 	http         *http.Client
 
-	cache   map[string]cacheEntry
-	cacheMu sync.RWMutex
-	cacheT  time.Duration
+	cache    map[string]cacheEntry
+	cacheMu  sync.RWMutex
+	cacheT   time.Duration
+	lastReap time.Time
 }
 
 type cacheEntry struct {
@@ -63,6 +76,7 @@ func New(baseURL, clientID, clientSecret, redirectURI string) *Client {
 		http:         &http.Client{Timeout: 10 * time.Second},
 		cache:        make(map[string]cacheEntry),
 		cacheT:       60 * time.Second,
+		lastReap:     time.Now(),
 	}
 }
 
@@ -149,10 +163,29 @@ func (c *Client) Verify(ctx context.Context, token string) (*User, error) {
 
 	c.cacheMu.Lock()
 	c.cache[token] = cacheEntry{user: vr.User, expires: time.Now().Add(c.cacheT)}
+	c.maybeReapLocked()
 	c.cacheMu.Unlock()
 
 	u := vr.User
 	return &u, nil
+}
+
+/*
+maybeReapLocked sweeps expired entries when either the time-based
+or size-based threshold is crossed. Caller must hold c.cacheMu
+(write lock).
+*/
+func (c *Client) maybeReapLocked() {
+	if time.Since(c.lastReap) < verifyCacheReapEvery && len(c.cache) < verifyCacheSoftMax {
+		return
+	}
+	now := time.Now()
+	for tok, entry := range c.cache {
+		if !now.Before(entry.expires) {
+			delete(c.cache, tok)
+		}
+	}
+	c.lastReap = now
 }
 
 // Revoke invalidates an access token on the auth service.

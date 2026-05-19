@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DashboardSkeleton } from "@/components/layout/dashboard-skeleton";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { Section } from "@/components/layout/section";
+import { useVisiblePoll } from "@/hooks/use-visible-poll";
 import { api } from "@/lib/api";
 import { computeTradePnl } from "@/lib/calculations";
 import type { DashboardResponse, DashboardTrade, Execution, LiveQuotesResponse } from "@/types/trade";
@@ -113,53 +114,39 @@ export function DashboardShell() {
       });
   }, []);
 
-  useEffect(() => {
-    loadDay();
-  }, [loadDay]);
+  // Auto-refresh: pauses when the tab is hidden, immediate refresh on return.
+  useVisiblePoll(loadDay, REFRESH_SECONDS * 1000);
 
-  // Auto-refresh
-  useEffect(() => {
-    const interval = setInterval(loadDay, REFRESH_SECONDS * 1000);
-    return () => clearInterval(interval);
-  }, [loadDay]);
-
-  // Live quotes polling
-  useEffect(() => {
-    if (!rawData?.trades?.length) return;
-    const hasSummaries = rawData.trades.some((t) => t.summary);
-    if (hasSummaries) return;
-
-    /*
-    Merge new options/quotes over the prior state when Schwab is
-    healthy so a single failing chain call doesn't blank a
-    previously-good "Current" card. But when the server reports
-    `connected: false` (Schwab token dead or unconfigured) we replace
-    the maps wholesale, otherwise stale marks from before the token
-    died masquerade as fresh data and the dashboard looks alive when
-    it isn't. Errors from the poll itself are swallowed so the prior
-    state survives a transient HTTP blip.
-    */
-    const poll = () =>
-      api
-        .getLiveQuotes()
-        .then((next) => {
-          if (!next || typeof next !== "object") return;
-          setLiveQuotes((prev) => {
-            if (next.connected === false) {
-              return { ...next, quotes: {}, options: {} };
-            }
-            return {
-              ...next,
-              quotes: { ...(prev?.quotes ?? {}), ...(next.quotes ?? {}) },
-              options: { ...(prev?.options ?? {}), ...(next.options ?? {}) },
-            };
-          });
-        })
-        .catch(() => {});
-    poll();
-    const interval = setInterval(poll, LIVE_POLL_SECONDS * 1000);
-    return () => clearInterval(interval);
-  }, [rawData]);
+  /*
+  Live quotes polling: same visibility gate. Merge new options/
+  quotes over the prior state when Schwab is healthy so a single
+  failing chain call doesn't blank a previously-good "Current" card.
+  When the server reports `connected: false` (Schwab token dead or
+  unconfigured) we replace the maps wholesale, otherwise stale marks
+  from before the token died masquerade as fresh data and the
+  dashboard looks alive when it isn't. Errors from the poll itself
+  are swallowed so the prior state survives a transient HTTP blip.
+  */
+  const liveEnabled = !!rawData?.trades?.length && !rawData.trades.some((t) => t.summary);
+  const pollLiveQuotes = useCallback(() => {
+    api
+      .getLiveQuotes()
+      .then((next) => {
+        if (!next || typeof next !== "object") return;
+        setLiveQuotes((prev) => {
+          if (next.connected === false) {
+            return { ...next, quotes: {}, options: {} };
+          }
+          return {
+            ...next,
+            quotes: { ...(prev?.quotes ?? {}), ...(next.quotes ?? {}) },
+            options: { ...(prev?.options ?? {}), ...(next.options ?? {}) },
+          };
+        });
+      })
+      .catch(() => {});
+  }, []);
+  useVisiblePoll(pollLiveQuotes, LIVE_POLL_SECONDS * 1000, liveEnabled);
 
   /*
   hasSummaries is computed off the unfiltered raw data so it stays
@@ -198,7 +185,7 @@ export function DashboardShell() {
               <PnlChart trades={filtered.trades} executions={executions} />
             </Section>
             <Section title="Trade Details" subtitle="Click any row to view the single-contract page" className="mt-10 border-t border-border/40 pt-8">
-              <TradeTable trades={filtered.trades} executions={executions} date={filtered.date} />
+              <TradeTable trades={filtered.trades} executions={executions} date={filtered.date} liveQuotes={liveQuotes} />
             </Section>
             <Section title="Exposure" subtitle="How capital was deployed today. For long options, max loss is the premium paid." className="mt-10 border-t border-border/40 pt-8">
               <ExposurePanel trades={filtered.trades} executions={executions} hasSummaries />

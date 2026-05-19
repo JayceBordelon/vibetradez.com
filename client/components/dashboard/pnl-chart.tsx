@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Bar, BarChart, Cell, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, XAxis, YAxis } from "recharts";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { computeTradePnl } from "@/lib/calculations";
 import { fmtPnlInt } from "@/lib/format";
@@ -47,11 +47,13 @@ export function PnlChart({ trades, executions }: PnlChartProps) {
           <XAxis type="number" tickFormatter={(v: number) => fmtPnlInt(v)} fontSize={11} />
           <YAxis type="category" dataKey="name" width={120} fontSize={11} tickLine={false} />
           <ChartTooltip content={<ChartTooltipContent formatter={(value) => fmtPnlInt(Number(value))} hideIndicator />} />
-          <Bar dataKey="pnl" radius={[0, 4, 4, 0]} barSize={24}>
-            {data.map((entry, index) => (
-              <Cell key={index} fill={entry.fill} />
-            ))}
-          </Bar>
+          {/*
+            Per-bar color comes from each datum's `fill` field —
+            Recharts v3 reads it directly on the Bar, no need for
+            <Cell> children (deprecated as of recharts 3.7 per
+            CLAUDE.md, removed in v4).
+          */}
+          <Bar dataKey="pnl" radius={[0, 4, 4, 0]} barSize={24} />
         </BarChart>
       </ChartContainer>
     </div>

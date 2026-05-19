@@ -526,19 +526,36 @@ deriveExecutionState collapses the open/close status pair into the
 single string the frontend renders. Returns empty string only when the
 open row is in a transient state we don't want to surface yet.
 
-'submitted' covers the window between order acceptance at the broker
-and confirmed fill — the row exists, Schwab has the order, but the
-reconcile cron hasn't observed FILLED yet. Without this, a real trade
-that's working at the broker is invisible on the dashboard until the
-next reconcile tick (or, historically, never).
+States:
+  - 'submitted'     — open order accepted at broker, no fill yet
+  - 'holding'       — open filled, no close attempted yet (or close
+    still in-flight: pending / working)
+  - 'closed'        — open filled AND close filled
+  - 'close_failed'  — open filled, close attempt reached a non-filled
+    terminal state (failed / rejected / canceled).
+    Position may be stranded at the broker:
+    operator must verify and manually close.
+  - 'failed'        — open never filled
+
+The close_failed state used to silently fall through to 'holding',
+which made the 3:55 retry-cancel-replace exhaustion case invisible
+on the dashboard.
 */
 func deriveExecutionState(openStatus string, closeStatus sql.NullString) string {
 	switch openStatus {
 	case "filled":
-		if closeStatus.Valid && closeStatus.String == "filled" {
-			return "closed"
+		if !closeStatus.Valid {
+			return "holding"
 		}
-		return "holding"
+		switch closeStatus.String {
+		case "filled":
+			return "closed"
+		case "failed", "rejected", "canceled":
+			return "close_failed"
+		default:
+			// pending / working / unknown → still holding (close in flight)
+			return "holding"
+		}
 	case "working", "pending":
 		return "submitted"
 	case "failed", "rejected":

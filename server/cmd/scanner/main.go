@@ -49,6 +49,17 @@ var marketHolidays = map[string]string{
 	"2026-09-07": "Labor Day",
 	"2026-11-26": "Thanksgiving",
 	"2026-12-25": "Christmas",
+	// 2027 NYSE schedule — published by NYSE in Q4 2026.
+	"2027-01-01": "New Year's Day",
+	"2027-01-18": "MLK Day",
+	"2027-02-15": "Presidents Day",
+	"2027-03-26": "Good Friday",
+	"2027-05-31": "Memorial Day",
+	"2027-06-18": "Juneteenth (Observed)",
+	"2027-07-05": "Independence Day (Observed)",
+	"2027-09-06": "Labor Day",
+	"2027-11-25": "Thanksgiving",
+	"2027-12-24": "Christmas (Observed)",
 }
 
 /*
@@ -62,6 +73,7 @@ var marketHalfDays = map[string]string{
 	"2025-12-24": "Christmas Eve",
 	"2026-11-27": "Day after Thanksgiving",
 	"2026-12-24": "Christmas Eve",
+	"2027-11-26": "Day after Thanksgiving",
 }
 
 func isHalfDay() bool {
@@ -166,7 +178,10 @@ func main() {
 
 	if len(cfg.EmailRecipients) > 0 {
 		for _, email := range cfg.EmailRecipients {
-			if err := db.AddSubscriber(email, ""); err != nil {
+			// EnsureSubscriberExists preserves prior unsubscribes;
+			// AddSubscriber would silently re-subscribe opted-out
+			// addresses on every container restart.
+			if err := db.EnsureSubscriberExists(email, ""); err != nil {
 				log.Printf("Warning: failed to seed subscriber %s: %v", email, err)
 			}
 		}

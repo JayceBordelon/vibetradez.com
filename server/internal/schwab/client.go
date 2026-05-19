@@ -102,10 +102,17 @@ func (c *Client) ExchangeCode(code string) error {
 		return fmt.Errorf("exchange code: %w", err)
 	}
 
+	// Floor ExpiresIn at 60s. Schwab returning 0 (or a negative value
+	// from a malformed response) would set expiresAt to now() and
+	// trigger a refresh storm on every subsequent API call.
+	expiresIn := time.Duration(tokens.ExpiresIn) * time.Second
+	if expiresIn < 60*time.Second {
+		expiresIn = 60 * time.Second
+	}
 	c.mu.Lock()
 	c.accessToken = tokens.AccessToken
 	c.refreshTok = tokens.RefreshToken
-	c.expiresAt = time.Now().Add(time.Duration(tokens.ExpiresIn) * time.Second)
+	c.expiresAt = time.Now().Add(expiresIn)
 	c.mu.Unlock()
 
 	c.persistTokens(tokens.AccessToken, tokens.RefreshToken, c.expiresAt)
@@ -151,14 +158,43 @@ func (c *Client) ValidToken() (string, error) {
 	return c.doRefresh(rt)
 }
 
+/*
+doRefresh performs the access-token refresh while keeping the write
+lock held for the bare minimum of time. The previous shape held
+c.mu.Lock() across the full tokenRequest network round-trip, which
+serialized EVERY other Schwab call in the process behind a single
+refresh — per-minute reconcile + live-quote polls all stalled on
+the same mutex.
+
+New shape:
+ 1. Take the lock briefly to double-check whether another goroutine
+    already refreshed (releases lock immediately on hit).
+ 2. Capture the in-flight refresh token while locked, then release.
+ 3. Network round-trip happens unlocked.
+ 4. Re-take the lock to commit the new token state. Final double-
+    check covers the case where a faster concurrent doRefresh
+    committed a fresher token while we were waiting on Schwab —
+    prefer the fresher one and discard our result.
+
+Schwab's refresh endpoint is idempotent for the same input refresh
+token (returns the same access token), so two concurrent inflight
+refreshes against the same refresh value would return interchangeable
+results; the loser's bytes are simply discarded.
+
+ExpiresIn is also defended below: Schwab returning 0 (omitted /
+malformed) would set expiresAt to now() and trigger an immediate
+refresh storm on every subsequent call. Clamp to a 60s minimum so a
+bad response self-throttles.
+*/
 func (c *Client) doRefresh(refreshToken string) (string, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Double-check under write lock (another goroutine may have refreshed).
+	// Fast path: someone else already refreshed.
 	if c.accessToken != "" && time.Now().Before(c.expiresAt.Add(-tokenGrace)) {
-		return c.accessToken, nil
+		tok := c.accessToken
+		c.mu.Unlock()
+		return tok, nil
 	}
+	c.mu.Unlock()
 
 	data := url.Values{
 		"grant_type":    {"refresh_token"},
@@ -170,11 +206,25 @@ func (c *Client) doRefresh(refreshToken string) (string, error) {
 		return "", fmt.Errorf("refresh token: %w", err)
 	}
 
+	expiresIn := time.Duration(tokens.ExpiresIn) * time.Second
+	if expiresIn < 60*time.Second {
+		expiresIn = 60 * time.Second
+	}
+	newExpiresAt := time.Now().Add(expiresIn)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// Final double-check: prefer a fresher token committed by a
+	// concurrent doRefresh while we were waiting on Schwab.
+	if c.accessToken != "" && c.expiresAt.After(newExpiresAt) {
+		return c.accessToken, nil
+	}
+
 	c.accessToken = tokens.AccessToken
 	if tokens.RefreshToken != "" {
 		c.refreshTok = tokens.RefreshToken
 	}
-	c.expiresAt = time.Now().Add(time.Duration(tokens.ExpiresIn) * time.Second)
+	c.expiresAt = newExpiresAt
 
 	c.persistTokens(c.accessToken, c.refreshTok, c.expiresAt)
 	log.Println("Schwab: access token refreshed")
@@ -251,15 +301,28 @@ retry refreshes the access token before reissuing so a token that
 expired mid-basket gets a clean second chance. 401/403 are NOT
 retried (real auth failure, retrying just wastes time). Network
 errors before any response are retried up to maxRetryAttempts as
-well. The basket selector previously aborted on the first transient
-blip from Schwab; with this in place a single rate-limit spike on
-account-hash or place-order no longer kills every remaining pick.
+well.
+
+POST is NOT retried because it is not idempotent: Schwab Trader's
+POST /accounts/{hash}/orders accepts the order on the broker side
+before the response body is read, and a 5xx during response read +
+automatic retry will submit a duplicate real-money order. For POST
+the caller gets exactly one attempt and must reconcile broker state
+itself (the reconcile cron picks up orphan orders if the response
+fails after broker acceptance). GET / DELETE / PUT are safe to retry
+under HTTP semantics; PATCH is also idempotent in practice for the
+Schwab endpoints we touch (none today).
 */
 func (c *Client) authenticatedRequest(method, url string, body io.Reader) (*http.Response, error) {
 	const (
 		maxRetryAttempts = 3
 		baseBackoff      = 250 * time.Millisecond
 	)
+
+	maxAttempts := maxRetryAttempts
+	if method == http.MethodPost {
+		maxAttempts = 1
+	}
 
 	var bodyBytes []byte
 	if body != nil {
@@ -272,7 +335,7 @@ func (c *Client) authenticatedRequest(method, url string, body io.Reader) (*http
 
 	var lastResp *http.Response
 	var lastErr error
-	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		token, err := c.ValidToken()
 		if err != nil {
 			return nil, err
@@ -295,7 +358,7 @@ func (c *Client) authenticatedRequest(method, url string, body io.Reader) (*http
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			lastErr = err
-			if attempt < maxRetryAttempts {
+			if attempt < maxAttempts {
 				time.Sleep(baseBackoff * time.Duration(1<<(attempt-1)))
 				continue
 			}
@@ -305,8 +368,8 @@ func (c *Client) authenticatedRequest(method, url string, body io.Reader) (*http
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError {
 			_ = resp.Body.Close()
 			lastResp = resp
-			if attempt < maxRetryAttempts {
-				log.Printf("Schwab: retrying %s %s after HTTP %d (attempt %d/%d)", method, url, resp.StatusCode, attempt, maxRetryAttempts)
+			if attempt < maxAttempts {
+				log.Printf("Schwab: retrying %s %s after HTTP %d (attempt %d/%d)", method, url, resp.StatusCode, attempt, maxAttempts)
 				time.Sleep(baseBackoff * time.Duration(1<<(attempt-1)))
 				continue
 			}

@@ -29,6 +29,20 @@ func New(databaseURL string) (*Store, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
+	/*
+		database/sql defaults to unlimited open connections. DO Managed
+		Postgres has a hard per-database cap (25 on the cheapest tier),
+		and the auth-service ping-on-every-request path means a burst of
+		API requests + the live-quotes poll + a cron tick can saturate
+		that cap and stall every other query. SetConnMaxLifetime also
+		ensures stale TCP that survived DO pooler restarts gets cycled
+		instead of returning "read: connection reset by peer" for hours.
+	*/
+	db.SetMaxOpenConns(20)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(30 * time.Minute)
+	db.SetConnMaxIdleTime(5 * time.Minute)
+
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
@@ -243,6 +257,15 @@ func (s *Store) RemoveAllForTest() {
 
 // --- Subscriber methods ---
 
+/*
+AddSubscriber is for EXPLICIT signup intent (form submit on the
+website, /api/subscribe handler). It force-reactivates a previously
+unsubscribed row: the user is asking to be re-added. Resets name to
+the value supplied so a re-signup updates the display name.
+
+Do NOT call this from a side-effect path (SSO login, EMAIL_RECIPIENTS
+boot seed) — see EnsureSubscriberExists, which preserves opt-outs.
+*/
 func (s *Store) AddSubscriber(email, name string) error {
 	_, err := s.db.Exec(`
 		INSERT INTO subscribers (email, name, active)
@@ -254,6 +277,36 @@ func (s *Store) AddSubscriber(email, name string) error {
 	`, email, name)
 	if err != nil {
 		return fmt.Errorf("failed to add subscriber: %w", err)
+	}
+	return nil
+}
+
+/*
+EnsureSubscriberExists registers a subscriber for the first time but
+RESPECTS any prior unsubscribe. Used by side-effect paths where the
+user is not explicitly opting in:
+
+  - EMAIL_RECIPIENTS startup seed (cmd/scanner/main.go)
+  - SSO callback (a sign-in is not consent to be emailed)
+
+On INSERT (new row) the user is created active=true. On CONFLICT the
+existing active / unsubscribed_at state is preserved; only name is
+refreshed when we have a non-empty name and the previous one was
+empty (avoids clobbering a user-chosen display name with a seed
+empty string).
+*/
+func (s *Store) EnsureSubscriberExists(email, name string) error {
+	_, err := s.db.Exec(`
+		INSERT INTO subscribers (email, name, active)
+		VALUES ($1, $2, true)
+		ON CONFLICT (email) DO UPDATE SET
+			name = CASE
+				WHEN subscribers.name = '' AND EXCLUDED.name <> '' THEN EXCLUDED.name
+				ELSE subscribers.name
+			END
+	`, email, name)
+	if err != nil {
+		return fmt.Errorf("failed to ensure subscriber exists: %w", err)
 	}
 	return nil
 }

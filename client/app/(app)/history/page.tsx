@@ -32,7 +32,12 @@ export async function generateMetadata(): Promise<Metadata> {
       let losers = 0;
 
       for (const day of data.days) {
-        for (const dt of day.trades) {
+        // day.trades can be JSON null when the Go server serializes a
+        // nil slice (see CLAUDE.md's history-crash note). The page
+        // component already guards with `?? []`; do the same here so
+        // generateMetadata doesn't silently fall through to the
+        // generic fallback description on a malformed day.
+        for (const dt of day.trades ?? []) {
           totalTrades++;
           const result = computeTradePnl(dt, day.executions ?? null);
           if (!result.hasData) continue;

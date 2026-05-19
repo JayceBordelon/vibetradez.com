@@ -18,6 +18,20 @@ import (
 	"vibetradez.com/internal/sentiment"
 )
 
+/*
+easternTime returns America/New_York for prompt-date anchoring.
+Falls back to UTC if the tzdata bundle is missing (treated the same
+as 'panic later'; the alpine runtime image installs tzdata so this
+should always succeed in production).
+*/
+func easternTime() *time.Location {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		return time.UTC
+	}
+	return loc
+}
+
 const (
 	maxOutputTokensPicks = 16384
 	maxOutputTokensEOD   = 16384
@@ -134,8 +148,14 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentime
 		return nil, fmt.Errorf("failed to marshal sentiment data: %w", err)
 	}
 
-	today := time.Now().Format("2006-01-02")
-	weekday := time.Now().Weekday().String()
+	// Container runs in UTC. The morning cron firing at 09:30 ET is
+	// safe (calendar date matches UTC at that hour), but any operator-
+	// initiated run between ~19:00 ET and midnight ET would otherwise
+	// tell Claude "today is X" while the rest of the system saves to
+	// date X-1 (ET) via todayDate() in cmd/scanner/main.go.
+	nowET := time.Now().In(easternTime())
+	today := nowET.Format("2006-01-02")
+	weekday := nowET.Weekday().String()
 
 	prompt := fmt.Sprintf(AnalysisPrompt, today, weekday, string(sentimentJSON))
 
@@ -195,8 +215,11 @@ func (p *ClaudePicker) GetEndOfDayAnalysis(ctx context.Context, morningTrades []
 		return nil, fmt.Errorf("failed to marshal morning trades: %w", err)
 	}
 
-	today := time.Now().Format("2006-01-02")
-	weekday := time.Now().Weekday().String()
+	// Same rationale as GetTopTrades — anchor on ET so prompt date
+	// matches what cmd/scanner persists.
+	nowET := time.Now().In(easternTime())
+	today := nowET.Format("2006-01-02")
+	weekday := nowET.Weekday().String()
 
 	prompt := fmt.Sprintf(EndOfDayPrompt, today, weekday, string(tradesJSON))
 

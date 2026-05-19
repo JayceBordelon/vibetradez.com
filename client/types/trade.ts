@@ -44,7 +44,7 @@ when no qualifying pick converted to an execution that day.
 */
 export interface Execution {
   mode: "paper" | "live";
-  state: "submitted" | "holding" | "closed" | "failed";
+  state: "submitted" | "holding" | "closed" | "close_failed" | "failed";
   symbol: string;
   contract_type: string;
   strike_price: number;
