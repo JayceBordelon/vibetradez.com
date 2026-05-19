@@ -8,6 +8,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1.0,
     },
     {
+      url: "https://vibetradez.com/dashboard",
+      changeFrequency: "daily",
+      priority: 0.9,
+    },
+    {
       url: "https://vibetradez.com/history",
       changeFrequency: "daily",
       priority: 0.8,
