@@ -81,6 +81,12 @@ services:
       ANTHROPIC_MODEL: claude-opus-4-7
       EMAIL_FROM: "Local Dev <local@vibetradez.local>"
       EMAIL_RECIPIENTS: ""
+      # Stub HMAC key for unsubscribe tokens. Real value MUST be
+      # operator-generated via `openssl rand -base64 32`; this is
+      # just a static stub for the local Docker stack so the server
+      # boots without operator setup. Tokens minted here are NOT
+      # valid against the production server (different key).
+      UNSUBSCRIBE_HMAC_KEY: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
       RUN_ON_START: "false"
       # /api/quotes/live returns synthetic option marks so the dashboard's
       # Buy/Current cards have something to render without a real Schwab

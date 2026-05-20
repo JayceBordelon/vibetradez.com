@@ -1,9 +1,6 @@
 "use client";
 
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ApiError, api } from "@/lib/api";
 import { signInWithGoogle, useSession } from "@/lib/session";
 
 function GoogleIcon({ className }: { className?: string }) {
@@ -46,50 +43,25 @@ export function SubscribeForm() {
   );
 }
 
+/*
+UnsubscribeForm is now a messaging-only surface. The previous form
+posted the typed email straight to /api/unsubscribe, which let
+anyone unsubscribe anyone else they could guess the email of (rate
+limit was per-IP and trivially defeated).
+
+The audit fix replaced the trust model: every outbound vibetradez
+email carries a per-recipient HMAC-signed unsubscribe link. Click
+that, you're out. There is no longer a typed-email path from the
+website — the link is the authentication.
+*/
 export function UnsubscribeForm() {
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
-  const [message, setMessage] = useState("");
-
-  async function handleSubmit() {
-    if (!email.trim()) return;
-    setStatus("loading");
-    try {
-      const res = await api.unsubscribe(email.trim());
-      if (res.ok) {
-        setStatus("success");
-        setMessage("You've been unsubscribed. Sorry to see you go!");
-        setEmail("");
-      } else {
-        setStatus("error");
-        setMessage(res.message || "Something went wrong.");
-      }
-    } catch (err) {
-      // ApiError carries the server's JSON body verbatim. For
-      // 4xx responses the body is `{ok, message}` and we surface the
-      // human message; otherwise fall through to a generic notice.
-      setStatus("error");
-      if (err instanceof ApiError && err.body) {
-        try {
-          const parsed = JSON.parse(err.body) as { message?: string };
-          setMessage(parsed.message || "Something went wrong.");
-        } catch {
-          setMessage("Connection error.");
-        }
-      } else {
-        setMessage("Connection error.");
-      }
-    }
-  }
-
   return (
-    <div className="space-y-3">
-      <Input type="email" placeholder="your@email.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-      <Button variant="outline" className="w-full text-red" disabled={status === "loading"} onClick={handleSubmit}>
-        {status === "loading" ? "Unsubscribing..." : "Unsubscribe"}
-      </Button>
-      {status === "success" && <p className="rounded-md bg-green-bg p-2.5 text-xs font-semibold text-green">{message}</p>}
-      {status === "error" && <p className="rounded-md bg-red-bg p-2.5 text-xs font-semibold text-red">{message}</p>}
+    <div className="space-y-3 text-xs leading-relaxed text-muted-foreground">
+      <p>
+        Every email we send (morning picks, EOD summary, weekly recap) has a one-click <strong className="font-semibold text-foreground">Unsubscribe</strong> link in the footer. Click that link in any
+        vibetradez.com email and you&apos;re out instantly.
+      </p>
+      <p>Lost all the emails? Reply to any vibetradez.com address from your subscribed inbox and the operator will remove you manually.</p>
     </div>
   );
 }

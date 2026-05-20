@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"sort"
@@ -24,6 +25,7 @@ import (
 	"vibetradez.com/internal/store"
 	"vibetradez.com/internal/templates"
 	"vibetradez.com/internal/trades"
+	"vibetradez.com/internal/unsub"
 
 	"github.com/robfig/cron/v3"
 )
@@ -153,6 +155,22 @@ func checkClockSkew() {
 isLocalStubKey detects the placeholder API keys used by the local Docker
 stack so the cron can be safely skipped without making real API calls.
 */
+/*
+unsubURLBuilder returns the per-recipient unsubscribe URL builder
+used by every subscriber-facing email send. Tokens are deterministic
+(same email + same key always produces the same URL), so links from
+old emails stay valid forever — exactly the property a one-click
+unsubscribe needs.
+*/
+func unsubURLBuilder(cfg *config.Config) func(string) string {
+	base := strings.TrimRight(cfg.PublicBaseURL, "/")
+	return func(email string) string {
+		tok := unsub.Sign(cfg.UnsubscribeHMACKey, email)
+		return fmt.Sprintf("%s/auth/unsubscribe?e=%s&t=%s",
+			base, url.QueryEscape(email), url.QueryEscape(tok))
+	}
+}
+
 func isLocalStubKey(k string) bool {
 	if k == "" {
 		return false
@@ -387,7 +405,7 @@ func main() {
 	c.Start()
 
 	sessionTTL := time.Duration(cfg.SessionTTLDays) * 24 * time.Hour
-	srv := server.New(db, schwabClient, authClient, scraper, emailClient, cfg.EmailFrom, cfg.AnthropicAPIKey, cfg.AnthropicModel, cfg.SessionCookieName, sessionTTL, cfg.AuthPublicURL, cfg.AuthClientID, cfg.AuthRedirectURI, cfg.ServerPort, executor, cfg.ExecutionRecipient)
+	srv := server.New(db, schwabClient, authClient, scraper, emailClient, cfg.EmailFrom, cfg.AnthropicAPIKey, cfg.AnthropicModel, cfg.SessionCookieName, sessionTTL, cfg.AuthPublicURL, cfg.AuthClientID, cfg.AuthRedirectURI, cfg.ServerPort, executor, cfg.ExecutionRecipient, cfg.UnsubscribeHMACKey, cfg.PublicBaseURL)
 	go srv.Start()
 
 	log.Printf("Options trade scanner started")
@@ -403,7 +421,7 @@ func main() {
 		log.Printf("Active subscribers: %d", len(subs))
 	}
 
-	go rollouts.Run(db, emailClient, cfg.EmailFrom, isLocalStubKey(cfg.ResendAPIKey))
+	go rollouts.Run(db, emailClient, cfg.EmailFrom, isLocalStubKey(cfg.ResendAPIKey), unsubURLBuilder(cfg))
 
 	if os.Getenv("RUN_ON_START") == "true" {
 		log.Println("Running initial analysis...")
@@ -631,7 +649,7 @@ func sendErrorNotification(cfg *config.Config, db *store.Store, emailClient *ema
 	}
 
 	subject := fmt.Sprintf("VibeTradez Alert (%s)", time.Now().Format("Jan 2, 3:04 PM"))
-	if err := emailClient.SendTradeEmail(cfg.EmailFrom, recipients, subject, htmlContent); err != nil {
+	if err := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, htmlContent, unsubURLBuilder(cfg)); err != nil {
 		log.Printf("Failed to send error notification email: %v", err)
 	}
 }
@@ -785,7 +803,7 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 	}
 
 	log.Printf("Sending email to %d subscribers...", len(recipients))
-	if err := emailClient.SendTradeEmail(cfg.EmailFrom, recipients, subject, htmlContent); err != nil {
+	if err := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, htmlContent, unsubURLBuilder(cfg)); err != nil {
 		log.Printf("Error sending email: %v", err)
 		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("Email delivery failed: %v", err))
 		return
@@ -1036,7 +1054,7 @@ func runWeeklyEmail(cfg *config.Config, db *store.Store, emailClient *email.Clie
 	}
 
 	log.Printf("Sending weekly email to %d subscribers...", len(recipients))
-	if err := emailClient.SendTradeEmail(cfg.EmailFrom, recipients, subject, htmlContent); err != nil {
+	if err := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, htmlContent, unsubURLBuilder(cfg)); err != nil {
 		log.Printf("Error sending weekly email: %v", err)
 		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("Weekly email delivery failed: %v", err))
 		return
@@ -1134,7 +1152,7 @@ func runEndOfDayAnalysis(cfg *config.Config, db *store.Store, claudePicker *trad
 	}
 
 	log.Printf("Sending EOD summary email to %d subscribers...", len(recipients))
-	if err := emailClient.SendTradeEmail(cfg.EmailFrom, recipients, subject, htmlContent); err != nil {
+	if err := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, htmlContent, unsubURLBuilder(cfg)); err != nil {
 		log.Printf("Error sending EOD email: %v", err)
 		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("EOD email delivery failed: %v", err))
 		return

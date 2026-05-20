@@ -54,7 +54,7 @@ Errors are logged, never returned, never fatal — a broken rollout
 template can't take the server down. The unsent slug remains pending
 and will retry on the next deploy.
 */
-func Run(db *store.Store, mail *email.Client, from string, isStubKey bool) {
+func Run(db *store.Store, mail *email.Client, from string, isStubKey bool, unsubURLFor func(email string) string) {
 	if isStubKey {
 		log.Printf("rollouts: skipping (Resend key is a local stub)")
 		return
@@ -91,7 +91,7 @@ func Run(db *store.Store, mail *email.Client, from string, isStubKey bool) {
 			continue
 		}
 
-		if err := mail.SendTradeEmail(from, emails, r.Subject, html); err != nil {
+		if err := mail.SendPersonalizedToList(from, emails, r.Subject, html, unsubURLFor); err != nil {
 			// Slug is now permanently claimed but the email never landed.
 			// We deliberately do NOT roll back the claim — re-opening the
 			// race would risk double-mass-email on the next boot, which
