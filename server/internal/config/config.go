@@ -9,19 +9,30 @@ import (
 )
 
 type Config struct {
-	CronScheduleOpen   string
-	CronScheduleClose  string
-	CronScheduleWeekly string
-	ResendAPIKey       string
-	AnthropicAPIKey    string
-	AnthropicModel     string
-	EmailRecipients    []string
-	EmailFrom          string
-	DatabaseURL        string
-	ServerPort         string
-	SchwabAppKey       string
-	SchwabSecret       string
-	SchwabCallbackURL  string
+	// CronScheduleOpen — picker fires (saves picks + emails subscribers).
+	// Default 9:25 ET so Claude has 5 minutes to complete the multi-round
+	// tool-use loop before market open. NO executor in this path.
+	CronScheduleOpen string
+	// CronScheduleExecute — basket fires at the open against fresh live
+	// Schwab quotes. Default 9:30:00 ET sharp. Each LIMIT order is
+	// fire-and-forget; the per-minute reconcile cron picks up fills.
+	CronScheduleExecute string
+	// CronScheduleCancelDangling — cancel any still-WORKING LIMITs that
+	// didn't fill in the first 5 minutes post-open, then send the single
+	// consolidated execution-summary email. Default 9:35 ET.
+	CronScheduleCancelDangling string
+	CronScheduleClose          string
+	CronScheduleWeekly         string
+	ResendAPIKey               string
+	AnthropicAPIKey            string
+	AnthropicModel             string
+	EmailRecipients            []string
+	EmailFrom                  string
+	DatabaseURL                string
+	ServerPort                 string
+	SchwabAppKey               string
+	SchwabSecret               string
+	SchwabCallbackURL          string
 	/*
 		Token-at-rest encryption key for Schwab persisted access/refresh
 		tokens. Loaded from SCHWAB_TOKEN_ENCRYPTION_KEY (base64-encoded
@@ -188,16 +199,18 @@ func Load() *Config {
 	}
 
 	return &Config{
-		CronScheduleOpen:   getEnvOrDefault("CRON_SCHEDULE_OPEN", "30 9 * * 1-5"),
-		CronScheduleClose:  getEnvOrDefault("CRON_SCHEDULE_CLOSE", "0 16 * * 1-5"),
-		CronScheduleWeekly: getEnvOrDefault("CRON_SCHEDULE_WEEKLY", "30 16 * * 5"),
-		ResendAPIKey:       resendKey,
-		AnthropicAPIKey:    anthropicKey,
-		AnthropicModel:     getEnvOrDefault("ANTHROPIC_MODEL", DefaultAnthropicModel),
-		EmailRecipients:    recipients,
-		EmailFrom:          getEnvOrDefault("EMAIL_FROM", "Vibe Tradez <trades@vibetradez.com>"),
-		DatabaseURL:        databaseURL,
-		ServerPort:         getEnvOrDefault("SERVER_PORT", "8080"),
+		CronScheduleOpen:           getEnvOrDefault("CRON_SCHEDULE_OPEN", "25 9 * * 1-5"),
+		CronScheduleExecute:        getEnvOrDefault("CRON_SCHEDULE_EXECUTE", "30 9 * * 1-5"),
+		CronScheduleCancelDangling: getEnvOrDefault("CRON_SCHEDULE_CANCEL_DANGLING", "35 9 * * 1-5"),
+		CronScheduleClose:          getEnvOrDefault("CRON_SCHEDULE_CLOSE", "0 16 * * 1-5"),
+		CronScheduleWeekly:         getEnvOrDefault("CRON_SCHEDULE_WEEKLY", "30 16 * * 5"),
+		ResendAPIKey:               resendKey,
+		AnthropicAPIKey:            anthropicKey,
+		AnthropicModel:             getEnvOrDefault("ANTHROPIC_MODEL", DefaultAnthropicModel),
+		EmailRecipients:            recipients,
+		EmailFrom:                  getEnvOrDefault("EMAIL_FROM", "Vibe Tradez <trades@vibetradez.com>"),
+		DatabaseURL:                databaseURL,
+		ServerPort:                 getEnvOrDefault("SERVER_PORT", "8080"),
 		/*
 			Schwab market data is optional, live quotes degrade gracefully when
 			keys are unset.

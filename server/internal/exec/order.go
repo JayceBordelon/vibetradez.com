@@ -11,15 +11,22 @@ import (
 
 /*
 LimitPriceMultiplier is the buffer applied to the live ask (or the
-fallback estimate) when constructing the open LIMIT order. 1.05 = 5%
-above ask. Schwab rejects MARKET option orders submitted before the
-9:30 ET open, so the morning cron uses LIMIT with this buffer to be
-accepted pre-market and fill at or near the open. The buffer is
-sized so a typical pre-open quote spread closes at fill without
-exceeding MaxContractPremium for any contract that already passed the
-selector cap.
+fallback estimate) when constructing the open LIMIT order. 1.10 =
+10% above ask.
+
+Bumped from 1.05 to 1.10 in the execute-at-open redesign: with the
+9:35 reprice cron removed, a LIMIT × 1.05 that misses on a fast-
+moving open (e.g. TJX gapping +5% in the first second) has no safety
+net to re-quote. The extra 5% buys headroom for the at-open spread
+to close at fill on volatile names. On calm names the LIMIT still
+fills near the ask — the bigger buffer is a ceiling, not the
+expected fill price, since Schwab routes to NBBO.
+
+The buffer's only ceiling is MaxContractPremium ($10/share, =
+$1000/contract): any LIMIT computed above that is clamped down,
+which keeps the per-contract cap intact even on a runaway ask.
 */
-const LimitPriceMultiplier = 1.05
+const LimitPriceMultiplier = 1.10
 
 /*
 ComputeOpenLimitPrice picks the LIMIT price for a morning open order:

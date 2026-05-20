@@ -22,7 +22,9 @@ If the market signals are empty, use web search to find trending stocks and mark
 REQUIREMENTS:
 - Each trade MUST be a DIFFERENT ticker symbol, no duplicate tickers allowed
 - Each trade should be a short-term option: 0DTE (same day expiration) to 7 DTE (one week out)
-- NO SINGLE CONTRACT should cost more than $200 (so strike prices should be chosen accordingly)
+- PREFERRED PREMIUM BAND: estimated_price ~$3.00-$5.00 (so a single contract costs ~$300-$500). Stay inside this band whenever the conviction call admits it — the basket executor sizes 2-3 contracts at the open, so $300-$500 per contract fits a $1,000 daily exposure target across the top 3 ranks.
+- HARD CEILING: estimated_price MUST be <= $10.00 per share. A contract above $1,000 will be rejected by the executor regardless of conviction (per-contract cap, no override).
+- It is OK to occasionally pick slightly above $5.00 when the thesis genuinely demands it (a near-the-money strike on a high-IV catalyst), but never above the $10 hard ceiling.
 - Include both CALL and PUT opportunities based on sentiment and market analysis
 - Provide a clear thesis for each trade explaining WHY it should be made
 - Use REAL prices from get_stock_quotes for current_price. The current_price field MUST come from a get_stock_quotes call you made in THIS conversation, NEVER from your training data or web search. If you do not have a fresh quote for a ticker, call get_stock_quotes again before committing the pick.

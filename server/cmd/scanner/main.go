@@ -145,7 +145,7 @@ func checkClockSkew() {
 		skew = -skew
 	}
 	if skew > maxAcceptableSkew {
-		log.Printf("clock-skew WARNING: local clock differs from cloudflare by %s (threshold %s); the 9:30 morning, 9:35 reprice, and 3:55 close crons WILL fire at the wrong wall-clock time", skew.Truncate(time.Second), maxAcceptableSkew)
+		log.Printf("clock-skew WARNING: local clock differs from cloudflare by %s (threshold %s); the 9:25 picker, 9:30 executor, 9:35 dangling-LIMIT-cancel, and 3:55 close crons WILL fire at the wrong wall-clock time", skew.Truncate(time.Second), maxAcceptableSkew)
 	} else {
 		log.Printf("clock-skew probe: local clock within %s of cloudflare (rtt=%s)", skew.Truncate(time.Millisecond), rtt.Truncate(time.Millisecond))
 	}
@@ -276,12 +276,49 @@ func main() {
 		executor = exec.NewService(db, trader, emailClient, execCfg)
 	}
 
+	// 9:25 ET — picker only. Runs against pre-open Schwab quotes
+	// (mark prices from the cancel-replace queue, no live spread yet)
+	// so Claude has 5 minutes to finish the tool-use loop before market
+	// open. NO executor in this path — orders are fired by the separate
+	// 9:30 cron once live quotes are available.
 	openJob := func() {
 		if open, reason := isMarketOpen(); !open {
-			log.Printf("Skipping morning analysis: Market closed (%s)", reason)
+			log.Printf("Skipping morning picker: Market closed (%s)", reason)
 			return
 		}
 		runTradeAnalysis(cfg, db, scraper, claudePicker, schwabClient, emailClient, modelLabel, executor)
+	}
+
+	// 9:30:00 ET sharp — execute the basket at the open. Loads today's
+	// saved picks, re-quotes via live Schwab ask, fires PlaceOrder for
+	// each qualifying entry. Does NOT poll/wait/email — the per-minute
+	// reconcile cron picks up fills, the 9:35 cron cancels dangling
+	// LIMITs and sends one consolidated summary email.
+	executeAtOpenJob := func() {
+		if open, reason := isMarketOpen(); !open {
+			log.Printf("Skipping execute-at-open: Market closed (%s)", reason)
+			return
+		}
+		if executor == nil {
+			log.Printf("Skipping execute-at-open: trading not enabled")
+			return
+		}
+		runExecuteAtOpen(cfg, db, executor)
+	}
+
+	// 9:35 ET — cancel any still-WORKING LIMITs from the 9:30 burst,
+	// then send the single consolidated execution-summary email.
+	cancelAndSummaryJob := func() {
+		if open, reason := isMarketOpen(); !open {
+			log.Printf("Skipping cancel-dangling-and-summary: Market closed (%s)", reason)
+			return
+		}
+		if executor == nil {
+			return
+		}
+		ctxBg := context.Background()
+		executor.CancelDanglingOpens(ctxBg, todayDate())
+		executor.SendExecutionSummary(ctxBg, todayDate())
 	}
 
 	closeJob := func() {
@@ -304,7 +341,13 @@ func main() {
 	c := cron.New(cron.WithLocation(loc))
 
 	if _, err := c.AddFunc(cfg.CronScheduleOpen, openJob); err != nil {
-		log.Fatalf("Failed to add market open cron job: %v", err)
+		log.Fatalf("Failed to add picker cron job: %v", err)
+	}
+	if _, err := c.AddFunc(cfg.CronScheduleExecute, executeAtOpenJob); err != nil {
+		log.Fatalf("Failed to add execute-at-open cron job: %v", err)
+	}
+	if _, err := c.AddFunc(cfg.CronScheduleCancelDangling, cancelAndSummaryJob); err != nil {
+		log.Fatalf("Failed to add cancel-dangling-and-summary cron job: %v", err)
 	}
 	if _, err := c.AddFunc(cfg.CronScheduleClose, closeJob); err != nil {
 		log.Fatalf("Failed to add market close cron job: %v", err)
@@ -352,27 +395,6 @@ func main() {
 			log.Fatalf("Failed to add open-order reconcile cron: %v", err)
 		}
 
-		/*
-			Post-open reprice safety net at 9:35 ET. The 9:30 morning cron
-			fires Claude against live post-open quotes — so in the typical
-			case orders are sized at ask × 1.05 against real numbers and
-			this pass is a no-op. It still exists as a defensive belt for
-			Claude mispricings (e.g. picking a deep-ITM put at OTM premium)
-			and for contracts whose ask runs in the first few minutes
-			after the bell. Timed to fire ~5 minutes after the morning
-			cron starts so the Claude tool-use loop + per-pick PlaceOrder
-			calls have settled at the broker before we re-check.
-		*/
-		if _, err := c.AddFunc("35 9 * * 1-5", func() {
-			if open, reason := isMarketOpen(); !open {
-				log.Printf("Skipping post-open reprice: %s", reason)
-				return
-			}
-			executor.RepriceWorkingOpens(ctxBg, todayDate())
-		}); err != nil {
-			log.Fatalf("Failed to add post-open reprice cron: %v", err)
-		}
-
 		if _, err := c.AddFunc("55 15 * * 1-5", func() {
 			if open, reason := isMarketOpen(); !open {
 				log.Printf("Skipping 3:55pm close: %s", reason)
@@ -399,7 +421,7 @@ func main() {
 		}); err != nil {
 			log.Fatalf("Failed to add 12:55pm half-day close cron: %v", err)
 		}
-		log.Printf("execution: cron registered (open-reconcile every minute 9-15 ET, post-open reprice 9:35 ET, close 3:55pm or 12:55pm half-days)")
+		log.Printf("execution: cron registered (picker 9:25 ET, executor 9:30 ET, dangling-LIMIT-cancel 9:35 ET, open-reconcile every minute 9-15 ET, close 3:55pm or 12:55pm half-days)")
 	}
 
 	c.Start()
@@ -547,6 +569,15 @@ func validatePickFields(picks []trades.Trade) []trades.Trade {
 		}
 		if p.EstimatedPrice <= 0 {
 			reasons = append(reasons, fmt.Sprintf("estimated_price=%v", p.EstimatedPrice))
+		}
+		// Hard per-contract cap of $1,000 = $10.00 per share. The prompt
+		// asks Claude to stay in the $3-5 band; a pick > $10 is either
+		// a hallucination (deep-ITM mark priced as OTM) or a model
+		// misread of the chain. Drop it before the selector ever sees
+		// it — the selector clamps the LIMIT but spending budget on a
+		// hallucinated pick crowds out real ones.
+		if p.EstimatedPrice > exec.MaxContractPremium {
+			reasons = append(reasons, fmt.Sprintf("estimated_price=$%.2f > $%.2f/share cap", p.EstimatedPrice, exec.MaxContractPremium))
 		}
 		if p.CurrentPrice <= 0 {
 			reasons = append(reasons, fmt.Sprintf("current_price=%v", p.CurrentPrice))
@@ -737,33 +768,14 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 	log.Printf("Saved %d trades to database for %s", len(topTrades), date)
 
 	/*
-		Auto-execution gate: only runs if TRADING_ENABLED. The selector
-		runs two phases: (1) unconditionally include the top
-		GuaranteedBasketRank picks at qty=1 each, (2) greedily fill
-		ranks 1..GreedyFillMaxRank with additional contracts (duplicates
-		merged into qty=N) until MaxDailyBasketUSD is exhausted. The
-		service then places one quantity=N order per BasketEntry after
-		a Schwab cash check. Score is not a gate; rank order is the
-		only ordering signal.
+		The picker no longer fires the executor inline. Picks are saved
+		here; the 9:30:00 ET executeAtOpenJob (runExecuteAtOpen) loads
+		them and submits the basket against fresh live Schwab quotes.
+		Decoupling buys the 5-minute pre-open window for Claude's tool
+		loop without blocking the at-open execution path on it.
 	*/
-	if executor != nil {
-		basket := exec.QualifyingBasket(topTrades)
-		if len(basket) > 0 {
-			summary := make([]string, 0, len(basket))
-			totalQty := 0
-			for _, b := range basket {
-				summary = append(summary, fmt.Sprintf("rank=%d %s %s@%.2f×%d", b.Trade.Rank, b.Trade.Symbol, b.Trade.ContractType, b.Trade.EstimatedPrice, b.Quantity))
-				totalQty += b.Quantity
-			}
-			log.Printf("execution: basket of %d entry(ies)/%d contract(s) selected [%s] (mode=%s)", len(basket), totalQty, strings.Join(summary, ", "), executor.Mode())
-			if _, err := executor.HandleQualifyingPicks(ctx, basket); err != nil {
-				log.Printf("execution: handle qualifying picks: %v", err)
-			}
-		} else {
-			log.Printf("execution: no qualifying basket today (no ranks 1..%d eligible under $%.2f per-contract cap)",
-				exec.GreedyFillMaxRank, exec.MaxContractPremium)
-		}
-	}
+	_ = ctx // kept for back-compat with callers that still pass it
+	_ = executor
 
 	templateTrades := make([]templates.Trade, len(topTrades))
 	for i, t := range topTrades {
@@ -880,6 +892,58 @@ func currentWeekRange() (string, string) {
 	monday := now.AddDate(0, 0, -daysFromMonday)
 	friday := monday.AddDate(0, 0, 4)
 	return monday.Format("2006-01-02"), friday.Format("2006-01-02")
+}
+
+/*
+runExecuteAtOpen is the 9:30:00 ET executor entry point. Loads
+today's saved picks from the DB (written by runTradeAnalysis at
+9:25), runs them through exec.QualifyingBasket to apply the top-3 +
+greedy-fill selector, and fires each PlaceOrder with a LIMIT × 1.10
+over fresh live Schwab ask.
+
+Fire-and-forget: this function returns as soon as PlaceOrder + the
+immediate broker-id persistence has happened for each entry. The
+per-minute reconcile cron picks up fills as they happen. The 9:35
+cron cancels any still-WORKING LIMITs and sends ONE consolidated
+email summarizing the day's open-side outcomes.
+
+No email is sent from this path — per the audit-driven redesign,
+all per-execution receipts and open-failed alerts were replaced by
+the 9:35 SendExecutionSummary email. Errors here are logged only.
+*/
+func runExecuteAtOpen(cfg *config.Config, db *store.Store, executor *exec.Service) {
+	_ = cfg
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	date := todayDate()
+	topTrades, err := db.GetMorningTrades(date)
+	if err != nil {
+		log.Printf("execute-at-open: load morning trades: %v", err)
+		return
+	}
+	if len(topTrades) == 0 {
+		log.Printf("execute-at-open: no saved trades for %s — picker either skipped or didn't finish in time", date)
+		return
+	}
+
+	basket := exec.QualifyingBasket(topTrades)
+	if len(basket) == 0 {
+		log.Printf("execute-at-open: no qualifying basket for %s (no ranks 1..%d eligible under $%.2f per-contract cap)",
+			date, exec.GreedyFillMaxRank, exec.MaxContractPremium)
+		return
+	}
+
+	summary := make([]string, 0, len(basket))
+	totalQty := 0
+	for _, b := range basket {
+		summary = append(summary, fmt.Sprintf("rank=%d %s %s@%.2f×%d", b.Trade.Rank, b.Trade.Symbol, b.Trade.ContractType, b.Trade.EstimatedPrice, b.Quantity))
+		totalQty += b.Quantity
+	}
+	log.Printf("execute-at-open: basket of %d entry(ies)/%d contract(s) [%s] (mode=%s)", len(basket), totalQty, strings.Join(summary, ", "), executor.Mode())
+	if _, err := executor.HandleQualifyingPicks(ctx, basket); err != nil {
+		log.Printf("execute-at-open: handle qualifying picks: %v", err)
+	}
 }
 
 func runWeeklyEmail(cfg *config.Config, db *store.Store, emailClient *email.Client) {

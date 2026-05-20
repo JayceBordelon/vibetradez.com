@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VibeTradez execution summary — {{ .Date }}</title>
+</head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f1f5f9;padding:24px 0;">
+<tr><td align="center">
+<table role="presentation" width="640" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
+
+<tr><td style="padding:24px 28px 16px 28px;">
+<h1 style="margin:0;font-size:18px;color:#0f172a;">
+Execution summary — {{ .Date }} ({{ .Mode }})
+</h1>
+<p style="margin:8px 0 0 0;color:#475569;font-size:13px;line-height:1.5;">
+{{ .Filled }} of {{ .Total }} order(s) filled. Total filled capital: <strong>${{ printf "%.2f" .TotalCost }}</strong>.
+</p>
+</td></tr>
+
+<tr><td style="padding:0 28px 24px 28px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;font-size:13px;">
+<thead>
+<tr style="background:#f8fafc;color:#475569;text-align:left;">
+<th style="padding:8px 6px;border-bottom:1px solid #e2e8f0;">#</th>
+<th style="padding:8px 6px;border-bottom:1px solid #e2e8f0;">Pick</th>
+<th style="padding:8px 6px;border-bottom:1px solid #e2e8f0;">Status</th>
+<th style="padding:8px 6px;border-bottom:1px solid #e2e8f0;text-align:right;">Qty</th>
+<th style="padding:8px 6px;border-bottom:1px solid #e2e8f0;text-align:right;">Fill</th>
+</tr>
+</thead>
+<tbody>
+{{ range .Rows }}
+<tr>
+<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;color:#64748b;">{{ .Rank }}</td>
+<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#0f172a;">
+${{ .Symbol }} {{ .ContractType }} {{ printf "%.2f" .StrikePrice }}
+</td>
+<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;color:{{ if eq .Status "filled" }}#16a34a{{ else if eq .Status "canceled" }}#ea580c{{ else if eq .Status "failed" }}#dc2626{{ else if eq .Status "rejected" }}#dc2626{{ else }}#64748b{{ end }};font-weight:600;text-transform:uppercase;font-size:11px;">
+{{ .Status }}
+</td>
+<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#475569;">{{ .Quantity }}</td>
+<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;text-align:right;font-family:ui-monospace,Menlo,monospace;color:#0f172a;">
+{{ if gt .FillPrice 0.0 }}${{ printf "%.2f" .FillPrice }}{{ else }}—{{ end }}
+</td>
+</tr>
+{{ if .ErrorMessage }}
+<tr><td colspan="5" style="padding:0 6px 8px 6px;color:#dc2626;font-size:11px;font-style:italic;">
+  &nbsp;&nbsp;&nbsp;{{ .ErrorMessage }}
+</td></tr>
+{{ end }}
+{{ end }}
+{{ if not .Rows }}
+<tr><td colspan="5" style="padding:24px 6px;color:#64748b;font-size:13px;text-align:center;font-style:italic;">
+No open-side executions for this date — the executor either fired zero qualifying picks or failed to run. Check container logs for the 9:30 ET executor cron.
+</td></tr>
+{{ end }}
+</tbody>
+</table>
+</td></tr>
+
+<tr><td style="padding:0 28px 24px 28px;color:#94a3b8;font-size:11px;line-height:1.5;border-top:1px solid #e2e8f0;padding-top:16px;">
+Auto-execution pipeline — picker fires at 9:25 ET, basket fires at 9:30:00 ET with LIMIT × 1.10 over fresh live ask, dangling LIMITs cancel at 9:35 ET. Per-execution receipt emails were replaced by this single consolidated summary.
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

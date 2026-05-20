@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +32,39 @@ type DecisionStore interface {
 	LiveExecutionsForDate(tradeDate string) ([]Execution, error)
 	OpenPositionsForDate(tradeDate string) ([]OpenPosition, error)
 	WorkingOpenPositionsForDate(tradeDate string) ([]OpenPosition, error)
+	/*
+		BasketSummaryForDate returns one row per open-side execution
+		for the given trade_date, joined to the trade row for symbol/
+		strike/contract_type/rank. Used by SendExecutionSummary to
+		render the single consolidated post-open email.
+	*/
+	BasketSummaryForDate(tradeDate string) ([]BasketSummaryRow, error)
+}
+
+/*
+BasketSummaryRow is the single-execution snapshot the morning summary
+email renders. Field semantics:
+
+  - Rank, Symbol, ContractType, StrikePrice — pulled from the trade row
+  - Mode — "live" or "paper"
+  - Status — open-side execution status (filled / working / canceled /
+    failed / rejected / pending)
+  - LimitPrice — what we asked Schwab for (per share)
+  - FillPrice — what we paid (per share). Zero if not filled.
+  - Quantity — number of contracts on the open side
+  - ErrorMessage — only populated for failed/canceled/rejected
+*/
+type BasketSummaryRow struct {
+	Rank         int
+	Symbol       string
+	ContractType string
+	StrikePrice  float64
+	Mode         string
+	Status       string
+	LimitPrice   float64
+	FillPrice    float64
+	Quantity     int
+	ErrorMessage string
 }
 
 // MailSender is the slice of *email.Client that exec.Service needs.
@@ -191,7 +223,10 @@ func (s *Service) checkCashAndPlace(ctx context.Context, entry *BasketEntry, has
 	if err != nil {
 		occ, _ := OCCSymbol(t.Symbol, t.Expiration, t.ContractType, t.StrikePrice)
 		log.Printf("execution: rank=%d %s pricing failed: %v", t.Rank, t.Symbol, err)
-		s.sendOpenFailedEmail(t, occ, "", err.Error())
+		// Per-execution email removed; the 9:35 SendExecutionSummary cron
+		// emits one consolidated email covering every open-side outcome
+		// for the day. Until then this is a log-only event.
+		_ = occ
 		return 0, false
 	}
 	costUSD := limitPrice * 100 * float64(entry.Quantity)
@@ -250,7 +285,10 @@ func (s *Service) handleSingleEntry(ctx context.Context, entry *BasketEntry, tra
 	limitPrice, err := s.resolveLimitPrice(ctx, t)
 	if err != nil {
 		log.Printf("execution: %s", err.Error())
-		s.sendOpenFailedEmail(t, occ, "", err.Error())
+		// Per-execution email removed; the 9:35 SendExecutionSummary cron
+		// emits one consolidated email covering every open-side outcome
+		// for the day. Until then this is a log-only event.
+		_ = occ
 		return "", err
 	}
 
@@ -274,7 +312,10 @@ func (s *Service) handleSingleEntry(ctx context.Context, entry *BasketEntry, tra
 	orderID, err := s.trader.PlaceOrder(ctx, hash, order)
 	if err != nil {
 		_ = s.store.UpdateExecutionStatus(execID, "failed", "", nil, 0, err.Error())
-		s.sendOpenFailedEmail(t, occ, "", err.Error())
+		// Per-execution email removed; the 9:35 SendExecutionSummary cron
+		// emits one consolidated email covering every open-side outcome
+		// for the day. Until then this is a log-only event.
+		_ = occ
 		return "", fmt.Errorf("place open order: %w", err)
 	}
 
@@ -291,10 +332,13 @@ func (s *Service) handleSingleEntry(ctx context.Context, entry *BasketEntry, tra
 		log.Printf("execution: warning: failed to persist orderID mid-flight (trade_id=%d, order=%s): %v", tradeID, orderID, err)
 	}
 
+	// Per-execution emails removed across this path; the consolidated
+	// SendExecutionSummary at 9:35 ET emits one operator email
+	// covering every open-side outcome for the day.
+	_ = occ
 	st, err := s.trader.GetOrder(ctx, hash, orderID)
 	if err != nil {
 		_ = s.store.UpdateExecutionStatus(execID, "failed", orderID, nil, 0, err.Error())
-		s.sendOpenFailedEmail(t, occ, orderID, err.Error())
 		return orderID, fmt.Errorf("get open order status: %w", err)
 	}
 
@@ -302,269 +346,24 @@ func (s *Service) handleSingleEntry(ctx context.Context, entry *BasketEntry, tra
 	case st.Filled:
 		fp := st.FillPrice
 		_ = s.store.UpdateExecutionStatus(execID, "filled", orderID, &fp, st.FilledQuantity, "")
-		s.sendReceiptEmail(t, occ, orderID, st.FillPrice, entry.Quantity)
 		log.Printf("execution: open filled (trade_id=%d, qty=%d, mode=%s, fill=%.2f, order=%s)", tradeID, entry.Quantity, s.cfg.Mode, st.FillPrice, orderID)
 	case st.Terminal:
 		// Terminal-but-not-filled: REJECTED, CANCELED, EXPIRED, REPLACED.
-		// Persist the broker's reason and alert the operator — silent
-		// rejection is how three days of bad orders went unnoticed.
+		// Persist the broker's reason and let the 9:35 summary email
+		// surface it; silent rejection is how three days of bad orders
+		// went unnoticed historically, so the DB row itself carries the
+		// reason string.
 		reason := st.ErrorMessage
 		if reason == "" {
 			reason = st.RawStatus
 		}
 		_ = s.store.UpdateExecutionStatus(execID, "rejected", orderID, nil, 0, reason)
-		s.sendOpenFailedEmail(t, occ, orderID, reason)
 		log.Printf("execution: open order rejected (trade_id=%d, qty=%d, order=%s, status=%s, reason=%q)", tradeID, entry.Quantity, orderID, st.RawStatus, reason)
 	default:
 		_ = s.store.UpdateExecutionStatus(execID, "working", orderID, nil, 0, "")
 		log.Printf("execution: open order working (trade_id=%d, qty=%d, order=%s, status=%s)", tradeID, entry.Quantity, orderID, st.RawStatus)
 	}
 	return orderID, nil
-}
-
-/*
-RepriceWorkingOpens is the one-shot post-open cron entry point that
-walks every still-WORKING open order and, when the post-open ask has
-moved enough to leave our original LIMIT underwater, cancel-and-
-replaces at a fresh-ask-derived limit. The morning cron fires at 9:30
-ET against live post-open quotes, so on a typical day this pass is a
-no-op — order limits already track real market. It still exists as a
-defensive belt against Claude mispricings and against contracts whose
-ask runs in the first few minutes after the bell, either of which
-would otherwise leave orders stranded WORKING until the broker auto-
-expires them at 16:00 ET.
-
-Decision tree per working position:
-
-  - GetOrder at the broker first. If it has already filled or
-    terminally rejected since the last reconcile tick, do nothing —
-    the per-minute reconcile cron will pick up the new state on its
-    next pass.
-  - Fetch a fresh ask via cfg.OptionAsk. If unavailable, leave the
-    order alone (the original limit might still fill on a pullback).
-  - newLimit = round(freshAsk × LimitPriceMultiplier, cents).
-  - If newLimit ≤ existing broker-side LIMIT (within rounding), leave
-    the order alone. Cancel+replace at the same price is pure round-
-    trip latency for zero benefit, plus a thin no-order-at-broker
-    window in which a fast spike could miss.
-  - If newLimit > MaxContractPremium, the post-open premium has run
-    past the single-contract cap. Cancel the working order, mark the
-    execution 'canceled', and email the operator. The pick is dead
-    for the day.
-  - Otherwise cancel the old order, mark the original execution row
-    'canceled' with a "repriced post-open" reason, insert a new
-    execution row for the replacement, and place a new LIMIT order at
-    newLimit. The new row carries the same trade_id so the dashboard
-    open-position join still points at the live order.
-
-Errors are logged but never propagate — one bad pick must not block
-the rest of the basket. Wrapped in s.mu so concurrent reconcile ticks
-serialize behind us.
-*/
-func (s *Service) RepriceWorkingOpens(ctx context.Context, tradeDate string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("execution: RepriceWorkingOpens top-level panic: %v", r)
-		}
-	}()
-
-	if s.cfg.OptionAsk == nil {
-		return
-	}
-
-	positions, err := s.store.WorkingOpenPositionsForDate(tradeDate)
-	if err != nil {
-		log.Printf("execution: reprice: working positions: %v", err)
-		return
-	}
-	if len(positions) == 0 {
-		return
-	}
-
-	hash, err := s.cfg.SchwabAccountHash(ctx)
-	if err != nil {
-		log.Printf("execution: reprice: account hash: %v", err)
-		return
-	}
-
-	log.Printf("execution: reprice pass for %d working open(s)", len(positions))
-	for i := range positions {
-		s.repriceOne(ctx, hash, &positions[i])
-	}
-}
-
-func (s *Service) repriceOne(ctx context.Context, hash string, p *OpenPosition) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("execution: repriceOne panic for trade %d: %v", p.Execution.TradeID, r)
-		}
-	}()
-
-	if p.Execution.SchwabOrderID == nil || *p.Execution.SchwabOrderID == "" {
-		return
-	}
-	oldOrderID := *p.Execution.SchwabOrderID
-
-	st, err := s.trader.GetOrder(ctx, hash, oldOrderID)
-	if err != nil {
-		log.Printf("execution: reprice GetOrder (trade=%d, order=%s): %v", p.Execution.TradeID, oldOrderID, err)
-		return
-	}
-	if !st.Working {
-		// Already filled, canceled, or terminally rejected. The reconcile
-		// cron owns the DB flip; reprice does nothing.
-		return
-	}
-	oldLimit := st.LimitPrice
-
-	freshAsk, err := s.cfg.OptionAsk(ctx, p.Symbol, p.Expiration, p.ContractType, p.StrikePrice)
-	if err != nil {
-		log.Printf("execution: reprice ask lookup failed (trade=%d, %s %s %.2f): %v", p.Execution.TradeID, p.Symbol, p.ContractType, p.StrikePrice, err)
-		return
-	}
-	if freshAsk <= 0 {
-		log.Printf("execution: reprice: fresh ask is %.2f, leaving order alone (trade=%d)", freshAsk, p.Execution.TradeID)
-		return
-	}
-
-	newLimit := math.Round(freshAsk*LimitPriceMultiplier*100) / 100
-
-	if oldLimit > 0 && newLimit <= oldLimit {
-		log.Printf("execution: reprice no-op (trade=%d, old_limit=$%.2f, fresh_ask=$%.2f, new_limit=$%.2f)",
-			p.Execution.TradeID, oldLimit, freshAsk, newLimit)
-		return
-	}
-
-	syntheticTrade := &trades.Trade{
-		Symbol:         p.Symbol,
-		ContractType:   p.ContractType,
-		StrikePrice:    p.StrikePrice,
-		Expiration:     p.Expiration,
-		EstimatedPrice: p.ContractPrice,
-	}
-	occ, _ := OCCSymbol(p.Symbol, p.Expiration, p.ContractType, p.StrikePrice)
-
-	if newLimit > MaxContractPremium {
-		reason := fmt.Sprintf("post-open ask $%.2f × %.2f = $%.2f exceeds single-contract cap $%.2f", freshAsk, LimitPriceMultiplier, newLimit, MaxContractPremium)
-		if cancelErr := s.trader.CancelOrder(ctx, hash, oldOrderID); cancelErr != nil {
-			log.Printf("execution: reprice cancel failed (trade=%d, order=%s): %v", p.Execution.TradeID, oldOrderID, cancelErr)
-			// Continue — record the canceled state in our DB and notify.
-			// If the broker rejected the cancel because the order already
-			// filled, the next reconcile tick will correct to 'filled'.
-		}
-		_ = s.store.UpdateExecutionStatus(p.Execution.ID, "canceled", oldOrderID, nil, 0, reason)
-		s.sendOpenFailedEmail(syntheticTrade, occ, oldOrderID, reason)
-		log.Printf("execution: reprice canceled — over cap (trade=%d, order=%s, %s)", p.Execution.TradeID, oldOrderID, reason)
-		return
-	}
-
-	if cancelErr := s.trader.CancelOrder(ctx, hash, oldOrderID); cancelErr != nil {
-		log.Printf("execution: reprice cancel failed, leaving original order in place (trade=%d, order=%s): %v", p.Execution.TradeID, oldOrderID, cancelErr)
-		return
-	}
-
-	/*
-		Re-poll the original order after the cancel. The race we are
-		closing: the original order can fill between the initial
-		GetOrder probe and the CancelOrder call. Schwab's CancelOrder
-		on an already-filled order returns success but the position is
-		already at the broker. Without this check the reprice path
-		would then InsertExecution + PlaceOrder a replacement and we
-		would hold the position twice. If the original is filled (or
-		any non-canceled terminal state) we abandon the reprice; the
-		reconcile cron picks the original up on its next tick.
-	*/
-	postCancel, err := s.trader.GetOrder(ctx, hash, oldOrderID)
-	if err != nil {
-		log.Printf("execution: reprice post-cancel GetOrder failed (trade=%d, order=%s): %v — abandoning reprice to avoid duplicate fill", p.Execution.TradeID, oldOrderID, err)
-		return
-	}
-	if postCancel.Filled {
-		fp := postCancel.FillPrice
-		_ = s.store.UpdateExecutionStatus(p.Execution.ID, "filled", oldOrderID, &fp, postCancel.FilledQuantity, "filled mid-reprice; replacement skipped")
-		log.Printf("execution: reprice race — original order %s filled mid-cancel (trade=%d); replacement skipped", oldOrderID, p.Execution.TradeID)
-		return
-	}
-	if postCancel.Terminal && postCancel.RawStatus != "CANCELED" && postCancel.RawStatus != "REPLACED" {
-		_ = s.store.UpdateExecutionStatus(p.Execution.ID, "rejected", oldOrderID, nil, 0, fmt.Sprintf("terminal mid-reprice as %s; replacement skipped", postCancel.RawStatus))
-		log.Printf("execution: reprice race — original order %s terminal as %s (trade=%d); replacement skipped", oldOrderID, postCancel.RawStatus, p.Execution.TradeID)
-		return
-	}
-	/*
-		CANCELED is the expected path when OUR CancelOrder reached the
-		broker and succeeded — proceed to the replacement order below.
-		BUT Schwab can also auto-cancel an order for reasons unrelated
-		to us (session boundary, broker-side risk system, manual op
-		intervention). In those cases we can't distinguish "our cancel
-		worked" from "Schwab pre-canceled it" from RawStatus alone.
-
-		Heuristic: if cancellation status arrived suspiciously fast
-		(within the cancel call itself, no broker-side latency
-		preserved between request and the post-cancel poll), assume
-		ours. Otherwise log a warning so the operator notices unusual
-		CANCELED responses. We still proceed with the replacement
-		because the reprice cron's intent was to swap the LIMIT —
-		Schwab-initiated cancels of in-flight orders are rare enough
-		that we'd rather get a replacement in than skip.
-	*/
-	if postCancel.RawStatus == "CANCELED" {
-		log.Printf("execution: reprice — original order %s reports CANCELED post-cancel (trade=%d); proceeding with replacement, manual verification recommended if this fires often", oldOrderID, p.Execution.TradeID)
-	}
-
-	_ = s.store.UpdateExecutionStatus(p.Execution.ID, "canceled", oldOrderID, nil, 0, fmt.Sprintf("repriced post-open from $%.2f to $%.2f", oldLimit, newLimit))
-
-	carriedQty := p.Execution.RequestedQuantity
-	if carriedQty < 1 {
-		carriedQty = 1
-	}
-	order, err := BuildOpenOrderForTrade(syntheticTrade, occ, newLimit, carriedQty)
-	if err != nil {
-		log.Printf("execution: reprice build order (trade=%d): %v", p.Execution.TradeID, err)
-		return
-	}
-
-	newExecRow := Execution{
-		TradeID:           p.Execution.TradeID,
-		Mode:              s.cfg.Mode,
-		Side:              "open",
-		Status:            "pending",
-		RequestedQuantity: carriedQty,
-	}
-	newExecID, err := s.store.InsertExecution(newExecRow)
-	if err != nil {
-		log.Printf("execution: reprice insert new execution (trade=%d): %v", p.Execution.TradeID, err)
-		return
-	}
-
-	newOrderID, err := s.trader.PlaceOrder(ctx, hash, order)
-	if err != nil {
-		_ = s.store.UpdateExecutionStatus(newExecID, "failed", "", nil, 0, err.Error())
-		s.sendOpenFailedEmail(syntheticTrade, occ, "", err.Error())
-		log.Printf("execution: reprice replace PlaceOrder failed (trade=%d): %v", p.Execution.TradeID, err)
-		return
-	}
-	_ = s.store.UpdateExecutionStatus(newExecID, "working", newOrderID, nil, 0, "")
-
-	if newSt, sErr := s.trader.GetOrder(ctx, hash, newOrderID); sErr == nil {
-		switch {
-		case newSt.Filled:
-			fp := newSt.FillPrice
-			_ = s.store.UpdateExecutionStatus(newExecID, "filled", newOrderID, &fp, newSt.FilledQuantity, "")
-			s.sendReceiptEmail(syntheticTrade, occ, newOrderID, newSt.FillPrice, carriedQty)
-		case newSt.Terminal:
-			reason := newSt.ErrorMessage
-			if reason == "" {
-				reason = newSt.RawStatus
-			}
-			_ = s.store.UpdateExecutionStatus(newExecID, "rejected", newOrderID, nil, 0, reason)
-			s.sendOpenFailedEmail(syntheticTrade, occ, newOrderID, reason)
-		}
-	}
-
-	log.Printf("execution: reprice replaced (trade=%d, old=%s @$%.2f → new=%s @$%.2f, fresh_ask=$%.2f)",
-		p.Execution.TradeID, oldOrderID, oldLimit, newOrderID, newLimit, freshAsk)
 }
 
 /*
@@ -638,14 +437,9 @@ func (s *Service) reconcileOne(ctx context.Context, hash string, p *OpenPosition
 	}
 
 	occ, _ := OCCSymbol(p.Symbol, p.Expiration, p.ContractType, p.StrikePrice)
-	syntheticTrade := &trades.Trade{
-		Symbol:         p.Symbol,
-		ContractType:   p.ContractType,
-		StrikePrice:    p.StrikePrice,
-		Expiration:     p.Expiration,
-		EstimatedPrice: p.ContractPrice,
-	}
-
+	// Reconcile is silent on a per-fill basis — the 9:35 consolidated
+	// summary email covers every open-side outcome for the day.
+	_ = occ
 	switch {
 	case st.Filled:
 		fp := st.FillPrice
@@ -654,7 +448,6 @@ func (s *Service) reconcileOne(ctx context.Context, hash string, p *OpenPosition
 		if filledQty < 1 {
 			filledQty = positionCloseQuantity(p)
 		}
-		s.sendReceiptEmail(syntheticTrade, occ, orderID, st.FillPrice, filledQty)
 		log.Printf("execution: reconcile open filled (trade=%d, qty=%d, mode=%s, fill=%.2f, order=%s)", p.Execution.TradeID, filledQty, p.Execution.Mode, st.FillPrice, orderID)
 	case st.Terminal:
 		reason := st.ErrorMessage
@@ -662,7 +455,6 @@ func (s *Service) reconcileOne(ctx context.Context, hash string, p *OpenPosition
 			reason = st.RawStatus
 		}
 		_ = s.store.UpdateExecutionStatus(p.Execution.ID, "rejected", orderID, nil, 0, reason)
-		s.sendOpenFailedEmail(syntheticTrade, occ, orderID, reason)
 		log.Printf("execution: reconcile open rejected (trade=%d, order=%s, status=%s, reason=%q)", p.Execution.TradeID, orderID, st.RawStatus, reason)
 	default:
 		// Still working at the broker — leave the row, try again next tick.
@@ -984,3 +776,143 @@ Compile-time guarantee that *email.Client satisfies MailSender. If
 the email package's signature changes, this file fails to compile.
 */
 var _ MailSender = (*email.Client)(nil)
+
+/*
+CancelDanglingOpens cancels any open-side executions that are still
+WORKING at the broker at the 9:35 ET cutoff (5 minutes after market
+open). Any LIMIT that hasn't filled by then is stale by definition:
+either the live ask ran above our 10% buffer, or Schwab routed the
+order through a slow venue that won't honor it. Cancel it and move
+on. The pick is dead for the day.
+
+Mirrors RepriceWorkingOpens' shape but does NOT re-submit. The
+audit-driven redesign removed the cancel-and-replace path because
+on fast-moving names a re-submitted LIMIT goes stale within
+seconds; the trade-off the user picked is "wider 10% buffer at
+9:30, no second chance" rather than "1.05× with multiple retry
+windows."
+
+Called by the 9:35 ET cron immediately before SendExecutionSummary
+so the summary email reflects the final state of every order.
+*/
+func (s *Service) CancelDanglingOpens(ctx context.Context, tradeDate string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("execution: CancelDanglingOpens top-level panic: %v", r)
+		}
+	}()
+
+	positions, err := s.store.WorkingOpenPositionsForDate(tradeDate)
+	if err != nil {
+		log.Printf("execution: cancel-dangling: working positions: %v", err)
+		return
+	}
+	if len(positions) == 0 {
+		return
+	}
+
+	hash, err := s.cfg.SchwabAccountHash(ctx)
+	if err != nil {
+		log.Printf("execution: cancel-dangling: account hash: %v", err)
+		return
+	}
+
+	log.Printf("execution: cancel-dangling pass for %d working open(s)", len(positions))
+	for i := range positions {
+		p := &positions[i]
+		if p.Execution.SchwabOrderID == nil || *p.Execution.SchwabOrderID == "" {
+			_ = s.store.UpdateExecutionStatus(p.Execution.ID, "canceled", "", nil, 0, "dangling LIMIT past 5min post-open (no broker order id)")
+			continue
+		}
+		orderID := *p.Execution.SchwabOrderID
+		if err := s.trader.CancelOrder(ctx, hash, orderID); err != nil {
+			// Broker side may have already terminally moved the order in
+			// the gap between the per-minute reconcile and this cron tick.
+			// Reconcile will reconcile DB state on its next pass; we just
+			// log and continue.
+			log.Printf("execution: cancel-dangling: CancelOrder (trade=%d, order=%s): %v", p.Execution.TradeID, orderID, err)
+			continue
+		}
+		_ = s.store.UpdateExecutionStatus(p.Execution.ID, "canceled", orderID, nil, 0, "dangling LIMIT past 5min post-open")
+		log.Printf("execution: cancel-dangling: canceled order %s (trade=%d)", orderID, p.Execution.TradeID)
+	}
+}
+
+/*
+SendExecutionSummary queries the day's open-side executions and
+sends ONE consolidated email to the operator recipient summarizing
+fills, working orders (rare — should be none after CancelDanglingOpens
+ran), failures, and cancels. Replaces the previous per-execution
+receipt + open-failed emails that fired throughout the morning.
+
+Empty-result case (no executions at all for the date) still sends a
+"no executions today" notice so the operator can tell the difference
+between "executor ran cleanly and chose to fire zero orders" and
+"executor failed silently."
+
+Caller orchestrates the 9:35 ET cron sequence:
+ 1. CancelDanglingOpens — flips any still-WORKING to canceled
+ 2. SendExecutionSummary — emails the final slate
+*/
+func (s *Service) SendExecutionSummary(ctx context.Context, tradeDate string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("execution: SendExecutionSummary top-level panic: %v", r)
+		}
+	}()
+
+	rows, err := s.store.BasketSummaryForDate(tradeDate)
+	if err != nil {
+		log.Printf("execution: summary: BasketSummaryForDate(%s): %v", tradeDate, err)
+		return
+	}
+
+	data := templates.BasketSummaryData{
+		Date:      tradeDate,
+		Mode:      s.cfg.Mode,
+		Rows:      make([]templates.BasketSummaryRow, 0, len(rows)),
+		TotalCost: 0,
+	}
+	totalFilled := 0
+	for _, r := range rows {
+		costPerContract := r.FillPrice
+		if costPerContract == 0 {
+			// For non-filled rows show the LIMIT we asked for (or zero)
+			// so the operator sees the order size that was attempted.
+			costPerContract = r.LimitPrice
+		}
+		totalCents := costPerContract * 100 * float64(r.Quantity)
+		if r.Status == "filled" {
+			data.TotalCost += totalCents
+			totalFilled++
+		}
+		data.Rows = append(data.Rows, templates.BasketSummaryRow{
+			Rank:         r.Rank,
+			Symbol:       r.Symbol,
+			ContractType: r.ContractType,
+			StrikePrice:  r.StrikePrice,
+			Mode:         r.Mode,
+			Status:       r.Status,
+			LimitPrice:   r.LimitPrice,
+			FillPrice:    r.FillPrice,
+			Quantity:     r.Quantity,
+			ErrorMessage: r.ErrorMessage,
+		})
+	}
+	data.Filled = totalFilled
+	data.Total = len(rows)
+
+	html, err := templates.RenderBasketSummary(data)
+	if err != nil {
+		log.Printf("execution: summary: render: %v", err)
+		return
+	}
+	subject := fmt.Sprintf("VibeTradez execution summary — %s (%d/%d filled, $%.2f)", tradeDate, totalFilled, len(rows), data.TotalCost)
+	if err := s.mail.SendTradeEmail(s.cfg.EmailFrom, []string{s.cfg.Recipient}, subject, html); err != nil {
+		log.Printf("execution: summary: send: %v", err)
+		return
+	}
+	log.Printf("execution: summary sent to %s (%d/%d filled, $%.2f)", s.cfg.Recipient, totalFilled, len(rows), data.TotalCost)
+}
