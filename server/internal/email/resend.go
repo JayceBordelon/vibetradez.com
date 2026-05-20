@@ -2,7 +2,9 @@ package email
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/resend/resend-go/v2"
 )
@@ -12,10 +14,29 @@ type Client struct {
 }
 
 func NewClient(apiKey string) *Client {
+	/*
+		Override the SDK's default 60s HTTP timeout. A single hung
+		Resend call would block the entire morning cron for a minute
+		per stuck recipient on the per-recipient SendPersonalizedToList
+		path. 15s matches the schwab + anthropic client budgets and is
+		well above Resend's typical sub-second response.
+	*/
+	httpClient := &http.Client{Timeout: 15 * time.Second}
 	return &Client{
-		client: resend.NewClient(apiKey),
+		client: resend.NewCustomClient(httpClient, apiKey),
 	}
 }
+
+/*
+perRecipientSendSpacing is the minimum delay between Resend calls in
+SendPersonalizedToList. Resend Pro is 10 req/s; 200ms = 5 req/s,
+under cap with headroom. Free tier is 2 req/s; operators on free
+should set RESEND_SEND_SPACING_MS=550 (not currently wired — add if
+needed). Without spacing, a 100-subscriber morning email burns
+through the rate limit in <10s and every call after that returns
+429 until the bucket refills.
+*/
+const perRecipientSendSpacing = 200 * time.Millisecond
 
 func (c *Client) SendTradeEmail(from string, to []string, subject, htmlContent string) error {
 	params := &resend.SendEmailRequest{
@@ -51,10 +72,33 @@ of 10 errors, recipients 8-10 still get their email. The aggregate
 error reports the count of failures so the caller can surface a
 partial-send warning to the operator without abandoning the batch.
 */
-func (c *Client) SendPersonalizedToList(from string, to []string, subject, htmlContent string, unsubURLFor func(email string) string) error {
+/*
+PersonalizedResult reports the outcome of a per-recipient batch so
+the caller can decide between "retry the whole rollout" (zero
+landed) and "log and move on" (some landed). Sensitive details
+(per-email failure reasons) stay in failureDetail for caller-side
+log redaction; the public counts are safe to surface.
+*/
+type PersonalizedResult struct {
+	Total         int
+	Succeeded     int
+	Failed        int
+	failureDetail string // unexported so callers must use FailureDetail() and decide to log it
+}
+
+func (r PersonalizedResult) FailureDetail() string { return r.failureDetail }
+
+func (c *Client) SendPersonalizedToList(from string, to []string, subject, htmlContent string, unsubURLFor func(email string) string) PersonalizedResult {
 	const placeholder = "@@VT_UNSUBSCRIBE_URL@@"
+	result := PersonalizedResult{Total: len(to)}
 	var failures []string
-	for _, addr := range to {
+	for i, addr := range to {
+		// Resend Pro is 10 req/s. Spacing between sends keeps us under
+		// cap so a long list doesn't trip 429s mid-batch. First send
+		// is unspaced; only subsequent sends sleep.
+		if i > 0 {
+			time.Sleep(perRecipientSendSpacing)
+		}
 		body := strings.ReplaceAll(htmlContent, placeholder, unsubURLFor(addr))
 		params := &resend.SendEmailRequest{
 			From:    from,
@@ -63,11 +107,20 @@ func (c *Client) SendPersonalizedToList(from string, to []string, subject, htmlC
 			Html:    body,
 		}
 		if _, err := c.client.Emails.Send(params); err != nil {
+			result.Failed++
 			failures = append(failures, fmt.Sprintf("%s: %v", addr, err))
+			// On 429 specifically, give the bucket extra refill time.
+			// resend-go wraps the body verbatim; substring match is
+			// best-effort but covers the dominant case.
+			if strings.Contains(err.Error(), "429") || strings.Contains(strings.ToLower(err.Error()), "rate") {
+				time.Sleep(2 * time.Second)
+			}
+			continue
 		}
+		result.Succeeded++
 	}
 	if len(failures) > 0 {
-		return fmt.Errorf("personalized send had %d failure(s) of %d recipient(s): %s", len(failures), len(to), strings.Join(failures, "; "))
+		result.failureDetail = strings.Join(failures, "; ")
 	}
-	return nil
+	return result
 }

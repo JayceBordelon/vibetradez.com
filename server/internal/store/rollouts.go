@@ -60,6 +60,22 @@ func (s *Store) ClaimRollout(slug string, recipientCount int) (bool, error) {
 }
 
 /*
+DeleteRolloutClaim removes a claim row so the next boot retries the
+slug. Used by rollouts.Run after a ZERO-landed send (Resend hard
+down, rate-limit storm) — rolling back the claim is safe because
+nobody saw the email, so there's no double-send risk on the next
+boot's retry. Returns nil even when the row didn't exist (defensive:
+the operator may have already manually DELETE'd it).
+*/
+func (s *Store) DeleteRolloutClaim(slug string) error {
+	_, err := s.db.Exec(`DELETE FROM sent_rollouts WHERE slug = $1`, slug)
+	if err != nil {
+		return fmt.Errorf("delete rollout claim: %w", err)
+	}
+	return nil
+}
+
+/*
 MarkRolloutSent is retained for compatibility with any caller still
 using the legacy check-send-mark flow. Prefer ClaimRollout for new
 code; this method does NOT race-safely guard against double-send.

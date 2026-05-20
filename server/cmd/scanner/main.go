@@ -649,8 +649,9 @@ func sendErrorNotification(cfg *config.Config, db *store.Store, emailClient *ema
 	}
 
 	subject := fmt.Sprintf("VibeTradez Alert (%s)", time.Now().Format("Jan 2, 3:04 PM"))
-	if err := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, htmlContent, unsubURLBuilder(cfg)); err != nil {
-		log.Printf("Failed to send error notification email: %v", err)
+	res := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, htmlContent, unsubURLBuilder(cfg))
+	if res.Failed > 0 {
+		log.Printf("Error notification email: %d/%d failed (%s)", res.Failed, res.Total, res.FailureDetail())
 	}
 }
 
@@ -803,10 +804,14 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 	}
 
 	log.Printf("Sending email to %d subscribers...", len(recipients))
-	if err := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, htmlContent, unsubURLBuilder(cfg)); err != nil {
-		log.Printf("Error sending email: %v", err)
-		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("Email delivery failed: %v", err))
+	res := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, htmlContent, unsubURLBuilder(cfg))
+	if res.Failed == res.Total && res.Total > 0 {
+		log.Printf("Morning email delivery failed: 0/%d delivered (%s)", res.Total, res.FailureDetail())
+		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("Morning email delivery failed: 0/%d landed", res.Total))
 		return
+	}
+	if res.Failed > 0 {
+		log.Printf("Morning email partial: %d/%d failed (%s)", res.Failed, res.Total, res.FailureDetail())
 	}
 
 	log.Println("Trade analysis complete and email sent!")
@@ -1054,10 +1059,14 @@ func runWeeklyEmail(cfg *config.Config, db *store.Store, emailClient *email.Clie
 	}
 
 	log.Printf("Sending weekly email to %d subscribers...", len(recipients))
-	if err := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, htmlContent, unsubURLBuilder(cfg)); err != nil {
-		log.Printf("Error sending weekly email: %v", err)
-		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("Weekly email delivery failed: %v", err))
+	res := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, htmlContent, unsubURLBuilder(cfg))
+	if res.Failed == res.Total && res.Total > 0 {
+		log.Printf("Weekly email delivery failed: 0/%d delivered (%s)", res.Total, res.FailureDetail())
+		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("Weekly email delivery failed: 0/%d landed", res.Total))
 		return
+	}
+	if res.Failed > 0 {
+		log.Printf("Weekly email partial: %d/%d failed (%s)", res.Failed, res.Total, res.FailureDetail())
 	}
 
 	log.Println("Weekly email sent!")
@@ -1152,10 +1161,14 @@ func runEndOfDayAnalysis(cfg *config.Config, db *store.Store, claudePicker *trad
 	}
 
 	log.Printf("Sending EOD summary email to %d subscribers...", len(recipients))
-	if err := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, htmlContent, unsubURLBuilder(cfg)); err != nil {
-		log.Printf("Error sending EOD email: %v", err)
-		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("EOD email delivery failed: %v", err))
+	res := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, htmlContent, unsubURLBuilder(cfg))
+	if res.Failed == res.Total && res.Total > 0 {
+		log.Printf("EOD email delivery failed: 0/%d delivered (%s)", res.Total, res.FailureDetail())
+		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("EOD email delivery failed: 0/%d landed", res.Total))
 		return
+	}
+	if res.Failed > 0 {
+		log.Printf("EOD email partial: %d/%d failed (%s)", res.Failed, res.Total, res.FailureDetail())
 	}
 
 	log.Println("EOD summary complete and email sent!")
