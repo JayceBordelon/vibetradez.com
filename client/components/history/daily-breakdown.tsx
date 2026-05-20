@@ -141,7 +141,12 @@ function DayRow({ day, maxAbsPnl }: { day: DayMultiStat; maxAbsPnl: number }) {
         </div>
 
         {day.executions.length > 0 && (
-          <div className="hidden shrink-0 items-center gap-1 sm:flex">
+          // Badges visible on every breakpoint. The previous `hidden sm:flex`
+          // dropped them entirely on mobile, which silently hid the
+          // "Close failed (verify position)" warning for stranded-at-broker
+          // positions — operator browsing /history on a phone wouldn't see
+          // it. The flex-wrap keeps the layout sane when many badges land.
+          <div className="flex shrink-0 flex-wrap items-center gap-1">
             {day.executions.map((e, i) => (
               <ExecutionBadge key={`${day.date}-exec-${i}`} execution={e} />
             ))}

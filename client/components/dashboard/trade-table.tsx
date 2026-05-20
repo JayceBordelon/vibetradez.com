@@ -82,6 +82,21 @@ function computeRow(dt: DashboardTrade, executions: Execution[] | null | undefin
     accentBorder = holdingPnl > 0 ? "border-l-green/60" : holdingPnl < 0 ? "border-l-red/60" : "border-l-transparent";
     entry = fmtMoney(execution.open_price);
     close = fmtMoney(liveMark);
+  } else if (execution?.state === "close_failed") {
+    /*
+    The auto-close cron exhausted its retry-cancel-replace window
+    and the position is still open at the broker. Surface that
+    loudly here — the prior shape rendered "OPEN" with no warning,
+    making a stranded-at-broker position look identical to a
+    never-executed pick.
+    */
+    pnl = 0;
+    pnlPct = 0;
+    resultLabel = "CLOSE FAILED";
+    resultVariant = "destructive";
+    accentBorder = "border-l-red";
+    entry = fmtMoney(execution.open_price);
+    close = "verify";
   } else {
     pnl = result.pnl;
     pnlPct = result.pctChange;

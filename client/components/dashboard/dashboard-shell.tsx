@@ -197,7 +197,15 @@ export function DashboardShell() {
               <MorningLayout trades={filtered.trades} liveQuotes={liveQuotes} date={filtered.date} executions={executions} />
             </Section>
             <Section title="Exposure" subtitle="Capital at risk for today's picks. For long options, max loss is the premium paid." className="mt-10 border-t border-border/40 pt-8">
-              <ExposurePanel trades={filtered.trades} executions={null} hasSummaries={false} />
+              {/*
+              Pass executions (not null) to ExposurePanel on the morning
+              branch too. exposure-panel.tsx multiplies premium by
+              executionQuantity(exec); null collapses every pick to qty=1,
+              so a greedy-fill morning that landed qty=3 on rank 1 showed
+              ~33% of the real Capital at Risk on the dashboard pre-EOD.
+              The EOD branch above already passes executions correctly.
+              */}
+              <ExposurePanel trades={filtered.trades} executions={executions} hasSummaries={false} />
             </Section>
           </>
         )}

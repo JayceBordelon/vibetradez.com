@@ -1,4 +1,4 @@
-import { findClosedExecutionForTrade } from "@/components/execution-badge";
+import { findClosedExecutionForTrade, findExecutionForTrade } from "@/components/execution-badge";
 import type { DashboardTrade, Execution, Trade } from "@/types/trade";
 
 export function calcMoneyness(trade: Trade) {
@@ -80,6 +80,19 @@ export function computeTradePnl(dt: DashboardTrade, executions: Execution[] | nu
       source: "execution",
       hasData: true,
     };
+  }
+  /*
+  Audit re-audit lens 4 #2: a close_failed execution means the
+  position is STILL OPEN at the broker (the auto-close retry window
+  exhausted). The modeled summary path below would silently roll up
+  Claude's modeled close price into stats, masking the operational
+  problem. Return hasData=false instead so StatsGrid / PnlChart /
+  ExposurePanel exclude these from aggregates — the trade table and
+  badges separately surface the "verify position" warning.
+  */
+  const anyExec = findExecutionForTrade(executions, dt.trade);
+  if (anyExec?.state === "close_failed") {
+    return { entryPrice: anyExec.open_price, closingPrice: 0, pnl: 0, pctChange: 0, source: "execution", hasData: false };
   }
   if (dt.summary) {
     const pnl = (dt.summary.closing_price - dt.summary.entry_price) * 100;
