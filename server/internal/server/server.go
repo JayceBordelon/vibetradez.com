@@ -186,7 +186,15 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/trades/week", requireInternal(s.handleTradesWeek))
 	s.mux.HandleFunc("/api/chart/", requireInternal(s.handleChart))
 	s.mux.HandleFunc("/api/market/status", requireInternal(s.handleMarketStatus))
-	s.mux.HandleFunc("/api/quotes/stream", requireInternal(s.handleQuoteStream))
+	/*
+		SSE stream — intentionally NOT gated by requireInternal. The
+		browser EventSource API cannot set custom headers, so a route
+		behind X-VT-Source is unreachable from the dashboard. Cross-
+		origin abuse is naturally blocked by the absence of CORS
+		headers on the response: a malicious-origin EventSource fails
+		the handshake. Read-only public market quotes anyway.
+	*/
+	s.mux.HandleFunc("/api/quotes/stream", s.handleQuoteStream)
 
 	/*
 		Auto-execution kill switch. Stack: requireInternal (trusted website
