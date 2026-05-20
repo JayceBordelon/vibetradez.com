@@ -48,7 +48,6 @@ var marketHolidays = map[string]string{
 	"2026-04-03": "Good Friday",
 	"2026-05-25": "Memorial Day",
 	"2026-06-19": "Juneteenth",
-	"2026-07-03": "Independence Day (Observed)",
 	"2026-09-07": "Labor Day",
 	"2026-11-26": "Thanksgiving",
 	"2026-12-25": "Christmas",
@@ -59,10 +58,8 @@ var marketHolidays = map[string]string{
 	"2027-03-26": "Good Friday",
 	"2027-05-31": "Memorial Day",
 	"2027-06-18": "Juneteenth (Observed)",
-	"2027-07-05": "Independence Day (Observed)",
 	"2027-09-06": "Labor Day",
 	"2027-11-25": "Thanksgiving",
-	"2027-12-24": "Christmas (Observed)",
 }
 
 /*
@@ -74,9 +71,12 @@ in November of the prior year.
 var marketHalfDays = map[string]string{
 	"2025-11-28": "Day after Thanksgiving",
 	"2025-12-24": "Christmas Eve",
+	"2026-07-03": "Independence Day (Observed)",
 	"2026-11-27": "Day after Thanksgiving",
 	"2026-12-24": "Christmas Eve",
+	"2027-07-05": "Independence Day (Observed)",
 	"2027-11-26": "Day after Thanksgiving",
+	"2027-12-24": "Christmas Day (Observed)",
 }
 
 func isHalfDay() bool {
