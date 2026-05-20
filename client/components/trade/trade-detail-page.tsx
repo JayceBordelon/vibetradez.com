@@ -2,7 +2,7 @@
 
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ExecutionBadge, findExecutionForTrade, liveMarkForTrade } from "@/components/execution-badge";
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
@@ -10,14 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { Metric } from "@/components/ui/metric";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useVisiblePoll } from "@/hooks/use-visible-poll";
+import { useMarketStatus } from "@/hooks/use-market-status";
+import { useQuoteStream } from "@/hooks/use-quote-stream";
 import { api } from "@/lib/api";
 import { calcBreakeven, calcMaxLoss, calcMoneyness, sentimentColor, sentimentLabel } from "@/lib/calculations";
 import { fmt, fmtMoney, fmtPctDec, fmtPnlInt, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { DashboardTrade, Execution, LiveQuotesResponse, Trade } from "@/types/trade";
-
-const LIVE_POLL_SECONDS = 15;
 
 type LoadState =
   | { kind: "loading" }
@@ -189,7 +188,13 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
   const pctChange = entryPrice > 0 ? ((closingPrice - entryPrice) / entryPrice) * 100 : 0;
   const stockPctChange = summary && summary.stock_open > 0 ? ((summary.stock_close - summary.stock_open) / summary.stock_open) * 100 : 0;
 
-  const liveQuotes = useLiveQuotes(!summary);
+  /*
+  Live quotes streaming: only open when (a) the pick is still mid-day
+  (no summary yet) and (b) the market is open. Outside hours, the SSE
+  endpoint 503s anyway and the EOD result block below is what matters.
+  */
+  const marketStatus = useMarketStatus();
+  const liveQuotes = useQuoteStream(!summary && marketStatus?.open === true);
 
   return (
     <div className="space-y-2">
@@ -297,33 +302,6 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
   );
 }
 
-/*
-Polls /api/quotes/live on the same 15s cadence the dashboard uses, with
-the same merge-over-prior semantics so a single transient miss doesn't
-blank the live panel. Pauses while the tab is hidden so a backgrounded
-trade-detail tab doesn't hammer the Schwab-backed endpoint indefinitely.
-*/
-function useLiveQuotes(enabled: boolean): LiveQuotesResponse | null {
-  const [liveQuotes, setLiveQuotes] = useState<LiveQuotesResponse | null>(null);
-
-  const poll = useCallback(() => {
-    api
-      .getLiveQuotes()
-      .then((next) => {
-        if (!next || typeof next !== "object") return;
-        setLiveQuotes((prev) => ({
-          ...next,
-          quotes: { ...(prev?.quotes ?? {}), ...(next.quotes ?? {}) },
-          options: { ...(prev?.options ?? {}), ...(next.options ?? {}) },
-        }));
-      })
-      .catch(() => {});
-  }, []);
-  useVisiblePoll(poll, LIVE_POLL_SECONDS * 1000, enabled);
-
-  return liveQuotes;
-}
-
 function LiveSection({ trade, liveQuotes }: { trade: Trade; liveQuotes: LiveQuotesResponse | null }) {
   /*
   Reconstruct the same option key the server emits (server.go ~846):
@@ -389,9 +367,7 @@ function LiveSection({ trade, liveQuotes }: { trade: Trade; liveQuotes: LiveQuot
         />
         <Stat label="Volume" value={liveOption ? liveOption.volume.toLocaleString() : <Skeleton className="inline-block h-6 w-14 align-middle" />} />
       </StatStrip>
-      <p className="mt-3 text-[11px] text-muted-foreground">
-        Refreshes every {LIVE_POLL_SECONDS}s · entry was {fmtMoney(trade.estimated_price)}.
-      </p>
+      <p className="mt-3 text-[11px] text-muted-foreground">Live ticks as Schwab pushes them · entry was {fmtMoney(trade.estimated_price)}.</p>
     </>
   );
 }

@@ -15,9 +15,11 @@ import (
 	"time"
 
 	"vibetradez.com/internal/authclient"
+	"vibetradez.com/internal/calendar"
 	"vibetradez.com/internal/config"
 	"vibetradez.com/internal/email"
 	"vibetradez.com/internal/exec"
+	"vibetradez.com/internal/quotes"
 	"vibetradez.com/internal/rollouts"
 	"vibetradez.com/internal/schwab"
 	"vibetradez.com/internal/sentiment"
@@ -30,68 +32,20 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-// US Market Holidays (NYSE/NASDAQ closed)
-var marketHolidays = map[string]string{
-	"2025-01-01": "New Year's Day",
-	"2025-01-20": "MLK Day",
-	"2025-02-17": "Presidents Day",
-	"2025-04-18": "Good Friday",
-	"2025-05-26": "Memorial Day",
-	"2025-06-19": "Juneteenth",
-	"2025-07-04": "Independence Day",
-	"2025-09-01": "Labor Day",
-	"2025-11-27": "Thanksgiving",
-	"2025-12-25": "Christmas",
-	"2026-01-01": "New Year's Day",
-	"2026-01-19": "MLK Day",
-	"2026-02-16": "Presidents Day",
-	"2026-04-03": "Good Friday",
-	"2026-05-25": "Memorial Day",
-	"2026-06-19": "Juneteenth",
-	"2026-09-07": "Labor Day",
-	"2026-11-26": "Thanksgiving",
-	"2026-12-25": "Christmas",
-	// 2027 NYSE schedule — published by NYSE in Q4 2026.
-	"2027-01-01": "New Year's Day",
-	"2027-01-18": "MLK Day",
-	"2027-02-15": "Presidents Day",
-	"2027-03-26": "Good Friday",
-	"2027-05-31": "Memorial Day",
-	"2027-06-18": "Juneteenth (Observed)",
-	"2027-09-06": "Labor Day",
-	"2027-11-25": "Thanksgiving",
-}
-
-/*
-US Market Half-Days (1pm ET early close instead of 4pm).
-On these dates the auto-execution close cron must fire at 12:55pm
-instead of 3:55pm. Update list yearly, NYSE publishes the schedule
-in November of the prior year.
-*/
-var marketHalfDays = map[string]string{
-	"2025-11-28": "Day after Thanksgiving",
-	"2025-12-24": "Christmas Eve",
-	"2026-07-03": "Independence Day (Observed)",
-	"2026-11-27": "Day after Thanksgiving",
-	"2026-12-24": "Christmas Eve",
-	"2027-07-05": "Independence Day (Observed)",
-	"2027-11-26": "Day after Thanksgiving",
-	"2027-12-24": "Christmas Day (Observed)",
-}
+// Market calendar moved to internal/calendar. The streaming hub + SSE
+// handlers consume the same source. Update the lists there yearly each
+// Q4 from NYSE's published schedule.
 
 func isHalfDay() bool {
-	loc, _ := time.LoadLocation("America/New_York")
-	today := time.Now().In(loc).Format("2006-01-02")
-	_, ok := marketHalfDays[today]
-	return ok
+	today := time.Now().In(calendar.ETLocation).Format("2006-01-02")
+	return calendar.IsHalfDay(today) != ""
 }
 
 func isMarketOpen() (bool, string) {
-	loc, _ := time.LoadLocation("America/New_York")
-	now := time.Now().In(loc)
+	now := time.Now().In(calendar.ETLocation)
 	today := now.Format("2006-01-02")
 
-	if holiday, exists := marketHolidays[today]; exists {
+	if holiday := calendar.IsHoliday(today); holiday != "" {
 		return false, holiday
 	}
 
@@ -424,11 +378,71 @@ func main() {
 		log.Printf("execution: cron registered (picker 9:25 ET, executor 9:30 ET, dangling-LIMIT-cancel 9:35 ET, open-reconcile every minute 9-15 ET, close 3:55pm or 12:55pm half-days)")
 	}
 
+	/*
+		Live-quotes streaming hub. One Schwab WebSocket connection
+		multiplexed to N browser SSE clients. Cron lifecycle:
+		  - Start: 9:30 ET sharp on trading days (picker has finished
+		    by then, so today's picks are in DB).
+		  - Stop: 16:00 ET (or 13:00 ET on half-days).
+		  - Holidays + weekends: never starts.
+		When the hub isn't running, /api/quotes/stream returns 503 and
+		the dashboard renders the closed-page.
+	*/
+	var streamClient *schwab.StreamClient
+	if schwabClient != nil && schwabClient.IsConnected() {
+		streamClient = schwab.NewStreamClient(schwabClient)
+	}
+	quotesHub := quotes.NewHub(streamClient, db)
+	if _, err := c.AddFunc("30 9 * * 1-5", func() {
+		today := todayDate()
+		if !calendar.IsTradingDay(today) {
+			log.Printf("quotes hub: skip start (%s is not a trading day)", today)
+			return
+		}
+		if err := quotesHub.Start(context.Background()); err != nil {
+			log.Printf("quotes hub: start: %v", err)
+		}
+	}); err != nil {
+		log.Fatalf("Failed to add 9:30 quotes-hub start cron: %v", err)
+	}
+	if _, err := c.AddFunc("0 16 * * 1-5", func() {
+		today := todayDate()
+		// On half-days the 13:00 ET cron already stopped it; this is a
+		// no-op then (Stop is idempotent).
+		if calendar.IsHalfDay(today) != "" {
+			return
+		}
+		quotesHub.Stop()
+	}); err != nil {
+		log.Fatalf("Failed to add 16:00 quotes-hub stop cron: %v", err)
+	}
+	if _, err := c.AddFunc("0 13 * * 1-5", func() {
+		today := todayDate()
+		if calendar.IsHalfDay(today) == "" {
+			return
+		}
+		quotesHub.Stop()
+	}); err != nil {
+		log.Fatalf("Failed to add 13:00 quotes-hub half-day stop cron: %v", err)
+	}
+	log.Printf("quotes hub: cron registered (start 9:30 ET, stop 16:00 ET regular / 13:00 ET half-days)")
+
 	c.Start()
 
 	sessionTTL := time.Duration(cfg.SessionTTLDays) * 24 * time.Hour
 	srv := server.New(db, schwabClient, authClient, scraper, emailClient, cfg.EmailFrom, cfg.AnthropicAPIKey, cfg.AnthropicModel, cfg.SessionCookieName, sessionTTL, cfg.AuthPublicURL, cfg.AuthClientID, cfg.AuthRedirectURI, cfg.ServerPort, executor, cfg.ExecutionRecipient, cfg.UnsubscribeHMACKey, cfg.UnsubscribePrevHMACKeys, cfg.PublicBaseURL)
+	srv.SetHub(quotesHub)
 	go srv.Start()
+
+	// If the process boots inside the 9:30-16:00 window on a trading
+	// day (e.g. container restart mid-session), warm the hub up
+	// immediately so the dashboard doesn't sit on a 503 until the next
+	// 9:30 cron tick the following day.
+	if st := calendar.CurrentStatus(time.Now()); st.Open {
+		if err := quotesHub.Start(context.Background()); err != nil {
+			log.Printf("quotes hub: warm start: %v", err)
+		}
+	}
 
 	log.Printf("Options trade scanner started")
 	log.Printf("Database: PostgreSQL")

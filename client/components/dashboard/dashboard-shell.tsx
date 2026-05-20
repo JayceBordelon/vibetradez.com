@@ -6,12 +6,15 @@ import { useCallback, useEffect, useState } from "react";
 import { DashboardSkeleton } from "@/components/layout/dashboard-skeleton";
 import { PageToolbar } from "@/components/layout/page-toolbar";
 import { Section } from "@/components/layout/section";
+import { useMarketStatus } from "@/hooks/use-market-status";
+import { useQuoteStream } from "@/hooks/use-quote-stream";
 import { useVisiblePoll } from "@/hooks/use-visible-poll";
 import { api } from "@/lib/api";
 import { computeTradePnl } from "@/lib/calculations";
-import type { DashboardResponse, DashboardTrade, Execution, LiveQuotesResponse } from "@/types/trade";
+import type { DashboardResponse, DashboardTrade, Execution } from "@/types/trade";
 
 import { ExposurePanel } from "./exposure-panel";
+import { MarketClosedPage } from "./market-closed-page";
 import { MorningLayout } from "./morning-layout";
 import { NoTradesToday } from "./no-trades-today";
 import { PnlChart } from "./pnl-chart";
@@ -21,7 +24,6 @@ import { TradeTable } from "./trade-table";
 
 const STORAGE_KEY = "jt_dash_v3";
 const REFRESH_SECONDS = 60;
-const LIVE_POLL_SECONDS = 15;
 
 function filterByRank(data: DashboardResponse, topFilter: number): DashboardResponse {
   /**
@@ -75,7 +77,7 @@ function computeStats(trades: DashboardTrade[], executions: Execution[] | null |
 export function DashboardShell() {
   const [topFilter, setTopFilter] = useState(10);
   const [rawData, setRawData] = useState<DashboardResponse | null>(null);
-  const [liveQuotes, setLiveQuotes] = useState<LiveQuotesResponse | null>(null);
+  const marketStatus = useMarketStatus();
 
   // Restore Top-N from localStorage
   useEffect(() => {
@@ -115,38 +117,21 @@ export function DashboardShell() {
   }, []);
 
   // Auto-refresh: pauses when the tab is hidden, immediate refresh on return.
-  useVisiblePoll(loadDay, REFRESH_SECONDS * 1000);
+  // Disabled when the market is closed — the page is just the closed-page
+  // CTA, no point polling.
+  useVisiblePoll(loadDay, REFRESH_SECONDS * 1000, marketStatus?.open !== false);
 
   /*
-  Live quotes polling: same visibility gate. Merge new options/
-  quotes over the prior state when Schwab is healthy so a single
-  failing chain call doesn't blank a previously-good "Current" card.
-  When the server reports `connected: false` (Schwab token dead or
-  unconfigured) we replace the maps wholesale, otherwise stale marks
-  from before the token died masquerade as fresh data and the
-  dashboard looks alive when it isn't. Errors from the poll itself
-  are swallowed so the prior state survives a transient HTTP blip.
+  Live quotes via SSE stream. Each tick lands one symbol or one
+  option_key at a time, so the dashboard rows light up progressively
+  as Schwab pushes data, not all-at-once on a 15s poll. The stream
+  is only opened when:
+    - Today's picks are loaded
+    - At least one pick is still mid-day (no summaries yet)
+    - The market is actually open (server returns 503 otherwise)
   */
-  const liveEnabled = !!rawData?.trades?.length && !rawData.trades.some((t) => t.summary);
-  const pollLiveQuotes = useCallback(() => {
-    api
-      .getLiveQuotes()
-      .then((next) => {
-        if (!next || typeof next !== "object") return;
-        setLiveQuotes((prev) => {
-          if (next.connected === false) {
-            return { ...next, quotes: {}, options: {} };
-          }
-          return {
-            ...next,
-            quotes: { ...(prev?.quotes ?? {}), ...(next.quotes ?? {}) },
-            options: { ...(prev?.options ?? {}), ...(next.options ?? {}) },
-          };
-        });
-      })
-      .catch(() => {});
-  }, []);
-  useVisiblePoll(pollLiveQuotes, LIVE_POLL_SECONDS * 1000, liveEnabled);
+  const liveEnabled = !!rawData?.trades?.length && !rawData.trades.some((t) => t.summary) && marketStatus?.open === true;
+  const liveQuotes = useQuoteStream(liveEnabled);
 
   /*
   hasSummaries is computed off the unfiltered raw data so it stays
@@ -159,6 +144,24 @@ export function DashboardShell() {
   const filtered = rawData ? filterByRank(rawData, effectiveTopFilter) : null;
   const executions = rawData?.executions ?? null;
   const stats = filtered?.trades ? computeStats(filtered.trades, executions) : null;
+
+  /*
+  Market closed → render the closed-page full-bleed. No SSE stream,
+  no auto-refresh, no skeleton spinner. The page links to /history,
+  which is DB-only and the right home for "what did the model do
+  recently?" while the live dashboard is dark.
+
+  marketStatus is null on first render (mid-fetch); we show the
+  loading state then so we don't briefly flash the closed-page on a
+  page where the market is actually open.
+  */
+  if (marketStatus && !marketStatus.open) {
+    return (
+      <div className="animate-in fade-in duration-300">
+        <MarketClosedPage status={marketStatus} />
+      </div>
+    );
+  }
 
   return (
     <div className="animate-in fade-in duration-300">
@@ -174,7 +177,7 @@ export function DashboardShell() {
             <TopNFilter value={topFilter} onChange={setTopFilter} />
           </div>
         ) : null}
-        {!rawData ? (
+        {!rawData || !marketStatus ? (
           <DashboardSkeleton />
         ) : !filtered?.trades?.length ? (
           <NoTradesToday />
