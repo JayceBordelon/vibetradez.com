@@ -123,6 +123,12 @@ func (s *Server) routes() {
 	unsubLimit := newIPLimiter(30, 10)
 
 	s.mux.HandleFunc("/health", s.handleHealth)
+	// /healthz is a lightweight liveness probe — db ping only, no
+	// external upstream probes. Wired to the docker-compose healthcheck
+	// so a slow Schwab / Anthropic response can't trip a container
+	// restart cascade. The richer /health still runs probes for the
+	// post-deploy healthcheck.yml workflow.
+	s.mux.HandleFunc("/healthz", s.handleLiveness)
 	s.mux.HandleFunc("/auth/unsubscribe", unsubLimit.middleware(s.handleUnsubscribeLink))
 	s.mux.HandleFunc("/auth/schwab", authLimit.middleware(s.handleSchwabAuth))
 	// Callback is gated by the state-cookie check inside the handler, but
@@ -487,6 +493,27 @@ type healthResponse struct {
 }
 
 var serverStartTime = time.Now()
+
+/*
+handleLiveness is the lightweight liveness probe wired to the
+docker-compose healthcheck. Returns 200 if the process is responsive
+and the DB is reachable, 503 otherwise. No external upstream probes
+(Schwab, Anthropic, sentiment scrapers) — those live on /health,
+which the post-deploy healthcheck.yml workflow exercises. Without
+this split, the compose healthcheck's 5s timeout would trip on the
+first slow Schwab response and trigger a restart cascade.
+*/
+func (s *Server) handleLiveness(w http.ResponseWriter, r *http.Request) {
+	if err := s.db.Ping(); err != nil {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte("db unreachable\n"))
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok\n"))
+}
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	services := make(map[string]serviceHealth)
