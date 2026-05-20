@@ -75,6 +75,49 @@ func TestVerify_NormalizesEmail(t *testing.T) {
 }
 
 /*
+TestVerifyWithFallback_AcceptsPreviousKey covers UNSUBSCRIBE_HMAC_KEY
+rotation: an email link signed under the operator's PREVIOUS key
+must still validate after they swap in a new primary key, as long
+as the previous key is still listed in UNSUBSCRIBE_HMAC_KEY_PREVIOUS.
+Without this, every outstanding subscriber email's unsub link
+breaks the moment the operator rotates the key.
+*/
+func TestVerifyWithFallback_AcceptsPreviousKey(t *testing.T) {
+	oldKey := testKey(t)
+	newKey := testKey(t)
+	tok := Sign(oldKey, "alice@example.com")
+
+	// Plain Verify against the NEW key fails (different secret).
+	if Verify(newKey, "alice@example.com", tok) {
+		t.Fatal("Verify with new key alone should reject token signed by old key")
+	}
+
+	// VerifyWithFallback accepts when the previous key is in the fallback list.
+	if !VerifyWithFallback(newKey, [][]byte{oldKey}, "alice@example.com", tok) {
+		t.Fatal("VerifyWithFallback should accept token signed by previous key")
+	}
+}
+
+func TestVerifyWithFallback_PrefersPrimary(t *testing.T) {
+	k1 := testKey(t)
+	k2 := testKey(t)
+	tok := Sign(k1, "alice@example.com")
+	// Even with k2 in fallback, the primary k1 must work first.
+	if !VerifyWithFallback(k1, [][]byte{k2}, "alice@example.com", tok) {
+		t.Fatal("VerifyWithFallback should accept primary signature")
+	}
+}
+
+func TestVerifyWithFallback_RejectsUnknownKey(t *testing.T) {
+	good := testKey(t)
+	other := testKey(t)
+	tok := Sign(other, "alice@example.com")
+	if VerifyWithFallback(good, [][]byte{testKey(t), testKey(t)}, "alice@example.com", tok) {
+		t.Fatal("VerifyWithFallback should reject token not signed by primary nor any previous key")
+	}
+}
+
+/*
 TestSign_Deterministic guards the property the email-link UX depends
 on: the same email + key must produce the same token every time, so
 users can re-use a link from any past email.

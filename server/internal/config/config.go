@@ -47,6 +47,18 @@ type Config struct {
 	*/
 	UnsubscribeHMACKey []byte
 	/*
+		Optional list of previous UNSUBSCRIBE_HMAC_KEY values, comma-
+		separated base64-encoded 32-byte secrets. Used for graceful
+		rotation: the primary key signs new email links; previous keys
+		still validate outstanding links in subscriber inboxes. Operator
+		retires a previous key by removing it from
+		UNSUBSCRIBE_HMAC_KEY_PREVIOUS (no code change required).
+
+		Unset = no fallback (default). Production behavior unchanged
+		until the operator adopts rotation.
+	*/
+	UnsubscribePrevHMACKeys [][]byte
+	/*
 		Auth service (auth.jaycebordelon.com) client credentials. Trading
 		server delegates sign-in to the centralized auth service and talks
 		to it over HTTP for token exchange + session introspection.
@@ -137,6 +149,20 @@ func Load() *Config {
 	if err != nil || len(unsubKey) != 32 {
 		log.Fatalf("UNSUBSCRIBE_HMAC_KEY must be base64-encoded 32 bytes (decoded_len=%d, err=%v)", len(unsubKey), err)
 	}
+	var unsubPrevKeys [][]byte
+	if prev := os.Getenv("UNSUBSCRIBE_HMAC_KEY_PREVIOUS"); prev != "" {
+		for _, raw := range strings.Split(prev, ",") {
+			raw = strings.TrimSpace(raw)
+			if raw == "" {
+				continue
+			}
+			decoded, perr := base64.StdEncoding.DecodeString(raw)
+			if perr != nil || len(decoded) != 32 {
+				log.Fatalf("UNSUBSCRIBE_HMAC_KEY_PREVIOUS entry must be base64-encoded 32 bytes (decoded_len=%d, err=%v)", len(decoded), perr)
+			}
+			unsubPrevKeys = append(unsubPrevKeys, decoded)
+		}
+	}
 
 	schwabAppKey := os.Getenv("SCHWAB_APP_KEY")
 	schwabSecret := os.Getenv("SCHWAB_SECRET")
@@ -176,22 +202,23 @@ func Load() *Config {
 			Schwab market data is optional, live quotes degrade gracefully when
 			keys are unset.
 		*/
-		SchwabAppKey:       schwabAppKey,
-		SchwabSecret:       schwabSecret,
-		SchwabCallbackURL:  getEnvOrDefault("SCHWAB_CALLBACK_URL", "https://vibetradez.com/auth/callback"),
-		SchwabTokenKey:     schwabTokenKey,
-		UnsubscribeHMACKey: unsubKey,
-		AuthBaseURL:        authBaseURL,
-		AuthPublicURL:      getEnvOrDefault("VT_AUTH_PUBLIC_URL", "https://auth.jaycebordelon.com"),
-		AuthClientID:       authClientID,
-		AuthClientSecret:   authClientSecret,
-		AuthRedirectURI:    authRedirectURI,
-		SessionCookieName:  getEnvOrDefault("SESSION_COOKIE_NAME", "vt_session"),
-		SessionTTLDays:     sessionTTLDays,
-		TradingEnabled:     os.Getenv("TRADING_ENABLED") == "true",
-		TradingMode:        resolveTradingMode(os.Getenv("TRADING_MODE")),
-		ExecutionRecipient: getEnvOrDefault("EXECUTION_RECIPIENT", "bordelonjayce@gmail.com"),
-		PublicBaseURL:      getEnvOrDefault("PUBLIC_BASE_URL", "https://vibetradez.com"),
+		SchwabAppKey:            schwabAppKey,
+		SchwabSecret:            schwabSecret,
+		SchwabCallbackURL:       getEnvOrDefault("SCHWAB_CALLBACK_URL", "https://vibetradez.com/auth/callback"),
+		SchwabTokenKey:          schwabTokenKey,
+		UnsubscribeHMACKey:      unsubKey,
+		UnsubscribePrevHMACKeys: unsubPrevKeys,
+		AuthBaseURL:             authBaseURL,
+		AuthPublicURL:           getEnvOrDefault("VT_AUTH_PUBLIC_URL", "https://auth.jaycebordelon.com"),
+		AuthClientID:            authClientID,
+		AuthClientSecret:        authClientSecret,
+		AuthRedirectURI:         authRedirectURI,
+		SessionCookieName:       getEnvOrDefault("SESSION_COOKIE_NAME", "vt_session"),
+		SessionTTLDays:          sessionTTLDays,
+		TradingEnabled:          os.Getenv("TRADING_ENABLED") == "true",
+		TradingMode:             resolveTradingMode(os.Getenv("TRADING_MODE")),
+		ExecutionRecipient:      getEnvOrDefault("EXECUTION_RECIPIENT", "bordelonjayce@gmail.com"),
+		PublicBaseURL:           getEnvOrDefault("PUBLIC_BASE_URL", "https://vibetradez.com"),
 	}
 }
 

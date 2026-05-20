@@ -79,11 +79,14 @@ type Server struct {
 	executor      *exec.Service
 	executorEmail string // email allowlist for /api/execution/* (single user)
 
-	// Unsubscribe HMAC key + the public-facing URL used to build email
-	// links. The /auth/unsubscribe handler validates ?t=<token> via
-	// unsub.Verify before flipping subscribers.active to false.
-	unsubscribeKey []byte
-	publicBaseURL  string
+	// Unsubscribe HMAC key + previous keys for rotation + the public-
+	// facing URL used to build email links. The /auth/unsubscribe
+	// handler validates ?t=<token> via unsub.VerifyWithFallback so
+	// links signed with the previous key (still in subscriber inboxes
+	// post-rotation) keep working.
+	unsubscribeKey     []byte
+	unsubscribePrevKey [][]byte
+	publicBaseURL      string
 }
 
 type subscribeRequest struct {
@@ -101,27 +104,28 @@ type apiResponse struct {
 	Message string `json:"message"`
 }
 
-func New(db *store.Store, schwabClient *schwab.Client, authClient *authclient.Client, scraper *sentiment.Scraper, emailClient *email.Client, emailFrom, anthropicKey, anthropicModel, sessionCookie string, sessionTTL time.Duration, ssoPublicURL, ssoClientID, ssoRedirectURI, port string, executor *exec.Service, executorEmail string, unsubscribeKey []byte, publicBaseURL string) *Server {
+func New(db *store.Store, schwabClient *schwab.Client, authClient *authclient.Client, scraper *sentiment.Scraper, emailClient *email.Client, emailFrom, anthropicKey, anthropicModel, sessionCookie string, sessionTTL time.Duration, ssoPublicURL, ssoClientID, ssoRedirectURI, port string, executor *exec.Service, executorEmail string, unsubscribeKey []byte, unsubscribePrevKey [][]byte, publicBaseURL string) *Server {
 	s := &Server{
-		db:             db,
-		schwab:         schwabClient,
-		auth:           authClient,
-		scraper:        scraper,
-		emailClient:    emailClient,
-		emailFrom:      emailFrom,
-		anthropicKey:   anthropicKey,
-		anthropicModel: anthropicModel,
-		sessionCookie:  sessionCookie,
-		sessionTTL:     sessionTTL,
-		ssoPublicURL:   strings.TrimRight(ssoPublicURL, "/"),
-		ssoClientID:    ssoClientID,
-		ssoRedirectURI: ssoRedirectURI,
-		mux:            http.NewServeMux(),
-		port:           port,
-		executor:       executor,
-		executorEmail:  executorEmail,
-		unsubscribeKey: unsubscribeKey,
-		publicBaseURL:  strings.TrimRight(publicBaseURL, "/"),
+		db:                 db,
+		schwab:             schwabClient,
+		auth:               authClient,
+		scraper:            scraper,
+		emailClient:        emailClient,
+		emailFrom:          emailFrom,
+		anthropicKey:       anthropicKey,
+		anthropicModel:     anthropicModel,
+		sessionCookie:      sessionCookie,
+		sessionTTL:         sessionTTL,
+		ssoPublicURL:       strings.TrimRight(ssoPublicURL, "/"),
+		ssoClientID:        ssoClientID,
+		ssoRedirectURI:     ssoRedirectURI,
+		mux:                http.NewServeMux(),
+		port:               port,
+		executor:           executor,
+		executorEmail:      executorEmail,
+		unsubscribeKey:     unsubscribeKey,
+		unsubscribePrevKey: unsubscribePrevKey,
+		publicBaseURL:      strings.TrimRight(publicBaseURL, "/"),
 	}
 	s.routes()
 	return s
@@ -434,7 +438,7 @@ func (s *Server) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Message: "email and token are required (use the unsubscribe link from any vibetradez.com email)"})
 		return
 	}
-	if !unsub.Verify(s.unsubscribeKey, req.Email, req.Token) {
+	if !unsub.VerifyWithFallback(s.unsubscribeKey, s.unsubscribePrevKey, req.Email, req.Token) {
 		writeJSON(w, http.StatusForbidden, apiResponse{OK: false, Message: "invalid unsubscribe token"})
 		return
 	}
@@ -469,7 +473,7 @@ func (s *Server) handleUnsubscribeLink(w http.ResponseWriter, r *http.Request) {
 		renderUnsubPage(w, http.StatusBadRequest, "Unsubscribe link incomplete", "The link you clicked is missing required parameters. Please use the link from a recent vibetradez.com email.")
 		return
 	}
-	if !unsub.Verify(s.unsubscribeKey, email, token) {
+	if !unsub.VerifyWithFallback(s.unsubscribeKey, s.unsubscribePrevKey, email, token) {
 		renderUnsubPage(w, http.StatusForbidden, "Unsubscribe link invalid", "We couldn't verify this unsubscribe link. It may have been altered or the link may be from before a key rotation. Please use the link from a recent vibetradez.com email or reply to the email and we'll unsubscribe you manually.")
 		return
 	}
