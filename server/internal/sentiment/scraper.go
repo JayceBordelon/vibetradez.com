@@ -18,8 +18,19 @@ import (
 type TickerMention struct {
 	Symbol    string
 	Mentions  int
-	Sentiment float64 // -1 to 1
+	Sentiment float64 // averaged final score in [-1, 1]
 	Sources   []string
+	/*
+		sentimentSum and sentimentSamples are merge accumulators populated
+		by scrapers that have a directional opinion (Yahoo movers
+		contributes ±0.5 per qualifying mover; StockTwits contributes a
+		keyword-scan score). mergeSources averages sum / samples at the
+		end. Sources without an opinion (Finviz, EDGAR) leave both at zero
+		so they don't dilute the score of sources that do — that was the
+		root cause of the "Sentiment always reads 0.00" UI bug.
+	*/
+	sentimentSum     float64
+	sentimentSamples int
 }
 
 type Scraper struct {
@@ -40,13 +51,64 @@ trending tickers. Each source contributes independently; failures are
 logged but do not block other sources from running.
 */
 func (s *Scraper) GetTrendingTickers(ctx context.Context, limit int) ([]TickerMention, error) {
-	allMentions := make(map[string]*TickerMention)
+	var allSources [][]TickerMention
 
-	merge := func(mentions []TickerMention) {
-		for _, m := range mentions {
+	// StockTwits: social momentum + trending scores
+	if mentions, err := s.scrapeStockTwitsTrending(ctx); err != nil {
+		log.Printf("Warning: StockTwits trending: %v", err)
+	} else {
+		allSources = append(allSources, mentions)
+	}
+
+	// Yahoo Finance: trending tickers and market movers
+	if mentions, err := s.scrapeYahooTrending(ctx); err != nil {
+		log.Printf("Warning: Yahoo trending: %v", err)
+	} else {
+		allSources = append(allSources, mentions)
+	}
+
+	// Finviz: unusual volume and most active options
+	if mentions, err := s.scrapeFinvizSignals(ctx); err != nil {
+		log.Printf("Warning: Finviz signals: %v", err)
+	} else {
+		allSources = append(allSources, mentions)
+	}
+
+	// SEC EDGAR: recent filings with catalyst keywords (8-K)
+	if mentions, err := s.scrapeEDGARCatalysts(ctx); err != nil {
+		log.Printf("Warning: EDGAR catalysts: %v", err)
+	} else {
+		allSources = append(allSources, mentions)
+	}
+
+	result := mergeSources(allSources...)
+
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+
+	return result, nil
+}
+
+/*
+mergeSources combines per-source mention slices into a deduped, sorted
+list. Sentiment is averaged only across the sources that actually
+contributed a directional signal (sentimentSamples > 0). Sources that
+left sentimentSamples=0 (Finviz, EDGAR) add to Mentions and Sources
+but don't pull the score toward zero — they're "no opinion" votes,
+not "neutral" votes.
+
+Extracted from GetTrendingTickers so it can be unit-tested with
+hand-crafted slices without the live HTTP scrapers.
+*/
+func mergeSources(sources ...[]TickerMention) []TickerMention {
+	allMentions := make(map[string]*TickerMention)
+	for _, src := range sources {
+		for _, m := range src {
 			if existing, ok := allMentions[m.Symbol]; ok {
 				existing.Mentions += m.Mentions
-				existing.Sentiment = (existing.Sentiment + m.Sentiment) / 2
+				existing.sentimentSum += m.sentimentSum
+				existing.sentimentSamples += m.sentimentSamples
 				existing.Sources = append(existing.Sources, m.Sources...)
 			} else {
 				copy := m
@@ -55,49 +117,20 @@ func (s *Scraper) GetTrendingTickers(ctx context.Context, limit int) ([]TickerMe
 		}
 	}
 
-	// StockTwits: social momentum + trending scores
-	if mentions, err := s.scrapeStockTwitsTrending(ctx); err != nil {
-		log.Printf("Warning: StockTwits trending: %v", err)
-	} else {
-		merge(mentions)
-	}
-
-	// Yahoo Finance: trending tickers and market movers
-	if mentions, err := s.scrapeYahooTrending(ctx); err != nil {
-		log.Printf("Warning: Yahoo trending: %v", err)
-	} else {
-		merge(mentions)
-	}
-
-	// Finviz: unusual volume and most active options
-	if mentions, err := s.scrapeFinvizSignals(ctx); err != nil {
-		log.Printf("Warning: Finviz signals: %v", err)
-	} else {
-		merge(mentions)
-	}
-
-	// SEC EDGAR: recent filings with catalyst keywords (8-K)
-	if mentions, err := s.scrapeEDGARCatalysts(ctx); err != nil {
-		log.Printf("Warning: EDGAR catalysts: %v", err)
-	} else {
-		merge(mentions)
-	}
-
-	// Convert and sort by mention count
 	result := make([]TickerMention, 0, len(allMentions))
 	for _, m := range allMentions {
+		if m.sentimentSamples > 0 {
+			m.Sentiment = m.sentimentSum / float64(m.sentimentSamples)
+		}
+		m.sentimentSum = 0
+		m.sentimentSamples = 0
 		result = append(result, *m)
 	}
 
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].Mentions > result[j].Mentions
 	})
-
-	if limit > 0 && len(result) > limit {
-		result = result[:limit]
-	}
-
-	return result, nil
+	return result
 }
 
 // ---------- StockTwits ----------
@@ -132,13 +165,20 @@ func (s *Scraper) scrapeStockTwitsTrending(ctx context.Context) ([]TickerMention
 		if !isEquityTicker(ticker) {
 			continue
 		}
-		sentiment := estimateSentimentFromText(sym.Summary)
-		mentions = append(mentions, TickerMention{
-			Symbol:    ticker,
-			Mentions:  2, // weight StockTwits trending higher than a single mention
-			Sentiment: sentiment,
-			Sources:   []string{"stocktwits-trending"},
-		})
+		tm := TickerMention{
+			Symbol:   ticker,
+			Mentions: 2, // weight StockTwits trending higher than a single mention
+			Sources:  []string{"stocktwits-trending"},
+		}
+		// Only contribute a sentiment vote when the keyword scan
+		// actually found bull or bear language. A blurb with neither
+		// is "no opinion", not "exactly neutral" — leaving samples=0
+		// keeps it from diluting other sources' real signal.
+		if sentiment := estimateSentimentFromText(sym.Summary); sentiment != 0 {
+			tm.sentimentSum = sentiment
+			tm.sentimentSamples = 1
+		}
+		mentions = append(mentions, tm)
 	}
 	return mentions, nil
 }
@@ -224,12 +264,17 @@ func (s *Scraper) scrapeYahooTrending(ctx context.Context) ([]TickerMention, err
 					}
 					mentions[sym].Mentions++
 					mentions[sym].Sources = append(mentions[sym].Sources, "yahoo-movers")
-					// Large move = stronger sentiment signal
+					// Large move = stronger sentiment signal. Each
+					// qualifying movers entry counts as one sample;
+					// mergeSources averages across samples globally,
+					// so we leave sum/samples unaveraged here.
 					pct := q.RegularMarketChangePercent.Raw
 					if pct > 3 {
-						mentions[sym].Sentiment += 0.5
+						mentions[sym].sentimentSum += 0.5
+						mentions[sym].sentimentSamples++
 					} else if pct < -3 {
-						mentions[sym].Sentiment -= 0.5
+						mentions[sym].sentimentSum -= 0.5
+						mentions[sym].sentimentSamples++
 					}
 				}
 			}
@@ -238,9 +283,6 @@ func (s *Scraper) scrapeYahooTrending(ctx context.Context) ([]TickerMention, err
 
 	result := make([]TickerMention, 0, len(mentions))
 	for _, m := range mentions {
-		if m.Mentions > 0 {
-			m.Sentiment = m.Sentiment / float64(m.Mentions)
-		}
 		result = append(result, *m)
 	}
 	return result, nil
