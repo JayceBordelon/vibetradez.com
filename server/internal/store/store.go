@@ -392,6 +392,31 @@ func (s *Store) SaveMorningTrades(date string, tradeList []trades.Trade) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	/*
+		Per-date Postgres advisory lock — closes the cross-process race
+		the executions-exist guard alone cannot close. Default tx
+		isolation is READ COMMITTED, so two concurrent
+		SaveMorningTrades calls (blue/green deploy, leftover compose,
+		RUN_ON_START race) would both COUNT=0 and both proceed to
+		DELETE/INSERT. pg_try_advisory_xact_lock returns false when
+		another tx already holds the lock; we treat that as
+		ErrTradesAlreadyExecuted so the caller short-circuits the
+		entire morning flow (email + executor) the same way it does
+		for the post-execution case.
+
+		Lock key derived via hashtext() of a per-date string so two
+		different dates can save concurrently. The lock is xact-scoped
+		so it releases automatically on COMMIT or ROLLBACK — no manual
+		unlock path to leak.
+	*/
+	var locked bool
+	if err := tx.QueryRow(`SELECT pg_try_advisory_xact_lock(hashtext($1))`, "vt_morning_trades:"+date).Scan(&locked); err != nil {
+		return fmt.Errorf("failed to acquire morning-trades advisory lock: %w", err)
+	}
+	if !locked {
+		return ErrTradesAlreadyExecuted
+	}
+
 	var execCount int
 	if err := tx.QueryRow(`
 		SELECT COUNT(*) FROM executions e

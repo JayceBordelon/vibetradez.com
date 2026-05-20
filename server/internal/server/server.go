@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log"
 	"math"
 	"math/rand/v2"
@@ -453,43 +454,103 @@ func (s *Server) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-handleUnsubscribeLink is the GET endpoint reached by clicking the
-unsubscribe link in any vibetradez.com email. Validates the HMAC
-token in the URL, removes the subscriber, and renders a plain
-HTML confirmation page.
+handleUnsubscribeLink is the public endpoint reached by clicking the
+unsubscribe link in any vibetradez.com email. Method semantics:
 
-Public — no X-VT-Source / no authentication required (the token
-IS the authentication). Rate-limited at 30/min/IP at the route
-layer to deflect token-enumeration storms.
+  - GET renders a confirmation page with a POST-button form. The
+    token + email are validated for shape only; the actual unsub
+    happens on POST. This pattern avoids "side-effect GET" failures
+    where Gmail / Outlook / Slack link-preview prefetch bots
+    accidentally unsubscribe users on forward or paste.
+
+  - POST performs the actual unsub. Triggered either by clicking the
+    confirmation page's button OR by Gmail / Apple Mail's native
+    one-click unsub UI (driven by the List-Unsubscribe-Post header
+    we set in resend.go).
+
+Token validation is shared. The 30/min/IP rate limit at the route
+layer applies to both methods.
 */
 func (s *Server) handleUnsubscribeLink(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	var email, token string
+	switch r.Method {
+	case http.MethodGet:
+		email = sanitizeForLog(strings.ToLower(r.URL.Query().Get("e")))
+		token = r.URL.Query().Get("t")
+	case http.MethodPost:
+		// Parse both URL query (RFC 8058 one-click — Gmail sends the
+		// e + t in the URL with empty body) AND form body (fallback
+		// from the on-page confirmation form).
+		_ = r.ParseForm()
+		email = sanitizeForLog(strings.ToLower(firstNonEmpty(r.URL.Query().Get("e"), r.PostFormValue("e"))))
+		token = firstNonEmpty(r.URL.Query().Get("t"), r.PostFormValue("t"))
+	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	email := sanitizeForLog(strings.ToLower(r.URL.Query().Get("e")))
-	token := r.URL.Query().Get("t")
+
 	if email == "" || token == "" {
-		renderUnsubPage(w, http.StatusBadRequest, "Unsubscribe link incomplete", "The link you clicked is missing required parameters. Please use the link from a recent vibetradez.com email.")
+		renderUnsubPage(w, http.StatusBadRequest, "Unsubscribe link incomplete", "The link you clicked is missing required parameters. Please use the link from a recent vibetradez.com email.", "", "")
+		return
+	}
+	if !emailRegex.MatchString(email) {
+		renderUnsubPage(w, http.StatusBadRequest, "Unsubscribe link invalid", "The email in this link doesn't look like a valid address. If you got it from a vibetradez.com email please reply and we'll unsubscribe you manually.", "", "")
 		return
 	}
 	if !unsub.VerifyWithFallback(s.unsubscribeKey, s.unsubscribePrevKey, email, token) {
-		renderUnsubPage(w, http.StatusForbidden, "Unsubscribe link invalid", "We couldn't verify this unsubscribe link. It may have been altered or the link may be from before a key rotation. Please use the link from a recent vibetradez.com email or reply to the email and we'll unsubscribe you manually.")
+		renderUnsubPage(w, http.StatusForbidden, "Unsubscribe link invalid", "We couldn't verify this unsubscribe link. It may have been altered or the link may be from before a key rotation. Please use the link from a recent vibetradez.com email or reply to the email and we'll unsubscribe you manually.", "", "")
 		return
 	}
+
+	if r.Method == http.MethodGet {
+		// Render the confirmation page; user clicks the button to POST.
+		renderUnsubPage(w, http.StatusOK, "Confirm unsubscribe", "Click below to remove this email from the vibetradez.com daily picks list. You can re-subscribe at any time from the website.", email, token)
+		return
+	}
+
+	// POST — token verified, actually do it.
 	if err := s.db.RemoveSubscriber(email); err != nil {
-		// "not active" is the common branch — surface it as already-unsubscribed.
 		log.Printf("Unsubscribe link removeSubscriber: %v", err)
-		renderUnsubPage(w, http.StatusOK, "You're already unsubscribed", "This email is already off the list. You won't receive further updates from vibetradez.com.")
+		// Mirror the success-page copy so a stale link doesn't leak an
+		// email-exists oracle to anyone holding a valid token.
+		renderUnsubPage(w, http.StatusOK, "Unsubscribed", "You won't receive further updates from vibetradez.com.", "", "")
 		return
 	}
 	log.Printf("Unsubscribed (link): %s", email)
-	renderUnsubPage(w, http.StatusOK, "Unsubscribed", "You won't receive further updates from vibetradez.com. Sorry to see you go.")
+	renderUnsubPage(w, http.StatusOK, "Unsubscribed", "You won't receive further updates from vibetradez.com. Sorry to see you go.", "", "")
 }
 
-func renderUnsubPage(w http.ResponseWriter, status int, title, body string) {
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+/*
+renderUnsubPage emits the unsubscribe HTML surface. When confirmEmail
++ confirmToken are non-empty, a POST-button form is rendered so the
+user can complete the unsub with one click. The form posts to
+/auth/unsubscribe with the email + token as form fields; the POST
+handler does the actual subscribers.active flip.
+
+All user-controlled values are HTML-escaped before emit — emailRegex
+already gates the input to a safe character set but the escape is
+defense-in-depth so a future regex relaxation doesn't open an XSS
+surface in the form's value=" " attribute.
+*/
+func renderUnsubPage(w http.ResponseWriter, status int, title, body, confirmEmail, confirmToken string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
+	form := ""
+	if confirmEmail != "" && confirmToken != "" {
+		form = fmt.Sprintf(`
+<form method="POST" action="/auth/unsubscribe" style="margin:24px 0 8px 0">
+<input type="hidden" name="e" value="%s">
+<input type="hidden" name="t" value="%s">
+<button type="submit" style="background:#ef4444;color:#fff;border:none;border-radius:8px;padding:12px 28px;font-size:14px;font-weight:600;cursor:pointer">Unsubscribe %s</button>
+</form>`, html.EscapeString(confirmEmail), html.EscapeString(confirmToken), html.EscapeString(confirmEmail))
+	}
 	_, _ = fmt.Fprintf(w, `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
@@ -504,9 +565,9 @@ func renderUnsubPage(w http.ResponseWriter, status int, title, body string) {
 </style>
 </head><body><main>
 <h1>%s</h1>
-<p>%s</p>
+<p>%s</p>%s
 <p><a href="https://vibetradez.com/">Back to vibetradez.com</a></p>
-</main></body></html>`, title, title, body)
+</main></body></html>`, html.EscapeString(title), html.EscapeString(title), html.EscapeString(body), form)
 }
 
 type serviceHealth struct {
@@ -997,9 +1058,13 @@ func (s *Server) handleSchwabAuth(w http.ResponseWriter, r *http.Request) {
 	state := base64.RawURLEncoding.EncodeToString(b)
 
 	http.SetCookie(w, &http.Cookie{
+		// Path="/auth/callback" instead of "/auth": the cookie is read
+		// only by handleSchwabCallback, so narrower scope keeps it out
+		// of every /auth/sso/* and /auth/unsubscribe request that
+		// doesn't need it (cookie hygiene, no functional change).
 		Name:     schwabStateCookie,
 		Value:    state,
-		Path:     "/auth",
+		Path:     "/auth/callback",
 		MaxAge:   600,
 		HttpOnly: true,
 		Secure:   true,
@@ -1034,9 +1099,13 @@ func (s *Server) handleSchwabCallback(w http.ResponseWriter, r *http.Request) {
 	// Burn the state cookie regardless of token-exchange outcome —
 	// states are one-shot.
 	http.SetCookie(w, &http.Cookie{
+		// Path="/auth/callback" instead of "/auth": the cookie is read
+		// only by handleSchwabCallback, so narrower scope keeps it out
+		// of every /auth/sso/* and /auth/unsubscribe request that
+		// doesn't need it (cookie hygiene, no functional change).
 		Name:     schwabStateCookie,
 		Value:    "",
-		Path:     "/auth",
+		Path:     "/auth/callback",
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   true,

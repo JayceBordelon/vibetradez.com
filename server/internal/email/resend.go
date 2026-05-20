@@ -99,12 +99,21 @@ func (c *Client) SendPersonalizedToList(from string, to []string, subject, htmlC
 		if i > 0 {
 			time.Sleep(perRecipientSendSpacing)
 		}
-		body := strings.ReplaceAll(htmlContent, placeholder, unsubURLFor(addr))
+		unsubURL := unsubURLFor(addr)
+		body := strings.ReplaceAll(htmlContent, placeholder, unsubURL)
 		params := &resend.SendEmailRequest{
 			From:    from,
 			To:      []string{addr},
 			Subject: subject,
 			Html:    body,
+			// RFC 8058 one-click unsubscribe. Gmail's bulk-sender rules
+			// require these headers since Feb 2024; Apple Mail, Yahoo,
+			// and most enterprise clients render a native "Unsubscribe"
+			// button in the inbox UI when both are present.
+			Headers: map[string]string{
+				"List-Unsubscribe":      "<" + unsubURL + ">",
+				"List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+			},
 		}
 		if _, err := c.client.Emails.Send(params); err != nil {
 			result.Failed++

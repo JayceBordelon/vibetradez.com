@@ -1,4 +1,4 @@
-import type { ApiResponse, ChartParams, ChartResponse, DashboardResponse, LiveQuotesResponse, WeekResponse } from "@/types/trade";
+import type { ApiResponse, DashboardResponse, LiveQuotesResponse, WeekResponse } from "@/types/trade";
 
 export interface SessionUser {
   id: number;
@@ -101,16 +101,11 @@ async function authFetch<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  getTradeDates: (limit = 30) => clientFetch<{ dates: string[] }>(`/api/trades/dates?limit=${limit}`),
-
   getTrades: (date?: string) => clientFetch<DashboardResponse>(date ? `/api/trades/today?date=${date}` : "/api/trades/today"),
 
   getWeekTrades: (start: string, end: string) => clientFetch<WeekResponse>(`/api/trades/week?start=${start}&end=${end}`),
 
   getLiveQuotes: () => clientFetch<LiveQuotesResponse>("/api/quotes/live"),
-
-  getChartData: (symbol: string, params: ChartParams) =>
-    clientFetch<ChartResponse>(`/api/chart/${symbol}?periodType=${params.ptype}&period=${params.period}&frequencyType=${params.ftype}&frequency=${params.freq}`),
 
   me: () => clientFetch<MeResponse>("/api/me"),
 

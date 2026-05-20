@@ -119,24 +119,3 @@ export interface ApiResponse {
   ok: boolean;
   message: string;
 }
-
-export interface ChartCandle {
-  time: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
-export interface ChartResponse {
-  symbol: string;
-  candles: ChartCandle[];
-}
-
-export interface ChartParams {
-  period: number;
-  ptype: string;
-  ftype: string;
-  freq: number;
-}

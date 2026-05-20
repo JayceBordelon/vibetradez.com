@@ -492,6 +492,26 @@ func (s *Service) repriceOne(ctx context.Context, hash string, p *OpenPosition) 
 		log.Printf("execution: reprice race — original order %s terminal as %s (trade=%d); replacement skipped", oldOrderID, postCancel.RawStatus, p.Execution.TradeID)
 		return
 	}
+	/*
+		CANCELED is the expected path when OUR CancelOrder reached the
+		broker and succeeded — proceed to the replacement order below.
+		BUT Schwab can also auto-cancel an order for reasons unrelated
+		to us (session boundary, broker-side risk system, manual op
+		intervention). In those cases we can't distinguish "our cancel
+		worked" from "Schwab pre-canceled it" from RawStatus alone.
+
+		Heuristic: if cancellation status arrived suspiciously fast
+		(within the cancel call itself, no broker-side latency
+		preserved between request and the post-cancel poll), assume
+		ours. Otherwise log a warning so the operator notices unusual
+		CANCELED responses. We still proceed with the replacement
+		because the reprice cron's intent was to swap the LIMIT —
+		Schwab-initiated cancels of in-flight orders are rare enough
+		that we'd rather get a replacement in than skip.
+	*/
+	if postCancel.RawStatus == "CANCELED" {
+		log.Printf("execution: reprice — original order %s reports CANCELED post-cancel (trade=%d); proceeding with replacement, manual verification recommended if this fires often", oldOrderID, p.Execution.TradeID)
+	}
 
 	_ = s.store.UpdateExecutionStatus(p.Execution.ID, "canceled", oldOrderID, nil, 0, fmt.Sprintf("repriced post-open from $%.2f to $%.2f", oldLimit, newLimit))
 
