@@ -28,6 +28,7 @@ import (
 	"vibetradez.com/internal/sentiment"
 	"vibetradez.com/internal/store"
 	"vibetradez.com/internal/trades"
+	"vibetradez.com/internal/unsub"
 )
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
@@ -52,6 +53,12 @@ type Server struct {
 	// Auto-execution (paper or live). nil = trading disabled at startup.
 	executor      *exec.Service
 	executorEmail string // email allowlist for /api/execution/* (single user)
+
+	// Unsubscribe HMAC key + the public-facing URL used to build email
+	// links. The /auth/unsubscribe handler validates ?t=<token> via
+	// unsub.Verify before flipping subscribers.active to false.
+	unsubscribeKey []byte
+	publicBaseURL  string
 }
 
 type subscribeRequest struct {
@@ -61,6 +68,7 @@ type subscribeRequest struct {
 
 type unsubscribeRequest struct {
 	Email string `json:"email"`
+	Token string `json:"token"`
 }
 
 type apiResponse struct {
@@ -68,7 +76,7 @@ type apiResponse struct {
 	Message string `json:"message"`
 }
 
-func New(db *store.Store, schwabClient *schwab.Client, authClient *authclient.Client, scraper *sentiment.Scraper, emailClient *email.Client, emailFrom, anthropicKey, anthropicModel, sessionCookie string, sessionTTL time.Duration, ssoPublicURL, ssoClientID, ssoRedirectURI, port string, executor *exec.Service, executorEmail string) *Server {
+func New(db *store.Store, schwabClient *schwab.Client, authClient *authclient.Client, scraper *sentiment.Scraper, emailClient *email.Client, emailFrom, anthropicKey, anthropicModel, sessionCookie string, sessionTTL time.Duration, ssoPublicURL, ssoClientID, ssoRedirectURI, port string, executor *exec.Service, executorEmail string, unsubscribeKey []byte, publicBaseURL string) *Server {
 	s := &Server{
 		db:             db,
 		schwab:         schwabClient,
@@ -87,6 +95,8 @@ func New(db *store.Store, schwabClient *schwab.Client, authClient *authclient.Cl
 		port:           port,
 		executor:       executor,
 		executorEmail:  executorEmail,
+		unsubscribeKey: unsubscribeKey,
+		publicBaseURL:  strings.TrimRight(publicBaseURL, "/"),
 	}
 	s.routes()
 	return s
@@ -107,7 +117,13 @@ func (s *Server) routes() {
 	authLimit := newIPLimiter(10, 5)     // 10/min, 5-burst (OAuth retries)
 	executionLimit := newIPLimiter(5, 3) // 5/min, 3-burst (HMAC tokens unbruteable; this is just DoS bound)
 
+	// Unsubscribe rate limiter — public endpoint (no X-VT-Source gate)
+	// hit via email links. 30/min/IP is generous for a single user but
+	// blocks token-enumeration storms.
+	unsubLimit := newIPLimiter(30, 10)
+
 	s.mux.HandleFunc("/health", s.handleHealth)
+	s.mux.HandleFunc("/auth/unsubscribe", unsubLimit.middleware(s.handleUnsubscribeLink))
 	s.mux.HandleFunc("/auth/schwab", authLimit.middleware(s.handleSchwabAuth))
 	// Callback is gated by the state-cookie check inside the handler, but
 	// also rate-limited so a flood of bogus callbacks can't churn the
@@ -356,6 +372,19 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, apiResponse{OK: true, Message: "subscribed successfully"})
 }
 
+/*
+handleUnsubscribe is the JSON-API path for the web form. Was a
+guess-the-email mass-unsub vector — anyone who knew or guessed a
+subscriber's email could POST `{"email": "…"}` and remove them,
+gated only by a defeatable per-IP rate limit.
+
+Now requires a valid HMAC token signed by the server (mintEd via
+unsub.Sign with the operator's UNSUBSCRIBE_HMAC_KEY). The website's
+UnsubscribeForm no longer hits this endpoint directly — users
+unsubscribe by clicking the link in any vibetradez.com email,
+which lands on GET /auth/unsubscribe with the token already in the
+URL.
+*/
 func (s *Server) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, http.StatusMethodNotAllowed, apiResponse{OK: false, Message: "method not allowed"})
@@ -370,8 +399,12 @@ func (s *Server) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 
-	if req.Email == "" {
-		writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Message: "email is required"})
+	if req.Email == "" || req.Token == "" {
+		writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Message: "email and token are required (use the unsubscribe link from any vibetradez.com email)"})
+		return
+	}
+	if !unsub.Verify(s.unsubscribeKey, req.Email, req.Token) {
+		writeJSON(w, http.StatusForbidden, apiResponse{OK: false, Message: "invalid unsubscribe token"})
 		return
 	}
 
@@ -380,8 +413,65 @@ func (s *Server) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Unsubscribed: %s", req.Email)
+	log.Printf("Unsubscribed (api): %s", req.Email)
 	writeJSON(w, http.StatusOK, apiResponse{OK: true, Message: "unsubscribed successfully"})
+}
+
+/*
+handleUnsubscribeLink is the GET endpoint reached by clicking the
+unsubscribe link in any vibetradez.com email. Validates the HMAC
+token in the URL, removes the subscriber, and renders a plain
+HTML confirmation page.
+
+Public — no X-VT-Source / no authentication required (the token
+IS the authentication). Rate-limited at 30/min/IP at the route
+layer to deflect token-enumeration storms.
+*/
+func (s *Server) handleUnsubscribeLink(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("e")))
+	token := r.URL.Query().Get("t")
+	if email == "" || token == "" {
+		renderUnsubPage(w, http.StatusBadRequest, "Unsubscribe link incomplete", "The link you clicked is missing required parameters. Please use the link from a recent vibetradez.com email.")
+		return
+	}
+	if !unsub.Verify(s.unsubscribeKey, email, token) {
+		renderUnsubPage(w, http.StatusForbidden, "Unsubscribe link invalid", "We couldn't verify this unsubscribe link. It may have been altered or the link may be from before a key rotation. Please use the link from a recent vibetradez.com email or reply to the email and we'll unsubscribe you manually.")
+		return
+	}
+	if err := s.db.RemoveSubscriber(email); err != nil {
+		// "not active" is the common branch — surface it as already-unsubscribed.
+		log.Printf("Unsubscribe link removeSubscriber: %v", err)
+		renderUnsubPage(w, http.StatusOK, "You're already unsubscribed", "This email is already off the list. You won't receive further updates from vibetradez.com.")
+		return
+	}
+	log.Printf("Unsubscribed (link): %s", email)
+	renderUnsubPage(w, http.StatusOK, "Unsubscribed", "You won't receive further updates from vibetradez.com. Sorry to see you go.")
+}
+
+func renderUnsubPage(w http.ResponseWriter, status int, title, body string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = fmt.Fprintf(w, `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>%s | VibeTradez</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0a0a0a;color:#e5e5e5;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px}
+  main{max-width:520px;background:#171717;border:1px solid #262626;border-radius:12px;padding:32px;text-align:center}
+  h1{margin:0 0 12px 0;font-size:22px;font-weight:700}
+  p{margin:0 0 16px 0;font-size:15px;line-height:1.55;color:#a3a3a3}
+  a{color:#22c55e;text-decoration:none;font-weight:600}
+</style>
+</head><body><main>
+<h1>%s</h1>
+<p>%s</p>
+<p><a href="https://vibetradez.com/">Back to vibetradez.com</a></p>
+</main></body></html>`, title, title, body)
 }
 
 type serviceHealth struct {

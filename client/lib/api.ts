@@ -117,10 +117,17 @@ export const api = {
   // Note: /auth/logout lives under /auth/*, not /api/*, so no X-VT-Source header.
   logout: () => authFetch<ApiResponse>("/auth/logout", { method: "POST" }),
 
-  unsubscribe: (email: string) =>
+  /*
+  Programmatic unsubscribe path — requires the HMAC token minted server-side
+  and emailed to the subscriber. No call site uses it from the website
+  today (UnsubscribeForm now points users to the link in their email),
+  but kept as a thin wrapper so any future tool that already holds a
+  valid token can call it.
+  */
+  unsubscribe: (email: string, token: string) =>
     clientFetch<ApiResponse>("/api/unsubscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...HEADERS },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, token }),
     }),
 };

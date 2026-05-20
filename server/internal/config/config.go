@@ -37,6 +37,16 @@ type Config struct {
 	*/
 	SchwabTokenKey []byte
 	/*
+		HMAC key for unsubscribe-link tokens embedded in every outbound
+		subscriber email. Loaded from UNSUBSCRIBE_HMAC_KEY (base64-encoded
+		32 bytes — `openssl rand -base64 32`). Without it /api/unsubscribe
+		was a guess-the-email mass-unsub vector. Required (mustEnv) — a
+		subscriber-email pipeline without working unsub links is a CAN-SPAM
+		exposure, so we refuse to boot instead of silently sending mail
+		with dead links.
+	*/
+	UnsubscribeHMACKey []byte
+	/*
 		Auth service (auth.jaycebordelon.com) client credentials. Trading
 		server delegates sign-in to the centralized auth service and talks
 		to it over HTTP for token exchange + session introspection.
@@ -122,6 +132,12 @@ func Load() *Config {
 		}
 	}
 
+	unsubKeyRaw := mustEnv("UNSUBSCRIBE_HMAC_KEY")
+	unsubKey, err := base64.StdEncoding.DecodeString(unsubKeyRaw)
+	if err != nil || len(unsubKey) != 32 {
+		log.Fatalf("UNSUBSCRIBE_HMAC_KEY must be base64-encoded 32 bytes (decoded_len=%d, err=%v)", len(unsubKey), err)
+	}
+
 	schwabAppKey := os.Getenv("SCHWAB_APP_KEY")
 	schwabSecret := os.Getenv("SCHWAB_SECRET")
 	var schwabTokenKey []byte
@@ -164,6 +180,7 @@ func Load() *Config {
 		SchwabSecret:       schwabSecret,
 		SchwabCallbackURL:  getEnvOrDefault("SCHWAB_CALLBACK_URL", "https://vibetradez.com/auth/callback"),
 		SchwabTokenKey:     schwabTokenKey,
+		UnsubscribeHMACKey: unsubKey,
 		AuthBaseURL:        authBaseURL,
 		AuthPublicURL:      getEnvOrDefault("VT_AUTH_PUBLIC_URL", "https://auth.jaycebordelon.com"),
 		AuthClientID:       authClientID,
