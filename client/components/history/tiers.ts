@@ -21,7 +21,7 @@ hero series; Top 3 takes the warm orange accent; Top 10 sits as the
 neutral zinc backdrop.
 */
 export const TIER_COLORS: Record<TierKey, string> = {
-  top1: "var(--gpt)",
+  top1: "var(--brand-green)",
   top3: "var(--claude)",
   top10: "var(--chart-3)",
 };
@@ -36,7 +36,7 @@ look doesn't change. Top 1 and Top 3 keep their brand colors which
 already pass.
 */
 export const TIER_PILL_COLORS: Record<TierKey, string> = {
-  top1: "var(--gpt)",
+  top1: "var(--brand-green)",
   top3: "var(--claude)",
   top10: "var(--tier-pill-top10)",
 };

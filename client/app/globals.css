@@ -78,11 +78,16 @@
      stays untouched. Zinc-700 → ~10:1 on white text. */
   --tier-pill-top10: #3f3f46;
 
-  /* AI brand colors. Slightly darkened from the marketing pure brand
-     hex so headline text passes 4.5:1 on white in light mode. */
-  --gpt: #0a7a5e;
-  --gpt-light: rgba(16, 163, 127, 0.10);
-  --gpt-border: rgba(16, 163, 127, 0.25);
+  /* Brand accents. --brand-green is VibeTradez' primary green (was
+     historically named --gpt back when the picker ran a parallel
+     OpenAI tier; the brand and the green stayed even though GPT did
+     not). --claude is the Anthropic accent used for the picker's
+     model attribution and rationale callouts. Both are slightly
+     darkened from the marketing pure brand hex so headline text
+     passes 4.5:1 on white in light mode. */
+  --brand-green: #0a7a5e;
+  --brand-green-light: rgba(16, 163, 127, 0.10);
+  --brand-green-border: rgba(16, 163, 127, 0.25);
   --claude: #b04a30;
   --claude-light: rgba(217, 119, 87, 0.10);
   --claude-border: rgba(217, 119, 87, 0.25);
@@ -158,10 +163,10 @@
      value that still keeps ≥4.5:1 against white text. */
   --tier-pill-top10: #52525b;
 
-  /* AI brand colors (dark) */
-  --gpt: #34d399;
-  --gpt-light: rgba(16, 163, 127, 0.12);
-  --gpt-border: rgba(52, 211, 153, 0.3);
+  /* Brand accents (dark mode) — see light-mode comment for naming. */
+  --brand-green: #34d399;
+  --brand-green-light: rgba(16, 163, 127, 0.12);
+  --brand-green-border: rgba(52, 211, 153, 0.3);
   --claude: #f4a27a;
   --claude-light: rgba(217, 119, 87, 0.12);
   --claude-border: rgba(244, 162, 122, 0.3);
@@ -218,9 +223,9 @@
   --color-chart-text: var(--chart-text);
 
   /* AI brand tokens */
-  --color-gpt: var(--gpt);
-  --color-gpt-light: var(--gpt-light);
-  --color-gpt-border: var(--gpt-border);
+  --color-brand-green: var(--brand-green);
+  --color-brand-green-light: var(--brand-green-light);
+  --color-brand-green-border: var(--brand-green-border);
   --color-claude: var(--claude);
   --color-claude-light: var(--claude-light);
   --color-claude-border: var(--claude-border);
@@ -283,23 +288,24 @@ body {
     font-variant-numeric: tabular-nums;
   }
 
-  /* GPT → Claude brand gradient */
+  /* Brand-green → Claude two-tone gradient used by the marketing
+     wordmark and the cross-section underlines. */
   .text-gradient-brand {
-    background: linear-gradient(135deg, var(--gpt), var(--claude));
+    background: linear-gradient(135deg, var(--brand-green), var(--claude));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
   .bg-gradient-brand {
-    background: linear-gradient(135deg, var(--gpt), var(--claude));
+    background: linear-gradient(135deg, var(--brand-green), var(--claude));
   }
   .border-gradient-brand {
-    border-image: linear-gradient(135deg, var(--gpt-border), var(--claude-border)) 1;
+    border-image: linear-gradient(135deg, var(--brand-green-border), var(--claude-border)) 1;
   }
 
   /* Active nav tab gradient underline */
   .nav-tab-active {
-    border-image: linear-gradient(90deg, var(--gpt), var(--claude)) 1;
+    border-image: linear-gradient(90deg, var(--brand-green), var(--claude)) 1;
     border-bottom-width: 2px;
   }
 
@@ -492,7 +498,7 @@ body {
     background:
       radial-gradient(ellipse 90% 70% at 12% 8%, color-mix(in oklab, #d97757 22%, transparent) 0%, transparent 60%),
       radial-gradient(ellipse 95% 75% at 92% 96%, color-mix(in oklab, #38bdf8 18%, transparent) 0%, transparent 62%),
-      radial-gradient(ellipse 80% 90% at 60% 40%, color-mix(in oklab, var(--gpt) 10%, transparent) 0%, transparent 70%);
+      radial-gradient(ellipse 80% 90% at 60% 40%, color-mix(in oklab, var(--brand-green) 10%, transparent) 0%, transparent 70%);
     filter: blur(40px) saturate(120%);
     animation: lg-mesh-breathe 48s ease-in-out infinite;
   }
@@ -500,7 +506,7 @@ body {
     background:
       radial-gradient(ellipse 90% 70% at 12% 8%, color-mix(in oklab, #d97757 28%, transparent) 0%, transparent 62%),
       radial-gradient(ellipse 95% 75% at 92% 96%, color-mix(in oklab, #38bdf8 22%, transparent) 0%, transparent 64%),
-      radial-gradient(ellipse 80% 90% at 60% 40%, color-mix(in oklab, var(--gpt) 14%, transparent) 0%, transparent 72%);
+      radial-gradient(ellipse 80% 90% at 60% 40%, color-mix(in oklab, var(--brand-green) 14%, transparent) 0%, transparent 72%);
     filter: blur(56px) saturate(110%);
   }
 
