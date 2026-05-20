@@ -91,15 +91,29 @@ func Run(db *store.Store, mail *email.Client, from string, isStubKey bool, unsub
 			continue
 		}
 
-		if err := mail.SendPersonalizedToList(from, emails, r.Subject, html, unsubURLFor); err != nil {
-			// Slug is now permanently claimed but the email never landed.
-			// We deliberately do NOT roll back the claim — re-opening the
-			// race would risk double-mass-email on the next boot, which
-			// is strictly worse than a single missed send. Operator can
-			// `DELETE FROM sent_rollouts WHERE slug=...` to retry.
-			log.Printf("rollouts: %s: CLAIMED but send failed — slug is now inert, delete the row to retry: %v", r.Slug, err)
+		res := mail.SendPersonalizedToList(from, emails, r.Subject, html, unsubURLFor)
+		if res.Failed == res.Total && res.Total > 0 {
+			/*
+				Zero recipients landed — total failure (Resend hard-down,
+				rate-limit cliff, etc.). Roll back the claim by DELETE-ing
+				the sent_rollouts row so the next boot can retry. This is
+				safe because nobody saw the email — no double-send risk.
+			*/
+			if rbErr := db.DeleteRolloutClaim(r.Slug); rbErr != nil {
+				log.Printf("rollouts: %s: ZERO landed AND rollback failed (manual DELETE FROM sent_rollouts WHERE slug='%s' required): send_err=%v rollback_err=%v", r.Slug, r.Slug, res.FailureDetail(), rbErr)
+			} else {
+				log.Printf("rollouts: %s: ZERO landed, claim rolled back for next-boot retry (%s)", r.Slug, res.FailureDetail())
+			}
 			continue
 		}
-		log.Printf("rollouts: %s sent to %d subscribers", r.Slug, len(emails))
+		if res.Failed > 0 {
+			// Partial failure — some subscribers got the rollout, some
+			// did not. Keep the claim (preventing double-send to the
+			// successful set on next boot) and log loudly so the
+			// operator can hand-retry the failed recipients.
+			log.Printf("rollouts: %s: PARTIAL — %d/%d delivered, %d failed (slug remains claimed; failed addrs need manual retry): %s", r.Slug, res.Succeeded, res.Total, res.Failed, res.FailureDetail())
+			continue
+		}
+		log.Printf("rollouts: %s sent to %d subscribers", r.Slug, res.Total)
 	}
 }

@@ -44,7 +44,7 @@ when no qualifying pick converted to an execution that day.
 */
 export interface Execution {
   mode: "paper" | "live";
-  state: "submitted" | "holding" | "closed" | "close_failed" | "failed";
+  state: "submitted" | "holding" | "closed" | "close_failed" | "failed" | "canceled";
   symbol: string;
   contract_type: string;
   strike_price: number;
@@ -118,25 +118,4 @@ export interface LiveQuotesResponse {
 export interface ApiResponse {
   ok: boolean;
   message: string;
-}
-
-export interface ChartCandle {
-  time: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
-export interface ChartResponse {
-  symbol: string;
-  candles: ChartCandle[];
-}
-
-export interface ChartParams {
-  period: number;
-  ptype: string;
-  ftype: string;
-  freq: number;
 }

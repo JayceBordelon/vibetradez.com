@@ -373,6 +373,56 @@ multiple contracts in a single morning (top 3 phase + greedy fill), and the fron
 needs to find the matching execution per trade card to source
 realized P&L from broker truth instead of the modeled EOD summary.
 */
+/*
+BasketSummaryForDate returns one row per open-side execution for the
+given trade_date, joined to the trade for rank/symbol/contract spec
+and aliased through exec.BasketSummaryRow so the executor service can
+render the morning summary email without importing this package.
+
+Ordered by trade rank ascending so the email reads rank-1 → rank-10.
+Includes every open-side execution row regardless of status (filled,
+working, canceled, failed, rejected, pending) — the email surfaces
+all of them with their final disposition.
+*/
+func (s *Store) BasketSummaryForDate(tradeDate string) ([]exec.BasketSummaryRow, error) {
+	rows, err := s.db.Query(`
+		SELECT
+			COALESCE(t.rank, 0), t.symbol, t.contract_type, t.strike_price,
+			openX.mode, openX.status,
+			-- Schwab returns the LIMIT price as the order.price field; we
+			-- don't currently persist it separately. For reporting we
+			-- approximate via the fill_price when filled, else 0.
+			COALESCE(openX.fill_price, 0) AS fill_price,
+			COALESCE(NULLIF(openX.filled_quantity, 0), NULLIF(openX.requested_quantity, 0), 1) AS quantity,
+			COALESCE(openX.error_message, '') AS error_message
+		FROM executions openX
+		INNER JOIN trades t ON t.id = openX.trade_id
+		WHERE t.date = $1 AND openX.side = 'open'
+		ORDER BY t.rank ASC, openX.id ASC
+	`, tradeDate)
+	if err != nil {
+		return nil, fmt.Errorf("query basket summary for date: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []exec.BasketSummaryRow
+	for rows.Next() {
+		var r exec.BasketSummaryRow
+		if err := rows.Scan(&r.Rank, &r.Symbol, &r.ContractType, &r.StrikePrice,
+			&r.Mode, &r.Status, &r.FillPrice, &r.Quantity, &r.ErrorMessage); err != nil {
+			return nil, fmt.Errorf("scan basket summary row: %w", err)
+		}
+		// LimitPrice column doesn't exist on the executions table — we
+		// store the broker order id but not the original LIMIT. The
+		// summary email therefore shows FillPrice (for filled rows) or
+		// 0 (for non-filled), and the operator infers LIMIT from the
+		// trade's estimated_price × LimitPriceMultiplier if needed.
+		r.LimitPrice = 0
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) GetExecutionsForDate(date string) ([]*ExecutionView, error) {
 	rows, err := s.db.Query(`
 		SELECT

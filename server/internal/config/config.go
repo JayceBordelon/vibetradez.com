@@ -9,19 +9,30 @@ import (
 )
 
 type Config struct {
-	CronScheduleOpen   string
-	CronScheduleClose  string
-	CronScheduleWeekly string
-	ResendAPIKey       string
-	AnthropicAPIKey    string
-	AnthropicModel     string
-	EmailRecipients    []string
-	EmailFrom          string
-	DatabaseURL        string
-	ServerPort         string
-	SchwabAppKey       string
-	SchwabSecret       string
-	SchwabCallbackURL  string
+	// CronScheduleOpen — picker fires (saves picks + emails subscribers).
+	// Default 9:25 ET so Claude has 5 minutes to complete the multi-round
+	// tool-use loop before market open. NO executor in this path.
+	CronScheduleOpen string
+	// CronScheduleExecute — basket fires at the open against fresh live
+	// Schwab quotes. Default 9:30:00 ET sharp. Each LIMIT order is
+	// fire-and-forget; the per-minute reconcile cron picks up fills.
+	CronScheduleExecute string
+	// CronScheduleCancelDangling — cancel any still-WORKING LIMITs that
+	// didn't fill in the first 5 minutes post-open, then send the single
+	// consolidated execution-summary email. Default 9:35 ET.
+	CronScheduleCancelDangling string
+	CronScheduleClose          string
+	CronScheduleWeekly         string
+	ResendAPIKey               string
+	AnthropicAPIKey            string
+	AnthropicModel             string
+	EmailRecipients            []string
+	EmailFrom                  string
+	DatabaseURL                string
+	ServerPort                 string
+	SchwabAppKey               string
+	SchwabSecret               string
+	SchwabCallbackURL          string
 	/*
 		Token-at-rest encryption key for Schwab persisted access/refresh
 		tokens. Loaded from SCHWAB_TOKEN_ENCRYPTION_KEY (base64-encoded
@@ -46,6 +57,18 @@ type Config struct {
 		with dead links.
 	*/
 	UnsubscribeHMACKey []byte
+	/*
+		Optional list of previous UNSUBSCRIBE_HMAC_KEY values, comma-
+		separated base64-encoded 32-byte secrets. Used for graceful
+		rotation: the primary key signs new email links; previous keys
+		still validate outstanding links in subscriber inboxes. Operator
+		retires a previous key by removing it from
+		UNSUBSCRIBE_HMAC_KEY_PREVIOUS (no code change required).
+
+		Unset = no fallback (default). Production behavior unchanged
+		until the operator adopts rotation.
+	*/
+	UnsubscribePrevHMACKeys [][]byte
 	/*
 		Auth service (auth.jaycebordelon.com) client credentials. Trading
 		server delegates sign-in to the centralized auth service and talks
@@ -137,6 +160,20 @@ func Load() *Config {
 	if err != nil || len(unsubKey) != 32 {
 		log.Fatalf("UNSUBSCRIBE_HMAC_KEY must be base64-encoded 32 bytes (decoded_len=%d, err=%v)", len(unsubKey), err)
 	}
+	var unsubPrevKeys [][]byte
+	if prev := os.Getenv("UNSUBSCRIBE_HMAC_KEY_PREVIOUS"); prev != "" {
+		for _, raw := range strings.Split(prev, ",") {
+			raw = strings.TrimSpace(raw)
+			if raw == "" {
+				continue
+			}
+			decoded, perr := base64.StdEncoding.DecodeString(raw)
+			if perr != nil || len(decoded) != 32 {
+				log.Fatalf("UNSUBSCRIBE_HMAC_KEY_PREVIOUS entry must be base64-encoded 32 bytes (decoded_len=%d, err=%v)", len(decoded), perr)
+			}
+			unsubPrevKeys = append(unsubPrevKeys, decoded)
+		}
+	}
 
 	schwabAppKey := os.Getenv("SCHWAB_APP_KEY")
 	schwabSecret := os.Getenv("SCHWAB_SECRET")
@@ -162,36 +199,39 @@ func Load() *Config {
 	}
 
 	return &Config{
-		CronScheduleOpen:   getEnvOrDefault("CRON_SCHEDULE_OPEN", "30 9 * * 1-5"),
-		CronScheduleClose:  getEnvOrDefault("CRON_SCHEDULE_CLOSE", "0 16 * * 1-5"),
-		CronScheduleWeekly: getEnvOrDefault("CRON_SCHEDULE_WEEKLY", "30 16 * * 5"),
-		ResendAPIKey:       resendKey,
-		AnthropicAPIKey:    anthropicKey,
-		AnthropicModel:     getEnvOrDefault("ANTHROPIC_MODEL", DefaultAnthropicModel),
-		EmailRecipients:    recipients,
-		EmailFrom:          getEnvOrDefault("EMAIL_FROM", "Vibe Tradez <trades@vibetradez.com>"),
-		DatabaseURL:        databaseURL,
-		ServerPort:         getEnvOrDefault("SERVER_PORT", "8080"),
+		CronScheduleOpen:           getEnvOrDefault("CRON_SCHEDULE_OPEN", "25 9 * * 1-5"),
+		CronScheduleExecute:        getEnvOrDefault("CRON_SCHEDULE_EXECUTE", "30 9 * * 1-5"),
+		CronScheduleCancelDangling: getEnvOrDefault("CRON_SCHEDULE_CANCEL_DANGLING", "35 9 * * 1-5"),
+		CronScheduleClose:          getEnvOrDefault("CRON_SCHEDULE_CLOSE", "0 16 * * 1-5"),
+		CronScheduleWeekly:         getEnvOrDefault("CRON_SCHEDULE_WEEKLY", "30 16 * * 5"),
+		ResendAPIKey:               resendKey,
+		AnthropicAPIKey:            anthropicKey,
+		AnthropicModel:             getEnvOrDefault("ANTHROPIC_MODEL", DefaultAnthropicModel),
+		EmailRecipients:            recipients,
+		EmailFrom:                  getEnvOrDefault("EMAIL_FROM", "Vibe Tradez <trades@vibetradez.com>"),
+		DatabaseURL:                databaseURL,
+		ServerPort:                 getEnvOrDefault("SERVER_PORT", "8080"),
 		/*
 			Schwab market data is optional, live quotes degrade gracefully when
 			keys are unset.
 		*/
-		SchwabAppKey:       schwabAppKey,
-		SchwabSecret:       schwabSecret,
-		SchwabCallbackURL:  getEnvOrDefault("SCHWAB_CALLBACK_URL", "https://vibetradez.com/auth/callback"),
-		SchwabTokenKey:     schwabTokenKey,
-		UnsubscribeHMACKey: unsubKey,
-		AuthBaseURL:        authBaseURL,
-		AuthPublicURL:      getEnvOrDefault("VT_AUTH_PUBLIC_URL", "https://auth.jaycebordelon.com"),
-		AuthClientID:       authClientID,
-		AuthClientSecret:   authClientSecret,
-		AuthRedirectURI:    authRedirectURI,
-		SessionCookieName:  getEnvOrDefault("SESSION_COOKIE_NAME", "vt_session"),
-		SessionTTLDays:     sessionTTLDays,
-		TradingEnabled:     os.Getenv("TRADING_ENABLED") == "true",
-		TradingMode:        resolveTradingMode(os.Getenv("TRADING_MODE")),
-		ExecutionRecipient: getEnvOrDefault("EXECUTION_RECIPIENT", "bordelonjayce@gmail.com"),
-		PublicBaseURL:      getEnvOrDefault("PUBLIC_BASE_URL", "https://vibetradez.com"),
+		SchwabAppKey:            schwabAppKey,
+		SchwabSecret:            schwabSecret,
+		SchwabCallbackURL:       getEnvOrDefault("SCHWAB_CALLBACK_URL", "https://vibetradez.com/auth/callback"),
+		SchwabTokenKey:          schwabTokenKey,
+		UnsubscribeHMACKey:      unsubKey,
+		UnsubscribePrevHMACKeys: unsubPrevKeys,
+		AuthBaseURL:             authBaseURL,
+		AuthPublicURL:           getEnvOrDefault("VT_AUTH_PUBLIC_URL", "https://auth.jaycebordelon.com"),
+		AuthClientID:            authClientID,
+		AuthClientSecret:        authClientSecret,
+		AuthRedirectURI:         authRedirectURI,
+		SessionCookieName:       getEnvOrDefault("SESSION_COOKIE_NAME", "vt_session"),
+		SessionTTLDays:          sessionTTLDays,
+		TradingEnabled:          os.Getenv("TRADING_ENABLED") == "true",
+		TradingMode:             resolveTradingMode(os.Getenv("TRADING_MODE")),
+		ExecutionRecipient:      getEnvOrDefault("EXECUTION_RECIPIENT", "bordelonjayce@gmail.com"),
+		PublicBaseURL:           getEnvOrDefault("PUBLIC_BASE_URL", "https://vibetradez.com"),
 	}
 }
 

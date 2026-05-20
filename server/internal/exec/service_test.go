@@ -44,6 +44,9 @@ func (f *fakeStore) OpenPositionsForDate(string) ([]OpenPosition, error) {
 func (f *fakeStore) WorkingOpenPositionsForDate(string) ([]OpenPosition, error) {
 	return f.workingPositions, nil
 }
+func (f *fakeStore) BasketSummaryForDate(string) ([]BasketSummaryRow, error) {
+	return nil, nil
+}
 
 type fakeMail struct {
 	sent []sentEmail
@@ -165,21 +168,11 @@ func TestHandleSinglePick_RejectedPersistsReasonAndEmails(t *testing.T) {
 		t.Errorf("errMessage: want 'Buying power insufficient', got %q", upd.errMessage)
 	}
 
-	if len(mail.sent) != 1 {
-		t.Fatalf("expected 1 email, got %d", len(mail.sent))
-	}
-	got := mail.sent[0]
-	if len(got.to) != 1 || got.to[0] != "ops@example.com" {
-		t.Errorf("recipient: want [ops@example.com], got %v", got.to)
-	}
-	if !strings.Contains(got.subject, "Open failed") {
-		t.Errorf("subject: want 'Open failed' marker, got %q", got.subject)
-	}
-	if !strings.Contains(got.html, "Buying power insufficient") {
-		t.Errorf("html missing reason")
-	}
-	if !strings.Contains(got.html, "ORDER-XYZ") {
-		t.Errorf("html missing order id")
+	// Per-execution emails removed in the execute-at-open redesign;
+	// the 9:35 consolidated SendExecutionSummary covers rejected
+	// outcomes. The DB row above still carries the reason string.
+	if len(mail.sent) != 0 {
+		t.Fatalf("expected 0 inline emails (consolidated summary fires at 9:35), got %d", len(mail.sent))
 	}
 }
 
@@ -225,15 +218,14 @@ func TestHandleSinglePick_PlaceErrorEmailsAndPersistsFailed(t *testing.T) {
 	if !strings.Contains(store.updates[0].errMessage, "token expired") {
 		t.Errorf("errMessage: want 'token expired', got %q", store.updates[0].errMessage)
 	}
-	if len(mail.sent) != 1 {
-		t.Fatalf("expected 1 alert email, got %d", len(mail.sent))
-	}
-	if len(mail.sent[0].to) != 1 || mail.sent[0].to[0] != "ops@example.com" {
-		t.Errorf("recipient: want [ops@example.com], got %v", mail.sent[0].to)
+	// Per-execution emails removed; the 9:35 consolidated summary
+	// covers PlaceOrder failures via the DB row's error_message.
+	if len(mail.sent) != 0 {
+		t.Fatalf("expected 0 inline alert emails (consolidated at 9:35), got %d", len(mail.sent))
 	}
 }
 
-func TestHandleSinglePick_FilledPersistsOrderIDAndSendsReceipt(t *testing.T) {
+func TestHandleSinglePick_FilledPersistsOrderID(t *testing.T) {
 	store := &fakeStore{}
 	mail := &fakeMail{}
 	trader := &countingTrader{fakeTrader: fakeTrader{
@@ -264,8 +256,10 @@ func TestHandleSinglePick_FilledPersistsOrderIDAndSendsReceipt(t *testing.T) {
 	if upd.status != "filled" || upd.orderID != "ORDER-FILL" {
 		t.Errorf("filled update: want status=filled orderID=ORDER-FILL, got %+v", upd)
 	}
-	if len(mail.sent) != 1 || !strings.Contains(mail.sent[0].subject, "Order filled") {
-		t.Errorf("expected receipt email, got %+v", mail.sent)
+	// Per-execution receipt email removed; the 9:35 consolidated
+	// summary covers filled outcomes.
+	if len(mail.sent) != 0 {
+		t.Errorf("expected 0 inline emails (consolidated at 9:35), got %+v", mail.sent)
 	}
 }
 
@@ -290,9 +284,9 @@ func TestHandleSinglePick_LimitPriceFromLiveAsk(t *testing.T) {
 	if trader.placed[0].OrderType != "LIMIT" {
 		t.Errorf("OrderType: want LIMIT, got %q", trader.placed[0].OrderType)
 	}
-	// 1.20 * 1.05 = 1.26
-	if trader.placed[0].Price != 1.26 {
-		t.Errorf("Price: want 1.26, got %.4f", trader.placed[0].Price)
+	// 1.20 * 1.10 = 1.32
+	if trader.placed[0].Price != 1.32 {
+		t.Errorf("Price: want 1.32, got %.4f", trader.placed[0].Price)
 	}
 }
 
@@ -313,9 +307,9 @@ func TestHandleSinglePick_LimitFallsBackToEstimateOnAskError(t *testing.T) {
 	if _, err := runSinglePick(svc, tr, 101); err != nil {
 		t.Fatalf("handleSinglePick: %v", err)
 	}
-	// 0.80 * 1.05 = 0.84
-	if len(trader.placed) != 1 || trader.placed[0].Price != 0.84 {
-		t.Errorf("Price: want 0.84 (fallback to estimate), got %+v", trader.placed)
+	// 0.80 * 1.10 = 0.88
+	if len(trader.placed) != 1 || trader.placed[0].Price != 0.88 {
+		t.Errorf("Price: want 0.88 (fallback to estimate), got %+v", trader.placed)
 	}
 }
 
@@ -327,7 +321,7 @@ func TestHandleSinglePick_LimitClampedToMaxContractPremium(t *testing.T) {
 		status:  OrderStatus{OrderID: "ORDER-CLAMP", RawStatus: "WORKING", Working: true},
 	}}
 	ask := func(_ context.Context, _, _, _ string, _ float64) (float64, error) {
-		return 9.90, nil // 9.90 * 1.05 = 10.395 → clamp to MaxContractPremium (10.00)
+		return 9.90, nil // 9.90 * 1.10 = 10.89 → clamp to MaxContractPremium (10.00)
 	}
 	svc := newTestServiceWithAsk(trader, store, mail, ask)
 
@@ -353,15 +347,13 @@ func TestHandleSinglePick_AbortsWhenAskAndEstimateBothZero(t *testing.T) {
 	if _, err := runSinglePick(svc, tr, 103); err == nil {
 		t.Fatal("expected error when no usable price basis")
 	}
-	// No order reached the broker AND the operator was alerted.
+	// No order reached the broker. Inline email removed — the 9:35
+	// consolidated summary will report the failure via the DB row.
 	if len(trader.placed) != 0 {
 		t.Errorf("expected no PlaceOrder call, but trader captured %+v", trader.placed)
 	}
-	if len(mail.sent) != 1 {
-		t.Fatalf("expected 1 alert email, got %d", len(mail.sent))
-	}
-	if !strings.Contains(mail.sent[0].subject, "Open failed") {
-		t.Errorf("subject: want 'Open failed' marker, got %q", mail.sent[0].subject)
+	if len(mail.sent) != 0 {
+		t.Fatalf("expected 0 inline emails (consolidated at 9:35), got %d", len(mail.sent))
 	}
 }
 
@@ -438,8 +430,8 @@ func TestHandleQualifyingPicks_StopsWhenSchwabCashIsLow(t *testing.T) {
 		status:     OrderStatus{OrderID: "ORDER-OK", RawStatus: "FILLED", Filled: true, Terminal: true, FillPrice: 1.25, FilledQuantity: 1},
 	}}
 	svc := newTestService(trader, store, mail)
-	// Limit prices: 1.25*1.05=1.31, 1.69*1.05=1.77, 1.65*1.05=1.73 (rounded).
-	// Costs (×100): 131, 177, 173. With $200 budget: only 131 fits.
+	// Limit prices: 1.25*1.10=1.38, 1.69*1.10=1.86, 1.65*1.10=1.82 (rounded).
+	// Costs (×100): 138, 186, 182. With $200 budget: only 138 fits.
 	picks := []trades.Trade{
 		basketSampleTrade("AKAM", 1, 1.25),
 		basketSampleTrade("RKLB", 2, 1.69),
@@ -547,405 +539,5 @@ func TestHandleSinglePick_WorkingPersistsOrderID(t *testing.T) {
 	}
 	if len(mail.sent) != 0 {
 		t.Errorf("expected no email on working state, got %d", len(mail.sent))
-	}
-}
-
-// ── RepriceWorkingOpens ───────────────────────────────────────────
-
-/*
-repriceTrader is a richer fake than fakeTrader, with per-order status
-lookup, captured cancels, and a queue of PlaceOrder return ids so a
-single test can simulate the cancel-old + place-new round trip.
-*/
-type repriceTrader struct {
-	statusByOrder  map[string]OrderStatus
-	statusGetErr   error
-	canceled       []string
-	cancelErr      error
-	cancelHook     func(orderID string)
-	placeIDs       []string
-	placedOrders   []Order
-	placeErr       error
-	placeStatusNew OrderStatus
-}
-
-func (r *repriceTrader) AccountHash(context.Context) (string, error) { return "ACCT-HASH", nil }
-func (r *repriceTrader) AvailableFunds(context.Context, string) (float64, error) {
-	return 1e6, nil
-}
-func (r *repriceTrader) PlaceOrder(_ context.Context, _ string, o Order) (string, error) {
-	if r.placeErr != nil {
-		return "", r.placeErr
-	}
-	if len(r.placeIDs) == 0 {
-		return "", errors.New("repriceTrader: no placeIDs left")
-	}
-	id := r.placeIDs[0]
-	r.placeIDs = r.placeIDs[1:]
-	r.placedOrders = append(r.placedOrders, o)
-	if r.statusByOrder == nil {
-		r.statusByOrder = map[string]OrderStatus{}
-	}
-	st := r.placeStatusNew
-	st.OrderID = id
-	r.statusByOrder[id] = st
-	return id, nil
-}
-func (r *repriceTrader) GetOrder(_ context.Context, _, orderID string) (OrderStatus, error) {
-	if r.statusGetErr != nil {
-		return OrderStatus{}, r.statusGetErr
-	}
-	st, ok := r.statusByOrder[orderID]
-	if !ok {
-		return OrderStatus{}, errors.New("repriceTrader: no status for " + orderID)
-	}
-	return st, nil
-}
-func (r *repriceTrader) CancelOrder(_ context.Context, _, orderID string) error {
-	r.canceled = append(r.canceled, orderID)
-	if r.cancelHook != nil {
-		r.cancelHook(orderID)
-	}
-	return r.cancelErr
-}
-
-func workingPositionFixture(execID int, tradeID int, orderID string, contractPrice float64) OpenPosition {
-	oid := orderID
-	return OpenPosition{
-		Execution: Execution{
-			ID:                execID,
-			TradeID:           tradeID,
-			Mode:              "live",
-			Side:              "open",
-			SchwabOrderID:     &oid,
-			Status:            "working",
-			RequestedQuantity: 1,
-		},
-		Symbol:        "AAPL",
-		ContractType:  "CALL",
-		StrikePrice:   150,
-		Expiration:    "2026-06-19",
-		ContractPrice: contractPrice,
-	}
-}
-
-func askFn(price float64, err error) func(context.Context, string, string, string, float64) (float64, error) {
-	return func(context.Context, string, string, string, float64) (float64, error) {
-		return price, err
-	}
-}
-
-func TestRepriceWorkingOpens_NoOpWhenNewLimitNotHigher(t *testing.T) {
-	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 0.92)},
-	}
-	mail := &fakeMail{}
-	trader := &repriceTrader{
-		statusByOrder: map[string]OrderStatus{
-			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 0.95},
-		},
-	}
-	// fresh ask × 1.05 = 0.90 × 1.05 = 0.945 → rounds to 0.95, equal to old.
-	svc := newTestServiceWithAsk(trader, store, mail, askFn(0.90, nil))
-
-	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
-
-	if len(trader.canceled) != 0 {
-		t.Errorf("expected no cancels on no-op, got %v", trader.canceled)
-	}
-	if len(trader.placedOrders) != 0 {
-		t.Errorf("expected no replacement orders on no-op, got %d", len(trader.placedOrders))
-	}
-	if len(store.updates) != 0 {
-		t.Errorf("expected no DB writes on no-op, got %d (%+v)", len(store.updates), store.updates)
-	}
-	if len(mail.sent) != 0 {
-		t.Errorf("expected no emails on no-op, got %d", len(mail.sent))
-	}
-}
-
-func TestRepriceWorkingOpens_CancelAndReplaceWhenAskMoved(t *testing.T) {
-	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 0.92)},
-	}
-	mail := &fakeMail{}
-	trader := &repriceTrader{
-		statusByOrder: map[string]OrderStatus{
-			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 0.92},
-		},
-		placeIDs:       []string{"ORDER-NEW"},
-		placeStatusNew: OrderStatus{RawStatus: "WORKING", Working: true},
-	}
-	// 2.40 × 1.05 = 2.52 → well above old 0.92 and below the $5 cap.
-	svc := newTestServiceWithAsk(trader, store, mail, askFn(2.40, nil))
-
-	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
-
-	if got := trader.canceled; len(got) != 1 || got[0] != "ORDER-OLD" {
-		t.Fatalf("expected cancel of ORDER-OLD, got %v", got)
-	}
-	if len(trader.placedOrders) != 1 {
-		t.Fatalf("expected one replacement order placed, got %d", len(trader.placedOrders))
-	}
-	if got := trader.placedOrders[0].Price; got != 2.52 {
-		t.Errorf("replacement limit: want 2.52, got %.4f", got)
-	}
-	if got := trader.placedOrders[0].OrderType; got != "LIMIT" {
-		t.Errorf("replacement order type: want LIMIT, got %q", got)
-	}
-
-	if len(store.inserts) != 1 {
-		t.Fatalf("expected one new execution row, got %d", len(store.inserts))
-	}
-	newExec := store.inserts[0]
-	if newExec.TradeID != 42 || newExec.Side != "open" || newExec.Mode != "live" {
-		t.Errorf("new execution shape unexpected: %+v", newExec)
-	}
-
-	// Expected update sequence:
-	//   1. old exec (id=7) → canceled with "repriced post-open ..." reason
-	//   2. new exec (id=1) → working with ORDER-NEW
-	//   3. new exec (id=1) → working with ORDER-NEW (post-place GetOrder confirmation)
-	if len(store.updates) < 2 {
-		t.Fatalf("expected at least 2 status updates, got %d (%+v)", len(store.updates), store.updates)
-	}
-	if store.updates[0].id != 7 || store.updates[0].status != "canceled" || store.updates[0].orderID != "ORDER-OLD" {
-		t.Errorf("update[0]: want id=7 canceled ORDER-OLD, got %+v", store.updates[0])
-	}
-	if !strings.Contains(store.updates[0].errMessage, "repriced post-open") {
-		t.Errorf("update[0] error message should mention repriced post-open, got %q", store.updates[0].errMessage)
-	}
-	if store.updates[1].status != "working" || store.updates[1].orderID != "ORDER-NEW" {
-		t.Errorf("update[1]: want working ORDER-NEW, got %+v", store.updates[1])
-	}
-	if len(mail.sent) != 0 {
-		t.Errorf("expected no emails on healthy reprice, got %d", len(mail.sent))
-	}
-}
-
-func TestRepriceWorkingOpens_CancelWithoutReplaceWhenOverCap(t *testing.T) {
-	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 3.08)},
-	}
-	mail := &fakeMail{}
-	trader := &repriceTrader{
-		statusByOrder: map[string]OrderStatus{
-			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 3.08},
-		},
-	}
-	// 14.60 × 1.05 = 15.33 → far above the $5 single-contract cap.
-	svc := newTestServiceWithAsk(trader, store, mail, askFn(14.60, nil))
-
-	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
-
-	if got := trader.canceled; len(got) != 1 || got[0] != "ORDER-OLD" {
-		t.Fatalf("expected cancel of ORDER-OLD, got %v", got)
-	}
-	if len(trader.placedOrders) != 0 {
-		t.Errorf("expected no replacement order when over cap, got %d", len(trader.placedOrders))
-	}
-	if len(store.inserts) != 0 {
-		t.Errorf("expected no new execution row when over cap, got %d", len(store.inserts))
-	}
-	if len(store.updates) != 1 {
-		t.Fatalf("expected 1 status update, got %d (%+v)", len(store.updates), store.updates)
-	}
-	upd := store.updates[0]
-	if upd.id != 7 || upd.status != "canceled" || upd.orderID != "ORDER-OLD" {
-		t.Errorf("update: want id=7 canceled ORDER-OLD, got %+v", upd)
-	}
-	if !strings.Contains(upd.errMessage, "exceeds single-contract cap") {
-		t.Errorf("update reason should mention single-contract cap exceed, got %q", upd.errMessage)
-	}
-	if len(mail.sent) != 1 {
-		t.Fatalf("expected 1 operator email on cap-exceed cancel, got %d", len(mail.sent))
-	}
-}
-
-func TestRepriceWorkingOpens_LeavesAloneWhenAlreadyFilled(t *testing.T) {
-	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 0.92)},
-	}
-	mail := &fakeMail{}
-	trader := &repriceTrader{
-		statusByOrder: map[string]OrderStatus{
-			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "FILLED", Filled: true, Terminal: true, LimitPrice: 0.92},
-		},
-	}
-	svc := newTestServiceWithAsk(trader, store, mail, askFn(2.40, nil))
-
-	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
-
-	if len(trader.canceled) != 0 {
-		t.Errorf("expected no cancel on already-filled order, got %v", trader.canceled)
-	}
-	if len(trader.placedOrders) != 0 {
-		t.Errorf("expected no replacement on already-filled order, got %d", len(trader.placedOrders))
-	}
-	if len(store.updates) != 0 {
-		t.Errorf("expected no DB writes (reconcile owns the filled flip), got %d", len(store.updates))
-	}
-}
-
-func TestRepriceWorkingOpens_LeavesAloneWhenFreshAskMissing(t *testing.T) {
-	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 0.92)},
-	}
-	mail := &fakeMail{}
-	trader := &repriceTrader{
-		statusByOrder: map[string]OrderStatus{
-			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 0.92},
-		},
-	}
-	svc := newTestServiceWithAsk(trader, store, mail, askFn(0, nil))
-
-	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
-
-	if len(trader.canceled) != 0 || len(trader.placedOrders) != 0 || len(store.updates) != 0 {
-		t.Errorf("expected total no-op when fresh ask is 0: canceled=%v placed=%d updates=%v", trader.canceled, len(trader.placedOrders), store.updates)
-	}
-}
-
-func TestRepriceWorkingOpens_NoOpWhenNoWorkingPositions(t *testing.T) {
-	store := &fakeStore{}
-	mail := &fakeMail{}
-	trader := &repriceTrader{}
-	svc := newTestServiceWithAsk(trader, store, mail, askFn(2.40, nil))
-
-	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
-
-	if len(trader.canceled) != 0 || len(trader.placedOrders) != 0 || len(store.updates) != 0 {
-		t.Errorf("expected total no-op with empty positions")
-	}
-}
-
-func TestRepriceWorkingOpens_SchwabGetOrderErrorDoesNotPanic(t *testing.T) {
-	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 0.92)},
-	}
-	mail := &fakeMail{}
-	trader := &repriceTrader{
-		statusGetErr: errors.New("schwab 503"),
-	}
-	svc := newTestServiceWithAsk(trader, store, mail, askFn(2.40, nil))
-
-	// Must not panic and must not act when broker status is unreadable.
-	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
-
-	if len(trader.canceled) != 0 || len(trader.placedOrders) != 0 || len(store.updates) != 0 {
-		t.Errorf("expected no actions on Schwab GetOrder error")
-	}
-}
-
-/*
-TestRepriceWorkingOpens_AbortsWhenOriginalFilledMidCancel guards the
-race we are closing in service.go: the original order can fill
-between the initial GetOrder probe and CancelOrder reaching Schwab.
-The cancel returns success on a filled order, and without a post-
-cancel re-poll we would then InsertExecution + PlaceOrder a
-replacement and hold the position twice. The fix re-polls and bails.
-*/
-func TestRepriceWorkingOpens_AbortsWhenOriginalFilledMidCancel(t *testing.T) {
-	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 0.92)},
-	}
-	mail := &fakeMail{}
-	trader := &repriceTrader{
-		statusByOrder: map[string]OrderStatus{
-			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 0.92},
-		},
-	}
-	// Cancel-hook flips the order to FILLED, simulating the race.
-	trader.cancelHook = func(orderID string) {
-		trader.statusByOrder[orderID] = OrderStatus{
-			OrderID:        orderID,
-			RawStatus:      "FILLED",
-			Filled:         true,
-			Terminal:       true,
-			FillPrice:      0.95,
-			FilledQuantity: 1,
-		}
-	}
-	svc := newTestServiceWithAsk(trader, store, mail, askFn(2.40, nil))
-
-	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
-
-	if len(trader.canceled) != 1 || trader.canceled[0] != "ORDER-OLD" {
-		t.Fatalf("expected exactly one cancel of ORDER-OLD, got %v", trader.canceled)
-	}
-	if len(trader.placedOrders) != 0 {
-		t.Fatalf("expected NO replacement order when original filled mid-cancel, got %d placed", len(trader.placedOrders))
-	}
-	if len(store.inserts) != 0 {
-		t.Fatalf("expected no new execution row, got %d", len(store.inserts))
-	}
-	// Original execution row should be flipped to 'filled' with the
-	// observed fill price (so the dashboard reflects broker truth).
-	if len(store.updates) != 1 {
-		t.Fatalf("expected exactly one update (original → filled), got %d (%+v)", len(store.updates), store.updates)
-	}
-	upd := store.updates[0]
-	if upd.id != 7 || upd.status != "filled" || upd.orderID != "ORDER-OLD" {
-		t.Errorf("update[0]: want id=7 filled ORDER-OLD, got %+v", upd)
-	}
-}
-
-/*
-TestRepriceWorkingOpens_AbortsWhenOriginalTerminalMidCancel covers
-the non-FILLED terminal case (REJECTED/EXPIRED mid-cancel). Same
-fix: no replacement order; the existing row gets marked rejected.
-*/
-func TestRepriceWorkingOpens_AbortsWhenOriginalTerminalMidCancel(t *testing.T) {
-	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 0.92)},
-	}
-	mail := &fakeMail{}
-	trader := &repriceTrader{
-		statusByOrder: map[string]OrderStatus{
-			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 0.92},
-		},
-	}
-	trader.cancelHook = func(orderID string) {
-		trader.statusByOrder[orderID] = OrderStatus{
-			OrderID:   orderID,
-			RawStatus: "REJECTED",
-			Terminal:  true,
-		}
-	}
-	svc := newTestServiceWithAsk(trader, store, mail, askFn(2.40, nil))
-
-	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
-
-	if len(trader.placedOrders) != 0 {
-		t.Fatalf("expected NO replacement order when original rejected mid-cancel, got %d placed", len(trader.placedOrders))
-	}
-	if len(store.inserts) != 0 {
-		t.Fatalf("expected no new execution row, got %d", len(store.inserts))
-	}
-	if len(store.updates) != 1 {
-		t.Fatalf("expected exactly one update (original → rejected), got %d", len(store.updates))
-	}
-	if store.updates[0].status != "rejected" {
-		t.Errorf("expected status=rejected, got %q", store.updates[0].status)
-	}
-}
-
-func TestRepriceWorkingOpens_NoOpWhenOptionAskNotConfigured(t *testing.T) {
-	store := &fakeStore{
-		workingPositions: []OpenPosition{workingPositionFixture(7, 42, "ORDER-OLD", 0.92)},
-	}
-	mail := &fakeMail{}
-	trader := &repriceTrader{
-		statusByOrder: map[string]OrderStatus{
-			"ORDER-OLD": {OrderID: "ORDER-OLD", RawStatus: "WORKING", Working: true, LimitPrice: 0.92},
-		},
-	}
-	// OptionAsk left nil — reprice must short-circuit without touching the broker.
-	svc := newTestService(trader, store, mail)
-
-	svc.RepriceWorkingOpens(context.Background(), "2026-05-13")
-
-	if len(trader.canceled) != 0 || len(trader.placedOrders) != 0 || len(store.updates) != 0 {
-		t.Errorf("expected no actions when OptionAsk is nil")
 	}
 }

@@ -15,6 +15,7 @@ State rules:
   - holding: shows entry + live unrealized P&L when mark known
   - closed: shows P&L with green/red color
   - failed: shows "open failed" with neutral styling
+  - canceled: 9:35 ET dangling-LIMIT cancel — pick never filled, no position
 */
 
 import { Minus } from "lucide-react";
@@ -71,6 +72,8 @@ function ExecutionPill({ execution, liveMark, className }: { execution: Executio
   let label: React.ReactNode;
   if (state === "failed") {
     label = <>{qty > 1 ? `Open failed (${qty} contracts)` : "Open failed"}</>;
+  } else if (state === "canceled") {
+    label = <>Open canceled (stale quote)</>;
   } else if (state === "close_failed") {
     // Position is filled at the broker but auto-close attempt
     // terminated in a non-filled state. Operator needs to verify and
@@ -127,7 +130,9 @@ function ExecutionPanel({ execution, liveMark, className }: { execution: Executi
   const holdingPnl = computeHoldingPnl(execution, liveMark);
 
   let headerColors: string;
-  if (holdingPnl !== null && holdingPnl > 0) {
+  if (state === "close_failed") {
+    headerColors = "border-red-border bg-red-bg text-red";
+  } else if (holdingPnl !== null && holdingPnl > 0) {
     headerColors = "border-green-border bg-green-bg text-green";
   } else if (holdingPnl !== null && holdingPnl < 0) {
     headerColors = "border-red-border bg-red-bg text-red";
@@ -135,8 +140,38 @@ function ExecutionPanel({ execution, liveMark, className }: { execution: Executi
     headerColors = isLive ? "border-red-border bg-red-bg text-red" : "border-amber-border bg-amber-bg text-amber";
   }
 
-  const headerLabel = state === "submitted" ? "Order placed" : "Position taken";
-  const closeSub = closed_at ? formatTime(closed_at) : state === "holding" ? "auto-closes 3:55pm ET" : state === "submitted" ? "pending open fill" : null;
+  // close_failed surfaces loudly in the header: the auto-close cron
+  // exhausted its retry window and the position is still open at the
+  // broker. Without this branch the panel reads "Position taken" with
+  // no warning — operator wouldn't know to check Schwab.
+  let headerLabel: string;
+  switch (state) {
+    case "submitted":
+      headerLabel = "Order placed";
+      break;
+    case "close_failed":
+      headerLabel = "Close failed, verify at broker";
+      break;
+    case "canceled":
+      headerLabel = "Open canceled";
+      break;
+    case "failed":
+      headerLabel = "Open failed";
+      break;
+    default:
+      headerLabel = "Position taken";
+  }
+  const closeSub = closed_at
+    ? formatTime(closed_at)
+    : state === "holding"
+      ? "auto-closes 3:55pm ET"
+      : state === "submitted"
+        ? "pending open fill"
+        : state === "close_failed"
+          ? "auto-close exhausted retries"
+          : state === "canceled"
+            ? "limit went stale 5min post-open"
+            : null;
   const entrySub = executed_at ? formatTime(executed_at) : state === "submitted" ? "awaiting broker fill" : null;
 
   /*

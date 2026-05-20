@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_close_receipt.html execute_close_failed.html execute_open_failed.html rollout_execution_rewrite.html schwab_reauth.html
+//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_close_receipt.html execute_close_failed.html execute_open_failed.html execute_basket_summary.html rollout_execution_rewrite.html schwab_reauth.html
 var templateFS embed.FS
 
 type Trade struct {
@@ -346,6 +346,38 @@ func RenderExecuteCloseFailed(d ExecuteCloseFailedData) (string, error) {
 }
 func RenderExecuteOpenFailed(d ExecuteOpenFailedData) (string, error) {
 	return renderOne("execute_open_failed.html", d)
+}
+
+/*
+BasketSummaryRow + BasketSummaryData feed the single consolidated
+post-open email sent by exec.Service.SendExecutionSummary at 9:35 ET.
+One row per open-side execution attempted that morning, with the
+final disposition (filled / canceled / failed / rejected / working).
+*/
+type BasketSummaryRow struct {
+	Rank         int
+	Symbol       string
+	ContractType string
+	StrikePrice  float64
+	Mode         string
+	Status       string
+	LimitPrice   float64
+	FillPrice    float64
+	Quantity     int
+	ErrorMessage string
+}
+
+type BasketSummaryData struct {
+	Date      string
+	Mode      string
+	Rows      []BasketSummaryRow
+	Filled    int
+	Total     int
+	TotalCost float64
+}
+
+func RenderBasketSummary(d BasketSummaryData) (string, error) {
+	return renderOne("execute_basket_summary.html", d)
 }
 
 /*

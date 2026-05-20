@@ -26,7 +26,7 @@ func setupTestServer(t *testing.T) *Server {
 
 	// Pre-baked 32-byte test key — fine to be static, no production secret.
 	testUnsubKey := []byte("0123456789abcdef0123456789abcdef")
-	return New(db, nil, nil, sentiment.NewScraper(), nil, "", "", "", "vt_session", 30*24*time.Hour, "", "", "", "0", nil, "", testUnsubKey, "https://vibetradez.test")
+	return New(db, nil, nil, sentiment.NewScraper(), nil, "", "", "", "vt_session", 30*24*time.Hour, "", "", "", "0", nil, "", testUnsubKey, nil, "https://vibetradez.test")
 }
 
 func TestSubscribeEndpoint(t *testing.T) {

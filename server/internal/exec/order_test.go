@@ -148,13 +148,13 @@ func TestComputeOpenLimitPrice(t *testing.T) {
 		ask, est float64
 		want     float64
 	}{
-		{"ask used, rounded to cent", 1.20, 0, 1.26}, // 1.20*1.05 = 1.26
-		{"ask zero falls back to estimate", 0, 0.80, 0.84},
+		{"ask used, rounded to cent", 1.20, 0, 1.32}, // 1.20*1.10 = 1.32
+		{"ask zero falls back to estimate", 0, 0.80, 0.88},
 		{"both zero returns zero", 0, 0, 0},
 		{"both negative returns zero", -1, -1, 0},
-		{"clamped to MaxContractPremium", 12.00, 0, MaxContractPremium}, // 12.00 * 1.05 = 12.60 > 10.00 cap
-		{"ask preferred over estimate", 2.00, 99.00, 2.10},
-		{"rounds up at half-cent", 1.234, 0, 1.30}, // 1.234*1.05 = 1.2957 → 1.30
+		{"clamped to MaxContractPremium", 12.00, 0, MaxContractPremium}, // 12.00 * 1.10 = 13.20 > 10.00 cap
+		{"ask preferred over estimate", 2.00, 99.00, 2.20},
+		{"rounds up at half-cent", 1.234, 0, 1.36}, // 1.234*1.10 = 1.3574 → 1.36
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -49,9 +49,10 @@ func Sign(key []byte, email string) string {
 }
 
 /*
-Verify returns true when token matches the expected HMAC for email.
-Uses crypto/subtle.ConstantTimeCompare so a timing attacker can't
-discover whether a partial token prefix is correct.
+Verify returns true when token matches the expected HMAC for email
+under the primary key. Uses crypto/subtle.ConstantTimeCompare so a
+timing attacker can't discover whether a partial token prefix is
+correct.
 
 Empty key, email, or token => false. The caller's policy decides
 what to do when an unsigned-mode legacy request arrives (the
@@ -63,6 +64,30 @@ func Verify(key []byte, email, token string) bool {
 	}
 	want := Sign(key, email)
 	return subtle.ConstantTimeCompare([]byte(want), []byte(token)) == 1
+}
+
+/*
+VerifyWithFallback validates the token against the primary key, then
+falls back to any of the prior keys if the primary check fails. Used
+during UNSUBSCRIBE_HMAC_KEY rotation: outstanding email links signed
+with the previous key keep working until the operator decides to
+retire the previous key (drop it from UNSUBSCRIBE_HMAC_KEY_PREVIOUS
+in .env). Without this, rotating the key instantly breaks every link
+in every email already in subscriber inboxes.
+
+primary is required; previous keys are optional (empty slice =
+no fallback, equivalent to plain Verify).
+*/
+func VerifyWithFallback(primary []byte, previous [][]byte, email, token string) bool {
+	if Verify(primary, email, token) {
+		return true
+	}
+	for _, k := range previous {
+		if Verify(k, email, token) {
+			return true
+		}
+	}
+	return false
 }
 
 func normalize(email string) string {
