@@ -33,6 +33,31 @@ import (
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
+/*
+sanitizeForLog strips ASCII control characters (CR, LF, NUL, etc.)
+and trims outer whitespace before user-controlled values land in
+log.Printf or apiResponse messages. Without this, an attacker
+subscribing with `Name: "Foo\n[ERROR] forged log entry"` plants a
+fake log line that any tail-based alerting will treat as a real
+error. Applied to email + name inputs on the subscribe/unsubscribe
+paths.
+*/
+func sanitizeForLog(s string) string {
+	s = strings.TrimSpace(s)
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		// Keep printable Unicode; drop any control char (categories Cc / Cf).
+		// '\t' is also dropped on purpose — logs shouldn't carry tab-aligned
+		// attacker text.
+		if r < 0x20 || r == 0x7f {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
 type Server struct {
 	db             *store.Store
 	schwab         *schwab.Client
@@ -360,8 +385,8 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
-	req.Name = strings.TrimSpace(req.Name)
+	req.Email = sanitizeForLog(strings.ToLower(req.Email))
+	req.Name = sanitizeForLog(req.Name)
 
 	if req.Email == "" || !emailRegex.MatchString(req.Email) {
 		writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Message: "valid email is required"})
@@ -403,7 +428,7 @@ func (s *Server) handleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+	req.Email = sanitizeForLog(strings.ToLower(req.Email))
 
 	if req.Email == "" || req.Token == "" {
 		writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Message: "email and token are required (use the unsubscribe link from any vibetradez.com email)"})
@@ -438,7 +463,7 @@ func (s *Server) handleUnsubscribeLink(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	email := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("e")))
+	email := sanitizeForLog(strings.ToLower(r.URL.Query().Get("e")))
 	token := r.URL.Query().Get("t")
 	if email == "" || token == "" {
 		renderUnsubPage(w, http.StatusBadRequest, "Unsubscribe link incomplete", "The link you clicked is missing required parameters. Please use the link from a recent vibetradez.com email.")
