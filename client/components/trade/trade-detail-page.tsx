@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { ExecutionBadge, findExecutionForTrade, liveMarkForTrade } from "@/components/execution-badge";
+import { findExecutionForTrade } from "@/components/execution-badge";
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
 import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
@@ -198,13 +198,7 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
 
   return (
     <div className="space-y-2">
-      {execution && (
-        <div className="mb-4">
-          <ExecutionBadge execution={execution} variant="full" liveMark={liveMarkForTrade(liveQuotes, trade)} />
-        </div>
-      )}
-
-      {/* Ticker header — flat, no card */}
+      {/* Ticker header — flat, no card. Paper/Taken pill lives inline here instead of a separate panel. */}
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="font-mono text-3xl font-bold tabular-nums text-foreground sm:text-4xl">${trade.symbol}</h1>
         <Badge variant="outline" className={cn(trade.contract_type === "CALL" ? "border-green-border text-green" : "border-red-border text-red")}>
@@ -215,6 +209,7 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
         <Badge variant="secondary" className="text-xs">
           {trade.risk_level}
         </Badge>
+        {execution && <PositionTag execution={execution} />}
         {summary && <Badge variant={pnl > 0 ? "default" : pnl < 0 ? "destructive" : "secondary"}>EOD {fmtPnlInt(pnl)}</Badge>}
         <span className="ml-auto text-xs text-muted-foreground">{resolvedDate}</span>
       </div>
@@ -223,6 +218,22 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
       {trade.catalyst && (
         <div className="mt-5 rounded-md border border-amber-border/40 bg-amber-bg/60 px-4 py-3 text-sm">
           <span className="font-semibold text-amber">Catalyst:</span> <span className="text-foreground/90">{trade.catalyst}</span>
+        </div>
+      )}
+
+      {/* Claudia's read — promoted near the top so the thesis is the first prose the user reads */}
+      {trade.rationale && (
+        <div className="mt-5 rounded-lg border border-claude-border/50 bg-claude-light px-6 py-5">
+          <div className="mb-3 flex items-center gap-2">
+            <ClaudeLogo className="h-5 w-5" />
+            <span className="text-base font-semibold text-claude">Claudia's read</span>
+            {trade.score > 0 && (
+              <Badge variant="secondary" className="tabular-nums">
+                {trade.score}/10
+              </Badge>
+            )}
+          </div>
+          <p className="text-[15px] leading-relaxed text-foreground/90">{trade.rationale}</p>
         </div>
       )}
 
@@ -247,8 +258,8 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
         <Metric label="Stock at entry" value={fmtMoney(trade.current_price)} />
       </div>
 
-      {/* Live block — flat section, StatStrip metrics */}
-      {!summary && <LiveSection trade={trade} liveQuotes={liveQuotes} />}
+      {/* Live block — flat section, StatStrip metrics. Same shape whether or not a position was taken; execution only nudges the P&L baseline. */}
+      {!summary && <LiveSection trade={trade} liveQuotes={liveQuotes} execution={execution} />}
 
       {/* EOD result — flat section */}
       {summary && (
@@ -282,27 +293,59 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
           {summary.notes && <p className="mt-4 rounded-md border border-border/50 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">{summary.notes}</p>}
         </>
       )}
-
-      {/* Claude's read — soft tinted prose container */}
-      {trade.rationale && (
-        <div className="mt-10 rounded-lg border border-claude-border/40 bg-claude-light px-5 py-4">
-          <div className="mb-2 flex items-center gap-2">
-            <ClaudeLogo className="h-4 w-4" />
-            <span className="text-sm font-semibold text-claude">Claudia's read</span>
-            {trade.score > 0 && (
-              <Badge variant="secondary" className="tabular-nums">
-                {trade.score}/10
-              </Badge>
-            )}
-          </div>
-          <p className="text-sm leading-relaxed text-foreground/85">{trade.rationale}</p>
-        </div>
-      )}
     </div>
   );
 }
 
-function LiveSection({ trade, liveQuotes }: { trade: Trade; liveQuotes: LiveQuotesResponse | null }) {
+/*
+PositionTag is the inline replacement for the old big "Position taken"
+panel. The trade detail page is now identical whether or not Jayce
+took the trade — this small pill is the only signal. Two normal
+states (Paper / Taken) plus loud warnings for failed / canceled /
+close_failed so the operator notices.
+*/
+function PositionTag({ execution }: { execution: Execution }) {
+  const { state, mode } = execution;
+  const qty = execution.quantity && execution.quantity > 0 ? execution.quantity : 1;
+
+  if (state === "failed") {
+    return (
+      <Badge variant="outline" className="border-red-border text-red">
+        Open failed
+      </Badge>
+    );
+  }
+  if (state === "canceled") {
+    return (
+      <Badge variant="secondary" className="text-xs">
+        Open canceled
+      </Badge>
+    );
+  }
+  if (state === "close_failed") {
+    return (
+      <Badge variant="outline" className="border-red-border text-red">
+        Close failed
+      </Badge>
+    );
+  }
+
+  const qtySuffix = qty > 1 ? ` ×${qty}` : "";
+  if (mode === "paper") {
+    return (
+      <Badge variant="outline" className="border-amber-border bg-amber-bg/40 text-amber" title="Paper-trade: no real money committed">
+        Paper{qtySuffix}
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="border-red-border bg-red-bg/40 text-red" title="Real position taken via Schwab">
+      Taken{qtySuffix}
+    </Badge>
+  );
+}
+
+function LiveSection({ trade, liveQuotes, execution }: { trade: Trade; liveQuotes: LiveQuotesResponse | null; execution: Execution | null }) {
   /*
   Reconstruct the same option key the server emits (server.go ~846):
   "<SYMBOL>|<CALL|PUT>|<strike .2f>|<expiration>".
@@ -313,13 +356,26 @@ function LiveSection({ trade, liveQuotes }: { trade: Trade; liveQuotes: LiveQuot
 
   if (!liveOption && !liveStock) return null;
 
+  /*
+  P&L baseline: actual broker fill price × quantity when a holding
+  execution exists, otherwise Claude's modeled entry × 1 contract.
+  Keeps the headline P&L honest for taken trades without changing
+  the section's shape for paper / not-taken picks.
+  */
+  const useFill = execution?.state === "holding" && execution.open_price > 0;
+  const qty = execution?.quantity && execution.quantity > 0 ? execution.quantity : 1;
+  const pnlEntry = useFill ? execution.open_price : trade.estimated_price;
+  const pnlMultiplier = useFill ? qty : 1;
+
   const currentPrice = liveOption?.mark ?? null;
-  const contractDelta = currentPrice !== null && trade.estimated_price > 0 ? currentPrice - trade.estimated_price : null;
-  const contractDeltaPct = contractDelta !== null && trade.estimated_price > 0 ? (contractDelta / trade.estimated_price) * 100 : null;
-  const livePnl = contractDelta !== null ? contractDelta * 100 : null;
+  const contractDelta = currentPrice !== null && pnlEntry > 0 ? currentPrice - pnlEntry : null;
+  const contractDeltaPct = contractDelta !== null && pnlEntry > 0 ? (contractDelta / pnlEntry) * 100 : null;
+  const livePnl = contractDelta !== null ? contractDelta * 100 * pnlMultiplier : null;
 
   const stockDelta = liveStock && trade.current_price > 0 ? liveStock.last_price - trade.current_price : null;
   const stockDeltaPct = stockDelta !== null && trade.current_price > 0 ? (stockDelta / trade.current_price) * 100 : null;
+
+  const entryCaption = useFill ? `fill ${fmtMoney(pnlEntry)}${qty > 1 ? ` ×${qty}` : ""}` : `entry was ${fmtMoney(pnlEntry)}`;
 
   return (
     <>
@@ -367,7 +423,7 @@ function LiveSection({ trade, liveQuotes }: { trade: Trade; liveQuotes: LiveQuot
         />
         <Stat label="Volume" value={liveOption ? liveOption.volume.toLocaleString() : <Skeleton className="inline-block h-6 w-14 align-middle" />} />
       </StatStrip>
-      <p className="mt-3 text-[11px] text-muted-foreground">Live ticks as Schwab pushes them · entry was {fmtMoney(trade.estimated_price)}.</p>
+      <p className="mt-3 text-[11px] text-muted-foreground">Live ticks as Schwab pushes them · {entryCaption}.</p>
     </>
   );
 }
