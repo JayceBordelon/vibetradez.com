@@ -12,7 +12,6 @@ import (
 	"math"
 	"math/rand/v2"
 	"net/http"
-	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -25,6 +24,7 @@ import (
 	"vibetradez.com/internal/authclient"
 	"vibetradez.com/internal/email"
 	"vibetradez.com/internal/exec"
+	"vibetradez.com/internal/quotes"
 	"vibetradez.com/internal/schwab"
 	"vibetradez.com/internal/sentiment"
 	"vibetradez.com/internal/store"
@@ -88,7 +88,15 @@ type Server struct {
 	unsubscribeKey     []byte
 	unsubscribePrevKey [][]byte
 	publicBaseURL      string
+
+	// Live-quotes hub. Set via SetHub after construction since the hub
+	// needs the DB (which lives in this server) at build time.
+	hub *quotes.Hub
 }
+
+// SetHub wires the live-quotes streaming hub. Must be called after New
+// and before Start. Idempotent.
+func (s *Server) SetHub(h *quotes.Hub) { s.hub = h }
 
 type subscribeRequest struct {
 	Email string `json:"email"`
@@ -177,7 +185,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/trades/dates", requireInternal(s.handleTradeDates))
 	s.mux.HandleFunc("/api/trades/week", requireInternal(s.handleTradesWeek))
 	s.mux.HandleFunc("/api/chart/", requireInternal(s.handleChart))
-	s.mux.HandleFunc("/api/quotes/live", requireInternal(s.handleLiveQuotes))
+	s.mux.HandleFunc("/api/market/status", requireInternal(s.handleMarketStatus))
+	s.mux.HandleFunc("/api/quotes/stream", requireInternal(s.handleQuoteStream))
 
 	/*
 		Auto-execution kill switch. Stack: requireInternal (trusted website
@@ -1123,219 +1132,8 @@ func (s *Server) handleSchwabCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/dashboard", http.StatusFound)
 }
 
-// ── Live Quotes ──
-
-type liveQuoteEntry struct {
-	LastPrice    float64 `json:"last_price"`
-	OpenPrice    float64 `json:"open_price"`
-	NetChange    float64 `json:"net_change"`
-	NetChangePct float64 `json:"net_change_pct"`
-	BidPrice     float64 `json:"bid_price"`
-	AskPrice     float64 `json:"ask_price"`
-	Volume       int64   `json:"volume"`
-}
-
-type liveOptionEntry struct {
-	Bid          float64 `json:"bid"`
-	Ask          float64 `json:"ask"`
-	Last         float64 `json:"last"`
-	Mark         float64 `json:"mark"`
-	Volume       int     `json:"volume"`
-	OpenInterest int     `json:"open_interest"`
-	Delta        float64 `json:"delta"`
-	Theta        float64 `json:"theta"`
-	ImpliedVol   float64 `json:"implied_vol"`
-}
-
-type liveQuotesResponse struct {
-	Connected  bool                       `json:"connected"`
-	MarketOpen bool                       `json:"market_open"`
-	AsOf       string                     `json:"as_of"`
-	Quotes     map[string]liveQuoteEntry  `json:"quotes"`
-	Options    map[string]liveOptionEntry `json:"options"`
-}
-
-func isMarketHours() bool {
-	loc, _ := time.LoadLocation("America/New_York")
-	now := time.Now().In(loc)
-	wd := now.Weekday()
-	if wd == time.Saturday || wd == time.Sunday {
-		return false
-	}
-	hour, min := now.Hour(), now.Minute()
-	minuteOfDay := hour*60 + min
-	return minuteOfDay >= 9*60+30 && minuteOfDay <= 16*60
-}
-
-func (s *Server) handleLiveQuotes(w http.ResponseWriter, r *http.Request) {
-	resp := liveQuotesResponse{
-		AsOf:       time.Now().UTC().Format(time.RFC3339),
-		MarketOpen: isMarketHours(),
-		Quotes:     make(map[string]liveQuoteEntry),
-		Options:    make(map[string]liveOptionEntry),
-	}
-
-	if s.schwab == nil || !s.schwab.IsConnected() {
-		/*
-			Local-dev convenience: when LOCAL_MOCK_QUOTES=1 and Schwab is
-			unauthorized, synthesize plausible live marks for today's picks
-			so the dashboard's Buy/Current cards exercise the live-data
-			path without needing a real Schwab account. Production never
-			sets this env var, so the empty-response branch still wins
-			there.
-		*/
-		if os.Getenv("LOCAL_MOCK_QUOTES") == "1" {
-			s.fillMockLiveQuotes(&resp)
-		}
-		w.Header().Set("Cache-Control", "no-store")
-		writeJSON(w, http.StatusOK, resp)
-		return
-	}
-	resp.Connected = true
-
-	// Get today's trades to know which symbols to fetch.
-	date, err := s.db.GetLatestTradeDate()
-	if err != nil {
-		w.Header().Set("Cache-Control", "no-store")
-		writeJSON(w, http.StatusOK, resp)
-		return
-	}
-
-	morningTrades, err := s.db.GetMorningTrades(date)
-	if err != nil || len(morningTrades) == 0 {
-		w.Header().Set("Cache-Control", "no-store")
-		writeJSON(w, http.StatusOK, resp)
-		return
-	}
-
-	// Collect unique symbols.
-	symbolSet := make(map[string]bool)
-	for _, t := range morningTrades {
-		symbolSet[t.Symbol] = true
-	}
-	symbols := make([]string, 0, len(symbolSet))
-	for sym := range symbolSet {
-		symbols = append(symbols, sym)
-	}
-
-	// Fetch stock quotes (cached 15s).
-	quotes, err := s.schwab.GetQuotes(symbols)
-	if err != nil {
-		log.Printf("Schwab quotes error: %v", err)
-	} else {
-		for sym, q := range quotes {
-			resp.Quotes[sym] = liveQuoteEntry{
-				LastPrice:    q.LastPrice,
-				OpenPrice:    q.OpenPrice,
-				NetChange:    q.NetChange,
-				NetChangePct: q.NetPercentChange,
-				BidPrice:     q.BidPrice,
-				AskPrice:     q.AskPrice,
-				Volume:       q.TotalVolume,
-			}
-		}
-	}
-
-	// Fetch option chain data for each trade's specific contract (cached 15s).
-	for _, t := range morningTrades {
-		chain, err := s.schwab.GetOptionChain(t.Symbol, t.ContractType, t.Expiration, t.Expiration, t.StrikePrice)
-		if err != nil {
-			continue
-		}
-		contract := schwab.FindContract(chain, t.ContractType, t.StrikePrice, t.Expiration)
-		if contract == nil {
-			continue
-		}
-		key := fmt.Sprintf("%s|%s|%.2f|%s", t.Symbol, t.ContractType, t.StrikePrice, t.Expiration)
-		resp.Options[key] = liveOptionEntry{
-			Bid:          contract.Bid,
-			Ask:          contract.Ask,
-			Last:         contract.Last,
-			Mark:         contract.Mark,
-			Volume:       contract.TotalVolume,
-			OpenInterest: contract.OpenInterest,
-			Delta:        contract.Delta,
-			Theta:        contract.Theta,
-			ImpliedVol:   contract.Volatility,
-		}
-	}
-
-	/*
-		No browser caching: Schwab calls already have a 15s in-process cache
-		in the schwab client, so the server hop is cheap. Caching at the
-		browser turns a single transient failure (e.g. one option-chain call
-		timing out) into a 10s window where every refresh keeps showing
-		"--" — exactly the symptom users report. Force every poll to reach
-		the handler so the next successful Schwab response wins immediately.
-	*/
-	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, resp)
-}
-
-/*
-fillMockLiveQuotes synthesizes plausible live marks for today's morning
-picks so the dashboard's Buy/Current cards have data to render in local
-dev (Schwab OAuth not set up). Each ticker gets a stable per-trade drift
-derived from its symbol so refreshes don't flicker wildly, plus a small
-time-based jitter so the numbers visibly tick. Never invoked in
-production: gated behind the LOCAL_MOCK_QUOTES env var.
-*/
-func (s *Server) fillMockLiveQuotes(resp *liveQuotesResponse) {
-	date, err := s.db.GetLatestTradeDate()
-	if err != nil {
-		return
-	}
-	morningTrades, err := s.db.GetMorningTrades(date)
-	if err != nil || len(morningTrades) == 0 {
-		return
-	}
-	resp.Connected = true
-
-	// Slow time-based oscillator so the price visibly drifts every refresh.
-	tick := math.Sin(float64(time.Now().Unix()%600) / 600.0 * 2 * math.Pi)
-
-	for _, t := range morningTrades {
-		/*
-			Stable drift in [-0.35, +0.35] derived from the symbol so each
-			ticker has its own personality across refreshes.
-		*/
-		var hash uint64
-		for _, c := range t.Symbol {
-			hash = hash*31 + uint64(c)
-		}
-		drift := (float64(hash%1000)/1000.0)*0.7 - 0.35
-		// Stock price: nudge ~1% off entry, plus tick.
-		stockMove := t.CurrentPrice * (drift*0.01 + tick*0.005)
-		stockNow := t.CurrentPrice + stockMove
-		resp.Quotes[t.Symbol] = liveQuoteEntry{
-			LastPrice:    stockNow,
-			OpenPrice:    t.CurrentPrice,
-			NetChange:    stockMove,
-			NetChangePct: (stockMove / t.CurrentPrice) * 100,
-			BidPrice:     stockNow - 0.02,
-			AskPrice:     stockNow + 0.02,
-			Volume:       1_000_000 + int64(hash%500_000),
-		}
-		/*
-			Option mark: scale the move by a fake delta of ~0.5 for ATM,
-			plus its own jitter so winners and losers diverge visibly.
-		*/
-		optMove := stockMove*0.5 + t.EstimatedPrice*tick*0.04 + t.EstimatedPrice*drift*0.1
-		mark := math.Max(0.01, t.EstimatedPrice+optMove)
-		key := fmt.Sprintf("%s|%s|%.2f|%s", t.Symbol, t.ContractType, t.StrikePrice, t.Expiration)
-		resp.Options[key] = liveOptionEntry{
-			Bid:          math.Max(0.01, mark-0.05),
-			Ask:          mark + 0.05,
-			Last:         mark,
-			Mark:         mark,
-			Volume:       int(500 + hash%2000),
-			OpenInterest: int(2000 + hash%5000),
-			Delta:        0.5 + drift*0.2,
-			Theta:        -0.05 - math.Abs(drift)*0.05,
-			ImpliedVol:   0.35 + math.Abs(drift)*0.2,
-		}
-	}
-}
+// Live quotes are streamed via /api/quotes/stream (SSE). The handler
+// lives in quotes_stream.go; cache + REST polling have been deleted.
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")

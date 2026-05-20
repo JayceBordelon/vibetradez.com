@@ -88,11 +88,6 @@ services:
       # valid against the production server (different key).
       UNSUBSCRIBE_HMAC_KEY: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
       RUN_ON_START: "false"
-      # /api/quotes/live returns synthetic option marks so the dashboard's
-      # Buy/Current cards have something to render without a real Schwab
-      # OAuth flow. Production never sets this var, so its empty-response
-      # branch still wins there.
-      LOCAL_MOCK_QUOTES: "1"
       # Push cron jobs far out so they never fire during local dev.
       CRON_SCHEDULE_OPEN: "0 9 * * 0"
       CRON_SCHEDULE_CLOSE: "0 16 * * 0"

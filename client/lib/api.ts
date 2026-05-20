@@ -1,4 +1,4 @@
-import type { ApiResponse, DashboardResponse, LiveQuotesResponse, WeekResponse } from "@/types/trade";
+import type { ApiResponse, DashboardResponse, MarketStatus, WeekResponse } from "@/types/trade";
 
 export interface SessionUser {
   id: number;
@@ -105,7 +105,13 @@ export const api = {
 
   getWeekTrades: (start: string, end: string) => clientFetch<WeekResponse>(`/api/trades/week?start=${start}&end=${end}`),
 
-  getLiveQuotes: () => clientFetch<LiveQuotesResponse>("/api/quotes/live"),
+  /*
+  Live quotes are now an SSE stream at /api/quotes/stream — see
+  hooks/use-quote-stream.ts. /api/market/status is the cheap polled
+  endpoint that tells the dashboard whether to open the stream or
+  render the market-closed page.
+  */
+  getMarketStatus: () => clientFetch<MarketStatus>("/api/market/status"),
 
   me: () => clientFetch<MeResponse>("/api/me"),
 

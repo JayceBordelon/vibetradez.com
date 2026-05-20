@@ -71,11 +71,6 @@ async function proxy(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: false, message: "upstream fetch failed" }, { status: 502 });
   }
 
-  /**
-  Read the body as bytes once so we can set an explicit Content-Length
-  and avoid streaming-related quirks in the runtime's response writer.
-  */
-  const body = await upstream.arrayBuffer();
   const responseHeaders = new Headers();
   for (const [k, v] of upstream.headers.entries()) {
     const lower = k.toLowerCase();
@@ -84,6 +79,29 @@ async function proxy(req: NextRequest): Promise<NextResponse> {
     }
     responseHeaders.set(k, v);
   }
+
+  /**
+  SSE responses must stream through the proxy, not buffer. Branch on
+  the upstream Content-Type: when it's text/event-stream, return the
+  body stream directly so each event surfaces in real time. In prod
+  Traefik routes /api/* straight to the Go server and this proxy is
+  inert, but local dev hits this path.
+  */
+  const contentType = upstream.headers.get("content-type") ?? "";
+  if (contentType.startsWith("text/event-stream")) {
+    responseHeaders.set("x-accel-buffering", "no");
+    return new NextResponse(upstream.body, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: responseHeaders,
+    });
+  }
+
+  /**
+  Buffer non-SSE responses so we can set an explicit Content-Length
+  and avoid streaming-related quirks in the runtime's response writer.
+  */
+  const body = await upstream.arrayBuffer();
   responseHeaders.set("content-length", String(body.byteLength));
 
   return new NextResponse(body, {

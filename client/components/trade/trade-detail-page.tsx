@@ -2,7 +2,7 @@
 
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ExecutionBadge, findExecutionForTrade, liveMarkForTrade } from "@/components/execution-badge";
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
@@ -10,14 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { Metric } from "@/components/ui/metric";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useVisiblePoll } from "@/hooks/use-visible-poll";
+import { useMarketStatus } from "@/hooks/use-market-status";
+import { useQuoteStream } from "@/hooks/use-quote-stream";
 import { api } from "@/lib/api";
 import { calcBreakeven, calcMaxLoss, calcMoneyness, sentimentColor, sentimentLabel } from "@/lib/calculations";
 import { fmt, fmtMoney, fmtPctDec, fmtPnlInt, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { DashboardTrade, Execution, LiveQuotesResponse, Trade } from "@/types/trade";
-
-const LIVE_POLL_SECONDS = 15;
 
 type LoadState =
   | { kind: "loading" }
@@ -55,7 +54,7 @@ export function TradeDetailPage({ symbol, date }: { symbol: string; date?: strin
   return (
     <div className="mx-auto min-w-0 max-w-[1100px] px-4 py-6 sm:px-7">
       <BackLink />
-      {state.kind === "loading" && <LoadingPanel symbol={symbol} />}
+      {state.kind === "loading" && <TradeDetailSkeleton symbol={symbol} />}
       {state.kind === "error" && <StatusBlock tone="error" title="Couldn't load that trade" body={state.message} />}
       {state.kind === "not-found" && (
         <StatusBlock
@@ -78,12 +77,74 @@ function BackLink() {
   );
 }
 
-function LoadingPanel({ symbol }: { symbol: string }) {
+/*
+Mirrors the TradeDetailBody layout so the page doesn't jump when the
+fetch resolves: ticker header, contract grid (real labels, skeleton
+values — the labels are informative-loading), one generic live/EOD
+section block, and Claudia's read. Symbol is known from the URL so
+it renders as the real H1 instead of pulsing. Execution badge and
+catalyst block are conditional in the loaded view, so we don't reserve
+space for them here — a small one-line shift on those is acceptable.
+
+Mobile: 2-col contract grid + 2-col stat strip (matches sm:grid-cols-4
+breakpoint on the real components). Skeleton widths stay narrow enough
+to fit a 320px viewport without horizontal overflow.
+*/
+const SKELETON_METRIC_LABELS = ["Strike", "Expiration", "Entry", "Target", "Stop loss", "Breakeven", "Max loss", "Sentiment", "Mentions", "Stock at entry"] as const;
+
+function TradeDetailSkeleton({ symbol }: { symbol: string }) {
   return (
-    <div className="space-y-3">
-      <div className="text-sm text-muted-foreground">Loading ${symbol}…</div>
-      <div className="h-8 w-1/3 animate-pulse rounded bg-muted/60" />
-      <div className="h-4 w-2/3 animate-pulse rounded bg-muted/60" />
+    <div className="space-y-2" aria-busy="true" aria-live="polite">
+      {/* Ticker header — symbol is known, surrounding badges + date pulse */}
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="font-mono text-3xl font-bold tabular-nums text-foreground sm:text-4xl">${symbol}</h1>
+        <Skeleton className="h-5 w-14" />
+        <Skeleton className="h-5 w-20" />
+        <Skeleton className="h-5 w-16" />
+        <Skeleton className="h-5 w-14" />
+        <Skeleton className="ml-auto h-3 w-24" />
+      </div>
+
+      {/* Catalyst — reserved (most picks have one) */}
+      <div className="mt-5 rounded-md border border-amber-border/40 bg-amber-bg/60 px-4 py-3">
+        <Skeleton className="h-4 w-full max-w-md" />
+      </div>
+
+      {/* Contract properties — real labels, skeleton values */}
+      <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3 md:grid-cols-4">
+        {SKELETON_METRIC_LABELS.map((label) => (
+          <Metric key={label} label={label} value={<Skeleton className="ml-auto h-4 w-14" />} />
+        ))}
+      </div>
+
+      {/* Live / EOD section head — generic placeholder, real component picks one once loaded */}
+      <div className="mb-4 mt-2 flex flex-wrap items-baseline justify-between gap-3 border-t border-border/40 pt-8">
+        <Skeleton className="h-6 w-32" />
+        <Skeleton className="h-7 w-28" />
+      </div>
+      {/* StatStrip — mirrors grid-cols-2 mobile / sm:grid-cols-4 desktop with hairline dividers */}
+      <div className="grid grid-cols-2 divide-x divide-y divide-border/50 border-y border-border/50 sm:grid-cols-4 sm:divide-y-0 sm:border-y-0 sm:border-t sm:border-b">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="min-w-0 px-4 py-4 sm:px-5">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="mt-2 h-7 w-20" />
+          </div>
+        ))}
+      </div>
+
+      {/* Claudia's read — reserved (rationale is always set) */}
+      <div className="mt-10 rounded-lg border border-claude-border/40 bg-claude-light px-5 py-4">
+        <div className="mb-2 flex items-center gap-2">
+          <ClaudeLogo className="h-4 w-4" />
+          <span className="text-sm font-semibold text-claude">Claudia's read</span>
+          <Skeleton className="h-5 w-10" />
+        </div>
+        <div className="space-y-2">
+          <Skeleton className="h-3.5 w-full" />
+          <Skeleton className="h-3.5 w-11/12" />
+          <Skeleton className="h-3.5 w-3/4" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -127,7 +188,13 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
   const pctChange = entryPrice > 0 ? ((closingPrice - entryPrice) / entryPrice) * 100 : 0;
   const stockPctChange = summary && summary.stock_open > 0 ? ((summary.stock_close - summary.stock_open) / summary.stock_open) * 100 : 0;
 
-  const liveQuotes = useLiveQuotes(!summary);
+  /*
+  Live quotes streaming: only open when (a) the pick is still mid-day
+  (no summary yet) and (b) the market is open. Outside hours, the SSE
+  endpoint 503s anyway and the EOD result block below is what matters.
+  */
+  const marketStatus = useMarketStatus();
+  const liveQuotes = useQuoteStream(!summary && marketStatus?.open === true);
 
   return (
     <div className="space-y-2">
@@ -235,33 +302,6 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
   );
 }
 
-/*
-Polls /api/quotes/live on the same 15s cadence the dashboard uses, with
-the same merge-over-prior semantics so a single transient miss doesn't
-blank the live panel. Pauses while the tab is hidden so a backgrounded
-trade-detail tab doesn't hammer the Schwab-backed endpoint indefinitely.
-*/
-function useLiveQuotes(enabled: boolean): LiveQuotesResponse | null {
-  const [liveQuotes, setLiveQuotes] = useState<LiveQuotesResponse | null>(null);
-
-  const poll = useCallback(() => {
-    api
-      .getLiveQuotes()
-      .then((next) => {
-        if (!next || typeof next !== "object") return;
-        setLiveQuotes((prev) => ({
-          ...next,
-          quotes: { ...(prev?.quotes ?? {}), ...(next.quotes ?? {}) },
-          options: { ...(prev?.options ?? {}), ...(next.options ?? {}) },
-        }));
-      })
-      .catch(() => {});
-  }, []);
-  useVisiblePoll(poll, LIVE_POLL_SECONDS * 1000, enabled);
-
-  return liveQuotes;
-}
-
 function LiveSection({ trade, liveQuotes }: { trade: Trade; liveQuotes: LiveQuotesResponse | null }) {
   /*
   Reconstruct the same option key the server emits (server.go ~846):
@@ -327,9 +367,7 @@ function LiveSection({ trade, liveQuotes }: { trade: Trade; liveQuotes: LiveQuot
         />
         <Stat label="Volume" value={liveOption ? liveOption.volume.toLocaleString() : <Skeleton className="inline-block h-6 w-14 align-middle" />} />
       </StatStrip>
-      <p className="mt-3 text-[11px] text-muted-foreground">
-        Refreshes every {LIVE_POLL_SECONDS}s · entry was {fmtMoney(trade.estimated_price)}.
-      </p>
+      <p className="mt-3 text-[11px] text-muted-foreground">Live ticks as Schwab pushes them · entry was {fmtMoney(trade.estimated_price)}.</p>
     </>
   );
 }

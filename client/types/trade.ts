@@ -107,12 +107,53 @@ export interface LiveOptionEntry {
   implied_vol: number;
 }
 
+/*
+LiveQuotesResponse is the SSE `snapshot` event payload and the
+in-memory shape the dashboard consumes. Per-tick `quote` events update
+single map entries in place. Kept named "LiveQuotesResponse" rather
+than "LiveQuotesSnapshot" so the existing consumer call sites
+(MorningLayout, TradeTable, execution-badge) don't need wholesale
+renames.
+*/
 export interface LiveQuotesResponse {
   connected: boolean;
   market_open: boolean;
   as_of: string;
   quotes: Record<string, LiveQuoteEntry>;
   options: Record<string, LiveOptionEntry>;
+}
+
+/*
+QuoteUpdate is the SSE `quote` event payload — a single contract or
+ticker's latest values. Exactly one of `quote` / `option` will be set;
+the matching key is in `symbol` / `option_key`.
+*/
+export interface QuoteUpdate {
+  symbol?: string;
+  option_key?: string;
+  quote?: LiveQuoteEntry;
+  option?: LiveOptionEntry;
+  as_of: string;
+}
+
+/*
+MarketStatus is GET /api/market/status. The dashboard polls this on
+mount + on visibility return to decide between rendering the live
+streaming UI (open) or the closed-page (otherwise). NextOpen /
+NextClose are populated regardless of state so we can render an
+honest countdown.
+
+session is a coarse label matching the server's calendar.Status:
+  - "premarket"  — trading day, before 9:30 ET
+  - "open"       — trading day, 9:30 ET to close (16:00 or 13:00 ET)
+  - "afterhours" — trading day, after close
+  - "closed"     — weekend or holiday
+*/
+export interface MarketStatus {
+  open: boolean;
+  session: "premarket" | "open" | "afterhours" | "closed";
+  next_open?: string;
+  next_close?: string;
 }
 
 export interface ApiResponse {

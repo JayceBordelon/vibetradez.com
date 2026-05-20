@@ -204,10 +204,10 @@ function TradeRow({ trade: t, date }: { trade: TradeDetail; date: string }) {
         {t.type}
       </Badge>
 
-      <span className="w-14 shrink-0 text-[11px] text-muted-foreground">${t.strike}</span>
+      <span className="w-14 shrink-0 text-[11px] text-foreground/80 tabular-nums">${t.strike}</span>
 
-      <span className="hidden w-32 shrink-0 text-[11px] text-muted-foreground sm:inline">
-        {fmtMoney(t.entry)} <span className="text-muted-foreground/70">&rarr;</span> {fmtMoney(t.close)}
+      <span className="hidden w-32 shrink-0 text-[11px] text-foreground/80 tabular-nums sm:inline">
+        {fmtMoney(t.entry)} <span className="text-muted-foreground/60">&rarr;</span> {fmtMoney(t.close)}
       </span>
 
       <span className={cn("ml-auto w-16 shrink-0 text-right text-[13px] tabular-nums", pnlColor(t.pnl))}>{fmtPctDec(t.pct)}</span>
