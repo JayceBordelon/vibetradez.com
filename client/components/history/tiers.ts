@@ -26,6 +26,21 @@ export const TIER_COLORS: Record<TierKey, string> = {
   top10: "var(--chart-3)",
 };
 
+/**
+TIER_PILL_COLORS is a parallel palette for rank pills (white text on a
+filled pill on the history rows). The chart palette above uses light
+zinc for Top 10 so the bar fills read at low saturation — but white
+text on that light zinc was failing WCAG AA contrast (~2.4:1). The
+pill uses a dedicated darker token (--tier-pill-top10) so the chart
+look doesn't change. Top 1 and Top 3 keep their brand colors which
+already pass.
+*/
+export const TIER_PILL_COLORS: Record<TierKey, string> = {
+  top1: "var(--gpt)",
+  top3: "var(--claude)",
+  top10: "var(--tier-pill-top10)",
+};
+
 export function inTier(rank: number, tier: TierKey): boolean {
   if (tier === "top1") return rank === 1;
   if (tier === "top3") return rank <= 3;

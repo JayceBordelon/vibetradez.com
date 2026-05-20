@@ -71,6 +71,13 @@
   --chart-grid: #e4e4e7;
   --chart-text: #52525b;
 
+  /* Rank pill background for the Top 10 tier on the history page row.
+     The chart series uses --chart-3 (zinc-400) with opacity tweaks for
+     bar fills, but white text on zinc-400 is ~2.4:1 and fails WCAG AA.
+     This token is reserved for the rank pill so the chart palette
+     stays untouched. Zinc-700 → ~10:1 on white text. */
+  --tier-pill-top10: #3f3f46;
+
   /* AI brand colors. Slightly darkened from the marketing pure brand
      hex so headline text passes 4.5:1 on white in light mode. */
   --gpt: #0a7a5e;
@@ -145,6 +152,11 @@
   --surface: #18181b;
   --chart-grid: #27272a;
   --chart-text: #a1a1aa;
+
+  /* See light-mode comment. Dark mode needs the pill bg LIGHTER than the
+     near-black page bg so the shape reads; zinc-600 is the lightest
+     value that still keeps ≥4.5:1 against white text. */
+  --tier-pill-top10: #52525b;
 
   /* AI brand colors (dark) */
   --gpt: #34d399;

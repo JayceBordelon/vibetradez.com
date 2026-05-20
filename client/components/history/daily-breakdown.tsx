@@ -12,7 +12,7 @@ import { fmtMoney, fmtPctDec, fmtPnlInt, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import type { DayMultiStat, TradeDetail } from "./history-shell";
-import { TIER_COLORS, TIER_KEYS, TIER_LABELS, type TierKey } from "./tiers";
+import { TIER_COLORS, TIER_KEYS, TIER_LABELS, TIER_PILL_COLORS, type TierKey } from "./tiers";
 
 const PAGE_SIZE = 25;
 
@@ -183,7 +183,7 @@ function TradeList({ details, date }: { details: TradeDetail[]; date: string }) 
 function TradeRow({ trade: t, date }: { trade: TradeDetail; date: string }) {
   const href = `/trade/${encodeURIComponent(t.symbol)}?date=${encodeURIComponent(date)}`;
   const tier = tierForRank(t.rank);
-  const tierColor = TIER_COLORS[tier];
+  const tierColor = TIER_PILL_COLORS[tier];
   return (
     <Link
       href={href}
