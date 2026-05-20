@@ -15,6 +15,7 @@ State rules:
   - holding: shows entry + live unrealized P&L when mark known
   - closed: shows P&L with green/red color
   - failed: shows "open failed" with neutral styling
+  - canceled: 9:35 ET dangling-LIMIT cancel — pick never filled, no position
 */
 
 import { Minus } from "lucide-react";
@@ -71,6 +72,8 @@ function ExecutionPill({ execution, liveMark, className }: { execution: Executio
   let label: React.ReactNode;
   if (state === "failed") {
     label = <>{qty > 1 ? `Open failed (${qty} contracts)` : "Open failed"}</>;
+  } else if (state === "canceled") {
+    label = <>Open canceled (stale quote)</>;
   } else if (state === "close_failed") {
     // Position is filled at the broker but auto-close attempt
     // terminated in a non-filled state. Operator needs to verify and
@@ -147,7 +150,13 @@ function ExecutionPanel({ execution, liveMark, className }: { execution: Executi
       headerLabel = "Order placed";
       break;
     case "close_failed":
-      headerLabel = "Close failed — verify at broker";
+      headerLabel = "Close failed, verify at broker";
+      break;
+    case "canceled":
+      headerLabel = "Open canceled";
+      break;
+    case "failed":
+      headerLabel = "Open failed";
       break;
     default:
       headerLabel = "Position taken";
@@ -160,7 +169,9 @@ function ExecutionPanel({ execution, liveMark, className }: { execution: Executi
         ? "pending open fill"
         : state === "close_failed"
           ? "auto-close exhausted retries"
-          : null;
+          : state === "canceled"
+            ? "limit went stale 5min post-open"
+            : null;
   const entrySub = executed_at ? formatTime(executed_at) : state === "submitted" ? "awaiting broker fill" : null;
 
   /*

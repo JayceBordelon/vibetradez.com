@@ -97,6 +97,20 @@ function computeRow(dt: DashboardTrade, executions: Execution[] | null | undefin
     accentBorder = "border-l-red";
     entry = fmtMoney(execution.open_price);
     close = "verify";
+  } else if (execution?.state === "canceled") {
+    /*
+    9:35 ET cancel-dangling cron killed the LIMIT before it filled
+    (stale quote, no second-chance retry). No position taken; render
+    neutrally distinct from "OPEN" so the row reads as "pick fired
+    but the open never happened" instead of a still-pending fill.
+    */
+    pnl = 0;
+    pnlPct = 0;
+    resultLabel = "CANCELED";
+    resultVariant = "secondary";
+    accentBorder = "border-l-transparent";
+    entry = "-";
+    close = "-";
   } else {
     pnl = result.pnl;
     pnlPct = result.pctChange;

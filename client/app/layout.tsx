@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     template: "%s | VibeTradez",
   },
   description:
-    "Live experiment in letting one silly model trade. Every morning at 9:30 ET sharp, Claudia pulls market signals, runs the same prompt against live Schwab quotes and web search, and ranks her top 10 contracts with conviction scores. Delivered free right at the open.",
+    "Live experiment in letting one silly model trade. Every morning at 9:25 ET, five minutes before the open, Claudia pulls market signals, runs the same prompt against live Schwab quotes and web search, and ranks her top 10 contracts with conviction scores. Delivered free just before the open.",
   keywords: ["options trading", "AI trading", "daily options picks", "trade alerts", "options analytics", "stock options", "day trading"],
   authors: [{ name: "Jayce Bordelon", url: "https://jaycebordelon.com" }],
   openGraph: {

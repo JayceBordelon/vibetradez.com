@@ -94,6 +94,16 @@ export function computeTradePnl(dt: DashboardTrade, executions: Execution[] | nu
   if (anyExec?.state === "close_failed") {
     return { entryPrice: anyExec.open_price, closingPrice: 0, pnl: 0, pctChange: 0, source: "execution", hasData: false };
   }
+  /*
+  9:35 ET cancel-dangling cron killed the LIMIT before fill. The pick
+  fired but no position was ever taken, so we must NOT fall through
+  to the modeled-summary path below: that would roll Claude's notional
+  EOD P&L into aggregates as if the trade happened, double-counting
+  ideas that never executed.
+  */
+  if (anyExec?.state === "canceled") {
+    return { entryPrice: 0, closingPrice: 0, pnl: 0, pctChange: 0, source: "execution", hasData: false };
+  }
   if (dt.summary) {
     const pnl = (dt.summary.closing_price - dt.summary.entry_price) * 100;
     const pctChange = dt.summary.entry_price > 0 ? ((dt.summary.closing_price - dt.summary.entry_price) / dt.summary.entry_price) * 100 : 0;
