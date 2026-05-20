@@ -212,8 +212,9 @@ checkCashAndPlace resolves the LIMIT price for one BasketEntry and
 submits the order when its full cost (price × 100 × quantity) fits
 in remainingCash. Returns (cost, true) on submit (so the caller can
 decrement its local cash counter) or (0, false) when the entry was
-skipped because pricing failed (already alerted via
-sendOpenFailedEmail) or because cost exceeded remaining cash.
+skipped because pricing failed or because cost exceeded remaining
+cash. Pricing failures are log-only; the 9:35 SendExecutionSummary
+cron is the single consolidated alert path for the open side.
 Errors after submission are logged inside handleSingleEntry; this
 function only filters by cost.
 */
@@ -652,70 +653,6 @@ func (s *Service) recordCloseAndEmail(ctx context.Context, p *OpenPosition, exec
 	}
 	if err := s.mail.SendTradeEmail(s.cfg.EmailFrom, []string{s.cfg.Recipient}, data.Subject, html); err != nil {
 		log.Printf("execution: send close receipt: %v", err)
-	}
-}
-
-func (s *Service) sendReceiptEmail(t *trades.Trade, occSymbol, orderID string, fillPrice float64, quantity int) {
-	if quantity < 1 {
-		quantity = 1
-	}
-	data := templates.ExecuteReceiptData{
-		Subject:            fmt.Sprintf("[%s] Order filled: %s %s ×%d @ $%.2f", strings.ToUpper(s.cfg.Mode), t.Symbol, t.ContractType, quantity, fillPrice),
-		Date:               time.Now().In(easternTime()).Format("Monday, Jan 2 (3:04 PM ET)"),
-		Mode:               s.cfg.Mode,
-		Symbol:             t.Symbol,
-		ContractType:       t.ContractType,
-		StrikePrice:        t.StrikePrice,
-		Expiration:         t.Expiration,
-		OCCSymbol:          occSymbol,
-		FillPrice:          fillPrice,
-		Quantity:           quantity,
-		OrderID:            orderID,
-		SchwabPositionsURL: schwabPositionsURL,
-	}
-	html, err := templates.RenderExecuteReceipt(data)
-	if err != nil {
-		log.Printf("execution: render receipt: %v", err)
-		return
-	}
-	if err := s.mail.SendTradeEmail(s.cfg.EmailFrom, []string{s.cfg.Recipient}, data.Subject, html); err != nil {
-		log.Printf("execution: send receipt: %v", err)
-	}
-}
-
-/*
-sendOpenFailedEmail alerts the operator when the morning open order
-either errored at submission, errored on status lookup, or came back
-in a terminal-but-not-filled state (REJECTED / CANCELED / EXPIRED).
-Goes ONLY to cfg.Recipient — never the subscriber list — so live-mode
-broker rejections don't leak to subscribers as a "we tried, it didn't
-work" message. Best-effort: render or send failures are logged and
-swallowed so the morning pipeline keeps running.
-*/
-func (s *Service) sendOpenFailedEmail(t *trades.Trade, occSymbol, orderID, errMsg string) {
-	if s.cfg.Recipient == "" {
-		return
-	}
-	data := templates.ExecuteOpenFailedData{
-		Subject:            fmt.Sprintf("[%s] Open failed: %s %s", strings.ToUpper(s.cfg.Mode), t.Symbol, t.ContractType),
-		Date:               time.Now().In(easternTime()).Format("Monday, Jan 2 (3:04 PM ET)"),
-		Mode:               s.cfg.Mode,
-		Symbol:             t.Symbol,
-		ContractType:       t.ContractType,
-		StrikePrice:        t.StrikePrice,
-		Expiration:         t.Expiration,
-		OCCSymbol:          occSymbol,
-		OrderID:            orderID,
-		ErrorMessage:       errMsg,
-		SchwabPositionsURL: schwabPositionsURL,
-	}
-	html, err := templates.RenderExecuteOpenFailed(data)
-	if err != nil {
-		log.Printf("execution: render open-failed email: %v", err)
-		return
-	}
-	if err := s.mail.SendTradeEmail(s.cfg.EmailFrom, []string{s.cfg.Recipient}, data.Subject, html); err != nil {
-		log.Printf("execution: send open-failed email: %v", err)
 	}
 }
 
