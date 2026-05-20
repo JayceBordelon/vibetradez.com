@@ -196,6 +196,14 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
   const marketStatus = useMarketStatus();
   const liveQuotes = useQuoteStream(!summary && marketStatus?.open === true);
 
+  /*
+  Compute the live snapshot once at the body level so the hero P&L
+  block at the top of the page and the Live StatStrip near the bottom
+  can share the same numbers — single source of truth, no risk of
+  drift between the two surfaces.
+  */
+  const liveSnap = !summary ? computeLiveSnapshot(trade, liveQuotes, execution) : null;
+
   return (
     <div className="space-y-2">
       {/* Ticker header — flat, no card. Paper/Taken pill lives inline here instead of a separate panel. */}
@@ -213,6 +221,9 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
         {summary && <Badge variant={pnl > 0 ? "default" : pnl < 0 ? "destructive" : "secondary"}>EOD {fmtPnlInt(pnl)}</Badge>}
         <span className="ml-auto text-xs text-muted-foreground">{resolvedDate}</span>
       </div>
+
+      {/* Live P&L hero — the single highest-priority number on the page when a live position is active. Sits right under the ticker header so the user's eye lands on it first. */}
+      {liveSnap && liveSnap.livePnl !== null && <LivePnlHero snap={liveSnap} />}
 
       {/* Catalyst — soft tinted prose container, NOT a full card */}
       {trade.catalyst && (
@@ -259,7 +270,7 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
       </div>
 
       {/* Live block — flat section, StatStrip metrics. Same shape whether or not a position was taken; execution only nudges the P&L baseline. */}
-      {!summary && <LiveSection trade={trade} liveQuotes={liveQuotes} execution={execution} />}
+      {!summary && liveSnap && <LiveSection snap={liveSnap} marketOpen={liveQuotes?.market_open} />}
 
       {/* EOD result — flat section */}
       {summary && (
@@ -345,14 +356,37 @@ function PositionTag({ execution }: { execution: Execution }) {
   );
 }
 
-function LiveSection({ trade, liveQuotes, execution }: { trade: Trade; liveQuotes: LiveQuotesResponse | null; execution: Execution | null }) {
+/*
+LiveSnapshot is the materialized state of the live SSE feed for one
+contract, reduced to render-ready fields. Computed once in
+TradeDetailBody and shared by LivePnlHero (the giant spotlight number)
+and LiveSection (the supporting StatStrip) so the two surfaces never
+disagree.
+
+Returns null when no live data has arrived yet — both renderers
+should skip in that case.
+*/
+type LiveSnapshot = {
+  liveOption: NonNullable<LiveQuotesResponse["options"]>[string] | null;
+  liveStock: NonNullable<LiveQuotesResponse["quotes"]>[string] | null;
+  mark: number | null;
+  contractDelta: number | null;
+  contractDeltaPct: number | null;
+  livePnl: number | null;
+  stockDelta: number | null;
+  stockDeltaPct: number | null;
+  entryCaption: string;
+};
+
+function computeLiveSnapshot(trade: Trade, liveQuotes: LiveQuotesResponse | null, execution: Execution | null): LiveSnapshot | null {
+  if (!liveQuotes) return null;
   /*
   Reconstruct the same option key the server emits (server.go ~846):
   "<SYMBOL>|<CALL|PUT>|<strike .2f>|<expiration>".
   */
   const optionKey = `${trade.symbol}|${trade.contract_type}|${trade.strike_price.toFixed(2)}|${trade.expiration}`;
-  const liveOption = liveQuotes?.options?.[optionKey] ?? null;
-  const liveStock = liveQuotes?.quotes?.[trade.symbol] ?? null;
+  const liveOption = liveQuotes.options?.[optionKey] ?? null;
+  const liveStock = liveQuotes.quotes?.[trade.symbol] ?? null;
 
   if (!liveOption && !liveStock) return null;
 
@@ -360,15 +394,15 @@ function LiveSection({ trade, liveQuotes, execution }: { trade: Trade; liveQuote
   P&L baseline: actual broker fill price × quantity when a holding
   execution exists, otherwise Claude's modeled entry × 1 contract.
   Keeps the headline P&L honest for taken trades without changing
-  the section's shape for paper / not-taken picks.
+  the shape for paper / not-taken picks.
   */
   const useFill = execution?.state === "holding" && execution.open_price > 0;
   const qty = execution?.quantity && execution.quantity > 0 ? execution.quantity : 1;
   const pnlEntry = useFill ? execution.open_price : trade.estimated_price;
   const pnlMultiplier = useFill ? qty : 1;
 
-  const currentPrice = liveOption?.mark ?? null;
-  const contractDelta = currentPrice !== null && pnlEntry > 0 ? currentPrice - pnlEntry : null;
+  const mark = liveOption?.mark ?? null;
+  const contractDelta = mark !== null && pnlEntry > 0 ? mark - pnlEntry : null;
   const contractDeltaPct = contractDelta !== null && pnlEntry > 0 ? (contractDelta / pnlEntry) * 100 : null;
   const livePnl = contractDelta !== null ? contractDelta * 100 * pnlMultiplier : null;
 
@@ -376,6 +410,49 @@ function LiveSection({ trade, liveQuotes, execution }: { trade: Trade; liveQuote
   const stockDeltaPct = stockDelta !== null && trade.current_price > 0 ? (stockDelta / trade.current_price) * 100 : null;
 
   const entryCaption = useFill ? `fill ${fmtMoney(pnlEntry)}${qty > 1 ? ` ×${qty}` : ""}` : `entry was ${fmtMoney(pnlEntry)}`;
+
+  return { liveOption, liveStock, mark, contractDelta, contractDeltaPct, livePnl, stockDelta, stockDeltaPct, entryCaption };
+}
+
+/*
+LivePnlHero is the single highest-priority number on the trade detail
+page. Sits right under the ticker header so it's the first metric the
+user's eye lands on. The supporting numbers (mark, bid/ask, stock,
+volume) still render in the StatStrip below — this block only owns
+the headline P&L + percentage.
+*/
+function LivePnlHero({ snap }: { snap: LiveSnapshot }) {
+  const { livePnl, contractDeltaPct, mark, entryCaption } = snap;
+  if (livePnl === null) return null;
+
+  return (
+    <div className="mt-6 rounded-xl border border-border/60 bg-card/50 px-5 py-5 sm:px-8 sm:py-7">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
+            </span>
+            <span>Live unrealized P&L</span>
+          </div>
+          <div className={cn("mt-3 text-5xl font-bold tabular-nums leading-none sm:text-6xl", pnlColor(livePnl))}>{fmtPnlInt(livePnl)}</div>
+        </div>
+        <div className="flex flex-col items-end gap-1 text-right">
+          {contractDeltaPct !== null && <span className={cn("text-2xl font-semibold tabular-nums leading-none sm:text-3xl", pnlColor(livePnl))}>{fmtPctDec(contractDeltaPct)}</span>}
+          {mark !== null && (
+            <span className="text-xs text-muted-foreground">
+              mark {fmtMoney(mark)} · {entryCaption}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LiveSection({ snap, marketOpen }: { snap: LiveSnapshot; marketOpen?: boolean }) {
+  const { liveOption, liveStock, mark, contractDelta, stockDelta, stockDeltaPct, entryCaption } = snap;
 
   return (
     <>
@@ -388,12 +465,7 @@ function LiveSection({ trade, liveQuotes, execution }: { trade: Trade; liveQuote
           </span>
         }
         right={
-          livePnl !== null ? (
-            <span className={cn("text-3xl font-bold tabular-nums leading-none", pnlColor(livePnl))}>
-              {fmtPnlInt(livePnl)}
-              {contractDeltaPct !== null && <span className="ml-2 text-sm font-medium text-muted-foreground">{fmtPctDec(contractDeltaPct)}</span>}
-            </span>
-          ) : liveQuotes?.market_open === false ? (
+          marketOpen === false ? (
             <Badge variant="secondary" className="text-[10px]">
               Market closed
             </Badge>
@@ -404,10 +476,8 @@ function LiveSection({ trade, liveQuotes, execution }: { trade: Trade; liveQuote
         <Stat
           label="Contract mark"
           value={
-            currentPrice !== null ? (
-              <span style={{ color: contractDelta != null && contractDelta > 0 ? "var(--green)" : contractDelta != null && contractDelta < 0 ? "var(--red)" : undefined }}>
-                {fmtMoney(currentPrice)}
-              </span>
+            mark !== null ? (
+              <span style={{ color: contractDelta != null && contractDelta > 0 ? "var(--green)" : contractDelta != null && contractDelta < 0 ? "var(--red)" : undefined }}>{fmtMoney(mark)}</span>
             ) : (
               <Skeleton className="inline-block h-6 w-16 align-middle" />
             )
