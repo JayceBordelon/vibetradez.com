@@ -249,41 +249,6 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 }
 
 /*
-requireUser is the strict counterpart to attachUser: rejects with 401
-if no user is on the context. Use this on endpoints where unauthenticated
-callers must not be able to reach the handler at all (auto-execution
-confirm, cancel-all kill switch). Stack as: attachUser → requireUser →
-optionally requireEmailAllowlist → handler.
-*/
-func (s *Server) requireUser(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if u := userFrom(r.Context()); u == nil {
-			writeJSON(w, http.StatusUnauthorized, apiResponse{OK: false, Message: "authentication required"})
-			return
-		}
-		next(w, r)
-	}
-}
-
-/*
-requireEmailAllowlist gates a handler to a single allowed email
-address. Used for the auto-execution surface — even an authenticated
-non-allowed user must never be able to fire trades. Email comparison
-is case-insensitive and trimmed.
-*/
-func (s *Server) requireEmailAllowlist(allowed string, next http.HandlerFunc) http.HandlerFunc {
-	want := strings.ToLower(strings.TrimSpace(allowed))
-	return func(w http.ResponseWriter, r *http.Request) {
-		u := userFrom(r.Context())
-		if u == nil || strings.ToLower(strings.TrimSpace(u.Email)) != want {
-			writeJSON(w, http.StatusForbidden, apiResponse{OK: false, Message: "forbidden"})
-			return
-		}
-		next(w, r)
-	}
-}
-
-/*
 isSafeReturnTo ensures we only redirect to same-origin paths so the
 callback can't be used as an open redirector.
 */

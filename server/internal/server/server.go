@@ -9,12 +9,9 @@ import (
 	"fmt"
 	"html"
 	"log"
-	"math"
-	"math/rand/v2"
 	"net/http"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -77,8 +74,7 @@ type Server struct {
 	mux            *http.ServeMux
 	port           string
 	// Auto-execution (paper or live). nil = trading disabled at startup.
-	executor      *exec.Service
-	executorEmail string // email allowlist for /api/execution/* (single user)
+	executor *exec.Service
 
 	// Unsubscribe HMAC key + previous keys for rotation + the public-
 	// facing URL used to build email links. The /auth/unsubscribe
@@ -113,7 +109,7 @@ type apiResponse struct {
 	Message string `json:"message"`
 }
 
-func New(db *store.Store, schwabClient *schwab.Client, authClient *authclient.Client, scraper *sentiment.Scraper, emailClient *email.Client, emailFrom, anthropicKey, anthropicModel, sessionCookie string, sessionTTL time.Duration, ssoPublicURL, ssoClientID, ssoRedirectURI, port string, executor *exec.Service, executorEmail string, unsubscribeKey []byte, unsubscribePrevKey [][]byte, publicBaseURL string) *Server {
+func New(db *store.Store, schwabClient *schwab.Client, authClient *authclient.Client, scraper *sentiment.Scraper, emailClient *email.Client, emailFrom, anthropicKey, anthropicModel, sessionCookie string, sessionTTL time.Duration, ssoPublicURL, ssoClientID, ssoRedirectURI, port string, executor *exec.Service, unsubscribeKey []byte, unsubscribePrevKey [][]byte, publicBaseURL string) *Server {
 	s := &Server{
 		db:                 db,
 		schwab:             schwabClient,
@@ -131,7 +127,6 @@ func New(db *store.Store, schwabClient *schwab.Client, authClient *authclient.Cl
 		mux:                http.NewServeMux(),
 		port:               port,
 		executor:           executor,
-		executorEmail:      executorEmail,
 		unsubscribeKey:     unsubscribeKey,
 		unsubscribePrevKey: unsubscribePrevKey,
 		publicBaseURL:      strings.TrimRight(publicBaseURL, "/"),
@@ -144,20 +139,14 @@ func (s *Server) routes() {
 	/*
 		Per-endpoint rate limiters. Buckets are per-source-IP; keys come
 		from clientIP (X-Forwarded-For first hop, set by Traefik in prod).
-		Tuned for the actual access pattern, not arbitrary defaults:
 		  - subscribe: anti-spam (1/min — humans never re-subscribe)
-		  - auth: anti-brute-force (10/min on OAuth start endpoints)
-		  - execution: anti-DoS on the high-stakes confirm + cancel-all
-		    endpoints (5/min each — even authenticated user wouldn't
-		    legitimately hit them more than once per real decision)
+		  - auth:      anti-brute-force on OAuth start endpoints
+		  - unsub:     public endpoint hit via email links; 30/min/IP is
+		               generous for a single user but blocks token-
+		               enumeration storms
 	*/
-	subscribeLimit := newIPLimiter(1, 3) // 1/min, 3-burst (initial signup)
-	authLimit := newIPLimiter(10, 5)     // 10/min, 5-burst (OAuth retries)
-	executionLimit := newIPLimiter(5, 3) // 5/min, 3-burst (HMAC tokens unbruteable; this is just DoS bound)
-
-	// Unsubscribe rate limiter — public endpoint (no X-VT-Source gate)
-	// hit via email links. 30/min/IP is generous for a single user but
-	// blocks token-enumeration storms.
+	subscribeLimit := newIPLimiter(1, 3)
+	authLimit := newIPLimiter(10, 5)
 	unsubLimit := newIPLimiter(30, 10)
 
 	s.mux.HandleFunc("/health", s.handleHealth)
@@ -182,9 +171,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/unsubscribe", requireInternal(subscribeLimit.middleware(s.handleUnsubscribe)))
 	s.mux.HandleFunc("/api/me", requireInternal(s.attachUser(s.handleMe)))
 	s.mux.HandleFunc("/api/trades/today", requireInternal(s.handleTradesToday))
-	s.mux.HandleFunc("/api/trades/dates", requireInternal(s.handleTradeDates))
 	s.mux.HandleFunc("/api/trades/week", requireInternal(s.handleTradesWeek))
-	s.mux.HandleFunc("/api/chart/", requireInternal(s.handleChart))
 	s.mux.HandleFunc("/api/market/status", requireInternal(s.handleMarketStatus))
 	/*
 		SSE stream — intentionally NOT gated by requireInternal. The
@@ -195,17 +182,6 @@ func (s *Server) routes() {
 		the handshake. Read-only public market quotes anyway.
 	*/
 	s.mux.HandleFunc("/api/quotes/stream", s.handleQuoteStream)
-
-	/*
-		Auto-execution kill switch. Stack: requireInternal (trusted website
-		origin) → executionLimit (per-IP rate cap) → attachUser (load
-		session) → requireUser (signed in) → requireEmailAllowlist (single
-		allowed email) → handler. All five gates must pass.
-	*/
-	if s.executor != nil {
-		s.mux.HandleFunc("/api/execution/cancel-all",
-			requireInternal(executionLimit.middleware(s.attachUser(s.requireUser(s.requireEmailAllowlist(s.executorEmail, s.executor.HandleCancelAll))))))
-	}
 }
 
 func (s *Server) Start() {
@@ -269,22 +245,6 @@ type weekResponse struct {
 	Start string    `json:"start"`
 	End   string    `json:"end"`
 	Days  []weekDay `json:"days"`
-}
-
-func (s *Server) handleTradeDates(w http.ResponseWriter, r *http.Request) {
-	limit := 30
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 365 {
-			limit = n
-		}
-	}
-	dates, err := s.db.GetTradeDates(limit)
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"dates": []string{}})
-		return
-	}
-	w.Header().Set("Cache-Control", "public, max-age=60")
-	writeJSON(w, http.StatusOK, map[string]any{"dates": dates})
 }
 
 func (s *Server) handleTradesToday(w http.ResponseWriter, r *http.Request) {
@@ -903,150 +863,6 @@ func fmtLatency(d time.Duration) string {
 		return fmt.Sprintf("%dμs", d.Microseconds())
 	}
 	return fmt.Sprintf("%dms", d.Milliseconds())
-}
-
-// ── Chart Data ──
-
-func (s *Server) handleChart(w http.ResponseWriter, r *http.Request) {
-	// Extract symbol from /api/chart/{symbol}
-	symbol := strings.TrimPrefix(r.URL.Path, "/api/chart/")
-	symbol = strings.ToUpper(strings.TrimSpace(symbol))
-	if symbol == "" {
-		writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Message: "symbol required"})
-		return
-	}
-
-	// Default: 5 days of 5-min candles for intraday view
-	periodType := r.URL.Query().Get("periodType")
-	if periodType == "" {
-		periodType = "day"
-	}
-	period := 5
-	if p := r.URL.Query().Get("period"); p != "" {
-		if n, err := strconv.Atoi(p); err == nil && n > 0 {
-			period = n
-		}
-	}
-	frequencyType := r.URL.Query().Get("frequencyType")
-	if frequencyType == "" {
-		frequencyType = "minute"
-	}
-	frequency := 5
-	if f := r.URL.Query().Get("frequency"); f != "" {
-		if n, err := strconv.Atoi(f); err == nil && n > 0 {
-			frequency = n
-		}
-	}
-
-	// If Schwab is connected, use real market data.
-	if s.schwab != nil && s.schwab.IsConnected() {
-		candles, err := s.schwab.GetPriceHistory(symbol, periodType, period, frequencyType, frequency)
-		if err != nil {
-			log.Printf("Chart data error for %s: %v", symbol, err)
-			writeJSON(w, http.StatusBadGateway, apiResponse{OK: false, Message: "failed to fetch chart data"})
-			return
-		}
-		w.Header().Set("Cache-Control", "public, max-age=15")
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"symbol":  symbol,
-			"candles": candles,
-		})
-		return
-	}
-
-	/*
-		Schwab not available — generate synthetic candles from the trade's
-		current_price so local dev still renders a chart.
-	*/
-	candles := s.syntheticCandles(symbol, period, frequency)
-	w.Header().Set("Cache-Control", "public, max-age=60")
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"symbol":  symbol,
-		"candles": candles,
-	})
-}
-
-/*
-syntheticCandles generates realistic-looking OHLCV candles for local dev
-when Schwab is not connected. It looks up the symbol's current_price from
-the trades table to anchor the simulation at the right price level.
-*/
-func (s *Server) syntheticCandles(symbol string, days, freqMinutes int) []schwab.Candle {
-	// Look up a base price from the most recent trade for this symbol.
-	basePrice := 150.0 // fallback
-	row := s.db.DB().QueryRow(
-		`SELECT current_price FROM trades WHERE symbol = $1 ORDER BY date DESC LIMIT 1`,
-		symbol,
-	)
-	if err := row.Scan(&basePrice); err != nil || basePrice <= 0 {
-		basePrice = 150.0
-	}
-
-	// Deterministic seed from symbol so the chart is stable across refreshes.
-	seed := uint64(0)
-	for _, c := range symbol {
-		seed = seed*31 + uint64(c)
-	}
-	rng := rand.New(rand.NewPCG(seed, seed^0xdeadbeef))
-
-	// Generate candles: ~78 five-minute bars per trading day (9:30-16:00).
-	barsPerDay := 390 / freqMinutes
-	totalBars := days * barsPerDay
-
-	now := time.Now()
-	// Walk back to find the start date (skip weekends).
-	tradingDays := make([]time.Time, 0, days)
-	d := now
-	for len(tradingDays) < days {
-		if d.Weekday() != time.Saturday && d.Weekday() != time.Sunday {
-			tradingDays = append(tradingDays, d)
-		}
-		d = d.AddDate(0, 0, -1)
-	}
-	// Reverse so oldest is first.
-	for i, j := 0, len(tradingDays)-1; i < j; i, j = i+1, j-1 {
-		tradingDays[i], tradingDays[j] = tradingDays[j], tradingDays[i]
-	}
-
-	candles := make([]schwab.Candle, 0, totalBars)
-	price := basePrice * (0.97 + rng.Float64()*0.06) // start near base
-
-	for _, day := range tradingDays {
-		marketOpen := time.Date(day.Year(), day.Month(), day.Day(), 9, 30, 0, 0, time.Local)
-		for bar := 0; bar < barsPerDay; bar++ {
-			t := marketOpen.Add(time.Duration(bar*freqMinutes) * time.Minute)
-
-			// Random walk with mean reversion toward basePrice.
-			drift := (basePrice - price) * 0.002
-			volatility := basePrice * 0.003
-			move := drift + volatility*(rng.Float64()-0.5)*2
-
-			open := price
-			close := price + move
-			high := math.Max(open, close) + rng.Float64()*volatility*0.5
-			low := math.Min(open, close) - rng.Float64()*volatility*0.5
-			vol := int64(50000 + rng.IntN(200000))
-
-			// Round to 2 decimals.
-			open = math.Round(open*100) / 100
-			close = math.Round(close*100) / 100
-			high = math.Round(high*100) / 100
-			low = math.Round(low*100) / 100
-
-			candles = append(candles, schwab.Candle{
-				Time:   t.Unix(),
-				Open:   open,
-				High:   high,
-				Low:    low,
-				Close:  close,
-				Volume: vol,
-			})
-
-			price = close
-		}
-	}
-
-	return candles
 }
 
 // ── Schwab OAuth ──

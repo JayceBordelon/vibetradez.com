@@ -430,7 +430,7 @@ func main() {
 	c.Start()
 
 	sessionTTL := time.Duration(cfg.SessionTTLDays) * 24 * time.Hour
-	srv := server.New(db, schwabClient, authClient, scraper, emailClient, cfg.EmailFrom, cfg.AnthropicAPIKey, cfg.AnthropicModel, cfg.SessionCookieName, sessionTTL, cfg.AuthPublicURL, cfg.AuthClientID, cfg.AuthRedirectURI, cfg.ServerPort, executor, cfg.ExecutionRecipient, cfg.UnsubscribeHMACKey, cfg.UnsubscribePrevHMACKeys, cfg.PublicBaseURL)
+	srv := server.New(db, schwabClient, authClient, scraper, emailClient, cfg.EmailFrom, cfg.AnthropicAPIKey, cfg.AnthropicModel, cfg.SessionCookieName, sessionTTL, cfg.AuthPublicURL, cfg.AuthClientID, cfg.AuthRedirectURI, cfg.ServerPort, executor, cfg.UnsubscribeHMACKey, cfg.UnsubscribePrevHMACKeys, cfg.PublicBaseURL)
 	srv.SetHub(quotesHub)
 	go srv.Start()
 

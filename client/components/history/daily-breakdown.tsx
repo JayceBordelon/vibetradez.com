@@ -4,7 +4,6 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { ExecutionBadge } from "@/components/execution-badge";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { formatDayName, formatMonthDay } from "@/lib/date-utils";
@@ -139,19 +138,6 @@ function DayRow({ day, maxAbsPnl }: { day: DayMultiStat; maxAbsPnl: number }) {
             <TierBar key={tier} tier={tier} pnl={day.tiers[tier].pnl} maxAbsPnl={maxAbsPnl} />
           ))}
         </div>
-
-        {day.executions.length > 0 && (
-          // Badges visible on every breakpoint. The previous `hidden sm:flex`
-          // dropped them entirely on mobile, which silently hid the
-          // "Close failed (verify position)" warning for stranded-at-broker
-          // positions — operator browsing /history on a phone wouldn't see
-          // it. The flex-wrap keeps the layout sane when many badges land.
-          <div className="flex shrink-0 flex-wrap items-center gap-1">
-            {day.executions.map((e, i) => (
-              <ExecutionBadge key={`${day.date}-exec-${i}`} execution={e} />
-            ))}
-          </div>
-        )}
       </CollapsibleTrigger>
 
       <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">

@@ -124,29 +124,6 @@ func cacheSet(key string, data interface{}) {
 	cache[key] = cacheEntry{data: data, expiresAt: time.Now().Add(cacheTTL)}
 }
 
-// ── Price History (OHLCV candles) ──
-
-type Candle struct {
-	Time   int64   `json:"time"` // epoch milliseconds from Schwab, converted to seconds for lightweight-charts
-	Open   float64 `json:"open"`
-	High   float64 `json:"high"`
-	Low    float64 `json:"low"`
-	Close  float64 `json:"close"`
-	Volume int64   `json:"volume"`
-}
-
-type priceHistoryRaw struct {
-	Candles []struct {
-		Datetime int64   `json:"datetime"`
-		Open     float64 `json:"open"`
-		High     float64 `json:"high"`
-		Low      float64 `json:"low"`
-		Close    float64 `json:"close"`
-		Volume   int64   `json:"volume"`
-	} `json:"candles"`
-	Empty bool `json:"empty"`
-}
-
 // ── Public Methods ──
 
 // GetQuotes fetches real-time quotes for the given symbols. Results are cached.
@@ -317,61 +294,6 @@ func (c *Client) GetOptionChain(symbol, contractType, fromDate, toDate string, s
 
 	cacheSet(cacheKey, chain)
 	return chain, nil
-}
-
-/*
-GetPriceHistory fetches OHLCV candle data for a symbol.
-periodType: "day","month","year","ytd". frequencyType: "minute","daily","weekly","monthly".
-*/
-func (c *Client) GetPriceHistory(symbol, periodType string, period int, frequencyType string, frequency int) ([]Candle, error) {
-	cacheKey := fmt.Sprintf("history:%s:%s:%d:%s:%d", symbol, periodType, period, frequencyType, frequency)
-	if cached, ok := cacheGet(cacheKey); ok {
-		return cached.([]Candle), nil
-	}
-
-	params := url.Values{
-		"symbol":        {symbol},
-		"periodType":    {periodType},
-		"period":        {fmt.Sprintf("%d", period)},
-		"frequencyType": {frequencyType},
-		"frequency":     {fmt.Sprintf("%d", frequency)},
-	}
-
-	u := fmt.Sprintf("%s/pricehistory?%s", marketDataBase, params.Encode())
-	resp, err := c.AuthenticatedGet(u)
-	if err != nil {
-		return nil, fmt.Errorf("get price history: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("pricehistory API returned %d: %s", resp.StatusCode, string(body))
-	}
-
-	var raw priceHistoryRaw
-	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, fmt.Errorf("decode price history: %w", err)
-	}
-
-	if raw.Empty || len(raw.Candles) == 0 {
-		return nil, nil
-	}
-
-	candles := make([]Candle, len(raw.Candles))
-	for i, c := range raw.Candles {
-		candles[i] = Candle{
-			Time:   c.Datetime / 1000, // Schwab returns epoch ms, lightweight-charts wants seconds
-			Open:   c.Open,
-			High:   c.High,
-			Low:    c.Low,
-			Close:  c.Close,
-			Volume: c.Volume,
-		}
-	}
-
-	cacheSet(cacheKey, candles)
-	return candles, nil
 }
 
 // FindContract looks up a specific option contract from the chain response.
