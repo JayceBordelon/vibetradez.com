@@ -1,0 +1,221 @@
+name: CI/CD Pipeline
+
+# Auto-fires on every push to main and on manual dispatch. Deploys
+# both vibetradez services (trading-server + trading-frontend) via
+# SSH to the droplet, using the unified ~/projects/docker-compose.yml
+# that owns Traefik and the shared app-network.
+#
+# Market-hours guard runs in `defer` mode: during 09:00-16:30 ET,
+# Mon-Fri the downstream jobs are skipped silently. The 16:35 ET
+# post-market replay (post-market-deploy.yml) dispatches this
+# workflow again with override_market_hours_guard=true so the deferred
+# push goes out post-close. Use the override input for emergency
+# deploys.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      override_market_hours_guard:
+        type: boolean
+        default: false
+        description: Skip the market-hours block (emergency deploys only).
+
+concurrency:
+  group: deploy-vibetradez
+  cancel-in-progress: false
+
+env:
+  PROJECTS_PATH: /home/jayce/projects
+  REPO_DIR: /home/jayce/projects/vibetradez.com
+
+jobs:
+  market_hours_guard:
+    name: Market hours guard
+    runs-on: ubuntu-latest
+    outputs:
+      in_window: ${{ steps.check.outputs.in_window }}
+    steps:
+      - id: check
+        run: |
+          if [ "${{ inputs.override_market_hours_guard }}" = "true" ]; then
+            echo "in_window=false (override set)"
+            echo "in_window=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          # America/New_York handles DST automatically. Window is
+          # weekday 09:00-16:30 ET; everything else (weekends, before
+          # 9am ET, after 4:30pm ET, holidays modulo a separate
+          # holiday-aware cron we don't have here) deploys immediately.
+          DOW=$(TZ=America/New_York date +'%u')
+          HHMM=$(TZ=America/New_York date +'%H%M')
+          if [ "$DOW" -ge 1 ] && [ "$DOW" -le 5 ] && [ "$HHMM" -ge 0900 ] && [ "$HHMM" -le 1630 ]; then
+            echo "Deferring: weekday $DOW $HHMM ET is inside the 09:00-16:30 ET window"
+            echo "in_window=true" >> $GITHUB_OUTPUT
+          else
+            echo "Proceeding: $DOW $HHMM ET is outside the market window"
+            echo "in_window=false" >> $GITHUB_OUTPUT
+          fi
+
+  sync:
+    name: Sync
+    needs: market_hours_guard
+    if: needs.market_hours_guard.outputs.in_window != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull latest on droplet
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+            cd ${{ env.REPO_DIR }}
+            git pull --ff-only origin main
+
+  build:
+    name: Build
+    needs: sync
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: docker compose build (server + frontend)
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          # Single build invocation does both images in one pass, so
+          # the runner doesn't pay the SSH + docker-buildx startup
+          # cost twice. --no-cache ensures fresh Go/Node layers when
+          # the lockfiles change underneath an unchanged Dockerfile.
+          script: |
+            set -e
+            cd ${{ env.PROJECTS_PATH }}
+            docker compose build --no-cache trading-server trading-frontend
+
+  deploy:
+    name: Deploy
+    needs: build
+    if: success()
+    runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.status.outputs.status }}
+    steps:
+      - name: Deploy trading-server (force-recreate, wait for healthy)
+        id: deploy_server
+        continue-on-error: true
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          # Order matters: trading-server force-recreated FIRST so
+          # the running container picks up the new compose yaml
+          # (healthcheck block, env). trading-frontend's depends_on
+          # then sees a healthcheck-equipped trading-server and the
+          # rollout can scale safely. Reversing the order leaves
+          # trading-frontend asking compose to wait on a healthcheck
+          # the running trading-server container doesn't have, and
+          # compose refuses with "dependency failed to start".
+          #
+          # --wait blocks until the trading-server's compose
+          # healthcheck (/healthz, db-only — intentionally lightweight
+          # so Schwab or Anthropic outages don't trigger restart
+          # cascades) returns healthy. --wait-timeout 180s gives a
+          # roomy ceiling for boot; anything slower is a real boot
+          # problem worth failing on.
+          script: |
+            set -e
+            cd ${{ env.PROJECTS_PATH }}
+            docker compose up -d --wait --wait-timeout 180 --force-recreate trading-server
+
+      - name: Deploy trading-frontend (rolling)
+        id: deploy_frontend
+        continue-on-error: true
+        if: steps.deploy_server.outcome == 'success'
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          # Rolling so dashboard visitors mid-session don't see a
+          # white-flash. --wait-after-healthy 30 drains in-flight
+          # SSE/HTTP requests before terminating the old container.
+          script: |
+            set -e
+            cd ${{ env.PROJECTS_PATH }}
+            docker rollout trading-frontend --timeout 120 --wait-after-healthy 30
+
+      - name: Ensure Traefik is up
+        if: always()
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd ${{ env.PROJECTS_PATH }}
+            docker compose up -d traefik
+
+      - name: Compute status
+        id: status
+        if: always()
+        run: |
+          SERVER="${{ steps.deploy_server.outcome }}"
+          FRONTEND="${{ steps.deploy_frontend.outcome }}"
+          if [ "$SERVER" = "success" ] && [ "$FRONTEND" = "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "::error::server=$SERVER frontend=$FRONTEND"
+            echo "status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+  healthcheck:
+    name: Health Check
+    needs: deploy
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify endpoints
+        run: |
+          set -e
+          # Allow ~30s for both containers + Traefik to settle.
+          sleep 30
+          # /health returns a JSON payload with per-service status.
+          # We accept 200 (everything ok) OR 503 (a downstream like
+          # Schwab is temporarily flaky) since the deploy can succeed
+          # even when an upstream is briefly degraded; what we're
+          # gating on is that the trading-server is serving HTTP at
+          # all, not that every downstream is hot.
+          code=$(curl -sSL -o /tmp/health.json -w '%{http_code}' https://vibetradez.com/health)
+          cat /tmp/health.json
+          echo ""
+          if [ "$code" != "200" ] && [ "$code" != "503" ]; then
+            echo "::error::vibetradez.com/health returned $code"
+            exit 1
+          fi
+          # Dashboard SSR check
+          code=$(curl -sSL -o /dev/null -w '%{http_code}' https://vibetradez.com/)
+          if [ "$code" != "200" ]; then
+            echo "::error::vibetradez.com/ returned $code"
+            exit 1
+          fi
+          echo "vibetradez.com/: 200, /health: $code"
+
+  cleanup:
+    name: Cleanup
+    needs: deploy
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: docker image prune
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            docker image prune -af --filter "until=24h"
