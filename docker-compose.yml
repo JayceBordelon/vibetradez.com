@@ -4,8 +4,8 @@
 #
 # Three services:
 #   - traefik: TLS termination + Host()/PathPrefix() routing
-#   - trading-server: Go API + cron + in-process Google OAuth (the
-#     /auth/google/* endpoints replaced the retired auth.jaycebordelon.com)
+#   - trading-server: Go API + cron + in-process Google OAuth
+#     (serves /auth/google/start + /auth/google/callback in-binary)
 #   - trading-frontend: Next.js dashboard. depends_on the server's
 #     /healthz so cold-boot doesn't briefly serve connection-refused
 x-logging: &default-logging
@@ -69,8 +69,7 @@ services:
       - "app=trading-server"
       - "traefik.enable=true"
       # API + auth + health routes — higher priority than the
-      # catch-all frontend router. /auth/google/* now lands here
-      # (replaces the retired /auth/sso/* consumer dance).
+      # catch-all frontend router. /auth/google/* lands here.
       - "traefik.http.routers.trading-api.rule=(Host(`vibetradez.com`) || Host(`www.vibetradez.com`)) && (PathPrefix(`/api`) || PathPrefix(`/auth`) || Path(`/health`))"
       - "traefik.http.routers.trading-api.entrypoints=websecure"
       - "traefik.http.routers.trading-api.tls.certresolver=letsencrypt"

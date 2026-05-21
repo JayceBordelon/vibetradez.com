@@ -887,7 +887,7 @@ func (s *Server) handleSchwabAuth(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		// Path="/auth/callback" instead of "/auth": the cookie is read
 		// only by handleSchwabCallback, so narrower scope keeps it out
-		// of every /auth/sso/* and /auth/unsubscribe request that
+		// of every /auth/google/* and /auth/unsubscribe request that
 		// doesn't need it (cookie hygiene, no functional change).
 		Name:     schwabStateCookie,
 		Value:    state,
@@ -928,7 +928,7 @@ func (s *Server) handleSchwabCallback(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		// Path="/auth/callback" instead of "/auth": the cookie is read
 		// only by handleSchwabCallback, so narrower scope keeps it out
-		// of every /auth/sso/* and /auth/unsubscribe request that
+		// of every /auth/google/* and /auth/unsubscribe request that
 		// doesn't need it (cookie hygiene, no functional change).
 		Name:     schwabStateCookie,
 		Value:    "",

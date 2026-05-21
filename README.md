@@ -6,7 +6,7 @@ AI-powered options trading service. A language model ranks 10 options contracts 
 
 - [jaycebordelon.com](https://github.com/JayceBordelon/jaycebordelon.com) — personal portfolio and blog. Standalone deployable; planned to run on its own droplet.
 
-Google OAuth used to live in a separate `auth.jaycebordelon.com` service. It's now folded into the trading-server binary at `/auth/google/start` + `/auth/google/callback` — no external dependency, no /oauth/verify HTTP hop on every request. The Google Cloud Console redirect URI is `https://vibetradez.com/auth/google/callback`.
+Google OAuth is handled in-process by the trading-server binary at `/auth/google/start` + `/auth/google/callback`. The Google Cloud Console redirect URI is `https://vibetradez.com/auth/google/callback`.
 
 ## Architecture
 
@@ -44,7 +44,7 @@ flowchart LR
     TS --> Resend
 ```
 
-Visitors hit Traefik, which routes by path: `/api`, `/auth`, `/admin`, `/health` go to the Go trading-server; everything else goes to the Next.js trading-frontend. The trading-server owns every outbound dependency: Postgres for picks / executions / summaries / users / sessions (the latter two from the retired auth-service's database, reused without migration), Schwab for live quotes + WebSocket ticks + Trader API orders, Anthropic Claude for the morning picker and EOD analysis, four sentiment scrapers for the morning signal aggregation, and Resend for email. Sign-in is a direct Google OAuth flow handled in the trading-server binary; the session cookie is validated against a local sessions table on each `/api/*` request (no HTTP hop). The trading-frontend doesn't talk to anything outside the droplet directly; live option ticks flow back to it as SSE from the trading-server.
+Visitors hit Traefik, which routes by path: `/api`, `/auth`, `/admin`, `/health` go to the Go trading-server; everything else goes to the Next.js trading-frontend. The trading-server owns every outbound dependency: Postgres for picks / executions / summaries / users / sessions, Schwab for live quotes + WebSocket ticks + Trader API orders, Anthropic Claude for the morning picker and EOD analysis, four sentiment scrapers for the morning signal aggregation, and Resend for email. Sign-in is a direct Google OAuth flow handled in the trading-server binary; the session cookie is validated against a local sessions table on each `/api/*` request. The trading-frontend doesn't talk to anything outside the droplet directly; live option ticks flow back to it as SSE from the trading-server.
 
 ## What's here
 
