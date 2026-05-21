@@ -1,0 +1,89 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  trading-frontend:
+    name: Lint + Build • Trading Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - name: Biome check
+        run: npx biome check .
+      - name: Next build
+        run: npx next build
+
+  trading-server:
+    name: Lint + Build • Trading Server
+    runs-on: ubuntu-latest
+    # Ephemeral Postgres container the store / server test suites
+    # connect to via TEST_DATABASE_URL.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: vibetradez
+          POSTGRES_PASSWORD: vibetradez
+          POSTGRES_DB: vibetradez_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vibetradez"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    defaults:
+      run:
+        working-directory: server
+    env:
+      TEST_DATABASE_URL: postgresql://vibetradez:vibetradez@localhost:5432/vibetradez_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          cache-dependency-path: server/go.sum
+      - run: go mod download
+      - name: gofmt check
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::Files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - run: go vet ./...
+      - run: go build ./...
+      - name: go test
+        # -race catches goroutine slips (e.g. the cron flock work);
+        # cheap on a server package this size.
+        run: go test -race -timeout 120s ./...
+      # golangci-lint catches the unused-function class of issue that
+      # `go vet` misses; ship-blocking on every PR.
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+      - name: golangci-lint
+        run: golangci-lint run ./...
+
+  workflows:
+    name: Lint • Workflows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: actionlint
+        uses: docker://rhysd/actionlint:latest
+        env:
+          SHELLCHECK_OPTS: -S warning
+        with:
+          args: -color

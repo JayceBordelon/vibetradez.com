@@ -43,6 +43,12 @@ services:
 
   auth-service:
     container_name: vt-local-auth
+    # Builds against the sibling auth.jaycebordelon.com repo. Post the
+    # monorepo split, the local-dev stack expects you to have the
+    # auth.jaycebordelon.com repo cloned as a sibling of this one
+    # (e.g. ~/Career/vibetradez.com and ~/Career/auth.jaycebordelon.com).
+    # Skip this service entirely by running with `--scale auth-service=0`
+    # if you only need the trading slice for offline frontend work.
     build:
       context: ../../auth.jaycebordelon.com
       dockerfile: Dockerfile

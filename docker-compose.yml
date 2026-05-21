@@ -1,0 +1,96 @@
+# vibetradez.com service slice. Expected to run alongside Traefik
+# on the same `app-network` overlay; the Traefik container itself and
+# the network live outside this repo and are referenced as external.
+#
+# Two services: trading-server (Go API + cron) and trading-frontend
+# (Next.js dashboard). The frontend waits for the server's /healthz
+# to come up before starting so a cold boot of the stack doesn't
+# briefly serve a connection-refused error shell.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
+services:
+  trading-server:
+    image: vibetradez.com-trading-server:latest
+    build:
+      context: ./server
+    env_file:
+      - ./server/.env
+    expose:
+      - "8080"
+    networks:
+      - app-network
+    restart: unless-stopped
+    logging: *default-logging
+    # Without a healthcheck, `docker compose up -d --force-recreate`
+    # reports success the moment the container is *created*, not when
+    # the Go binary is actually serving traffic. A mustEnv failure
+    # (rotated DATABASE_URL / ANTHROPIC_API_KEY / VT_AUTH_*) would
+    # log.Fatal and crash-loop silently while the deploy job reported
+    # success.
+    #
+    # /healthz is the lightweight liveness probe — db ping + listener
+    # only, no upstream probes. The richer /health endpoint exercised
+    # by the post-deploy healthcheck workflow runs Schwab + Anthropic
+    # + sentiment probes that can take 5-25s on a slow upstream, so
+    # tying the compose healthcheck to /health would trip the first
+    # time Anthropic returned slowly.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "app=trading-server"
+      - "traefik.enable=true"
+      # API / auth / health routes — higher priority
+      - "traefik.http.routers.trading-api.rule=(Host(`vibetradez.com`) || Host(`www.vibetradez.com`)) && (PathPrefix(`/api`) || PathPrefix(`/auth`) || Path(`/health`))"
+      - "traefik.http.routers.trading-api.entrypoints=websecure"
+      - "traefik.http.routers.trading-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.trading-api.priority=20"
+      - "traefik.http.services.trading-api.loadbalancer.server.port=8080"
+
+  trading-frontend:
+    image: vibetradez.com-trading-frontend:latest
+    build:
+      context: ./client
+    environment:
+      - API_URL=http://trading-server:8080
+    expose:
+      - "3001"
+    networks:
+      - app-network
+    restart: unless-stopped
+    logging: *default-logging
+    # condition: service_healthy waits for trading-server's /healthz to
+    # return 200 before starting trading-frontend. Cold boot of the
+    # full stack (droplet reboot, `compose down && up`) would otherwise
+    # leave Next.js SSR-fetching /api/market/status + /api/quotes/stream
+    # against a connection-refused upstream and serving an error shell
+    # for the first 10-30s.
+    depends_on:
+      trading-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "app=trading-frontend"
+      - "traefik.enable=true"
+      # Catch-all frontend — lower priority
+      - "traefik.http.routers.trading-frontend.rule=Host(`vibetradez.com`) || Host(`www.vibetradez.com`)"
+      - "traefik.http.routers.trading-frontend.entrypoints=websecure"
+      - "traefik.http.routers.trading-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.trading-frontend.priority=10"
+      - "traefik.http.services.trading-frontend.loadbalancer.server.port=3001"
+
+networks:
+  app-network:
+    external: true
