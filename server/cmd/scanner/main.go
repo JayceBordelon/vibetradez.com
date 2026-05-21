@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"vibetradez.com/internal/authclient"
+	"vibetradez.com/internal/auth"
 	"vibetradez.com/internal/calendar"
 	"vibetradez.com/internal/config"
 	"vibetradez.com/internal/email"
@@ -173,7 +173,20 @@ func main() {
 		log.Println("Schwab: not configured (SCHWAB_APP_KEY / SCHWAB_SECRET not set)")
 	}
 
-	authClient := authclient.New(cfg.AuthBaseURL, cfg.AuthClientID, cfg.AuthClientSecret, cfg.AuthRedirectURI)
+	// Auth folded in-process: open the dedicated AUTH_DATABASE_URL pool
+	// (existing users + sessions tables from the retired auth-service),
+	// wire it to the Google OAuth client, and hand the resulting
+	// *auth.Service to the HTTP server. No more out-of-process
+	// /oauth/verify hop on every /api/* request.
+	authStore, err := auth.NewStore(cfg.AuthDatabaseURL)
+	if err != nil {
+		log.Fatalf("auth store: %v", err)
+	}
+	defer func() { _ = authStore.Close() }()
+	googleClient := auth.NewGoogleClient(cfg.GoogleClientID, cfg.GoogleClientSecret, cfg.GoogleCallbackURL)
+	authService := auth.New(authStore, googleClient, auth.Options{
+		SessionTTL: time.Duration(cfg.SessionTTLDays) * 24 * time.Hour,
+	})
 
 	scraper := sentiment.NewScraper()
 
@@ -430,7 +443,7 @@ func main() {
 	c.Start()
 
 	sessionTTL := time.Duration(cfg.SessionTTLDays) * 24 * time.Hour
-	srv := server.New(db, schwabClient, authClient, scraper, emailClient, cfg.EmailFrom, cfg.AnthropicAPIKey, cfg.AnthropicModel, cfg.SessionCookieName, sessionTTL, cfg.AuthPublicURL, cfg.AuthClientID, cfg.AuthRedirectURI, cfg.ServerPort, executor, cfg.UnsubscribeHMACKey, cfg.UnsubscribePrevHMACKeys, cfg.PublicBaseURL)
+	srv := server.New(db, schwabClient, authService, scraper, emailClient, cfg.EmailFrom, cfg.AnthropicAPIKey, cfg.AnthropicModel, cfg.SessionCookieName, sessionTTL, cfg.ServerPort, executor, cfg.UnsubscribeHMACKey, cfg.UnsubscribePrevHMACKeys, cfg.PublicBaseURL)
 	srv.SetHub(quotesHub)
 	go srv.Start()
 

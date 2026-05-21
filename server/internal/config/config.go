@@ -70,17 +70,20 @@ type Config struct {
 	*/
 	UnsubscribePrevHMACKeys [][]byte
 	/*
-		Auth service (auth.jaycebordelon.com) client credentials. Trading
-		server delegates sign-in to the centralized auth service and talks
-		to it over HTTP for token exchange + session introspection.
+		In-process Google OAuth. The trading-server runs the Google
+		sign-in flow itself (no separate auth-service container or
+		HTTP hop). GoogleCallbackURL must be registered as an
+		authorized redirect URI in Google Cloud Console; mismatches
+		400 with redirect_uri_mismatch. AuthDatabaseURL is a separate
+		Postgres so the existing users + sessions tables from the
+		retired auth-service can be reused without data migration.
 	*/
-	AuthBaseURL       string
-	AuthPublicURL     string
-	AuthClientID      string
-	AuthClientSecret  string
-	AuthRedirectURI   string
-	SessionCookieName string
-	SessionTTLDays    int
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleCallbackURL  string
+	AuthDatabaseURL    string
+	SessionCookieName  string
+	SessionTTLDays     int
 	/*
 		Auto-execution feature. TradingEnabled is the master switch; when
 		false, the entire pipeline (selector, decision row, email, order)
@@ -134,10 +137,10 @@ func Load() *Config {
 	databaseURL := mustEnv("DATABASE_URL")
 	resendKey := mustEnv("RESEND_API_KEY")
 	anthropicKey := mustEnv("ANTHROPIC_API_KEY")
-	authBaseURL := mustEnv("VT_AUTH_BASE_URL")
-	authClientID := mustEnv("VT_AUTH_CLIENT_ID")
-	authClientSecret := mustEnv("VT_AUTH_CLIENT_SECRET")
-	authRedirectURI := mustEnv("VT_AUTH_REDIRECT_URI")
+	authDatabaseURL := mustEnv("AUTH_DATABASE_URL")
+	googleClientID := mustEnv("GOOGLE_CLIENT_ID")
+	googleClientSecret := mustEnv("GOOGLE_CLIENT_SECRET")
+	googleCallbackURL := getEnvOrDefault("GOOGLE_CALLBACK_URL", "https://vibetradez.com/auth/google/callback")
 
 	var recipients []string
 	if r := os.Getenv("EMAIL_RECIPIENTS"); r != "" {
@@ -221,11 +224,10 @@ func Load() *Config {
 		SchwabTokenKey:          schwabTokenKey,
 		UnsubscribeHMACKey:      unsubKey,
 		UnsubscribePrevHMACKeys: unsubPrevKeys,
-		AuthBaseURL:             authBaseURL,
-		AuthPublicURL:           getEnvOrDefault("VT_AUTH_PUBLIC_URL", "https://auth.jaycebordelon.com"),
-		AuthClientID:            authClientID,
-		AuthClientSecret:        authClientSecret,
-		AuthRedirectURI:         authRedirectURI,
+		GoogleClientID:          googleClientID,
+		GoogleClientSecret:      googleClientSecret,
+		GoogleCallbackURL:       googleCallbackURL,
+		AuthDatabaseURL:         authDatabaseURL,
 		SessionCookieName:       getEnvOrDefault("SESSION_COOKIE_NAME", "vt_session"),
 		SessionTTLDays:          sessionTTLDays,
 		TradingEnabled:          os.Getenv("TRADING_ENABLED") == "true",

@@ -18,7 +18,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicoption "github.com/anthropics/anthropic-sdk-go/option"
 
-	"vibetradez.com/internal/authclient"
+	"vibetradez.com/internal/auth"
 	"vibetradez.com/internal/email"
 	"vibetradez.com/internal/exec"
 	"vibetradez.com/internal/quotes"
@@ -59,7 +59,7 @@ func sanitizeForLog(s string) string {
 type Server struct {
 	db             *store.Store
 	schwab         *schwab.Client
-	auth           *authclient.Client
+	auth           *auth.Service
 	scraper        *sentiment.Scraper
 	emailClient    *email.Client
 	emailFrom      string
@@ -67,10 +67,6 @@ type Server struct {
 	anthropicModel string
 	sessionCookie  string
 	sessionTTL     time.Duration
-	// SSO consumer config — identifies this app to auth.jaycebordelon.com.
-	ssoPublicURL   string // https://auth.jaycebordelon.com (browser-facing)
-	ssoClientID    string
-	ssoRedirectURI string
 	mux            *http.ServeMux
 	port           string
 	// Auto-execution (paper or live). nil = trading disabled at startup.
@@ -109,11 +105,11 @@ type apiResponse struct {
 	Message string `json:"message"`
 }
 
-func New(db *store.Store, schwabClient *schwab.Client, authClient *authclient.Client, scraper *sentiment.Scraper, emailClient *email.Client, emailFrom, anthropicKey, anthropicModel, sessionCookie string, sessionTTL time.Duration, ssoPublicURL, ssoClientID, ssoRedirectURI, port string, executor *exec.Service, unsubscribeKey []byte, unsubscribePrevKey [][]byte, publicBaseURL string) *Server {
+func New(db *store.Store, schwabClient *schwab.Client, authService *auth.Service, scraper *sentiment.Scraper, emailClient *email.Client, emailFrom, anthropicKey, anthropicModel, sessionCookie string, sessionTTL time.Duration, port string, executor *exec.Service, unsubscribeKey []byte, unsubscribePrevKey [][]byte, publicBaseURL string) *Server {
 	s := &Server{
 		db:                 db,
 		schwab:             schwabClient,
-		auth:               authClient,
+		auth:               authService,
 		scraper:            scraper,
 		emailClient:        emailClient,
 		emailFrom:          emailFrom,
@@ -121,9 +117,6 @@ func New(db *store.Store, schwabClient *schwab.Client, authClient *authclient.Cl
 		anthropicModel:     anthropicModel,
 		sessionCookie:      sessionCookie,
 		sessionTTL:         sessionTTL,
-		ssoPublicURL:       strings.TrimRight(ssoPublicURL, "/"),
-		ssoClientID:        ssoClientID,
-		ssoRedirectURI:     ssoRedirectURI,
 		mux:                http.NewServeMux(),
 		port:               port,
 		executor:           executor,
@@ -162,14 +155,17 @@ func (s *Server) routes() {
 	// also rate-limited so a flood of bogus callbacks can't churn the
 	// token-exchange path.
 	s.mux.HandleFunc("/auth/callback", authLimit.middleware(s.handleSchwabCallback))
-	s.mux.HandleFunc("/auth/sso/start", authLimit.middleware(s.handleSSOStart))
-	s.mux.HandleFunc("/auth/sso/callback", s.handleSSOCallback)
-	s.mux.HandleFunc("/auth/logout", s.handleLogout)
+	// Google OAuth flow — replaces the retired /auth/sso/* consumer
+	// dance with auth.jaycebordelon.com. Trading-server now talks to
+	// Google directly; callback registered at vibetradez.com.
+	s.mux.HandleFunc("/auth/google/start", authLimit.middleware(s.auth.HandleStart))
+	s.mux.HandleFunc("/auth/google/callback", authLimit.middleware(s.auth.HandleCallback(s.sessionCookie)))
+	s.mux.HandleFunc("/auth/logout", s.auth.HandleLogout(s.sessionCookie))
 
 	// API routes — require internal header (requests must come from the website)
 	s.mux.HandleFunc("/api/subscribe", requireInternal(subscribeLimit.middleware(s.handleSubscribe)))
 	s.mux.HandleFunc("/api/unsubscribe", requireInternal(subscribeLimit.middleware(s.handleUnsubscribe)))
-	s.mux.HandleFunc("/api/me", requireInternal(s.attachUser(s.handleMe)))
+	s.mux.HandleFunc("/api/me", requireInternal(s.auth.AttachUser(s.sessionCookie, s.handleMe)))
 	s.mux.HandleFunc("/api/trades/today", requireInternal(s.handleTradesToday))
 	s.mux.HandleFunc("/api/trades/week", requireInternal(s.handleTradesWeek))
 	s.mux.HandleFunc("/api/market/status", requireInternal(s.handleMarketStatus))

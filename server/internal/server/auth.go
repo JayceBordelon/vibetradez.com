@@ -1,269 +1,36 @@
+/*
+Auth handlers were folded into trading-server when auth.jaycebordelon.com
+retired as a standalone service. The new in-process flow lives in
+vibetradez.com/internal/auth (package auth). This file is now a thin
+context-key shim plus a /api/me handler so the rest of the server
+package can read the current user from a request context without
+importing the auth package directly.
+
+Routing for /auth/google/start, /auth/google/callback, and /auth/logout
+is wired in server.go directly to auth.Service handlers.
+*/
 package server
 
 import (
-	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"crypto/subtle"
-	"encoding/base64"
-	"log"
 	"net/http"
-	"net/url"
-	"strings"
-	"time"
 
-	"vibetradez.com/internal/authclient"
+	"vibetradez.com/internal/auth"
 )
 
-const (
-	ssoStateCookie    = "vt_sso_state"
-	ssoVerifierCookie = "vt_sso_verifier"
-)
-
-type userCtxKey struct{}
-
-func withUser(ctx context.Context, u *authclient.User) context.Context {
-	return context.WithValue(ctx, userCtxKey{}, u)
+// userFrom returns the current user from a request context, or nil
+// when the caller is anonymous. Wraps auth.UserFrom so handlers in
+// this package don't need to import the auth package directly for
+// the read-only read.
+func userFrom(r *http.Request) *auth.User {
+	return auth.UserFrom(r.Context())
 }
 
-func userFrom(ctx context.Context) *authclient.User {
-	if u, ok := ctx.Value(userCtxKey{}).(*authclient.User); ok {
-		return u
-	}
-	return nil
-}
-
-/*
-attachUser reads the local vt_session cookie (holds an opaque access
-token issued by auth.jaycebordelon.com), verifies it via the auth
-service's /oauth/verify endpoint (cached 60s), and attaches the user
-to the request context. Non-blocking: invalid or missing tokens just
-proceed with no user.
-*/
-func (s *Server) attachUser(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		c, err := r.Cookie(s.sessionCookie)
-		if err != nil || c.Value == "" {
-			next(w, r)
-			return
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		defer cancel()
-		u, err := s.auth.Verify(ctx, c.Value)
-		if err != nil {
-			log.Printf("attachUser: verify: %v", err)
-			next(w, r)
-			return
-		}
-		if u == nil {
-			next(w, r)
-			return
-		}
-		next(w, r.WithContext(withUser(r.Context(), u)))
-	}
-}
-
-/*
-handleSSOStart kicks off the authorization code flow to
-auth.jaycebordelon.com. Generates a CSRF state, stores it in an
-httpOnly cookie (double-submit) and redirects to the auth service's
-/oauth/authorize with the consumer client id + registered redirect
-URI. return_to is echoed back through the auth service so the
-callback can bounce the user to the originating page.
-*/
-func (s *Server) handleSSOStart(w http.ResponseWriter, r *http.Request) {
-	returnTo := r.URL.Query().Get("return_to")
-	if !isSafeReturnTo(returnTo) {
-		returnTo = "/"
-	}
-
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		http.Error(w, "sso start failed", http.StatusInternalServerError)
-		return
-	}
-	state := base64.RawURLEncoding.EncodeToString(b)
-
-	// PKCE (RFC 7636 S256). The verifier is a high-entropy URL-safe
-	// random string; the challenge is its base64url-sha256. The auth
-	// service stores the challenge with the auth code and verifies the
-	// verifier at /oauth/token. Without PKCE a leaked auth code that
-	// also gets the consumer secret would be redeemable; with PKCE the
-	// verifier (held only in this browser session) is required too.
-	vBytes := make([]byte, 32)
-	if _, err := rand.Read(vBytes); err != nil {
-		http.Error(w, "sso start failed", http.StatusInternalServerError)
-		return
-	}
-	codeVerifier := base64.RawURLEncoding.EncodeToString(vBytes)
-	challengeBytes := sha256.Sum256([]byte(codeVerifier))
-	codeChallenge := base64.RawURLEncoding.EncodeToString(challengeBytes[:])
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     ssoStateCookie,
-		Value:    state,
-		Path:     "/auth/sso",
-		MaxAge:   600,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     ssoVerifierCookie,
-		Value:    codeVerifier,
-		Path:     "/auth/sso",
-		MaxAge:   600,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	q := url.Values{}
-	q.Set("client_id", s.ssoClientID)
-	q.Set("redirect_uri", s.ssoRedirectURI)
-	q.Set("state", state)
-	q.Set("return_to", returnTo)
-	q.Set("code_challenge", codeChallenge)
-	q.Set("code_challenge_method", "S256")
-	http.Redirect(w, r, s.ssoPublicURL+"/oauth/authorize?"+q.Encode(), http.StatusFound)
-}
-
-/*
-handleSSOCallback completes the auth.jaycebordelon.com authorization
-code flow: exchanges the one-shot code for an access token, then sets
-the access token as the vt_session cookie on vibetradez.com.
-*/
-func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
-	code := r.URL.Query().Get("code")
-	state := r.URL.Query().Get("state")
-	returnTo := r.URL.Query().Get("return_to")
-	if code == "" {
-		http.Error(w, "missing code", http.StatusBadRequest)
-		return
-	}
-
-	c, err := r.Cookie(ssoStateCookie)
-	if err != nil || c.Value == "" || state == "" ||
-		subtle.ConstantTimeCompare([]byte(c.Value), []byte(state)) != 1 {
-		http.Error(w, "invalid sso state", http.StatusBadRequest)
-		return
-	}
-
-	// PKCE verifier was minted at /auth/sso/start and stashed in a
-	// host-scoped cookie. Empty cookie + new auth-service deploy is a
-	// state mismatch (challenge stored but verifier absent); the auth
-	// service will reject token exchange.
-	var codeVerifier string
-	if vc, vErr := r.Cookie(ssoVerifierCookie); vErr == nil {
-		codeVerifier = vc.Value
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     ssoStateCookie,
-		Value:    "",
-		Path:     "/auth/sso",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     ssoVerifierCookie,
-		Value:    "",
-		Path:     "/auth/sso",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
-	defer cancel()
-
-	tok, err := s.auth.Exchange(ctx, code, codeVerifier)
-	if err != nil {
-		log.Printf("handleSSOCallback: exchange: %v", err)
-		http.Error(w, "token exchange failed", http.StatusInternalServerError)
-		return
-	}
-
-	email := strings.ToLower(strings.TrimSpace(tok.User.Email))
-	if email != "" {
-		// EnsureSubscriberExists, not AddSubscriber: a sign-in does not
-		// re-subscribe a previously opted-out user.
-		if err := s.db.EnsureSubscriberExists(email, tok.User.Name); err != nil {
-			log.Printf("handleSSOCallback: ensure subscriber: %v", err)
-		}
-		if err := s.db.LinkSubscriberAuthUser(tok.User.ID, email); err != nil {
-			log.Printf("handleSSOCallback: link subscriber: %v", err)
-		}
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     s.sessionCookie,
-		Value:    tok.AccessToken,
-		Path:     "/",
-		MaxAge:   int(s.sessionTTL.Seconds()),
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	if !isSafeReturnTo(returnTo) {
-		returnTo = "/dashboard"
-	}
-	log.Printf("SSO sign-in: auth_user_id=%d email=%s", tok.User.ID, email)
-	http.Redirect(w, r, returnTo, http.StatusFound)
-}
-
-func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if c, err := r.Cookie(s.sessionCookie); err == nil && c.Value != "" {
-		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		defer cancel()
-		if err := s.auth.Revoke(ctx, c.Value); err != nil {
-			log.Printf("handleLogout: revoke: %v", err)
-		}
-	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     s.sessionCookie,
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-	writeJSON(w, http.StatusOK, apiResponse{OK: true, Message: "signed out"})
-}
-
+// meResponse is the /api/me payload: the resolved user, or null when
+// anonymous. The client uses this to render the sign-in nav.
 type meResponse struct {
-	User *authclient.User `json:"user"`
+	User *auth.User `json:"user"`
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, meResponse{User: userFrom(r.Context())})
-}
-
-/*
-isSafeReturnTo ensures we only redirect to same-origin paths so the
-callback can't be used as an open redirector.
-*/
-func isSafeReturnTo(p string) bool {
-	if p == "" {
-		return false
-	}
-	if !strings.HasPrefix(p, "/") {
-		return false
-	}
-	if strings.HasPrefix(p, "//") {
-		return false
-	}
-	if strings.Contains(p, "\\") {
-		return false
-	}
-	return true
+	writeJSON(w, http.StatusOK, meResponse{User: userFrom(r)})
 }
