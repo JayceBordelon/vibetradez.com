@@ -155,9 +155,7 @@ func (s *Server) routes() {
 	// also rate-limited so a flood of bogus callbacks can't churn the
 	// token-exchange path.
 	s.mux.HandleFunc("/auth/callback", authLimit.middleware(s.handleSchwabCallback))
-	// Google OAuth flow — replaces the retired /auth/sso/* consumer
-	// dance with auth.jaycebordelon.com. Trading-server now talks to
-	// Google directly; callback registered at vibetradez.com.
+	// In-process Google OAuth. Callback registered at vibetradez.com.
 	s.mux.HandleFunc("/auth/google/start", authLimit.middleware(s.auth.HandleStart))
 	s.mux.HandleFunc("/auth/google/callback", authLimit.middleware(s.auth.HandleCallback(s.sessionCookie)))
 	s.mux.HandleFunc("/auth/logout", s.auth.HandleLogout(s.sessionCookie))

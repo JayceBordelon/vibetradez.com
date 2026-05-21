@@ -39,9 +39,6 @@ AttachUser is the middleware that pulls the vt_session cookie off
 each request, looks it up against the sessions table, and stashes
 the resolved user on the context. Non-blocking: invalid / missing
 tokens just proceed anonymously, so public surfaces still render.
-
-Replaces the old attachUser middleware that round-tripped to
-auth.jaycebordelon.com via /oauth/verify.
 */
 func (s *Service) AttachUser(sessionCookieName string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

@@ -71,12 +71,10 @@ type Config struct {
 	UnsubscribePrevHMACKeys [][]byte
 	/*
 		In-process Google OAuth. The trading-server runs the Google
-		sign-in flow itself (no separate auth-service container or
-		HTTP hop). GoogleCallbackURL must be registered as an
-		authorized redirect URI in Google Cloud Console; mismatches
+		sign-in flow itself. GoogleCallbackURL must be registered as
+		an authorized redirect URI in Google Cloud Console; mismatches
 		400 with redirect_uri_mismatch. AuthDatabaseURL is a separate
-		Postgres so the existing users + sessions tables from the
-		retired auth-service can be reused without data migration.
+		Postgres for the users + sessions tables.
 	*/
 	GoogleClientID     string
 	GoogleClientSecret string

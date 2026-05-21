@@ -1,16 +1,11 @@
 /*
-Package auth is the in-process Google OAuth flow that replaced the
-standalone auth.jaycebordelon.com service. Folded into trading-server:
-the same binary that serves /api/* now also serves /auth/google/start
-and /auth/google/callback, and validates session cookies against its
-own sessions table directly (no HTTP hop, no opaque access tokens, no
-60s verify cache).
+Package auth is the trading-server's in-process Google OAuth flow.
+The same binary that serves /api/* also serves /auth/google/start and
+/auth/google/callback, and validates session cookies against the
+sessions table directly (no HTTP hop, no /verify cache).
 
-Connects to a dedicated AUTH_DATABASE_URL so the existing users +
-sessions tables from the retired auth-service can be reused verbatim.
-Long-term these can be folded into the main trading-server DB; for the
-cutover we just point at the same Postgres that auth-service used so
-existing signed-in users stay signed in.
+Connects to a dedicated AUTH_DATABASE_URL so users + sessions live in
+their own pool (separable from the trading DB without a schema fight).
 */
 package auth
 
@@ -52,10 +47,9 @@ func NewStore(databaseURL string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open auth db: %w", err)
 	}
-	// Same caps as the retired auth-service used: bursty bursts on every
-	// /api/* request to vibetradez (each does an attachUser lookup), so
-	// the connection pool needs headroom without exhausting the managed
-	// DB's per-database connection limit.
+	// Every /api/* request hits attachUser → LookupSession, so the
+	// pool needs headroom on traffic spikes without exhausting the
+	// managed DB's per-database connection limit.
 	db.SetMaxOpenConns(15)
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(30 * time.Minute)
@@ -76,13 +70,10 @@ func (s *Store) Close() error { return s.db.Close() }
 func (s *Store) Ping() error  { return s.db.Ping() }
 
 /*
-migrate is idempotent: when pointed at the legacy auth-service DB it's
-a no-op (all tables exist with these column shapes). When pointed at a
-fresh Postgres (local dev, test, future fresh deploy) it creates the
-two tables this package actually needs. The retired consumer-flow
-tables (oauth_clients, auth_codes, oauth_states-as-CSRF-bridge) are
-intentionally NOT created here; this server is now the only consumer
-and skips the authorization-code dance.
+migrate is idempotent: CREATE TABLE IF NOT EXISTS on the three tables
+this package needs (users, oauth_states, sessions). Safe to run on a
+fresh Postgres (local dev, test) or against a DB that already has the
+tables (production).
 */
 func migrate(db *sql.DB) error {
 	_, err := db.Exec(`
@@ -98,10 +89,8 @@ func migrate(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
-		-- oauth_states still holds CSRF-protected pending Google flows
-		-- (the random string + return_to + TTL pattern), just no longer
-		-- includes the consumer client_id / consumer_state columns that
-		-- only mattered when the auth-service was bridging to vibetradez.
+		-- oauth_states holds CSRF-protected pending Google flows
+		-- (random string + return_to + TTL).
 		CREATE TABLE IF NOT EXISTS oauth_states (
 			state TEXT PRIMARY KEY,
 			return_to TEXT NOT NULL DEFAULT '/',

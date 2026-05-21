@@ -173,11 +173,9 @@ func main() {
 		log.Println("Schwab: not configured (SCHWAB_APP_KEY / SCHWAB_SECRET not set)")
 	}
 
-	// Auth folded in-process: open the dedicated AUTH_DATABASE_URL pool
-	// (existing users + sessions tables from the retired auth-service),
+	// Open the dedicated AUTH_DATABASE_URL pool (users + sessions),
 	// wire it to the Google OAuth client, and hand the resulting
-	// *auth.Service to the HTTP server. No more out-of-process
-	// /oauth/verify hop on every /api/* request.
+	// *auth.Service to the HTTP server.
 	authStore, err := auth.NewStore(cfg.AuthDatabaseURL)
 	if err != nil {
 		log.Fatalf("auth store: %v", err)

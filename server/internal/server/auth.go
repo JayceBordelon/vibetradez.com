@@ -1,13 +1,8 @@
 /*
-Auth handlers were folded into trading-server when auth.jaycebordelon.com
-retired as a standalone service. The new in-process flow lives in
-vibetradez.com/internal/auth (package auth). This file is now a thin
-context-key shim plus a /api/me handler so the rest of the server
-package can read the current user from a request context without
-importing the auth package directly.
-
-Routing for /auth/google/start, /auth/google/callback, and /auth/logout
-is wired in server.go directly to auth.Service handlers.
+Thin shim so the rest of the server package can read the current
+user from a request context without importing the auth package
+directly. The Google OAuth flow itself lives in internal/auth (see
+that package's docs); routing is wired in server.go.
 */
 package server
 

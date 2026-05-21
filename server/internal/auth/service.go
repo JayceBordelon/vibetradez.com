@@ -12,14 +12,8 @@ import (
 /*
 Service is the trading-server's in-process auth layer. Owns the
 Google OAuth client, the auth-DB connection, and the session-token
-lifecycle. The HTTP handlers (handlers.go) and the attachUser
+lifecycle. The HTTP handlers (handlers.go) and the AttachUser
 middleware are thin wrappers that call into Service methods.
-
-Replaces what auth.jaycebordelon.com used to do as a separate
-container: that whole HTTP boundary is now a single function call,
-the 60s verify cache is gone (we read straight from our own
-sessions table), and the consumer-side authorization-code dance is
-gone (no second consumer, no opaque tokens).
 */
 type Service struct {
 	store      *Store
@@ -132,8 +126,8 @@ cookie) and returns the matching user, or nil if the token is
 invalid / revoked / expired. Non-error nil is the "not signed in"
 signal; callers should treat it as anonymous.
 
-Replaces the old /oauth/verify HTTP round-trip; this is now a single
-indexed Postgres lookup against the sessions table.
+One indexed Postgres lookup per call — fast enough to skip the
+in-memory cache layer middleware-style auth historically used.
 */
 func (s *Service) ResolveSession(token string) (*User, error) {
 	if token == "" {
