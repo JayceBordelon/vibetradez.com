@@ -1,13 +1,99 @@
+# ========================
+# OS / Editor
+# ========================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/settings.json
+*.sublime-*
+
+# ========================
+# Environment
+# ========================
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# ========================
+# Node.js / Next.js (client/)
+# ========================
+**/node_modules/
+**/.next/
+**/out/
+**/build/
+**/dist/
+**/.turbo/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+*.log
+
+# Testing
+**/coverage/
+**/.nyc_output/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Vercel
+.vercel
+
+# ========================
+# Go (server/)
+# ========================
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
+**/bin/
+**/__debug_bin*
+
+# Test binary
 *.test
+
+# Coverage
 *.out
-vendor/
+**/coverage.txt
+
+# Go workspace
+go.work
+go.work.sum
+
+# Air live reload
+**/tmp/
+
+# Local-dev sentinel files
 *.db
 *.db-wal
 *.db-shm
-/scanner
+
+# ========================
+# Docker / Logs
+# ========================
+**/*.log
+docker-compose.override.yml
+
+# ========================
+# Misc
+# ========================
+*.bak
+*.tmp
+*.temp
