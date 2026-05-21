@@ -10,47 +10,40 @@ AI-powered options trading service. A language model ranks 10 options contracts 
 ## Architecture
 
 ```mermaid
-flowchart TB
-    classDef external fill:#fef2f2,stroke:#b91c1c,color:#0f172a
-    classDef droplet fill:#f0fdf4,stroke:#047857,color:#0f172a
-    classDef data fill:#eff6ff,stroke:#1d4ed8,color:#0f172a
-    classDef edge fill:#fffbeb,stroke:#92400e,color:#0f172a
+flowchart LR
+    User(["Visitors"])
 
-    User(["👤 Browser visitors"])
-
-    subgraph Droplet["Digital Ocean Droplet — docker compose"]
-      Traefik["Traefik v2.10<br/>:80 / :443<br/>Let's Encrypt TLS"]:::edge
-
-      subgraph Apps[" "]
-        direction LR
-        TF["trading-frontend<br/>Next.js 16 dashboard /<br/>history / trade<br/>:3001"]:::droplet
-        TS["trading-server<br/>Go API + cron + email<br/>:8080"]:::droplet
-      end
-
-      Traefik -- "vibetradez.com /api /auth /admin /health" --> TS
-      Traefik -- "vibetradez.com (everything else)" --> TF
-      TF -. "Next.js [...path] proxy /api → trading-server" .-> TS
+    subgraph Droplet["Droplet · docker compose"]
+      direction TB
+      Traefik(["Traefik · TLS · path routing"])
+      TF["trading-frontend<br/>Next.js"]
+      TS["trading-server<br/>Go · cron · email"]
     end
 
-    AUTH["auth.jaycebordelon.com<br/>OAuth identity provider"]:::external
-    DB[("Digital Ocean<br/>Managed Postgres<br/>vibetradez")]:::data
-    Picker["Anthropic Claude<br/>via anthropic-sdk-go"]:::external
-    Schwab["Schwab Market Data + Trader API<br/>quotes + option chain + orders"]:::external
-    Signals["Market Signals<br/>StockTwits · Yahoo · Finviz · EDGAR"]:::external
-    Resend["Resend<br/>email delivery"]:::external
+    subgraph Backing["Backing services"]
+      direction TB
+      DB[("Postgres<br/>DO Managed")]
+      AUTH["auth.jaycebordelon.com"]
+      Schwab["Schwab API<br/>data · orders · WS"]
+      Claude["Anthropic Claude"]
+      Signals["Sentiment scrapers<br/>StockTwits · Yahoo · Finviz · EDGAR"]
+      Resend["Resend"]
+    end
 
     User --> Traefik
+    Traefik -->|"static + SSR"| TF
+    Traefik -->|"/api · /auth · /health"| TS
+    TS -.->|"SSE live ticks"| TF
+
     TS --> DB
-    TS -. "OAuth verify on every request" .-> AUTH
-    TS -- "morning cron 9:25 ET (pick) +<br/>9:30:00 ET (resolve + fire) +<br/>4:00 ET (EOD analysis)" --> Picker
-    TS -- "WebSocket stream (9:30-16:00 ET)<br/>LEVELONE_EQUITIES + LEVELONE_OPTIONS" --> Schwab
-    TS -- "morning cron market signals" --> Signals
-    TS -- "subscriber email" --> Resend
-    Picker -. "function tools<br/>(quotes, web_search)" .-> Schwab
-    TS -. "SSE /api/quotes/stream<br/>tick fan-out" .-> TF
+    TS --> AUTH
+    TS --> Schwab
+    TS --> Claude
+    TS --> Signals
+    TS --> Resend
 ```
 
-Reading the diagram: visitors land on Traefik, which routes by path priority — `/api`, `/auth`, `/admin`, `/health` go to the Go trading-server; everything else goes to the Next.js trading-frontend. The trading-server owns Postgres for picks/executions/summaries, talks to Schwab for live market data + order placement, and uses Claude for the daily picker and EOD analysis. Sign-in is brokered through the separate [auth.jaycebordelon.com](https://github.com/JayceBordelon/auth.jaycebordelon.com) service.
+Visitors hit Traefik, which routes by path: `/api`, `/auth`, `/admin`, `/health` go to the Go trading-server; everything else goes to the Next.js trading-frontend. The trading-server owns every outbound dependency: Postgres for picks / executions / summaries, [auth.jaycebordelon.com](https://github.com/JayceBordelon/auth.jaycebordelon.com) for token verification on each request, Schwab for live quotes + WebSocket ticks + Trader API orders, Anthropic Claude for the morning picker and EOD analysis, four sentiment scrapers for the morning signal aggregation, and Resend for email. The trading-frontend doesn't talk to anything outside the droplet directly; live option ticks flow back to it as SSE from the trading-server.
 
 ## What's here
 
