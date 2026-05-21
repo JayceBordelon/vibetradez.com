@@ -1,11 +1,13 @@
-# vibetradez.com service slice. Expected to run alongside Traefik
-# on the same `app-network` overlay; the Traefik container itself and
-# the network live outside this repo and are referenced as external.
+# vibetradez.com self-contained stack. Owns its own Traefik, its own
+# letsencrypt cert volume, and its own bridge network. Drop-in
+# deployable on any droplet that has docker + ports 80/443 open.
 #
-# Two services: trading-server (Go API + cron) and trading-frontend
-# (Next.js dashboard). The frontend waits for the server's /healthz
-# to come up before starting so a cold boot of the stack doesn't
-# briefly serve a connection-refused error shell.
+# Three services:
+#   - traefik: TLS termination + Host()/PathPrefix() routing
+#   - trading-server: Go API + cron + in-process Google OAuth
+#     (serves /auth/google/start + /auth/google/callback in-binary)
+#   - trading-frontend: Next.js dashboard. depends_on the server's
+#     /healthz so cold-boot doesn't briefly serve connection-refused
 x-logging: &default-logging
   driver: json-file
   options:
@@ -13,6 +15,32 @@ x-logging: &default-logging
     max-file: "5"
 
 services:
+  traefik:
+    image: traefik:v2.10
+    container_name: vibetradez-traefik
+    logging: *default-logging
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=bordelonjayce@gmail.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "vibetradez_letsencrypt:/letsencrypt"
+    networks:
+      - vibetradez-network
+    restart: unless-stopped
+
   trading-server:
     image: vibetradez.com-trading-server:latest
     build:
@@ -22,18 +50,11 @@ services:
     expose:
       - "8080"
     networks:
-      - app-network
+      - vibetradez-network
     restart: unless-stopped
     logging: *default-logging
-    # Without a healthcheck, `docker compose up -d --force-recreate`
-    # reports success the moment the container is *created*, not when
-    # the Go binary is actually serving traffic. A mustEnv failure
-    # (rotated DATABASE_URL / ANTHROPIC_API_KEY / VT_AUTH_*) would
-    # log.Fatal and crash-loop silently while the deploy job reported
-    # success.
-    #
-    # /healthz is the lightweight liveness probe — db ping + listener
-    # only, no upstream probes. The richer /health endpoint exercised
+    # /healthz is the lightweight liveness probe (db ping + listener
+    # only, no upstream probes). The richer /health endpoint exercised
     # by the post-deploy healthcheck workflow runs Schwab + Anthropic
     # + sentiment probes that can take 5-25s on a slow upstream, so
     # tying the compose healthcheck to /health would trip the first
@@ -47,7 +68,8 @@ services:
     labels:
       - "app=trading-server"
       - "traefik.enable=true"
-      # API / auth / health routes — higher priority
+      # API + auth + health routes — higher priority than the
+      # catch-all frontend router. /auth/google/* lands here.
       - "traefik.http.routers.trading-api.rule=(Host(`vibetradez.com`) || Host(`www.vibetradez.com`)) && (PathPrefix(`/api`) || PathPrefix(`/auth`) || Path(`/health`))"
       - "traefik.http.routers.trading-api.entrypoints=websecure"
       - "traefik.http.routers.trading-api.tls.certresolver=letsencrypt"
@@ -63,15 +85,14 @@ services:
     expose:
       - "3001"
     networks:
-      - app-network
+      - vibetradez-network
     restart: unless-stopped
     logging: *default-logging
     # condition: service_healthy waits for trading-server's /healthz to
     # return 200 before starting trading-frontend. Cold boot of the
-    # full stack (droplet reboot, `compose down && up`) would otherwise
-    # leave Next.js SSR-fetching /api/market/status + /api/quotes/stream
-    # against a connection-refused upstream and serving an error shell
-    # for the first 10-30s.
+    # full stack would otherwise leave Next.js SSR-fetching
+    # /api/market/status + /api/quotes/stream against a connection-
+    # refused upstream and serving an error shell for the first 10-30s.
     depends_on:
       trading-server:
         condition: service_healthy
@@ -84,13 +105,17 @@ services:
     labels:
       - "app=trading-frontend"
       - "traefik.enable=true"
-      # Catch-all frontend — lower priority
+      # Catch-all frontend — lower priority than trading-api so
+      # /api/* and /auth/* don't route here.
       - "traefik.http.routers.trading-frontend.rule=Host(`vibetradez.com`) || Host(`www.vibetradez.com`)"
       - "traefik.http.routers.trading-frontend.entrypoints=websecure"
       - "traefik.http.routers.trading-frontend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.trading-frontend.priority=10"
       - "traefik.http.services.trading-frontend.loadbalancer.server.port=3001"
 
+volumes:
+  vibetradez_letsencrypt:
+
 networks:
-  app-network:
-    external: true
+  vibetradez-network:
+    driver: bridge

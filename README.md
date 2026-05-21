@@ -4,26 +4,27 @@ AI-powered options trading service. A language model ranks 10 options contracts 
 
 ## Related repos
 
-- [auth.jaycebordelon.com](https://github.com/JayceBordelon/auth.jaycebordelon.com) — centralized OAuth identity provider. The dashboard's "Sign in with Google" flow brokers through this service; every API request on `vibetradez.com` verifies its session cookie's token via `POST /oauth/verify` against it.
-- [jaycebordelon.com](https://github.com/JayceBordelon/jaycebordelon.com) — sibling project on the same droplet (personal portfolio and blog).
+- [jaycebordelon.com](https://github.com/JayceBordelon/jaycebordelon.com) — personal portfolio and blog. Standalone deployable; planned to run on its own droplet.
+
+Google OAuth is handled in-process by the trading-server binary at `/auth/google/start` + `/auth/google/callback`. The Google Cloud Console redirect URI is `https://vibetradez.com/auth/google/callback`.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
     User(["Visitors"])
+    Google(["Google OAuth"])
 
     subgraph Droplet["Droplet · docker compose"]
       direction TB
       Traefik(["Traefik · TLS · path routing"])
       TF["trading-frontend<br/>Next.js"]
-      TS["trading-server<br/>Go · cron · email"]
+      TS["trading-server<br/>Go · cron · email ·<br/>in-process Google OAuth"]
     end
 
     subgraph Backing["Backing services"]
       direction TB
-      DB[("Postgres<br/>DO Managed")]
-      AUTH["auth.jaycebordelon.com"]
+      DB[("Postgres<br/>trades + sessions")]
       Schwab["Schwab API<br/>data · orders · WS"]
       Claude["Anthropic Claude"]
       Signals["Sentiment scrapers<br/>StockTwits · Yahoo · Finviz · EDGAR"]
@@ -34,24 +35,25 @@ flowchart LR
     Traefik -->|"static + SSR"| TF
     Traefik -->|"/api · /auth · /health"| TS
     TS -.->|"SSE live ticks"| TF
+    TS -.->|"/auth/google/* dance"| Google
 
     TS --> DB
-    TS --> AUTH
     TS --> Schwab
     TS --> Claude
     TS --> Signals
     TS --> Resend
 ```
 
-Visitors hit Traefik, which routes by path: `/api`, `/auth`, `/admin`, `/health` go to the Go trading-server; everything else goes to the Next.js trading-frontend. The trading-server owns every outbound dependency: Postgres for picks / executions / summaries, [auth.jaycebordelon.com](https://github.com/JayceBordelon/auth.jaycebordelon.com) for token verification on each request, Schwab for live quotes + WebSocket ticks + Trader API orders, Anthropic Claude for the morning picker and EOD analysis, four sentiment scrapers for the morning signal aggregation, and Resend for email. The trading-frontend doesn't talk to anything outside the droplet directly; live option ticks flow back to it as SSE from the trading-server.
+Visitors hit Traefik, which routes by path: `/api`, `/auth`, `/admin`, `/health` go to the Go trading-server; everything else goes to the Next.js trading-frontend. The trading-server owns every outbound dependency: Postgres for picks / executions / summaries / users / sessions, Schwab for live quotes + WebSocket ticks + Trader API orders, Anthropic Claude for the morning picker and EOD analysis, four sentiment scrapers for the morning signal aggregation, and Resend for email. Sign-in is a direct Google OAuth flow handled in the trading-server binary; the session cookie is validated against a local sessions table on each `/api/*` request. The trading-frontend doesn't talk to anything outside the droplet directly; live option ticks flow back to it as SSE from the trading-server.
 
 ## What's here
 
 ```
 vibetradez.com/
-├── server/                 Go API (cron jobs, Claude picker + at-open contract resolver, Schwab market data, Resend email)
+├── server/                 Go API (cron jobs, Claude picker + at-open contract resolver, Schwab market data, in-process Google OAuth, Resend email)
 │   ├── cmd/scanner/        Main entry point, cron registration, daily lifecycle
 │   ├── internal/
+│   │   ├── auth/           In-process Google OAuth: store (users + sessions in dedicated Postgres pool), Google client, service, handlers
 │   │   ├── calendar/       NYSE holiday + half-day calendar, market-hours math
 │   │   ├── config/         Environment variable loading
 │   │   ├── email/          Resend email client
@@ -60,7 +62,7 @@ vibetradez.com/
 │   │   ├── schwab/         Schwab OAuth + Market Data API + streaming client
 │   │   ├── sentiment/      Market signal aggregator (4 sources)
 │   │   ├── server/         HTTP API handlers (including SSE /api/quotes/stream)
-│   │   ├── store/          PostgreSQL data layer
+│   │   ├── store/          PostgreSQL data layer (trades, executions, summaries, subscribers)
 │   │   ├── templates/      HTML email templates
 │   │   └── trades/         Picker prompt + agent loop
 │   ├── Dockerfile          Multi-stage Go build
@@ -73,7 +75,7 @@ vibetradez.com/
 │   ├── types/              TypeScript interfaces
 │   └── Dockerfile          Multi-stage Node.js build
 ├── local/                  Self-contained Docker stack with seeded Postgres for offline dev
-├── docker-compose.yml      Two-service compose slice (trading-server + trading-frontend) with Traefik labels
+├── docker-compose.yml      Self-contained stack (traefik + trading-server + trading-frontend) with own letsencrypt volume + bridge network
 └── .github/workflows/      PR checks: lint + build + test on every PR
 ```
 
@@ -83,9 +85,9 @@ vibetradez.com/
 |---|---|
 | Server | Go 1.25, PostgreSQL (DO managed), Anthropic Claude Opus 4.7, Schwab Market Data + Trader API, Resend email |
 | Client | Next.js 16, React 19, Tailwind CSS v4, shadcn/ui (new-york), Recharts v3, TradingView Lightweight Charts |
-| Auth (external) | Brokered through [auth.jaycebordelon.com](https://github.com/JayceBordelon/auth.jaycebordelon.com) |
+| Auth | In-process Google OAuth (`golang.org/x/oauth2`); sessions in a dedicated Postgres pool |
 | Live data | Schwab WebSocket Streamer API, fanned out to browsers via SSE |
-| Infra | Docker Compose, Traefik v2.10 (external), Let's Encrypt, Digital Ocean Droplet |
+| Infra | Docker Compose, Traefik v2.10 (in-repo), Let's Encrypt, Digital Ocean Droplet |
 
 ## Daily lifecycle
 
@@ -266,6 +268,7 @@ Production deploys are handled by the operator's deploy pipeline (separate from 
 | Auto-execution selector + gates | `server/internal/exec/selector.go` |
 | Order placement + reconcile + cancel-dangling + close-all + summary emails | `server/internal/exec/service.go` |
 | Email templates (morning, open-summary, close-summary, EOD, weekly, error) | `server/internal/templates/` |
+| In-process Google OAuth (`/auth/google/start`, `/auth/google/callback`, AttachUser middleware) | `server/internal/auth/` |
 
 ## Common operations
 

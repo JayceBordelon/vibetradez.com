@@ -2,12 +2,24 @@ package store
 
 import (
 	"errors"
+	"os"
 	"testing"
 
 	"vibetradez.com/internal/trades"
 )
 
-const testDatabaseURL = "postgresql://jaycebordelon@localhost:5432/vibetradez_test?sslmode=disable"
+/*
+testDatabaseURL is the connection string used by every test in this
+package. CI exports TEST_DATABASE_URL pointing at the workflow's
+ephemeral Postgres service container; when the env var is unset
+(developer running tests locally), fall back to the dev DB string.
+*/
+var testDatabaseURL = func() string {
+	if v := os.Getenv("TEST_DATABASE_URL"); v != "" {
+		return v
+	}
+	return "postgresql://jaycebordelon@localhost:5432/vibetradez_test?sslmode=disable"
+}()
 
 func setupTestDB(t *testing.T) *Store {
 	t.Helper()

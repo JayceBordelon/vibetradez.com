@@ -100,10 +100,17 @@ All `/api/*` routes on the trading server require the `X-VT-Source` header. With
 
 When working with Next.js, Tailwind CSS, shadcn/ui, Recharts, Anthropic SDK, Schwab API, or any external library: fetch and read the current documentation before writing code. Recalled syntax may be outdated. Anthropic and Schwab in particular publish updates frequently. Incorrect API assumptions cause more rework than the time saved by skipping docs.
 
-## Related services
+## Auth is in-process
 
-- [auth.jaycebordelon.com](https://github.com/JayceBordelon/auth.jaycebordelon.com) — OAuth provider. The dashboard's "Sign in with Google" brokers through it; every API request verifies its session cookie's token via `POST /oauth/verify` against it. Required at boot: `VT_AUTH_*` env vars.
-- [jaycebordelon.com](https://github.com/JayceBordelon/jaycebordelon.com) — sibling project on the same droplet.
+Google OAuth is handled by the trading-server binary itself. The package lives at `internal/auth/` and serves `/auth/google/start` + `/auth/google/callback`. Sessions are validated against a dedicated Postgres pool (`AUTH_DATABASE_URL`) on every `/api/*` request via the `AttachUser` middleware.
+
+The Google Cloud Console redirect URI is `https://vibetradez.com/auth/google/callback`. Changing the hostname or the callback path requires updating the Console allowlist or sign-in 400s with `redirect_uri_mismatch`.
+
+Required env vars at boot: `AUTH_DATABASE_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. Optional `GOOGLE_CALLBACK_URL` overrides the default.
+
+## Related repos
+
+- [jaycebordelon.com](https://github.com/JayceBordelon/jaycebordelon.com) — personal portfolio and blog. Self-contained stack, planned to live on its own droplet.
 
 ## Common operations
 

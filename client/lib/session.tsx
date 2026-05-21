@@ -54,13 +54,13 @@ export function useSession() {
 }
 
 /**
-signInWithGoogle bounces the browser to the trading-server's SSO
-start endpoint, which generates CSRF state + redirects to the
-centralized auth service (auth.jaycebordelon.com). Named for the
-user-facing provider — the transport is OAuth via our own auth
-service, and Google is the upstream IdP.
+signInWithGoogle bounces the browser to the trading-server's
+/auth/google/start endpoint, which generates a CSRF state + redirects
+to Google's consent screen. The callback at /auth/google/callback
+lands on the trading-server (in-process Google OAuth) and sets the
+vt_session cookie before redirecting to return_to.
 */
 export function signInWithGoogle(returnTo?: string) {
   const target = returnTo ?? (typeof window !== "undefined" ? window.location.pathname + window.location.search : "/");
-  window.location.assign(`/auth/sso/start?return_to=${encodeURIComponent(target)}`);
+  window.location.assign(`/auth/google/start?return_to=${encodeURIComponent(target)}`);
 }

@@ -70,9 +70,11 @@ jobs:
         # cheap on a server package this size.
         run: go test -race -timeout 120s ./...
       # golangci-lint catches the unused-function class of issue that
-      # `go vet` misses; ship-blocking on every PR.
+      # `go vet` misses; ship-blocking on every PR. The /v2 import
+      # path is required since .golangci.yml uses v2 config syntax
+      # (the v1 binary errors with "configuration file for v2 with v1").
       - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
       - name: golangci-lint
         run: golangci-lint run ./...
 
