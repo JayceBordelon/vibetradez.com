@@ -81,8 +81,7 @@ ORDER BY t.rank;
 
 - **Dashboard at `/`** — most recent date is in "morning picks" mode (no summaries). The previous day will switch to "EOD results" mode with stats grid, P&L chart, and trade table.
 - **Date navigation** — prev/next arrows on the dashboard to walk through 10 days of seeded history
-- **Top N filter** — dashboard EOD mode shows a Top 1 / 3 / 5 / 10 selector; localStorage persistence works
-- **Historical analytics at `/history`** — locked to all-time, top 10. Equity curve, daily P&L bars (weekly buckets), exposure vs returns, capital efficiency panel, daily breakdown with expandable rows
+- **Historical analytics at `/history`** — locked to all-time, full top-3 basket. Equity curve, weekly P&L bars, exposure vs returns, and capital efficiency split by Top 1 / Top 2 / Top 3 tier; daily breakdown with expandable per-trade rows
 - **Subscribe modal** — opens via the top bar button. Submitting writes to the local subscribers table.
 - **Terms & FAQ** — `/terms` and `/faq` pages
 - **API protection** — `curl http://localhost:8080/api/trades/today` returns 403 (missing `X-VT-Source`); the frontend includes the header automatically

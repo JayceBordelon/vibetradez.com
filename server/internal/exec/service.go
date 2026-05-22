@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -39,6 +38,24 @@ type DecisionStore interface {
 		render the single consolidated post-open email.
 	*/
 	BasketSummaryForDate(tradeDate string) ([]BasketSummaryRow, error)
+	/*
+		CloseSummaryForDate returns one row per close-side execution
+		for the given trade_date with the matching open's fill price
+		stitched in so realized P&L is computable per position. Used
+		by SendCloseSummary to render the single consolidated 3:55 ET
+		email that replaced per-trade close receipt + close-failed
+		emails.
+	*/
+	CloseSummaryForDate(tradeDate string) ([]CloseSummaryRow, error)
+	/*
+		ResolveTradeContract writes the five at-open-resolved columns
+		into the trades row in a single UPDATE: strike_price, expiration,
+		dte, estimated_price, stop_loss. Called by PlaceBuyToOpenAgent
+		when the at-open execagent picks a concrete contract for a
+		candidate and fires the order, so the dashboard / EOD path /
+		close cron all see the chosen contract spec on the trade row.
+	*/
+	ResolveTradeContract(tradeID int, strike float64, expiration string, dte int, estimatedPrice, stopLoss float64) error
 }
 
 /*
@@ -67,6 +84,29 @@ type BasketSummaryRow struct {
 	ErrorMessage string
 }
 
+/*
+CloseSummaryRow is one close-side execution snapshot the close-summary
+email renders. Open/close fill prices come from the executions table
+(broker truth), realized P&L is computed at query time as
+(close - open) × 100 × quantity. Status reflects the close-side
+disposition (filled / failed / working / pending). ErrorMessage is
+populated for the failure modes that previously fired a per-trade
+"close failed" alert; the consolidated email surfaces them inline.
+*/
+type CloseSummaryRow struct {
+	Rank         int
+	Symbol       string
+	ContractType string
+	StrikePrice  float64
+	Mode         string
+	Status       string
+	OpenPrice    float64
+	ClosePrice   float64
+	RealizedPnL  float64
+	Quantity     int
+	ErrorMessage string
+}
+
 // MailSender is the slice of *email.Client that exec.Service needs.
 type MailSender interface {
 	SendTradeEmail(from string, to []string, subject, htmlContent string) error
@@ -82,15 +122,6 @@ type ServiceConfig struct {
 	EmailFrom         string
 	ModelLabel        string
 	SchwabAccountHash func(ctx context.Context) (string, error)
-	/*
-		OptionAsk returns the current ask quote for an option contract.
-		Called at order-submission time to size the morning open LIMIT
-		price. Optional — when nil, the limit falls back to the trade's
-		EstimatedPrice (Claude's modeled premium at pick time). Live
-		mode wires this to schwab.Client.OptionAsk; tests can pass a
-		stub.
-	*/
-	OptionAsk func(ctx context.Context, symbol, expiration, contractType string, strike float64) (float64, error)
 }
 
 /*
@@ -131,240 +162,171 @@ schwab_trading auth failures are fatal (live) or merely a warning
 func (s *Service) Mode() string { return s.cfg.Mode }
 
 /*
-HandleQualifyingPicks is the basket entry point fired by the morning
-cron with the basket returned by selector.QualifyingBasket. Each
-BasketEntry carries a (trade, quantity) pair; the selector has
-already merged duplicates so the executor fires exactly one
-quantity=N order per entry. Entries arrive in rank-ascending order.
+PlaceBuyToOpenAgent is the at-open-execution-agent entry point. The
+agent (internal/execagent) has chosen a specific strike, expiration,
+and limit price from the now-live chain; this method:
 
-For each entry:
+ 1. Builds the OCC symbol from the agent's chosen contract spec
+ 2. Persists those contract specs onto the trade row (so the EOD
+    path / dashboard / close cron all have something to work with)
+ 3. Inserts a 'pending' open-side execution row
+ 4. Submits the LIMIT × 1 BUY_TO_OPEN order to Schwab
+ 5. Flips the row to 'working' with the broker order_id
 
-  - resolves the LIMIT price from the live ask (or estimate fallback)
-  - checks the entry's full cost (limit price × 100 × quantity) fits
-    in the remaining Schwab cash (polled once at basket open and
-    decremented locally per submission, since Schwab balance won't
-    refresh until fills settle T+1)
-  - submits the order via handleSingleEntry, decrements remaining
-    cash, moves on; or skips when the entry exceeds remaining cash
+Fire-and-forget by design: this does NOT poll for fill. The per-minute
+ReconcileOpenOrders cron picks fills up; the 9:35 CancelDanglingOpens
+cron handles anything still working at the cutoff. Returns the broker
+order_id and the executions.id row id; caller surfaces the order_id to
+the agent's tool response so Claude can reference it in its final JSON.
 
-The selector already enforced MaxDailyBasketUSD for phase-2 fills,
-so the only governor on this layer is Schwab cash availability —
-phase 1 (top 3) is guaranteed by the selector and will fire here as
-long as the account has cash to cover it. Per-entry errors are
-logged and don't abort the basket: rank-1's pricing failure can't
-prevent rank-2 from firing.
-
-Returns the count of orders the service successfully submitted
-(filled, working, or rejected — every case where Schwab actually
-saw the order). Caller logs the count.
+Single-contract only (quantity hard-coded to 1) — the execagent fires
+at most one order per pick per day. Caller (the tool layer in
+internal/execagent/tools.go) enforces the per-rank uniqueness, the
+3-orders-per-day cap, and the off-list-symbol refusal. This method's
+contract is "given a validated single-contract buy, submit it".
 */
-func (s *Service) HandleQualifyingPicks(ctx context.Context, basket []BasketEntry) (int, error) {
+func (s *Service) PlaceBuyToOpenAgent(
+	ctx context.Context,
+	t *trades.Trade,
+	strike float64,
+	expiration string,
+	dte int,
+	limitPrice float64,
+) (orderID string, execID int, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(basket) == 0 {
-		return 0, nil
+
+	if t == nil || t.ID == 0 {
+		return "", 0, errors.New("trade is nil or missing ID")
 	}
-	if s.cfg.Recipient == "" {
-		return 0, errors.New("execution recipient not configured")
+	if limitPrice <= 0 || limitPrice > MaxContractPremium {
+		return "", 0, fmt.Errorf("limit price %.2f outside (0, %.2f]", limitPrice, MaxContractPremium)
 	}
+
+	occ, err := OCCSymbol(t.Symbol, expiration, t.ContractType, strike)
+	if err != nil {
+		return "", 0, fmt.Errorf("build OCC symbol: %w", err)
+	}
+
+	/*
+		Stamp the agent's chosen contract spec onto the trade row before
+		placing the order. The dashboard renders strike/expiration off
+		the trade row; if PlaceOrder succeeds but the trade row never
+		got the spec, the UI shows "Finding contracts..." indefinitely
+		for a position that's actually live at the broker. stop_loss is
+		set to half the entry premium as a placeholder. It is NOT
+		currently auto-traded against; it is persisted purely for display
+		on the dashboard / EOD path and for future stop-loss work.
+	*/
+	if err := s.store.ResolveTradeContract(t.ID, strike, expiration, dte, limitPrice, limitPrice*0.5); err != nil {
+		return "", 0, fmt.Errorf("persist resolved contract on trade row: %w", err)
+	}
+	/*
+		Mutate the in-memory trade so BuildOpenOrderForTrade can read
+		strike/expiration off it without a DB re-read. The trade pointer
+		comes from the agent's working copy, so this is safe to mutate.
+	*/
+	t.SetResolvedContract(strike, expiration, dte, limitPrice, limitPrice*0.5)
+
+	order, err := BuildOpenOrderForTrade(t, occ, limitPrice, 1)
+	if err != nil {
+		return "", 0, fmt.Errorf("build open order: %w", err)
+	}
+
+	hash, err := s.cfg.SchwabAccountHash(ctx)
+	if err != nil {
+		return "", 0, fmt.Errorf("account hash: %w", err)
+	}
+
+	execRow := Execution{
+		TradeID:           t.ID,
+		Mode:              s.cfg.Mode,
+		Side:              "open",
+		Status:            "pending",
+		RequestedQuantity: 1,
+	}
+	execID, err = s.store.InsertExecution(execRow)
+	if err != nil {
+		return "", 0, fmt.Errorf("insert open execution: %w", err)
+	}
+
+	orderID, err = s.trader.PlaceOrder(ctx, hash, order)
+	if err != nil {
+		_ = s.store.UpdateExecutionStatus(execID, "failed", "", nil, 0, err.Error())
+		return "", execID, fmt.Errorf("place open order: %w", err)
+	}
+
+	/*
+		Persist the broker order id IMMEDIATELY (same orphan-prevention
+		rationale as handleSingleEntry). If the process crashes between
+		this and the next reconcile-cron tick, the order is still live
+		at Schwab and the row is in 'working' state with the id so it
+		can be picked up.
+	*/
+	if err := s.store.UpdateExecutionStatus(execID, "working", orderID, nil, 0, ""); err != nil {
+		log.Printf("execution: warning: persist mid-flight orderID for trade %d (order=%s): %v", t.ID, orderID, err)
+	}
+
+	log.Printf("execagent: open order submitted (trade=%d, rank=%d, %s %s $%.2f exp=%s limit=$%.2f, order=%s)",
+		t.ID, t.Rank, t.Symbol, t.ContractType, strike, expiration, limitPrice, orderID)
+	return orderID, execID, nil
+}
+
+/*
+InsertSkippedExecutionAgent writes a synthetic open-side execution row
+with status='skipped' to record that the at-open agent looked at this
+pick and explicitly declined to trade it. The reason goes into
+error_message and is surfaced in the 9:35 SendExecutionSummary email
+and on the dashboard.
+
+Status 'skipped' is a deliberate new enum value distinct from:
+  - 'pending'  — order in flight, never reached the broker (in-process)
+  - 'failed'   — order attempted, broker rejected or DB write failed
+  - 'rejected' — order reached broker, broker terminally refused
+  - 'canceled' — order placed, then canceled (typically by 9:35 cron)
+
+'skipped' means: no order was ever attempted, by deliberate model
+choice. requested_quantity=0 reinforces the "nothing was placed" shape.
+*/
+func (s *Service) InsertSkippedExecutionAgent(tradeID int, reason string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if tradeID == 0 {
+		return 0, errors.New("trade ID required for skipped execution")
+	}
+	row := Execution{
+		TradeID:           tradeID,
+		Mode:              s.cfg.Mode,
+		Side:              "open",
+		Status:            "skipped",
+		RequestedQuantity: 0,
+		ErrorMessage:      reason,
+	}
+	id, err := s.store.InsertExecution(row)
+	if err != nil {
+		return 0, fmt.Errorf("insert skipped execution: %w", err)
+	}
+	if err := s.store.UpdateExecutionStatus(id, "skipped", "", nil, 0, reason); err != nil {
+		log.Printf("execution: warning: persist skip status (trade=%d): %v", tradeID, err)
+	}
+	log.Printf("execagent: skip persisted (trade=%d, reason=%q)", tradeID, reason)
+	return id, nil
+}
+
+/*
+AvailableFundsAgent is the at-open-execution-agent's view of available
+cash. Calls SchwabAccountHash + AvailableFunds under the service mutex
+so it can't race with an in-flight PlaceBuyToOpenAgent on the same
+process. Exposed to the agent as the `get_account_funds` tool.
+*/
+func (s *Service) AvailableFundsAgent(ctx context.Context) (float64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	hash, err := s.cfg.SchwabAccountHash(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("account hash: %w", err)
 	}
-
-	/*
-		Poll Schwab for live cash exactly once at basket open. The
-		broker won't decrement available funds until a previous order
-		actually fills (and for options that's typically T+1 settlement
-		anyway), so re-querying mid-basket would over-report and risk
-		double-spending the same cash across contracts. Local cash
-		accounting is the source of truth from this point on.
-	*/
-	availableUSD, err := s.trader.AvailableFunds(ctx, hash)
-	if err != nil {
-		log.Printf("execution: AvailableFunds lookup failed, skipping basket: %v", err)
-		return 0, fmt.Errorf("available funds: %w", err)
-	}
-	log.Printf("execution: basket has %d entries, Schwab available = $%.2f, daily fill target = $%.2f", len(basket), availableUSD, MaxDailyBasketUSD)
-
-	remainingCash := availableUSD
-	submitted := 0
-	for i := range basket {
-		entry := &basket[i]
-		t := &entry.Trade
-		if t.ID == 0 {
-			log.Printf("execution: rank=%d %s qty=%d missing trade ID, skipping", t.Rank, t.Symbol, entry.Quantity)
-			continue
-		}
-		costUSD, ok := s.checkCashAndPlace(ctx, entry, hash, remainingCash)
-		if !ok {
-			continue
-		}
-		remainingCash -= costUSD
-		submitted++
-	}
-	log.Printf("execution: basket complete, submitted %d/%d orders, remaining cash $%.2f", submitted, len(basket), remainingCash)
-	return submitted, nil
-}
-
-/*
-checkCashAndPlace resolves the LIMIT price for one BasketEntry and
-submits the order when its full cost (price × 100 × quantity) fits
-in remainingCash. Returns (cost, true) on submit (so the caller can
-decrement its local cash counter) or (0, false) when the entry was
-skipped because pricing failed or because cost exceeded remaining
-cash. Pricing failures are log-only; the 9:35 SendExecutionSummary
-cron is the single consolidated alert path for the open side.
-Errors after submission are logged inside handleSingleEntry; this
-function only filters by cost.
-*/
-func (s *Service) checkCashAndPlace(ctx context.Context, entry *BasketEntry, hash string, remainingCash float64) (float64, bool) {
-	t := &entry.Trade
-	limitPrice, err := s.resolveLimitPrice(ctx, t)
-	if err != nil {
-		occ, _ := OCCSymbol(t.Symbol, t.Expiration, t.ContractType, t.StrikePrice)
-		log.Printf("execution: rank=%d %s pricing failed: %v", t.Rank, t.Symbol, err)
-		// Per-execution email removed; the 9:35 SendExecutionSummary cron
-		// emits one consolidated email covering every open-side outcome
-		// for the day. Until then this is a log-only event.
-		_ = occ
-		return 0, false
-	}
-	costUSD := limitPrice * 100 * float64(entry.Quantity)
-	if costUSD > remainingCash {
-		log.Printf("execution: rank=%d %s qty=%d skipped, cost $%.2f exceeds remaining cash $%.2f", t.Rank, t.Symbol, entry.Quantity, costUSD, remainingCash)
-		return 0, false
-	}
-	if _, err := s.handleSingleEntry(ctx, entry, t.ID, hash); err != nil {
-		log.Printf("execution: rank=%d %s qty=%d submit failed: %v", t.Rank, t.Symbol, entry.Quantity, err)
-		// Even on submission failure, the contract reached the broker
-		// (or tried to) — count the cost against remaining cash so a
-		// retry storm can't blow through the account.
-		return costUSD, true
-	}
-	return costUSD, true
-}
-
-/*
-resolveLimitPrice fetches the live ask and returns the LIMIT price
-the open order should carry, falling back to Claude's modeled premium
-when the live quote is missing. Returns an error only when neither
-basis is usable — caller treats that as "do not submit".
-*/
-func (s *Service) resolveLimitPrice(ctx context.Context, t *trades.Trade) (float64, error) {
-	var askPrice float64
-	if s.cfg.OptionAsk != nil {
-		fetched, askErr := s.cfg.OptionAsk(ctx, t.Symbol, t.Expiration, t.ContractType, t.StrikePrice)
-		if askErr != nil {
-			log.Printf("execution: option ask unavailable, falling back to estimate (symbol=%s err=%v)", t.Symbol, askErr)
-		} else {
-			askPrice = fetched
-		}
-	}
-	limitPrice := ComputeOpenLimitPrice(askPrice, t.EstimatedPrice)
-	if limitPrice <= 0 {
-		return 0, fmt.Errorf("could not resolve a LIMIT price (ask=%.2f, est=%.2f)", askPrice, t.EstimatedPrice)
-	}
-	return limitPrice, nil
-}
-
-/*
-handleSingleEntry is the per-entry submission body that
-HandleQualifyingPicks calls in a loop. Submits one quantity=N order
-for the given BasketEntry. Returns the order id from Schwab on
-success (empty string on early exit). Errors are non-nil for "did
-not reach broker" cases AND for downstream lookup failures; the
-caller decides whether to keep going.
-*/
-func (s *Service) handleSingleEntry(ctx context.Context, entry *BasketEntry, tradeID int, hash string) (string, error) {
-	t := &entry.Trade
-	occ, err := OCCSymbol(t.Symbol, t.Expiration, t.ContractType, t.StrikePrice)
-	if err != nil {
-		return "", fmt.Errorf("build OCC symbol: %w", err)
-	}
-
-	limitPrice, err := s.resolveLimitPrice(ctx, t)
-	if err != nil {
-		log.Printf("execution: %s", err.Error())
-		// Per-execution email removed; the 9:35 SendExecutionSummary cron
-		// emits one consolidated email covering every open-side outcome
-		// for the day. Until then this is a log-only event.
-		_ = occ
-		return "", err
-	}
-
-	order, err := BuildOpenOrderForTrade(t, occ, limitPrice, entry.Quantity)
-	if err != nil {
-		return "", fmt.Errorf("build open order: %w", err)
-	}
-
-	execRow := Execution{
-		TradeID:           tradeID,
-		Mode:              s.cfg.Mode,
-		Side:              "open",
-		Status:            "pending",
-		RequestedQuantity: entry.Quantity,
-	}
-	execID, err := s.store.InsertExecution(execRow)
-	if err != nil {
-		return "", fmt.Errorf("insert open execution: %w", err)
-	}
-
-	orderID, err := s.trader.PlaceOrder(ctx, hash, order)
-	if err != nil {
-		_ = s.store.UpdateExecutionStatus(execID, "failed", "", nil, 0, err.Error())
-		// Per-execution email removed; the 9:35 SendExecutionSummary cron
-		// emits one consolidated email covering every open-side outcome
-		// for the day. Until then this is a log-only event.
-		_ = occ
-		return "", fmt.Errorf("place open order: %w", err)
-	}
-
-	/*
-		Persist the broker order id IMMEDIATELY after PlaceOrder returns,
-		before any further work. If the process crashes between PlaceOrder
-		succeeding at the broker and the GetOrder status write below, the
-		order is live at Schwab but used to be invisible to us, no
-		reconcile, no kill-switch, no close. Flipping the row to
-		'working' with the order id makes the per-minute reconcile cron
-		pick it up on the next tick if anything downstream fails.
-	*/
-	if err := s.store.UpdateExecutionStatus(execID, "working", orderID, nil, 0, ""); err != nil {
-		log.Printf("execution: warning: failed to persist orderID mid-flight (trade_id=%d, order=%s): %v", tradeID, orderID, err)
-	}
-
-	// Per-execution emails removed across this path; the consolidated
-	// SendExecutionSummary at 9:35 ET emits one operator email
-	// covering every open-side outcome for the day.
-	_ = occ
-	st, err := s.trader.GetOrder(ctx, hash, orderID)
-	if err != nil {
-		_ = s.store.UpdateExecutionStatus(execID, "failed", orderID, nil, 0, err.Error())
-		return orderID, fmt.Errorf("get open order status: %w", err)
-	}
-
-	switch {
-	case st.Filled:
-		fp := st.FillPrice
-		_ = s.store.UpdateExecutionStatus(execID, "filled", orderID, &fp, st.FilledQuantity, "")
-		log.Printf("execution: open filled (trade_id=%d, qty=%d, mode=%s, fill=%.2f, order=%s)", tradeID, entry.Quantity, s.cfg.Mode, st.FillPrice, orderID)
-	case st.Terminal:
-		// Terminal-but-not-filled: REJECTED, CANCELED, EXPIRED, REPLACED.
-		// Persist the broker's reason and let the 9:35 summary email
-		// surface it; silent rejection is how three days of bad orders
-		// went unnoticed historically, so the DB row itself carries the
-		// reason string.
-		reason := st.ErrorMessage
-		if reason == "" {
-			reason = st.RawStatus
-		}
-		_ = s.store.UpdateExecutionStatus(execID, "rejected", orderID, nil, 0, reason)
-		log.Printf("execution: open order rejected (trade_id=%d, qty=%d, order=%s, status=%s, reason=%q)", tradeID, entry.Quantity, orderID, st.RawStatus, reason)
-	default:
-		_ = s.store.UpdateExecutionStatus(execID, "working", orderID, nil, 0, "")
-		log.Printf("execution: open order working (trade_id=%d, qty=%d, order=%s, status=%s)", tradeID, entry.Quantity, orderID, st.RawStatus)
-	}
-	return orderID, nil
+	return s.trader.AvailableFunds(ctx, hash)
 }
 
 /*
@@ -501,14 +463,14 @@ func (s *Service) closeOne(ctx context.Context, p *OpenPosition) {
 
 	hash, err := s.cfg.SchwabAccountHash(ctx)
 	if err != nil {
-		s.sendCloseFailedEmail(p, fmt.Sprintf("account hash lookup failed: %v", err))
+		s.recordCloseFailure(p, 0, fmt.Sprintf("account hash lookup failed: %v", err))
 		return
 	}
 
 	closeQty := positionCloseQuantity(p)
 	order, err := BuildCloseOrderForPosition(p, closeQty)
 	if err != nil {
-		s.sendCloseFailedEmail(p, fmt.Sprintf("build close order: %v", err))
+		s.recordCloseFailure(p, 0, fmt.Sprintf("build close order: %v", err))
 		return
 	}
 
@@ -521,15 +483,16 @@ func (s *Service) closeOne(ctx context.Context, p *OpenPosition) {
 	}
 	execID, err := s.store.InsertExecution(execRow)
 	if err != nil {
-		log.Printf("execution: insert close row: %v", err)
-		s.sendCloseFailedEmail(p, fmt.Sprintf("insert close row: %v", err))
+		// No execID to update; this is a DB outage, log and move on.
+		// The close-summary email will surface a missing close row for
+		// this position so the operator can investigate.
+		log.Printf("execution: insert close row failed for trade %d: %v", p.Execution.TradeID, err)
 		return
 	}
 
 	orderID, err := s.trader.PlaceOrder(ctx, hash, order)
 	if err != nil {
-		_ = s.store.UpdateExecutionStatus(execID, "failed", "", nil, 0, err.Error())
-		s.sendCloseFailedEmail(p, fmt.Sprintf("first PlaceOrder: %v", err))
+		_ = s.store.UpdateExecutionStatus(execID, "failed", "", nil, 0, fmt.Sprintf("first PlaceOrder: %v", err))
 		return
 	}
 	// Same orphan-prevention rationale as the open path: persist the
@@ -539,7 +502,7 @@ func (s *Service) closeOne(ctx context.Context, p *OpenPosition) {
 		log.Printf("execution: warning: failed to persist close orderID mid-flight (trade_id=%d, order=%s): %v", p.Execution.TradeID, orderID, err)
 	}
 	if s.pollFilled(ctx, hash, orderID, 8, 15*time.Second) {
-		s.recordCloseAndEmail(ctx, p, execID, hash, orderID)
+		s.recordCloseFilled(ctx, p, execID, hash, orderID)
 		return
 	}
 
@@ -558,12 +521,11 @@ func (s *Service) closeOne(ctx context.Context, p *OpenPosition) {
 	*/
 	if postCancel, gErr := s.trader.GetOrder(ctx, hash, orderID); gErr == nil {
 		if postCancel.Filled {
-			s.recordCloseAndEmail(ctx, p, execID, hash, orderID)
+			s.recordCloseFilled(ctx, p, execID, hash, orderID)
 			return
 		}
 		if postCancel.Terminal && postCancel.RawStatus != "CANCELED" && postCancel.RawStatus != "REPLACED" {
 			_ = s.store.UpdateExecutionStatus(execID, "failed", orderID, nil, 0, fmt.Sprintf("close terminal mid-cancel as %s; cancel-replace skipped", postCancel.RawStatus))
-			s.sendCloseFailedEmail(p, fmt.Sprintf("first close order ended as %s mid-cancel; manual review", postCancel.RawStatus))
 			return
 		}
 	}
@@ -571,7 +533,6 @@ func (s *Service) closeOne(ctx context.Context, p *OpenPosition) {
 	orderID2, err := s.trader.PlaceOrder(ctx, hash, order)
 	if err != nil {
 		_ = s.store.UpdateExecutionStatus(execID, "failed", orderID, nil, 0, "cancel-replace failed: "+err.Error())
-		s.sendCloseFailedEmail(p, fmt.Sprintf("cancel-replace PlaceOrder: %v", err))
 		return
 	}
 	// Persist the replacement order id immediately, same rationale.
@@ -579,12 +540,11 @@ func (s *Service) closeOne(ctx context.Context, p *OpenPosition) {
 		log.Printf("execution: warning: failed to persist cancel-replace orderID mid-flight (trade_id=%d, order=%s): %v", p.Execution.TradeID, orderID2, err)
 	}
 	if s.pollFilled(ctx, hash, orderID2, 8, 15*time.Second) {
-		s.recordCloseAndEmail(ctx, p, execID, hash, orderID2)
+		s.recordCloseFilled(ctx, p, execID, hash, orderID2)
 		return
 	}
 
-	_ = s.store.UpdateExecutionStatus(execID, "failed", orderID2, nil, 0, "unfilled after retry-cancel-replace")
-	s.sendCloseFailedEmail(p, "Position did not fill within 4-minute retry-cancel-replace window. Close on Schwab manually before 4:00pm ET.")
+	_ = s.store.UpdateExecutionStatus(execID, "failed", orderID2, nil, 0, "Position did not fill within 4-minute retry-cancel-replace window. Close on Schwab manually before 4:00pm ET.")
 }
 
 func (s *Service) pollFilled(ctx context.Context, hash, orderID string, attempts int, interval time.Duration) bool {
@@ -609,73 +569,56 @@ func (s *Service) pollFilled(ctx context.Context, hash, orderID string, attempts
 	return false
 }
 
-func (s *Service) recordCloseAndEmail(ctx context.Context, p *OpenPosition, execID int, hash, orderID string) {
+/*
+recordCloseFilled persists the broker-side fill on the close execution
+row. No per-trade email is sent anymore: the 3:55 ET SendCloseSummary
+cron emits one consolidated daily email after all positions have been
+attempted, sourcing this row's status + fill price via the store.
+*/
+func (s *Service) recordCloseFilled(ctx context.Context, p *OpenPosition, execID int, hash, orderID string) {
 	st, err := s.trader.GetOrder(ctx, hash, orderID)
 	if err != nil {
 		log.Printf("execution: post-fill GetOrder: %v", err)
 		return
 	}
 	fp := st.FillPrice
-	_ = s.store.UpdateExecutionStatus(execID, "filled", orderID, &fp, st.FilledQuantity, "")
-
-	openPrice := p.ContractPrice
-	open, err := s.store.OpenExecutionForTrade(p.Execution.TradeID)
-	if err == nil && open != nil && open.FillPrice != nil {
-		openPrice = *open.FillPrice
-	}
-	// Use the broker's filled_quantity if Schwab reported one (qty=N
-	// closes can partially fill in theory), otherwise fall back to the
-	// quantity we requested. The open and close quantities will match
-	// for any clean lifecycle.
-	closedQty := st.FilledQuantity
-	if closedQty < 1 {
-		closedQty = positionCloseQuantity(p)
-	}
-	realized := (st.FillPrice - openPrice) * 100 * float64(closedQty)
-
-	data := templates.ExecuteCloseReceiptData{
-		Subject:            fmt.Sprintf("[%s] Position closed: %s %s, P&L $%.2f", strings.ToUpper(s.cfg.Mode), p.Symbol, p.ContractType, realized),
-		Date:               time.Now().In(easternTime()).Format("Monday, Jan 2 (3:04 PM ET)"),
-		Mode:               s.cfg.Mode,
-		Symbol:             p.Symbol,
-		ContractType:       p.ContractType,
-		StrikePrice:        p.StrikePrice,
-		Expiration:         p.Expiration,
-		OpenPrice:          openPrice,
-		ClosePrice:         st.FillPrice,
-		RealizedPnL:        realized,
-		SchwabPositionsURL: schwabPositionsURL,
-	}
-	html, err := templates.RenderExecuteCloseReceipt(data)
-	if err != nil {
-		log.Printf("execution: render close receipt: %v", err)
-		return
-	}
-	if err := s.mail.SendTradeEmail(s.cfg.EmailFrom, []string{s.cfg.Recipient}, data.Subject, html); err != nil {
-		log.Printf("execution: send close receipt: %v", err)
+	if err := s.store.UpdateExecutionStatus(execID, "filled", orderID, &fp, st.FilledQuantity, ""); err != nil {
+		log.Printf("execution: persist close fill (trade=%d, order=%s): %v", p.Execution.TradeID, orderID, err)
 	}
 }
 
-func (s *Service) sendCloseFailedEmail(p *OpenPosition, errMsg string) {
-	occ, _ := OCCSymbol(p.Symbol, p.Expiration, p.ContractType, p.StrikePrice)
-	data := templates.ExecuteCloseFailedData{
-		Subject:            fmt.Sprintf("[ACTION REQUIRED] vibetradez close failed: %s", p.Symbol),
-		Date:               time.Now().In(easternTime()).Format("Monday, Jan 2 (3:04 PM ET)"),
-		Symbol:             p.Symbol,
-		ContractType:       p.ContractType,
-		StrikePrice:        p.StrikePrice,
-		Expiration:         p.Expiration,
-		OCCSymbol:          occ,
-		ErrorMessage:       errMsg,
-		SchwabPositionsURL: schwabPositionsURL,
-	}
-	html, err := templates.RenderExecuteCloseFailed(data)
-	if err != nil {
-		log.Printf("execution: render close-failed email: %v", err)
+/*
+recordCloseFailure writes a close-side failure into the executions
+table for cases that happen BEFORE an execID exists (account-hash
+lookup, build-order error). The downstream SendCloseSummary email
+reads these rows and surfaces the error_message inline; no per-trade
+alert fires anymore.
+
+When _execID is non-zero the caller has already written the failure
+via UpdateExecutionStatus and this function is a no-op log. When
+execID is zero, we synthesize a new close-side execution row in the
+failed state so the email has something to render.
+*/
+func (s *Service) recordCloseFailure(p *OpenPosition, execID int, errMsg string) {
+	if execID != 0 {
+		log.Printf("execution: close failed (trade=%d, exec=%d): %s", p.Execution.TradeID, execID, errMsg)
 		return
 	}
-	if err := s.mail.SendTradeEmail(s.cfg.EmailFrom, []string{s.cfg.Recipient}, data.Subject, html); err != nil {
-		log.Printf("execution: send close-failed email: %v", err)
+	row := Execution{
+		TradeID:           p.Execution.TradeID,
+		Mode:              s.cfg.Mode,
+		Side:              "close",
+		Status:            "failed",
+		RequestedQuantity: positionCloseQuantity(p),
+		ErrorMessage:      errMsg,
+	}
+	id, err := s.store.InsertExecution(row)
+	if err != nil {
+		log.Printf("execution: insert pre-orderID close-failed row (trade=%d): %v", p.Execution.TradeID, err)
+		return
+	}
+	if err := s.store.UpdateExecutionStatus(id, "failed", "", nil, 0, errMsg); err != nil {
+		log.Printf("execution: persist pre-orderID close-failed status (trade=%d): %v", p.Execution.TradeID, err)
 	}
 }
 
@@ -694,18 +637,6 @@ func positionCloseQuantity(p *OpenPosition) int {
 		return p.Execution.RequestedQuantity
 	}
 	return 1
-}
-
-/*
-easternTime returns the ET location for date formatting. Falls back
-to UTC if the zone db isn't available (extremely unlikely).
-*/
-func easternTime() *time.Location {
-	loc, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		return time.UTC
-	}
-	return loc
 }
 
 /*
@@ -852,4 +783,93 @@ func (s *Service) SendExecutionSummary(ctx context.Context, tradeDate string) {
 		return
 	}
 	log.Printf("execution: summary sent to %s (%d/%d filled, $%.2f)", s.cfg.Recipient, totalFilled, len(rows), data.TotalCost)
+}
+
+/*
+SendCloseSummary queries the day's close-side executions and sends ONE
+consolidated email to the operator recipient summarizing every
+position close attempted today: which filled and at what realized P&L,
+which failed and why, and the day's net realized P&L across the
+basket. Replaces the previous per-trade close-receipt + close-failed
+emails that fired one-per-position throughout the 3:55 ET window.
+
+Empty-result case (no close-side executions at all for the date)
+still sends a "no positions closed today" notice so the operator can
+distinguish between "executor ran cleanly and had nothing to close"
+(zero opens earlier) and "executor failed silently" (opens existed
+but no close rows were ever written).
+
+Cron sequence (called by cmd/scanner/main.go after the 3:55 close
+cron finishes):
+ 1. CloseAllPositionsForDate — sells every open position, retries
+    once via cancel-replace, records each row's final status
+ 2. SendCloseSummary — emails the final slate
+*/
+func (s *Service) SendCloseSummary(ctx context.Context, tradeDate string) {
+	_ = ctx // included for parity with SendExecutionSummary; future work may use it
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("execution: SendCloseSummary top-level panic: %v", r)
+		}
+	}()
+
+	rows, err := s.store.CloseSummaryForDate(tradeDate)
+	if err != nil {
+		log.Printf("execution: close-summary: CloseSummaryForDate(%s): %v", tradeDate, err)
+		return
+	}
+
+	data := templates.CloseSummaryData{
+		Date:               tradeDate,
+		Mode:               s.cfg.Mode,
+		Rows:               make([]templates.CloseSummaryRow, 0, len(rows)),
+		SchwabPositionsURL: schwabPositionsURL,
+	}
+	totalFilled := 0
+	totalFailed := 0
+	for _, r := range rows {
+		if r.Status == "filled" {
+			totalFilled++
+			data.TotalRealizedPnL += r.RealizedPnL
+		}
+		// "failed" / "rejected" are the action-required statuses the
+		// email's red callout gates on. "working" and "pending" are
+		// transient and rare at 3:55 (the close path polls + retries),
+		// but they show up in the body if they exist.
+		if r.Status == "failed" || r.Status == "rejected" {
+			totalFailed++
+		}
+		data.Rows = append(data.Rows, templates.CloseSummaryRow{
+			Rank:         r.Rank,
+			Symbol:       r.Symbol,
+			ContractType: r.ContractType,
+			StrikePrice:  r.StrikePrice,
+			Mode:         r.Mode,
+			Status:       r.Status,
+			OpenPrice:    r.OpenPrice,
+			ClosePrice:   r.ClosePrice,
+			RealizedPnL:  r.RealizedPnL,
+			Quantity:     r.Quantity,
+			ErrorMessage: r.ErrorMessage,
+		})
+	}
+	data.Filled = totalFilled
+	data.Failed = totalFailed
+	data.Total = len(rows)
+
+	html, err := templates.RenderCloseSummary(data)
+	if err != nil {
+		log.Printf("execution: close-summary: render: %v", err)
+		return
+	}
+	sign := "+"
+	if data.TotalRealizedPnL < 0 {
+		sign = ""
+	}
+	subject := fmt.Sprintf("VibeTradez close summary — %s (%d/%d closed, %s$%.2f P&L)", tradeDate, totalFilled, len(rows), sign, data.TotalRealizedPnL)
+	if err := s.mail.SendTradeEmail(s.cfg.EmailFrom, []string{s.cfg.Recipient}, subject, html); err != nil {
+		log.Printf("execution: close-summary: send: %v", err)
+		return
+	}
+	log.Printf("execution: close-summary sent to %s (%d/%d closed, %s$%.2f P&L)", s.cfg.Recipient, totalFilled, len(rows), sign, data.TotalRealizedPnL)
 }

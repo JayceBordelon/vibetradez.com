@@ -12,7 +12,7 @@ import { ClaudeLogo } from "@/components/ui/brand-icons";
 export const metadata: Metadata = {
   title: "VibeTradez | AI-Powered Options Picks",
   description:
-    "An LLM ranks 10 options contracts every weekday with live market data and a written rationale for each. The top 3 picks auto-fire in my actual brokerage account every morning. Free to watch, expensive to run.",
+    "An LLM picks 3 options contracts every weekday with live market data and a written rationale for each. All 3 auto-fire in my actual brokerage account at the open. Free to watch, expensive to run.",
 };
 
 export default function LandingPage() {
@@ -20,7 +20,7 @@ export default function LandingPage() {
     <div className="relative min-h-dvh overflow-hidden bg-background text-foreground">
       <AmbientBackground position="absolute" />
 
-      {/* ── Floating glass nav (kept — it's a fixed surface, not a content card) ── */}
+      {/* ── Floating glass nav (kept, it's a fixed surface, not a content card) ── */}
       <nav className="fixed top-3 left-1/2 z-50 w-[calc(100%-1.5rem)] -translate-x-1/2 sm:top-4 sm:max-w-5xl">
         <div className="lg-panel lg-edge-shine flex items-center justify-between px-4 py-2 sm:px-5 sm:py-2.5">
           <Link href="/" className="inline-flex min-h-11 items-center text-xl font-extrabold tracking-tight sm:min-h-9">
@@ -66,7 +66,7 @@ export default function LandingPage() {
 
           <Reveal effect="rise" delay={280} duration={900}>
             <p className="mx-auto mt-7 max-w-[640px] text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Every weekday at 9:30 ET, a language model ranks 10 options contracts and auto-fires the top 3 in my real brokerage account. By close, you see whether Claudia was right.{" "}
+              Every weekday, a language model picks 3 options contracts before the bell and auto-fires all 3 in my real brokerage account at the open. By close, you see whether Claudia was right.{" "}
               <span className="italic">(She is sometimes.)</span>
             </p>
           </Reveal>
@@ -109,7 +109,7 @@ export default function LandingPage() {
             </div>
           </Reveal>
 
-          {/* Timeline — connecting hairline runs through the middle of the row on desktop;
+          {/* Timeline, connecting hairline runs through the middle of the row on desktop;
               vertical accent line on mobile. */}
           <div className="relative mt-14">
             <div className="absolute top-[34px] left-[12.5%] hidden h-px w-[75%] bg-gradient-to-r from-transparent via-foreground/15 to-transparent md:block" aria-hidden />
@@ -119,7 +119,7 @@ export default function LandingPage() {
               {pipeline.map((p, i) => (
                 <Reveal key={p.time} effect="rise" delay={i * 100} duration={600}>
                   <li className="relative flex gap-4 md:block">
-                    {/* Numbered dot — sits on the timeline */}
+                    {/* Numbered dot, sits on the timeline */}
                     <div className="flex shrink-0 flex-col items-center md:items-start">
                       <span className="relative inline-flex h-8 w-8 items-center justify-center rounded-full bg-background text-xs font-bold ring-1 ring-foreground/15">
                         <span className="absolute -inset-[5px] rounded-full bg-gradient-brand opacity-10" aria-hidden />
@@ -146,10 +146,42 @@ export default function LandingPage() {
       {/* ── Testimonials ── */}
       <Testimonials />
 
-      {/* ── Trusted-by parody marquee (warm-up before the subscribe CTA) ── */}
+      {/* ── Trusted-by parody marquee (warm-up before the open-source + subscribe CTAs) ── */}
       <TrustedBy />
 
-      {/* ── Subscribe CTA — flat hero-style block, no outer panel ── */}
+      {/* ── Open source / contribute, its own section, sits above the signup CTA so devs see it on the first scroll ── */}
+      <section className="relative px-5 pb-12 sm:px-6 sm:pb-16">
+        <div className="relative mx-auto max-w-3xl">
+          <Reveal effect="rise" duration={700}>
+            <div className="lg-panel relative overflow-hidden rounded-2xl px-6 py-7 sm:px-8 sm:py-8">
+              <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                <div className="min-w-0">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Open source · contributors welcome</span>
+                  <h3 className="mt-1.5 text-xl font-bold tracking-tight sm:text-2xl">
+                    The whole stack lives on <span className="text-gradient-brand">GitHub</span>
+                  </h3>
+                  <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+                    Go backend, Next.js frontend, Schwab + Anthropic wiring, the whole picker prompt, all open source. If you&apos;re a dev with an idea, ping me to contribute and I&apos;ll merge your
+                    changes in. Real code, real users, real money on the line.
+                  </p>
+                </div>
+                <a
+                  href="https://github.com/JayceBordelon/vibetradez.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-foreground/10 bg-foreground/[0.03] px-5 text-sm font-semibold text-foreground transition-colors hover:border-foreground/25 hover:bg-foreground/[0.06]"
+                >
+                  <GitHubMark className="h-4 w-4" />
+                  View on GitHub
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </a>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── Subscribe CTA, flat hero-style block, no outer panel ── */}
       <section className="relative px-5 pb-24 sm:px-6 sm:pb-32">
         <div className="relative z-10 mx-auto max-w-3xl text-center">
           <div className="lg-orb lg-orb-claude absolute h-[420px] w-[420px] -top-24 -left-24 opacity-30" aria-hidden />
@@ -205,6 +237,14 @@ export default function LandingPage() {
               FAQ
             </Link>
             <a
+              href="https://github.com/JayceBordelon/vibetradez.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center underline underline-offset-2 hover:text-foreground sm:min-h-0 sm:min-w-0 sm:justify-start"
+            >
+              GitHub
+            </a>
+            <a
               href="https://jaycebordelon.com"
               target="_blank"
               rel="noopener noreferrer"
@@ -219,18 +259,30 @@ export default function LandingPage() {
   );
 }
 
+// GitHub Octocat mark, inline so we don't depend on a lucide icon that
+// upstream removed (lucide dropped Github citing trademark concerns).
+function GitHubMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" className={className} fill="currentColor">
+      <title>GitHub</title>
+      <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
+    </svg>
+  );
+}
+
 const pipeline = [
   {
-    time: "9:30 AM ET",
-    title: "Claudia picks against the bell",
+    time: "9:25 AM ET",
+    title: "Claudia picks 3 tickers",
     detail:
-      "Right at the open, an LLM pulls market signals, calls Schwab for live quotes and option chains, and ranks 10 contracts with a written rationale for each. Live post-open prices, not pre-market guesses.",
+      "Before the bell, an LLM pulls market signals, scrapes overnight news, calls Schwab for the live equity spot, and returns 3 high-conviction tickers with direction (call vs put), score, written rationale, and intent (how far out-of-the-money, minimum days to expiry).",
     Icon: Sparkles,
   },
   {
-    time: "9:31-9:33 AM ET",
-    title: "Auto-fire the basket",
-    detail: "The top 3 picks fire live in my actual Schwab account a minute or two after the bell. Real money, real fills. Capped at $5/share per contract, $1,000 daily basket limit.",
+    time: "9:30:00 AM ET",
+    title: "Claudia picks the contracts and fires",
+    detail:
+      "She wakes up again with the 3 candidates plus live Schwab chain tools and a real order tool. For each candidate she picks a strike, expiration, and limit price from the live chain and either fires a real BUY_TO_OPEN LIMIT or declines with a written reason. Per-contract safety cap at $10/share, capped at 3 orders per run.",
     Icon: Zap,
   },
   {

@@ -12,7 +12,7 @@ between rendering the live streaming UI or the market-closed page.
 
 The endpoint is cheap (calendar lookup, no Schwab calls) and the
 status only flips on cron-tick boundaries, so polling on focus
-instead of on a timer is enough — a user away from the tab during
+instead of on a timer is enough, a user away from the tab during
 9:30 ET will see the flip the moment they return.
 
 Returns null until the first fetch lands; consumers should render a

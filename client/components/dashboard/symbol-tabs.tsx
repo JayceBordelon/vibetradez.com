@@ -42,7 +42,7 @@ export function SymbolTabs({ trades, activeSymbol, onSelect, executions }: Symbo
         symbol: sym,
         rank: dt.trade.rank,
         contractType: dt.trade.contract_type,
-        strike: dt.trade.strike_price,
+        strike: dt.trade.strike_price ?? 0,
         score: dt.trade.score,
         pnl: tradePnl,
       });
@@ -61,12 +61,16 @@ export function SymbolTabs({ trades, activeSymbol, onSelect, executions }: Symbo
   /*
   Auto-scroll the active pill into view when the selection changes.
   Using a callback ref instead of useEffect keeps the dependency
-  surface minimal — the callback only runs when the *active* button
+  surface minimal, the callback only runs when the *active* button
   mounts, which is exactly when we want to scroll.
   */
   const focusOnMount = (el: HTMLButtonElement | null) => {
     if (!el) return;
-    el.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+    el.scrollIntoView({
+      block: "nearest",
+      inline: "center",
+      behavior: "smooth",
+    });
   };
 
   return (

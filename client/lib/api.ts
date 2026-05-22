@@ -43,7 +43,7 @@ export class ApiError extends Error {
 parseResponse centralizes the "did we actually get JSON back from a
 2xx" check. Without this, a 502 from Traefik or a 401 redirect to an
 HTML login page would throw inside res.json() with a useless
-"Unexpected token < in JSON" SyntaxError — callers had no way to
+"Unexpected token < in JSON" SyntaxError, callers had no way to
 distinguish that from a real malformed body. Now every non-2xx
 throws ApiError, and a body that fails to parse as JSON throws
 ApiError too (rather than the obscure SyntaxError).
@@ -106,7 +106,7 @@ export const api = {
   getWeekTrades: (start: string, end: string) => clientFetch<WeekResponse>(`/api/trades/week?start=${start}&end=${end}`),
 
   /*
-  Live quotes are now an SSE stream at /api/quotes/stream — see
+  Live quotes are now an SSE stream at /api/quotes/stream, see
   hooks/use-quote-stream.ts. /api/market/status is the cheap polled
   endpoint that tells the dashboard whether to open the stream or
   render the market-closed page.
@@ -119,7 +119,7 @@ export const api = {
   logout: () => authFetch<ApiResponse>("/auth/logout", { method: "POST" }),
 
   /*
-  Programmatic unsubscribe path — requires the HMAC token minted server-side
+  Programmatic unsubscribe path, requires the HMAC token minted server-side
   and emailed to the subscriber. No call site uses it from the website
   today (UnsubscribeForm now points users to the link in their email),
   but kept as a thin wrapper so any future tool that already holds a

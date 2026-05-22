@@ -74,15 +74,10 @@ type Trade struct {
 
 	Symbol         string  `json:"symbol"`
 	ContractType   string  `json:"contract_type"`
-	StrikePrice    float64 `json:"strike_price"`
-	Expiration     string  `json:"expiration"`
-	DTE            int     `json:"dte"`
-	EstimatedPrice float64 `json:"estimated_price"`
 	Thesis         string  `json:"thesis"`
 	SentimentScore float64 `json:"sentiment_score"`
 	CurrentPrice   float64 `json:"current_price"`
 	TargetPrice    float64 `json:"target_price"`
-	StopLoss       float64 `json:"stop_loss"`
 	RiskLevel      string  `json:"risk_level"`
 	Catalyst       string  `json:"catalyst"`
 	MentionCount   int     `json:"mention_count"`
@@ -91,7 +86,103 @@ type Trade struct {
 	Score     int    `json:"score"`
 	Rationale string `json:"rationale"`
 	Model     string `json:"model"`
+
+	// Contract intent: written by the 9:25 picker, consumed by the 9:30
+	// executor when resolving against the live option chain. TargetOTMPct
+	// is signed-OTM in percent (e.g. 1.5 for a put 1.5% below spot or a
+	// call 1.5% above spot; sign is implicit from ContractType). MinDTE is
+	// the minimum acceptable days-to-expiration; the executor picks the
+	// nearest expiration >= MinDTE.
+	TargetOTMPct float64 `json:"target_otm_pct"`
+	MinDTE       int     `json:"min_dte"`
+
+	// Resolved at open. Nil until the 9:30 at-open agent picks the
+	// contract from the live chain and PlaceBuyToOpenAgent stamps the
+	// chosen strike/expiration/dte/estimated_price/stop_loss onto the
+	// trade row. The frontend renders "Finding contracts..." for any
+	// pick whose StrikePrice is still nil. Stays nil forever for
+	// candidates the agent chose to skip.
+	StrikePrice    *float64 `json:"strike_price"`
+	Expiration     *string  `json:"expiration"`
+	DTE            *int     `json:"dte"`
+	EstimatedPrice *float64 `json:"estimated_price"`
+	StopLoss       *float64 `json:"stop_loss"`
 }
+
+// ContractResolved is true once the at-open executor has filled in the
+// strike/expiration/dte/estimated_price/stop_loss fields. Use this when
+// deciding whether to render a trade card, build an OCC symbol, or run
+// it through the basket selector.
+func (t *Trade) ContractResolved() bool {
+	return t.StrikePrice != nil && t.Expiration != nil && t.EstimatedPrice != nil
+}
+
+// Strike returns the resolved strike, or 0 when unresolved.
+func (t *Trade) Strike() float64 {
+	if t.StrikePrice == nil {
+		return 0
+	}
+	return *t.StrikePrice
+}
+
+// ExpirationStr returns the resolved expiration, or "" when unresolved.
+func (t *Trade) ExpirationStr() string {
+	if t.Expiration == nil {
+		return ""
+	}
+	return *t.Expiration
+}
+
+// DTEVal returns the resolved DTE, or 0 when unresolved. (0DTE is a valid
+// resolved value, so callers must gate on ContractResolved before
+// interpreting a zero here.)
+func (t *Trade) DTEVal() int {
+	if t.DTE == nil {
+		return 0
+	}
+	return *t.DTE
+}
+
+// EstPrice returns the resolved estimated_price, or 0 when unresolved.
+func (t *Trade) EstPrice() float64 {
+	if t.EstimatedPrice == nil {
+		return 0
+	}
+	return *t.EstimatedPrice
+}
+
+// StopLossVal returns the resolved stop_loss, or 0 when unresolved.
+func (t *Trade) StopLossVal() float64 {
+	if t.StopLoss == nil {
+		return 0
+	}
+	return *t.StopLoss
+}
+
+// SetResolvedContract is a convenience setter for tests + the at-open
+// resolver that flips a pick from pre-resolution to resolved with one
+// call. Production code path also goes through this so the contract-
+// resolution invariant lives in one place: ContractResolved() returns
+// true iff all five fields are set.
+func (t *Trade) SetResolvedContract(strike float64, expiration string, dte int, estimatedPrice, stopLoss float64) {
+	s := strike
+	e := expiration
+	d := dte
+	p := estimatedPrice
+	sl := stopLoss
+	t.StrikePrice = &s
+	t.Expiration = &e
+	t.DTE = &d
+	t.EstimatedPrice = &p
+	t.StopLoss = &sl
+}
+
+// PtrFloat / PtrString / PtrInt are tiny helpers for tests that build
+// Trade literals with selectively-set pointer fields. Exported so they
+// can be reused by tests in other packages.
+func PtrFloat(v float64) *float64 { return &v }
+func PtrString(v string) *string  { return &v }
+func PtrInt(v int) *int           { return &v }
 
 type TradeSummary struct {
 	Symbol       string  `json:"symbol"`
@@ -125,21 +216,18 @@ func NewClaudePicker(apiKey, model string, schwabClient *schwab.Client) *ClaudeP
 func (p *ClaudePicker) Model() string { return p.model }
 
 type claudeTradeOutput struct {
-	Symbol         string  `json:"symbol"`
-	ContractType   string  `json:"contract_type"`
-	StrikePrice    float64 `json:"strike_price"`
-	Expiration     string  `json:"expiration"`
-	DTE            int     `json:"dte"`
-	EstimatedPrice float64 `json:"estimated_price"`
-	CurrentPrice   float64 `json:"current_price"`
-	TargetPrice    float64 `json:"target_price"`
-	StopLoss       float64 `json:"stop_loss"`
-	RiskLevel      string  `json:"risk_level"`
-	Catalyst       string  `json:"catalyst"`
-	Thesis         string  `json:"thesis"`
-	Score          int     `json:"score"`
-	Rationale      string  `json:"rationale"`
-	Rank           int     `json:"rank"`
+	Symbol       string  `json:"symbol"`
+	ContractType string  `json:"contract_type"`
+	CurrentPrice float64 `json:"current_price"`
+	TargetPrice  float64 `json:"target_price"`
+	RiskLevel    string  `json:"risk_level"`
+	Catalyst     string  `json:"catalyst"`
+	Thesis       string  `json:"thesis"`
+	Score        int     `json:"score"`
+	Rationale    string  `json:"rationale"`
+	Rank         int     `json:"rank"`
+	TargetOTMPct float64 `json:"target_otm_pct"`
+	MinDTE       int     `json:"min_dte"`
 }
 
 func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentiment.TickerMention) ([]Trade, error) {
@@ -172,22 +260,19 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentime
 	trades := make([]Trade, 0, len(raw))
 	for _, r := range raw {
 		trades = append(trades, Trade{
-			Symbol:         r.Symbol,
-			ContractType:   r.ContractType,
-			StrikePrice:    r.StrikePrice,
-			Expiration:     r.Expiration,
-			DTE:            r.DTE,
-			EstimatedPrice: r.EstimatedPrice,
-			Thesis:         r.Thesis,
-			CurrentPrice:   r.CurrentPrice,
-			TargetPrice:    r.TargetPrice,
-			StopLoss:       r.StopLoss,
-			RiskLevel:      r.RiskLevel,
-			Catalyst:       r.Catalyst,
-			Rank:           r.Rank,
-			Score:          r.Score,
-			Rationale:      r.Rationale,
-			Model:          p.model,
+			Symbol:       r.Symbol,
+			ContractType: r.ContractType,
+			Thesis:       r.Thesis,
+			CurrentPrice: r.CurrentPrice,
+			TargetPrice:  r.TargetPrice,
+			RiskLevel:    r.RiskLevel,
+			Catalyst:     r.Catalyst,
+			Rank:         r.Rank,
+			Score:        r.Score,
+			Rationale:    r.Rationale,
+			Model:        p.model,
+			TargetOTMPct: r.TargetOTMPct,
+			MinDTE:       r.MinDTE,
 		})
 	}
 

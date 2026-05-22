@@ -48,7 +48,7 @@ export function PnlChart({ trades, executions }: PnlChartProps) {
           <YAxis type="category" dataKey="name" width={120} fontSize={11} tickLine={false} />
           <ChartTooltip content={<ChartTooltipContent formatter={(value) => fmtPnlInt(Number(value))} hideIndicator />} />
           {/*
-            Per-bar color comes from each datum's `fill` field —
+            Per-bar color comes from each datum's `fill` field
             Recharts v3 reads it directly on the Bar, no need for
             <Cell> children (deprecated as of recharts 3.7 per
             CLAUDE.md, removed in v4).

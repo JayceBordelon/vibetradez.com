@@ -9,7 +9,7 @@ import type { MarketStatus } from "@/types/trade";
 /*
 MarketClosedPage is the full-page render when the dashboard loads
 outside the 9:30-16:00 ET (or 13:00 ET on half-days) window of a
-trading day. No live-data fetches happen on this page — the only
+trading day. No live-data fetches happen on this page, the only
 data dependency is the next-open timestamp from /api/market/status,
 which is a calendar lookup with no Schwab calls.
 

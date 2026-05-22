@@ -12,8 +12,8 @@ import { TIER_COLORS, TIER_KEYS, TIER_LABELS } from "./tiers";
 
 const chartConfig: ChartConfig = {
   top1: { label: TIER_LABELS.top1, color: TIER_COLORS.top1 },
+  top2: { label: TIER_LABELS.top2, color: TIER_COLORS.top2 },
   top3: { label: TIER_LABELS.top3, color: TIER_COLORS.top3 },
-  top10: { label: TIER_LABELS.top10, color: TIER_COLORS.top10 },
 };
 
 export function EquityCurveChart({ days }: { days: DayMultiStat[] }) {
@@ -22,8 +22,8 @@ export function EquityCurveChart({ days }: { days: DayMultiStat[] }) {
       days.map((d) => ({
         date: d.date,
         top1: d.tiers.top1.cumPnl,
+        top2: d.tiers.top2.cumPnl,
         top3: d.tiers.top3.cumPnl,
-        top10: d.tiers.top10.cumPnl,
       })),
     [days]
   );

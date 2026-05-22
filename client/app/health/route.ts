@@ -18,6 +18,8 @@ export async function GET(): Promise<NextResponse> {
   const body = await upstream.text();
   return new NextResponse(body, {
     status: upstream.status,
-    headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" },
+    headers: {
+      "content-type": upstream.headers.get("content-type") ?? "application/json",
+    },
   });
 }

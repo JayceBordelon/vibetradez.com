@@ -45,15 +45,25 @@ The trading server runs against a live broker. A broken cron in production can m
 
 `internal/store/store.go`'s `migrate()` function runs on server boot with `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE ... IF NOT EXISTS` for additive columns. Schema changes go there; no separate migration directory.
 
-## Picker / executor: two-stage by design
+## Picker / agent: two-stage by design
 
-This is the load-bearing architectural invariant of the system. Read it before touching any picker, executor, or chain code.
+This is the load-bearing architectural invariant. Read it before touching any picker, agent, or chain code.
 
-**Pre-bell (9:25 ET) does ticker selection only.** Claude reads sentiment + overnight news + live Schwab equity spot. Output: `symbol`, `contract_type` (CALL/PUT), `score`, `thesis`, contract intent (`target_otm_pct`, `min_dte`). Specific strikes / expirations / estimated prices are NOT chosen because US listed options don't trade pre-market and Schwab's `/chains` endpoint serves yesterday's 4:00 PM close.
+**Pre-bell (9:25 ET) does ticker selection only.** Claude reads sentiment + overnight news + live Schwab equity spot. Output: exactly **3 ranked candidates**, each `{symbol, contract_type, score, thesis, target_otm_pct, min_dte}`. Specific strikes / expirations / estimated prices are NOT chosen because US listed options don't trade pre-market and Schwab's `/chains` endpoint serves yesterday's 4:00 PM close.
 
-**At market open (9:30:00 ET) does contract selection.** The executor's `ResolveContractsForOpen` walks the live chain per pick and snaps each intent to a real contract via `PickContract` (nearest expiration meeting `min_dte`, closest strike to the OTM anchor, skip zero-ask contracts that haven't opened in the rotation yet). The five contract-specific columns (`strike_price`, `expiration`, `dte`, `estimated_price`, `stop_loss`) are persisted then. Only then does the basket selector see the picks.
+**At market open (9:30:00 ET) the agent picks contracts and fires orders.** Same model, re-invoked via `internal/execagent` with a locked-down tool surface: live Schwab quotes, live option chain restricted to the candidate symbols, account funds, web search, and `place_options_order` (the only side-effectful tool — submits one BUY_TO_OPEN LIMIT per call). For each candidate the agent reads the now-live chain, picks the strike + expiration + limit price, and either calls `place_options_order` (which writes the execution row + stamps the contract spec on the trade row + submits the order in one atomic step) or declines with a written reason. Skipped candidates land in `executions` with `status='skipped'` and the reason in `error_message`.
 
-**Don't try to "improve" the picker by giving it the chain.** It was that way before and produced wrong orders on overnight-gap names (INTU 2026-05-21: $1.48 stale LIMIT vs $13+ true post-open ask, +$1,180 floor missed). The split exists because pre-bell chain data is fossilized; the prompt now explicitly tells Claude this.
+Hard caps live at the tool layer in `internal/execagent/tools.go`, enforced even if the system prompt is bypassed:
+
+- `MaxOrdersPerRun = 3` — mirrors candidate basket size
+- `MaxToolPremiumPerShare = $10.00` — per-share LIMIT cap, $1,000 exposure per contract, $3,000 daily blast radius worst case
+- One order per rank (no duplicate fires)
+- Symbol allowlist (only the 3 morning candidates can be ordered)
+- `exec.MaxContractPremium = $10.00` re-validates at the broker entry point so a buggy tool-layer change can't widen the limit
+
+**Don't try to "improve" the picker by giving it the chain pre-bell.** It was that way before and produced wrong orders on overnight-gap names (INTU 2026-05-21: $1.48 stale LIMIT vs $13+ true post-open ask, +$1,180 floor missed). The split exists because pre-bell chain data is fossilized; the picker prompt now explicitly tells Claude this.
+
+The 9:30 agent run is fire-and-forget. The per-minute reconcile cron flips fills through the morning, the 9:35 cron cancels any still-WORKING LIMITs and sends ONE consolidated execution-summary email covering every candidate (buys with fill prices, skips with reasons).
 
 ## Model version refresh policy
 
@@ -144,9 +154,11 @@ docker compose up -d --force-recreate trading-server  # Full recreate (env reloa
 | Cron registration (9:25, 9:30:00, 9:35, 15:55, 16:00, 16:30 Fri) | `server/cmd/scanner/main.go` |
 | Market open / holiday / half-day gating | `server/internal/calendar/calendar.go` |
 | Signal scraping (4 sources) | `server/internal/sentiment/scraper.go` |
-| Picker agent loop + Anthropic SDK wiring | `server/internal/trades/picker.go` |
+| 9:25 picker tool loop + Anthropic SDK wiring | `server/internal/trades/picker.go` |
 | Picker prompts (AnalysisPrompt, EndOfDayPrompt) | `server/internal/trades/prompt.go` |
-| At-open contract resolver (`ResolveContractsForOpen`, `PickContract`) | `server/internal/exec/resolver.go` |
-| Auto-execution selector + gates | `server/internal/exec/selector.go` |
-| Order placement + reconcile + cancel-dangling + close-all + summary emails | `server/internal/exec/service.go` |
-| Email templates (morning, open-summary, close-summary, EOD, weekly, error) | `server/internal/templates/` |
+| 9:30 at-open agent (conversation loop, final-JSON reconciliation) | `server/internal/execagent/agent.go` |
+| Agent tool schemas + validation + hard caps | `server/internal/execagent/tools.go` |
+| Agent system prompt | `server/internal/execagent/prompt.go` |
+| Broker entry points (`PlaceBuyToOpenAgent`, `InsertSkippedExecutionAgent`, `AvailableFundsAgent`) + reconcile + cancel-dangling + close-all + summary emails | `server/internal/exec/service.go` |
+| Email templates (morning, basket summary, close summary, EOD, weekly, error) | `server/internal/templates/` |
+| Rollout v8 announcement (agent execution) | `server/internal/rollouts/v8_agent_executes.go` + `server/internal/templates/rollout_agent_executes.html` |

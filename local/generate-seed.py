@@ -8,12 +8,11 @@ day with three live holdings so the dashboard exercises the green/red
 unrealized-P&L coloring on first boot.
 
 Equity-walk semantics (mirrors src/internal/exec/selector.go on prod):
-  - 10 ranked picks per trading day (rank 1..10).
-  - Auto-executor walks ranks 1, 2, 3 in order and buys each whose
-    estimated_price * 100 fits in the remaining $1000 daily basket
-    budget. Anything that doesn't fit is skipped.
+  - 3 ranked picks per trading day (rank 1..3).
+  - Auto-executor fires one contract per rank, gated only by a
+    $10/share per-contract premium cap. No greedy fill, no daily
+    basket budget.
   - Open fill at 9:30 ET, close fill at 3:55 ET (intraday only).
-  - Per-contract premium capped at $5/share (max $500/contract).
 
 Realism knobs:
   - Win rate ≈ 52% (slight edge after costs).
@@ -200,15 +199,15 @@ THESES = [
 
 RATIONALES = [
     "Highest conviction pick of the day. Sentiment leans hard into this name and the chain shows favorable bid/ask spreads.",
-    "Strong setup but the catalyst window is tight. Sized smaller because the move could happen pre-market.",
+    "Strong setup with a tight catalyst window. Sized at one contract; the move could happen fast at the open.",
     "Multiple confirming signals: trending score up, technicals clean, IV reasonable for the expected move.",
-    "Decent risk/reward but not top-tier. Including because the broader sector tailwind supports the thesis.",
+    "Solid second-tier idea. Sector tailwind supports the thesis and the entry premium leaves room for the exit.",
     "Speculative tail-risk play. Cheap premium and asymmetric upside; comfortable losing the entire premium.",
     "Mean-reversion candidate. Stock oversold on RSI; option premium prices in more downside than I expect.",
     "Earnings volatility play. Expected move priced in is smaller than historical move on similar setups.",
     "Sentiment-driven momentum. StockTwits is loud and the contract benefits from short-dated gamma.",
     "Hedge against broader exposure. Negative beta to SPY makes this a portfolio protection layer.",
-    "Lowest-ranked pick. Including for diversification but conviction is the weakest of the day.",
+    "Rounds out the three-pick basket as a directional play with a clean technical setup and contained downside.",
 ]
 
 
@@ -249,18 +248,14 @@ def gen_pick(rank: int, day: dt.date) -> dict:
     dte = RNG.choices([1, 2, 3, 4, 5, 6, 7], weights=[1, 3, 4, 4, 2, 1, 1])[0]
     expiration = (day + dt.timedelta(days=dte)).isoformat()
 
-    # Estimated premium $0.30 - $4.50 — must be ≤ $5/share to be eligible
-    # for auto-execution per server-side per-contract cap.
+    # Estimated premium $0.30 - $4.50 — well under the $10/share
+    # per-contract cap so every pick is execution-eligible.
     estimated_price = round(RNG.uniform(0.3, 4.5), 2)
-    # Special case: today's top-3 picks get cheaper premiums so the
-    # equity-walk basket reliably picks all three. Keeps the dashboard
-    # demo showing 3 holding cards with the new green/red coloring on
-    # first boot. Past days stay random.
-    if day == dt.date(2026, 5, 15) and rank <= 3:
-        estimated_price = round(RNG.uniform(0.7, 1.5), 2)
 
-    # Score 4-9, anti-correlated with rank.
-    score = max(2, min(9, int(round(9 - (rank - 1) * 0.6 + RNG.gauss(0, 0.6)))))
+    # Score 5-9, anti-correlated with rank. The top-3 universe shouldn't
+    # have anything weaker than ~5/10 conviction since the picker only
+    # returns its best ideas.
+    score = max(5, min(9, int(round(9 - (rank - 1) * 1.2 + RNG.gauss(0, 0.5)))))
     sentiment = round(RNG.uniform(-0.3, 0.85) * (1 if contract_type == "CALL" else -1), 2)
     mentions = RNG.randint(8, 220)
 
@@ -335,29 +330,37 @@ def main() -> None:
     summary_inserts: List[str] = []
     execution_inserts: List[str] = []
 
-    daily_basket_cap_usd = 1000.0
-    per_contract_cap_usd = 5.0
+    per_contract_cap_usd = 10.0
+    picks_per_day = 3
 
     for day in days:
         is_today = day == today
         date_str = day.isoformat()
 
-        picks = [gen_pick(rank=i + 1, day=day) for i in range(10)]
+        # Mirror the picker prompt's "every pick must be a different
+        # ticker" rule. Regenerate any pick whose symbol already shows
+        # up in today's basket; cap at 50 retries so a (hypothetically)
+        # exhausted symbol universe doesn't loop forever.
+        picks: List[dict] = []
+        seen_symbols: set[str] = set()
+        for rank in range(1, picks_per_day + 1):
+            p = gen_pick(rank=rank, day=day)
+            for _ in range(50):
+                if p["symbol"] not in seen_symbols:
+                    break
+                p = gen_pick(rank=rank, day=day)
+            picks.append(p)
+            seen_symbols.add(p["symbol"])
 
-        # Auto-executor walk: ranks 1..3 fitting in remaining $500 budget.
-        remaining_budget = daily_basket_cap_usd
+        # Auto-executor: every pick whose premium fits the per-contract cap
+        # fires. No greedy fill, no basket budget.
         executed_ranks: List[int] = []
         for p in picks:
-            if p["rank"] > 3:
-                break
             if p["estimated_price"] > per_contract_cap_usd:
                 continue
-            premium_total = p["estimated_price"] * 100
-            if premium_total <= remaining_budget:
-                executed_ranks.append(p["rank"])
-                remaining_budget -= premium_total
+            executed_ranks.append(p["rank"])
 
-        # Insert all 10 trade rows.
+        # Insert all 3 trade rows.
         day_trade_ids = []
         for p in picks:
             trade_id_counter += 1

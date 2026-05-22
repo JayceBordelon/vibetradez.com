@@ -20,7 +20,7 @@ Lifecycle:
   - EventSource has built-in auto-reconnect for transient drops; the
     custom error handler caps that loop only on hard 5xx responses
     (specifically the 503 the server returns when the hub isn't
-    running — e.g. during the 16:00 ET stop tick).
+    running, e.g. during the 16:00 ET stop tick).
 
 Returns null until the first snapshot lands; consumers should treat
 that as "no data yet" and not blank existing UI (matches the prior
@@ -45,7 +45,9 @@ export function useQuoteStream(enabled: boolean): LiveQuotesResponse | null {
       // Clean up any prior source before opening a new one (defends
       // against reopens triggered by rapid visibility flicker).
       sourceRef.current?.close();
-      const src = new EventSource("/api/quotes/stream", { withCredentials: true });
+      const src = new EventSource("/api/quotes/stream", {
+        withCredentials: true,
+      });
       sourceRef.current = src;
 
       src.addEventListener("snapshot", (e) => {
@@ -53,7 +55,7 @@ export function useQuoteStream(enabled: boolean): LiveQuotesResponse | null {
           const data = JSON.parse((e as MessageEvent).data) as LiveQuotesResponse;
           setSnapshot(data);
         } catch {
-          // Malformed snapshot — log and ignore. Next tick replaces.
+          // Malformed snapshot, log and ignore. Next tick replaces.
         }
       });
 
@@ -62,7 +64,7 @@ export function useQuoteStream(enabled: boolean): LiveQuotesResponse | null {
           const update = JSON.parse((e as MessageEvent).data) as QuoteUpdate;
           setSnapshot((prev) => mergeUpdate(prev, update));
         } catch {
-          // Malformed tick — ignore. Next tick supersedes.
+          // Malformed tick, ignore. Next tick supersedes.
         }
       });
 
@@ -72,7 +74,7 @@ export function useQuoteStream(enabled: boolean): LiveQuotesResponse | null {
         /*
         EventSource auto-reconnects for transient drops. For a hard
         503 (hub closed), the browser will keep retrying every few
-        seconds — that's fine, the closed-page is the real UI and
+        seconds, that's fine, the closed-page is the real UI and
         the dashboard re-polls /api/market/status on focus to flip
         back to live mode when the hub restarts.
         */

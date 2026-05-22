@@ -75,7 +75,7 @@ func TestOCCSymbol_Errors(t *testing.T) {
 }
 
 func TestBuildOpenOrderForTrade_LimitShape(t *testing.T) {
-	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: 150, Expiration: "2024-01-19"}
+	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: trades.PtrFloat(150), Expiration: trades.PtrString("2024-01-19")}
 	o, err := BuildOpenOrderForTrade(tr, "AAPL  240119C00150000", 1.50, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -102,7 +102,7 @@ func TestBuildOpenOrderForTrade_LimitShape(t *testing.T) {
 }
 
 func TestBuildOpenOrderForTrade_PassesQuantityThrough(t *testing.T) {
-	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: 150, Expiration: "2024-01-19"}
+	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: trades.PtrFloat(150), Expiration: trades.PtrString("2024-01-19")}
 	o, err := BuildOpenOrderForTrade(tr, "AAPL  240119C00150000", 1.50, 7)
 	if err != nil {
 		t.Fatal(err)
@@ -125,7 +125,7 @@ func TestBuildOpenOrderForTrade_RejectsMissingOCC(t *testing.T) {
 }
 
 func TestBuildOpenOrderForTrade_RejectsNonPositiveLimit(t *testing.T) {
-	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: 150, Expiration: "2024-01-19"}
+	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: trades.PtrFloat(150), Expiration: trades.PtrString("2024-01-19")}
 	for _, p := range []float64{0, -0.5} {
 		if _, err := BuildOpenOrderForTrade(tr, "AAPL  240119C00150000", p, 1); err == nil {
 			t.Fatalf("expected error for limit %.2f", p)
@@ -134,35 +134,11 @@ func TestBuildOpenOrderForTrade_RejectsNonPositiveLimit(t *testing.T) {
 }
 
 func TestBuildOpenOrderForTrade_RejectsNonPositiveQuantity(t *testing.T) {
-	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: 150, Expiration: "2024-01-19"}
+	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: trades.PtrFloat(150), Expiration: trades.PtrString("2024-01-19")}
 	for _, q := range []int{0, -1} {
 		if _, err := BuildOpenOrderForTrade(tr, "AAPL  240119C00150000", 1.50, q); err == nil {
 			t.Fatalf("expected error for quantity %d", q)
 		}
-	}
-}
-
-func TestComputeOpenLimitPrice(t *testing.T) {
-	cases := []struct {
-		name     string
-		ask, est float64
-		want     float64
-	}{
-		{"ask used, rounded to cent", 1.20, 0, 1.32}, // 1.20*1.10 = 1.32
-		{"ask zero falls back to estimate", 0, 0.80, 0.88},
-		{"both zero returns zero", 0, 0, 0},
-		{"both negative returns zero", -1, -1, 0},
-		{"clamped to MaxContractPremium", 12.00, 0, MaxContractPremium}, // 12.00 * 1.10 = 13.20 > 10.00 cap
-		{"ask preferred over estimate", 2.00, 99.00, 2.20},
-		{"rounds up at half-cent", 1.234, 0, 1.36}, // 1.234*1.10 = 1.3574 → 1.36
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := ComputeOpenLimitPrice(tc.ask, tc.est)
-			if got != tc.want {
-				t.Errorf("got %.4f want %.4f", got, tc.want)
-			}
-		})
 	}
 }
 

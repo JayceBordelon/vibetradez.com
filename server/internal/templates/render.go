@@ -9,27 +9,33 @@ import (
 	"time"
 )
 
-//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_close_receipt.html execute_close_failed.html execute_open_failed.html execute_basket_summary.html rollout_execution_rewrite.html schwab_reauth.html
+//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_open_failed.html execute_basket_summary.html execute_close_summary.html rollout_agent_executes.html schwab_reauth.html
 var templateFS embed.FS
 
 type Trade struct {
 	Symbol         string
 	ContractType   string
-	StrikePrice    float64
-	Expiration     string
-	DTE            int
-	EstimatedPrice float64
+	StrikePrice    float64 // zero until contract resolved at open
+	Expiration     string  // empty until contract resolved at open
+	DTE            int     // zero until contract resolved at open
+	EstimatedPrice float64 // zero until contract resolved at open
 	Thesis         string
 	SentimentScore float64
 	CurrentPrice   float64
 	TargetPrice    float64
-	StopLoss       float64
+	StopLoss       float64 // zero until contract resolved at open
 	RiskLevel      string
 	Catalyst       string
 	MentionCount   int
 	Rank           int
 	Score          int
 	Rationale      string
+	// Contract intent. Rendered in place of strike/expiration in the
+	// morning email when ContractResolved is false: e.g. "~1.5% OTM,
+	// expiring 3+ DTE".
+	TargetOTMPct     float64
+	MinDTE           int
+	ContractResolved bool
 }
 
 /*
@@ -289,32 +295,6 @@ type ExecuteReceiptData struct {
 	SchwabPositionsURL string
 }
 
-type ExecuteCloseReceiptData struct {
-	Subject            string
-	Date               string
-	Mode               string
-	Symbol             string
-	ContractType       string
-	StrikePrice        float64
-	Expiration         string
-	OpenPrice          float64
-	ClosePrice         float64
-	RealizedPnL        float64
-	SchwabPositionsURL string
-}
-
-type ExecuteCloseFailedData struct {
-	Subject            string
-	Date               string
-	Symbol             string
-	ContractType       string
-	StrikePrice        float64
-	Expiration         string
-	OCCSymbol          string
-	ErrorMessage       string
-	SchwabPositionsURL string
-}
-
 /*
 ExecuteOpenFailedData drives the operator-only alert sent when the
 morning open order errors at submission, errors on status lookup, or
@@ -337,12 +317,6 @@ type ExecuteOpenFailedData struct {
 
 func RenderExecuteReceipt(d ExecuteReceiptData) (string, error) {
 	return renderOne("execute_receipt.html", d)
-}
-func RenderExecuteCloseReceipt(d ExecuteCloseReceiptData) (string, error) {
-	return renderOne("execute_close_receipt.html", d)
-}
-func RenderExecuteCloseFailed(d ExecuteCloseFailedData) (string, error) {
-	return renderOne("execute_close_failed.html", d)
 }
 func RenderExecuteOpenFailed(d ExecuteOpenFailedData) (string, error) {
 	return renderOne("execute_open_failed.html", d)
@@ -381,16 +355,53 @@ func RenderBasketSummary(d BasketSummaryData) (string, error) {
 }
 
 /*
-RenderRolloutExecutionRewrite renders the v6 rollout email announcing
-the selector + executor rewrite: top 3 picks always fire (no $500 cap
-holding back high-conviction picks), then a greedy fill from picks
-1-10 to a $1,000 daily exposure target, with the per-contract premium
-ceiling raised from $5 to $10. Static content, no parameters beyond
-the Subject string.
+CloseSummaryRow + CloseSummaryData feed the single consolidated 3:55
+ET close-side email sent by exec.Service.SendCloseSummary. One row per
+close-side execution attempted that day, with per-position realized
+P&L sourced from broker truth (open fill price stitched in via the
+store's CloseSummaryForDate query). Replaces the previous per-trade
+ExecuteCloseReceiptData / ExecuteCloseFailedData emails.
 */
-func RenderRolloutExecutionRewrite() (string, error) {
-	return renderOne("rollout_execution_rewrite.html", map[string]string{
-		"Subject": "Selector rewrite: top 3 always fire, basket fills to $1k",
+type CloseSummaryRow struct {
+	Rank         int
+	Symbol       string
+	ContractType string
+	StrikePrice  float64
+	Mode         string
+	Status       string
+	OpenPrice    float64
+	ClosePrice   float64
+	RealizedPnL  float64
+	Quantity     int
+	ErrorMessage string
+}
+
+type CloseSummaryData struct {
+	Date               string
+	Mode               string
+	Rows               []CloseSummaryRow
+	Filled             int
+	Failed             int
+	Total              int
+	TotalRealizedPnL   float64
+	SchwabPositionsURL string
+}
+
+func RenderCloseSummary(d CloseSummaryData) (string, error) {
+	return renderOne("execute_close_summary.html", d)
+}
+
+/*
+RenderRolloutAgentExecutes renders the v8 rollout email announcing the
+agent-driven execution model: Claude is re-invoked at 9:30:00 ET with
+live chain tools + a place_options_order tool, picks the actual
+contracts to trade for the 3 morning candidates, and may skip any
+candidate with a written reason that lands in the dashboard and the
+operator summary email. Static content, no parameters beyond Subject.
+*/
+func RenderRolloutAgentExecutes() (string, error) {
+	return renderOne("rollout_agent_executes.html", map[string]string{
+		"Subject": "Claudia now picks the contracts at the open, too",
 	})
 }
 

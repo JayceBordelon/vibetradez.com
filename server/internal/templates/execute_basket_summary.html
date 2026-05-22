@@ -37,23 +37,23 @@ Execution summary — {{ .Date }} ({{ .Mode }})
 <td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#0f172a;">
 ${{ .Symbol }} {{ .ContractType }} {{ printf "%.2f" .StrikePrice }}
 </td>
-<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;color:{{ if eq .Status "filled" }}#16a34a{{ else if eq .Status "canceled" }}#ea580c{{ else if eq .Status "failed" }}#dc2626{{ else if eq .Status "rejected" }}#dc2626{{ else }}#64748b{{ end }};font-weight:600;text-transform:uppercase;font-size:11px;">
+<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;color:{{ if eq .Status "filled" }}#16a34a{{ else if eq .Status "canceled" }}#ea580c{{ else if eq .Status "failed" }}#dc2626{{ else if eq .Status "rejected" }}#dc2626{{ else if eq .Status "skipped" }}#64748b{{ else }}#64748b{{ end }};font-weight:600;text-transform:uppercase;font-size:11px;">
 {{ .Status }}
 </td>
 <td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#475569;">{{ .Quantity }}</td>
 <td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;text-align:right;font-family:ui-monospace,Menlo,monospace;color:#0f172a;">
-{{ if gt .FillPrice 0.0 }}${{ printf "%.2f" .FillPrice }}{{ else }}—{{ end }}
+{{ if gt .FillPrice 0.0 }}${{ printf "%.2f" .FillPrice }}{{ else }}&mdash;{{ end }}
 </td>
 </tr>
 {{ if .ErrorMessage }}
-<tr><td colspan="5" style="padding:0 6px 8px 6px;color:#dc2626;font-size:11px;font-style:italic;">
-  &nbsp;&nbsp;&nbsp;{{ .ErrorMessage }}
+<tr><td colspan="5" style="padding:0 6px 8px 6px;color:{{ if eq .Status "skipped" }}#475569{{ else }}#dc2626{{ end }};font-size:11px;font-style:italic;">
+  &nbsp;&nbsp;&nbsp;{{ if eq .Status "skipped" }}Skipped at open:{{ end }} {{ .ErrorMessage }}
 </td></tr>
 {{ end }}
 {{ end }}
 {{ if not .Rows }}
 <tr><td colspan="5" style="padding:24px 6px;color:#64748b;font-size:13px;text-align:center;font-style:italic;">
-No open-side executions for this date — the executor either fired zero qualifying picks or failed to run. Check container logs for the 9:30 ET executor cron.
+No open-side executions for this date. The agent either ran cleanly with zero buys, or failed before logging any decisions. Check container logs for the 9:30 ET cron.
 </td></tr>
 {{ end }}
 </tbody>
@@ -61,7 +61,7 @@ No open-side executions for this date — the executor either fired zero qualify
 </td></tr>
 
 <tr><td style="padding:0 28px 24px 28px;color:#94a3b8;font-size:11px;line-height:1.5;border-top:1px solid #e2e8f0;padding-top:16px;">
-Auto-execution pipeline — picker fires at 9:25 ET, basket fires at 9:30:00 ET with LIMIT × 1.10 over fresh live ask, dangling LIMITs cancel at 9:35 ET. Per-execution receipt emails were replaced by this single consolidated summary.
+Auto-execution pipeline: picker fires at 9:25 ET, the at-open Claude agent runs at 9:30:00 ET and chooses which candidates to buy plus the specific strike, expiration, and limit for each, dangling LIMITs cancel at 9:35 ET. Skipped rows reflect candidates the at-open agent deliberately chose not to trade and carry the agent&rsquo;s written reason.
 </td></tr>
 
 </table>

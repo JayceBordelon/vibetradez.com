@@ -4,7 +4,6 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { DashboardSkeleton } from "@/components/layout/dashboard-skeleton";
-import { PageToolbar } from "@/components/layout/page-toolbar";
 import { Section } from "@/components/layout/section";
 import { useMarketStatus } from "@/hooks/use-market-status";
 import { useQuoteStream } from "@/hooks/use-quote-stream";
@@ -19,25 +18,9 @@ import { MorningLayout } from "./morning-layout";
 import { NoTradesToday } from "./no-trades-today";
 import { PnlChart } from "./pnl-chart";
 import { StatsGrid } from "./stats-grid";
-import { TopNFilter } from "./top-n-filter";
 import { TradeTable } from "./trade-table";
 
-const STORAGE_KEY = "jt_dash_v3";
 const REFRESH_SECONDS = 60;
-
-function filterByRank(data: DashboardResponse, topFilter: number): DashboardResponse {
-  /**
-  Server should always return an empty array, but be defensive in
-  case any deployment regresses to nil-slice → JSON null. Mirrors
-  the same defensive coalescing the history page already does.
-  */
-  const trades = data.trades ?? [];
-  if (topFilter >= 10) return { ...data, trades };
-  return {
-    ...data,
-    trades: trades.filter((t) => t.trade.rank >= 1 && t.trade.rank <= topFilter),
-  };
-}
 
 function computeStats(trades: DashboardTrade[], executions: Execution[] | null | undefined) {
   let winners = 0;
@@ -75,30 +58,11 @@ function computeStats(trades: DashboardTrade[], executions: Execution[] | null |
 }
 
 export function DashboardShell() {
-  const [topFilter, setTopFilter] = useState(10);
   const [rawData, setRawData] = useState<DashboardResponse | null>(null);
   const marketStatus = useMarketStatus();
 
-  // Restore Top-N from localStorage
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const saved = JSON.parse(raw);
-        if (saved.topFilter && [1, 3, 5, 10].includes(saved.topFilter)) setTopFilter(saved.topFilter);
-      }
-    } catch {}
-  }, []);
-
-  // Persist Top-N
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ topFilter }));
-    } catch {}
-  }, [topFilter]);
-
   /*
-  Dashboard is today-only — historical day-by-day analysis lives on
+  Dashboard is today-only, historical day-by-day analysis lives on
   /history. Always fetch the current trading day; auto-refresh keeps
   the morning-mode picks fresh and flips to EOD-mode automatically
   once summaries land.
@@ -117,7 +81,7 @@ export function DashboardShell() {
   }, []);
 
   // Auto-refresh: pauses when the tab is hidden, immediate refresh on return.
-  // Disabled when the market is closed — the page is just the closed-page
+  // Disabled when the market is closed, the page is just the closed-page
   // CTA, no point polling.
   useVisiblePoll(loadDay, REFRESH_SECONDS * 1000, marketStatus?.open !== false);
 
@@ -134,16 +98,13 @@ export function DashboardShell() {
   const liveQuotes = useQuoteStream(liveEnabled);
 
   /*
-  hasSummaries is computed off the unfiltered raw data so it stays
-  stable regardless of TopN selection. On live (morning) days the
-  Top-N filter is hidden because the only meaningful view is
-  "today's 10 picks" — anything else is noise before EOD lands.
+  Server should always return an empty array, but be defensive in
+  case any deployment regresses to nil-slice → JSON null. Mirrors
+  the same defensive coalescing the history page already does.
   */
-  const hasSummaries = !!rawData?.trades?.some((t) => t.summary);
-  const effectiveTopFilter = hasSummaries ? topFilter : 10;
-  const filtered = rawData ? filterByRank(rawData, effectiveTopFilter) : null;
+  const trades = rawData?.trades ?? [];
   const executions = rawData?.executions ?? null;
-  const stats = filtered?.trades ? computeStats(filtered.trades, executions) : null;
+  const stats = trades.length ? computeStats(trades, executions) : null;
 
   /*
   Market closed → render the closed-page full-bleed. No SSE stream,
@@ -165,50 +126,38 @@ export function DashboardShell() {
 
   return (
     <div className="animate-in fade-in duration-300">
-      {hasSummaries && filtered?.trades?.length ? (
-        <div className="hidden sm:block">
-          <PageToolbar rightSlot={<TopNFilter value={topFilter} onChange={setTopFilter} />} />
-        </div>
-      ) : null}
-
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-7">
-        {hasSummaries && filtered?.trades?.length ? (
-          <div className="mb-4 flex items-center justify-end gap-2 sm:hidden">
-            <TopNFilter value={topFilter} onChange={setTopFilter} />
-          </div>
-        ) : null}
         {!rawData || !marketStatus ? (
           <DashboardSkeleton />
-        ) : !filtered?.trades?.length ? (
+        ) : !trades.length ? (
           <NoTradesToday />
         ) : stats?.hasSummaries ? (
           <>
             <StatsGrid totalPnl={stats.totalPnl} winRate={stats.winRate} profitFactor={stats.profitFactor} bestPnl={stats.bestPnl} bestSym={stats.bestSym} />
             <Section title="P&L by Trade" subtitle="Per-contract performance, sorted" className="mt-10 border-t border-border/40 pt-8">
-              <PnlChart trades={filtered.trades} executions={executions} />
+              <PnlChart trades={trades} executions={executions} />
             </Section>
             <Section title="Trade Details" subtitle="Click any row to view the single-contract page" className="mt-10 border-t border-border/40 pt-8">
-              <TradeTable trades={filtered.trades} executions={executions} date={filtered.date} liveQuotes={liveQuotes} />
+              <TradeTable trades={trades} executions={executions} date={rawData.date} liveQuotes={liveQuotes} />
             </Section>
             <Section title="Exposure" subtitle="How capital was deployed today. For long options, max loss is the premium paid." className="mt-10 border-t border-border/40 pt-8">
-              <ExposurePanel trades={filtered.trades} executions={executions} hasSummaries />
+              <ExposurePanel trades={trades} executions={executions} hasSummaries />
             </Section>
           </>
         ) : (
           <>
-            <Section title="Today's Picks" subtitle={`${filtered.trades.length} ranked plays · click any pick for the full single-contract view`}>
-              <MorningLayout trades={filtered.trades} liveQuotes={liveQuotes} date={filtered.date} executions={executions} />
+            <Section title="Today's Picks" subtitle={`${trades.length} ranked play${trades.length === 1 ? "" : "s"} · click any pick for the full single-contract view`}>
+              <MorningLayout trades={trades} liveQuotes={liveQuotes} date={rawData.date} executions={executions} />
             </Section>
             <Section title="Exposure" subtitle="Capital at risk for today's picks. For long options, max loss is the premium paid." className="mt-10 border-t border-border/40 pt-8">
               {/*
               Pass executions (not null) to ExposurePanel on the morning
               branch too. exposure-panel.tsx multiplies premium by
-              executionQuantity(exec); null collapses every pick to qty=1,
-              so a greedy-fill morning that landed qty=3 on rank 1 showed
-              ~33% of the real Capital at Risk on the dashboard pre-EOD.
-              The EOD branch above already passes executions correctly.
+              executionQuantity(exec); null would collapse every pick to
+              qty=1 and under-report Capital at Risk on legacy historical
+              days where a rank fired qty > 1.
               */}
-              <ExposurePanel trades={filtered.trades} executions={executions} hasSummaries={false} />
+              <ExposurePanel trades={trades} executions={executions} hasSummaries={false} />
             </Section>
           </>
         )}

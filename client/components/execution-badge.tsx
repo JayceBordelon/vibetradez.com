@@ -15,7 +15,7 @@ State rules:
   - holding: shows entry + live unrealized P&L when mark known
   - closed: shows P&L with green/red color
   - failed: shows "open failed" with neutral styling
-  - canceled: 9:35 ET dangling-LIMIT cancel — pick never filled, no position
+  - canceled: 9:35 ET dangling-LIMIT cancel, pick never filled, no position
 */
 
 import { Minus } from "lucide-react";
@@ -31,7 +31,7 @@ interface ExecutionBadgeProps {
   Current option mark for the contract this execution is on. When
   provided AND the execution is in 'holding' state in live mode, the
   badge derives unrealized P&L = (liveMark - open_price) * 100 and
-  recolors itself green/red on that. Optional — surfaces without live
+  recolors itself green/red on that. Optional, surfaces without live
   data (history view) pass null/undefined and the badge falls back to
   the neutral mode-based styling.
   */
@@ -54,7 +54,12 @@ function ExecutionPill({ execution, liveMark, className }: { execution: Executio
   const holdingPnl = computeHoldingPnl(execution, liveMark);
 
   let modeColors: string;
-  if (holdingPnl !== null && holdingPnl > 0) {
+  if (state === "skipped") {
+    // Skipped picks aren't positions, they're decisions. Neutral
+    // slate so they don't shout for attention the way real fills or
+    // failures do.
+    modeColors = "border-border bg-muted/40 text-muted-foreground";
+  } else if (holdingPnl !== null && holdingPnl > 0) {
     modeColors = "border-green-border bg-green-bg text-green";
   } else if (holdingPnl !== null && holdingPnl < 0) {
     modeColors = "border-red-border bg-red-bg text-red";
@@ -70,7 +75,12 @@ function ExecutionPill({ execution, liveMark, className }: { execution: Executio
   const qtyPrefix = qty > 1 ? `${qty} ` : "";
 
   let label: React.ReactNode;
-  if (state === "failed") {
+  if (state === "skipped") {
+    // Skipped at the open by the agent. The reason text rides on
+    // the badge's title attribute so the full justification is one
+    // hover away without bloating the inline pill.
+    label = <>Skipped at open</>;
+  } else if (state === "failed") {
     label = <>{qty > 1 ? `Open failed (${qty} contracts)` : "Open failed"}</>;
   } else if (state === "canceled") {
     label = <>Open canceled (stale quote)</>;
@@ -111,14 +121,14 @@ function ExecutionPill({ execution, liveMark, className }: { execution: Executio
     );
   }
 
+  const title =
+    state === "skipped" ? execution.note || "Skipped at open by the at-open agent (no reason provided)" : isLive ? "Real position taken via Schwab" : "Paper-trade, no real money committed";
+
   return (
-    <span
-      className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium", modeColors, className)}
-      title={isLive ? "Real position taken via Schwab" : "Paper-trade: no real money committed"}
-    >
+    <span className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium", modeColors, className)} title={title}>
       <span className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
       <span>{label}</span>
-      <span className="ml-0.5 text-[10px] font-bold uppercase tracking-wider opacity-80">{mode}</span>
+      {state !== "skipped" && <span className="ml-0.5 text-[10px] font-bold uppercase tracking-wider opacity-80">{mode}</span>}
     </span>
   );
 }
@@ -126,6 +136,18 @@ function ExecutionPill({ execution, liveMark, className }: { execution: Executio
 function ExecutionPanel({ execution, liveMark, className }: { execution: Execution; liveMark?: number | null; className?: string }) {
   const { mode, state, open_price, close_price, realized_pnl, executed_at, closed_at } = execution;
   const isLive = mode === "live";
+
+  // Skipped picks get their own minimal panel since none of the
+  // Entry / Close / P&L columns mean anything for a position that
+  // was never taken. The reason text is the entire payload.
+  if (state === "skipped") {
+    return (
+      <div className={cn("rounded-lg border border-border bg-muted/30", className)}>
+        <div className="border-b border-border px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Skipped at open by the at-open agent</div>
+        <div className="px-4 py-3 text-sm leading-relaxed text-foreground/85">{execution.note?.trim() ? execution.note : "No reason provided."}</div>
+      </div>
+    );
+  }
 
   const holdingPnl = computeHoldingPnl(execution, liveMark);
 
@@ -143,7 +165,7 @@ function ExecutionPanel({ execution, liveMark, className }: { execution: Executi
   // close_failed surfaces loudly in the header: the auto-close cron
   // exhausted its retry window and the position is still open at the
   // broker. Without this branch the panel reads "Position taken" with
-  // no warning — operator wouldn't know to check Schwab.
+  // no warning, operator wouldn't know to check Schwab.
   let headerLabel: string;
   switch (state) {
     case "submitted":
@@ -254,7 +276,14 @@ function Stat({ label, value, sub, valueClassName }: { label: string; value: Rea
 function formatTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/New_York" }) + " ET";
+  return (
+    d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "America/New_York",
+    }) + " ET"
+  );
 }
 
 /**
@@ -262,19 +291,23 @@ matchesTrade returns true when the execution is for the given trade
 row (same symbol + contract_type + strike). Used by the dashboard /
 history surfaces to find which card or row to render the badge on.
 */
-export function matchesTrade(execution: Execution | null | undefined, trade: { symbol: string; contract_type: string; strike_price: number }): boolean {
+export function matchesTrade(execution: Execution | null | undefined, trade: { symbol: string; contract_type: string; strike_price: number | null }): boolean {
   if (!execution) return false;
+  if (trade.strike_price === null) return false;
   return execution.symbol === trade.symbol && execution.contract_type === trade.contract_type && Math.abs(execution.strike_price - trade.strike_price) < 0.005;
 }
 
 /**
 findExecutionForTrade scans a list of executions and returns the one
 matching the given trade by symbol + contract_type + strike. Returns
-null when no execution matches — caller should fall back to Claude's
-modeled summary numbers in that case.
+null when no execution matches, caller should fall back to the
+modeled summary numbers in that case. Returns null for pre-resolution
+picks (strike_price still nil) since the executor only creates rows
+after resolution.
 */
-export function findExecutionForTrade(executions: Execution[] | null | undefined, trade: { symbol: string; contract_type: string; strike_price: number }): Execution | null {
+export function findExecutionForTrade(executions: Execution[] | null | undefined, trade: { symbol: string; contract_type: string; strike_price: number | null }): Execution | null {
   if (!executions || executions.length === 0) return null;
+  if (trade.strike_price === null) return null;
   for (const e of executions) {
     if (matchesTrade(e, trade)) return e;
   }
@@ -285,10 +318,10 @@ export function findExecutionForTrade(executions: Execution[] | null | undefined
 findClosedExecutionForTrade returns the execution for the trade ONLY
 when it has a closed state with both fill prices populated. This is
 the gate for sourcing realized P&L from broker truth instead of from
-the modeled EOD summary — pre-bugfix close rows recorded fill_price=0,
+the modeled EOD summary, pre-bugfix close rows recorded fill_price=0,
 so a closed execution with close_price=0 must fall back to summary.
 */
-export function findClosedExecutionForTrade(executions: Execution[] | null | undefined, trade: { symbol: string; contract_type: string; strike_price: number }): Execution | null {
+export function findClosedExecutionForTrade(executions: Execution[] | null | undefined, trade: { symbol: string; contract_type: string; strike_price: number | null }): Execution | null {
   const e = findExecutionForTrade(executions, trade);
   if (!e) return null;
   if (e.state !== "closed") return null;
@@ -317,6 +350,7 @@ export function executionQuantity(execution: Execution | null | undefined): numb
 
 export function liveMarkForTrade(liveQuotes: LiveQuotesResponse | null | undefined, trade: Pick<Trade, "symbol" | "contract_type" | "strike_price" | "expiration">): number | null {
   if (!liveQuotes?.options) return null;
+  if (trade.strike_price === null || trade.expiration === null) return null;
   const key = `${trade.symbol}|${trade.contract_type}|${trade.strike_price.toFixed(2)}|${trade.expiration}`;
   const mark = liveQuotes.options[key]?.mark;
   if (mark == null || mark <= 0) return null;
@@ -329,7 +363,7 @@ contract) for a live execution currently in 'holding' state, given
 the contract's live mark. Returns null when:
   - the execution isn't a live holding (paper mode, or state ≠ holding)
   - no live mark is available (Schwab disconnected, contract delisted)
-  - the open fill price wasn't recorded (defensive — shouldn't happen)
+  - the open fill price wasn't recorded (defensive, shouldn't happen)
 Never returns 0 by accident: we explicitly distinguish "no mark known"
 (null → neutral styling) from "mark known and break-even" (0 →
 neutral styling but caller can still display "+$0.00").

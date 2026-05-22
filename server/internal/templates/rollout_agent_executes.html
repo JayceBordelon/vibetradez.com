@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>{{.Subject}}</title>
+  <style>
+    :root { color-scheme: light dark; }
+    @media (prefers-color-scheme: dark) {
+      .body-bg { background-color: #0f172a !important; }
+      .header-bg { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important; }
+      .content-bg { background-color: #1e293b !important; }
+      .footer-bg { background-color: #0f172a !important; border-color: #334155 !important; }
+      .text-primary { color: #ffffff !important; }
+      .text-secondary { color: #e2e8f0 !important; }
+      .label-muted { color: #cbd5e1 !important; }
+      .panel-bg { background-color: #0b1220 !important; border-color: #334155 !important; }
+      .divider-color { border-color: #334155 !important; }
+      .purple-panel-bg { background-color: #1e1133 !important; border-color: #a855f7 !important; }
+      .purple-text { color: #c4b5fd !important; }
+      .green-panel-bg { background-color: #052e1c !important; border-color: #16a34a !important; }
+      .green-text { color: #4ade80 !important; }
+      .amber-panel-bg { background-color: #2b1d05 !important; border-color: #d97706 !important; }
+      .amber-text { color: #fbbf24 !important; }
+      .red-panel-bg { background-color: #2b0d10 !important; border-color: #b91c1c !important; }
+      .red-text { color: #f87171 !important; }
+      .slate-panel-bg { background-color: #1e293b !important; border-color: #475569 !important; }
+      .arrow-color { color: #64748b !important; }
+    }
+  </style>
+</head>
+<body class="body-bg" style="margin:0;padding:0;background-color:#fafafa;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="body-bg" style="background-color:#fafafa;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;max-width:620px;">
+
+          <!-- Brand accent bar -->
+          <tr>
+            <td style="height:4px;background:linear-gradient(90deg,#10a37f,#D97757);border-radius:12px 12px 0 0;font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
+          <!-- Header -->
+          <tr>
+            <td class="header-bg" bgcolor="#0f172a" style="padding:24px 28px;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td>
+                    <span style="font-size:24px;font-weight:800;color:#10a37f;letter-spacing:-0.5px;">Vibe</span><span style="font-size:24px;font-weight:800;color:#D97757;letter-spacing:-0.5px;">Tradez</span>
+                  </td>
+                  <td align="right">
+                    <span style="color:#a5b4fc;font-size:12px;font-weight:700;background:rgba(165,180,252,0.18);padding:5px 11px;border-radius:6px;letter-spacing:0.4px;">Agent executes</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Headline -->
+          <tr>
+            <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:32px 28px 12px 28px;">
+              <h1 class="text-primary" style="margin:0 0 14px 0;font-size:28px;font-weight:800;color:#0f172a;letter-spacing:-0.5px;line-height:1.2;">
+                Claudia picks the tickers pre-bell. <span style="background:linear-gradient(90deg,#10a37f,#22c55e);-webkit-background-clip:text;background-clip:text;color:transparent;">She also picks the contracts at the open now.</span>
+              </h1>
+              <p class="text-secondary" style="margin:0 0 8px 0;font-size:15px;color:#475569;line-height:1.6;">
+                The old at-open resolver was a piece of deterministic Go code that walked the chain and snapped each picker intent to the nearest strike. It worked, but it was also a robot doing what is fundamentally a judgment call. This release retires that code path. The same model that picked the tickers at 9:25 wakes up again at 9:30:00 with live chain access, picks the specific strike and limit price for each candidate, and fires the orders directly via a dedicated tool. She can also decline a pick at the open with a written reason that lands in your dashboard and our daily summary email.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Section 1: What changed -->
+          <tr>
+            <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:28px 28px 8px 28px;">
+              <h2 class="text-primary" style="margin:0 0 12px 0;font-size:18px;font-weight:800;color:#0f172a;">What changed</h2>
+              <p class="text-secondary" style="margin:0 0 14px 0;font-size:14px;color:#475569;line-height:1.6;">
+                The 9:25 ET morning picker is unchanged: Claudia still returns 3 high-conviction candidate tickers with intent (CALL or PUT, how far OTM, minimum days to expiry). What's new is the 9:30:00 ET step. Instead of a deterministic algorithm snapping each intent to a contract, the model is re-invoked with the morning candidates plus a small set of carefully-scoped tools. She walks the now-live option chain, picks the specific strike, expiration, and limit price per candidate, and either submits the order or writes down why she's skipping it. Real picks fire as real LIMIT orders via Schwab. Skipped picks land in the dashboard with the explanation inline.
+              </p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="green-panel-bg panel-bg" bgcolor="#f0fdf4" style="background-color:#f0fdf4;border:1px solid #86efac;border-radius:10px;">
+                <tr>
+                  <td style="padding:14px 18px;">
+                    <p class="text-secondary green-text" style="margin:0 0 6px 0;font-size:13px;color:#166534;line-height:1.55;font-weight:700;">
+                      Why this is better
+                    </p>
+                    <p class="text-secondary green-text" style="margin:0;font-size:13px;color:#166534;line-height:1.55;">
+                      An overnight gap, a missed earnings release, an unusually wide bid-ask, or a chain where the intent anchor strike just doesn't have liquidity yet at the open are all judgment calls. A model that can read the chain and the news in 10 seconds is a better judge than a fixed nearest-strike rule. And when Claudia decides not to trade something, you get to see her reasoning instead of a silent "no fill".
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Section 2: The new flow diagram -->
+          <tr>
+            <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:28px 28px 8px 28px;">
+              <h2 class="text-primary" style="margin:0 0 6px 0;font-size:18px;font-weight:800;color:#0f172a;">The new daily flow</h2>
+              <p class="text-secondary label-muted" style="margin:0 0 18px 0;font-size:12px;color:#64748b;letter-spacing:0.3px;text-transform:uppercase;font-weight:700;">
+                Top to bottom, one trading day
+              </p>
+
+              <!-- Stage 1: 9:25 ticker selection -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="purple-panel-bg panel-bg" bgcolor="#f5f3ff" style="background-color:#f5f3ff;border:1px solid #c4b5fd;border-radius:10px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td>
+                          <span style="display:inline-block;background:#7c3aed;color:#ffffff;font-size:11px;font-weight:800;padding:3px 9px;border-radius:5px;letter-spacing:0.4px;">9:25 AM ET</span>
+                          <span class="text-primary purple-text" style="margin-left:8px;font-size:15px;font-weight:800;color:#5b21b6;">Stage 1, Picker chooses 3 tickers</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding-top:10px;">
+                          <p class="text-secondary" style="margin:0;font-size:13px;color:#475569;line-height:1.55;">
+                            Claudia reads sentiment from four sources (StockTwits, Yahoo, Finviz, EDGAR), scrapes overnight news, pulls live Schwab equity quotes, and returns 3 ranked picks. Each carries a symbol, direction (CALL vs PUT), conviction score, written thesis, and intent (how far out-of-the-money, minimum days to expiry).
+                          </p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding-top:10px;">
+                          <span class="text-secondary label-muted" style="font-size:10px;color:#64748b;letter-spacing:0.4px;text-transform:uppercase;font-weight:700;">Saves to DB</span>
+                          <span class="text-primary purple-text" style="margin-left:6px;font-size:12px;color:#5b21b6;font-weight:600;">symbol, direction, score, thesis, target_otm_pct, min_dte</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Connector -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td align="center" class="arrow-color" style="padding:6px 0;color:#94a3b8;font-size:20px;line-height:1;">&#9660;</td>
+                </tr>
+              </table>
+
+              <!-- Stage 2: 9:25 morning email -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="slate-panel-bg panel-bg" bgcolor="#f8fafc" style="background-color:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td>
+                          <span style="display:inline-block;background:#475569;color:#ffffff;font-size:11px;font-weight:800;padding:3px 9px;border-radius:5px;letter-spacing:0.4px;">9:25 AM ET</span>
+                          <span class="text-primary" style="margin-left:8px;font-size:15px;font-weight:800;color:#0f172a;">Stage 2, Morning email lands</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding-top:10px;">
+                          <p class="text-secondary" style="margin:0;font-size:13px;color:#475569;line-height:1.55;">
+                            You (this email format, every weekday morning) get the candidate list rendered as intent text: "~1.5% OTM call, 3+ DTE". Specific strikes and expirations are not yet quoted, because they will be chosen at 9:30:00 ET against real live prices, not against yesterday's frozen close.
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Connector -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td align="center" class="arrow-color" style="padding:6px 0;color:#94a3b8;font-size:20px;line-height:1;">&#9660;</td>
+                </tr>
+              </table>
+
+              <!-- Stage 3: 9:30:00 at-open agent (NEW) -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="amber-panel-bg panel-bg" bgcolor="#fffbeb" style="background-color:#fffbeb;border:1px solid #fcd34d;border-radius:10px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td>
+                          <span style="display:inline-block;background:#d97706;color:#ffffff;font-size:11px;font-weight:800;padding:3px 9px;border-radius:5px;letter-spacing:0.4px;">9:30:00 AM ET</span>
+                          <span class="text-primary amber-text" style="margin-left:8px;font-size:15px;font-weight:800;color:#92400e;">Stage 3, At-open agent decides &amp; executes (NEW)</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding-top:10px;">
+                          <p class="text-secondary" style="margin:0;font-size:13px;color:#475569;line-height:1.55;">
+                            Claudia wakes up again with the 3 morning candidates and a small, locked-down tool surface: live Schwab quotes, live option chain, account funds, and a <code style="background:#fef3c7;padding:1px 4px;border-radius:3px;font-size:12px;">place_options_order</code> tool that submits a real BUY_TO_OPEN LIMIT for exactly one contract. For each candidate she picks a strike and limit price from the live chain and either fires the order or declines with a written reason. Hard caps in code: max 3 orders per day, one per candidate, $10/share per-contract premium ceiling, symbol must match a morning candidate.
+                          </p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding-top:10px;">
+                          <span class="text-secondary label-muted" style="font-size:10px;color:#92400e;letter-spacing:0.4px;text-transform:uppercase;font-weight:700;">Dashboard shows</span>
+                          <span class="text-primary amber-text" style="margin-left:6px;font-size:12px;color:#92400e;font-weight:600;">live position for each buy, "Skipped at open: &lt;reason&gt;" for each skip</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Connector -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td align="center" class="arrow-color" style="padding:6px 0;color:#94a3b8;font-size:20px;line-height:1;">&#9660;</td>
+                </tr>
+              </table>
+
+              <!-- Stage 4: 9:35 cancel dangling + summary email -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="slate-panel-bg panel-bg" bgcolor="#f8fafc" style="background-color:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td>
+                          <span style="display:inline-block;background:#475569;color:#ffffff;font-size:11px;font-weight:800;padding:3px 9px;border-radius:5px;letter-spacing:0.4px;">9:35 AM ET</span>
+                          <span class="text-primary" style="margin-left:8px;font-size:15px;font-weight:800;color:#0f172a;">Stage 4, Cancel danglers, send summary</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding-top:10px;">
+                          <p class="text-secondary" style="margin:0;font-size:13px;color:#475569;line-height:1.55;">
+                            Any LIMIT still working 5 minutes after the open is stale by definition. We cancel it and move on. Then the operator inbox gets one consolidated execution summary covering every candidate for the day: filled buys with their fill prices, skipped picks with the reason, and any orders that failed at the broker.
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Connector -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td align="center" class="arrow-color" style="padding:6px 0;color:#94a3b8;font-size:20px;line-height:1;">&#9660;</td>
+                </tr>
+              </table>
+
+              <!-- Stage 5: 3:55 mandatory close + EOD email -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="red-panel-bg panel-bg" bgcolor="#fef2f2" style="background-color:#fef2f2;border:1px solid #fca5a5;border-radius:10px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td>
+                          <span style="display:inline-block;background:#b91c1c;color:#ffffff;font-size:11px;font-weight:800;padding:3px 9px;border-radius:5px;letter-spacing:0.4px;">3:55 PM ET</span>
+                          <span class="text-primary red-text" style="margin-left:8px;font-size:15px;font-weight:800;color:#991b1b;">Stage 5, Mandatory close + EOD email</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding-top:10px;">
+                          <p class="text-secondary" style="margin:0;font-size:13px;color:#475569;line-height:1.55;">
+                            Every open position closes unconditionally five minutes before the bell, with a retry-cancel-replace if the first SELL_TO_CLOSE doesn't fill. No overnight risk. The EOD email lands right after 4:00 ET with realized P&amp;L per contract and the day's totals.
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Section 3: The guardrails -->
+          <tr>
+            <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:28px 28px 8px 28px;">
+              <h2 class="text-primary" style="margin:0 0 12px 0;font-size:18px;font-weight:800;color:#0f172a;">What can the agent NOT do</h2>
+              <p class="text-secondary" style="margin:0 0 14px 0;font-size:14px;color:#475569;line-height:1.6;">
+                The execution surface is small on purpose. The agent does not have a generic "buy anything" tool. The only writing tool is <code style="background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:12px;">place_options_order</code>, and every call is validated in code before it reaches Schwab:
+              </p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="slate-panel-bg panel-bg" bgcolor="#f8fafc" style="background-color:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <ul class="text-secondary" style="margin:0;padding-left:20px;font-size:13px;color:#475569;line-height:1.7;">
+                      <li>Symbol must match one of the 3 morning candidates. Anything else is refused with a clear error.</li>
+                      <li>One order per candidate rank. The second call for the same rank is refused.</li>
+                      <li>Maximum 3 orders per agent run. Hard cap, enforced even if the rank check is somehow bypassed.</li>
+                      <li>Limit price must be in (0, $10/share]. A $1,000 ceiling on capital exposure per single contract.</li>
+                      <li>Expiration must be a valid future date (YYYY-MM-DD) that exists on the live chain.</li>
+                    </ul>
+                  </td>
+                </tr>
+              </table>
+              <p class="text-secondary" style="margin:14px 0 0 0;font-size:13px;color:#475569;line-height:1.6;font-style:italic;">
+                Worst-case blast radius from a runaway model output is three contracts at $1,000 each, total $3,000. The 9:35 cancel cron handles anything that didn't fill, the 3:55 close cron handles anything that did.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Section 4: What you'll see -->
+          <tr>
+            <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:28px 28px 24px 28px;">
+              <h2 class="text-primary" style="margin:0 0 12px 0;font-size:18px;font-weight:800;color:#0f172a;">What you'll see on the dashboard</h2>
+              <p class="text-secondary" style="margin:0 0 12px 0;font-size:14px;color:#475569;line-height:1.6;">
+                Bought candidates render the same live position card as before, with the broker fill price, live mark, and unrealized P&amp;L. Skipped candidates render a neutral "Skipped at open" pill on the card, and the trade detail page shows Claudia's full written reasoning. Bought picks and skipped picks both count toward the day's basket in the history view.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="footer-bg" bgcolor="#f1f5f9" style="background-color:#f1f5f9;padding:20px 28px;border-top:1px solid #e2e8f0;border-radius:0 0 12px 12px;">
+              <p class="text-secondary label-muted" style="margin:0;font-size:11px;color:#64748b;line-height:1.6;text-align:center;">
+                Free, no credit card, no premium tier. Reply or unsubscribe whenever.<br>
+                <a href="https://github.com/JayceBordelon/vibetradez.com" style="color:#64748b;text-decoration:underline;">github.com/JayceBordelon/vibetradez.com</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

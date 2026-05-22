@@ -24,7 +24,7 @@ const colsClass: Record<NonNullable<StatStripProps["cols"]>, string> = {
 
 /**
 StatStrip lays a horizontal row of large readouts with thin hairline
-dividers between them — the FT/Bloomberg pattern. It replaces the
+dividers between them, the FT/Bloomberg pattern. It replaces the
 4-card grid pattern (`StatCard` × 4 inside a Card wrapper) so a
 single section reads as one continuous strip of numbers instead of
 a row of bordered tiles.

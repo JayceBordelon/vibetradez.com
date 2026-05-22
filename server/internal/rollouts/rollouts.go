@@ -40,7 +40,7 @@ ever reintroduces the slug. Retired rollouts v1..v5 each lived here
 once and have all been recorded as sent on production.
 */
 var Registry = []Rollout{
-	executionRewriteV6,
+	agentExecutesV8,
 }
 
 /*

@@ -69,6 +69,12 @@ next-env.d.ts
 # Test binary
 *.test
 
+# Go build artifacts from preview/utility cmds
+server/preview-email
+server/preview-rollout
+server/scanner
+server/fix-execution-fill-price
+
 # Coverage
 *.out
 **/coverage.txt

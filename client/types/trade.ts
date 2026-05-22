@@ -1,15 +1,21 @@
 export interface Trade {
   symbol: string;
   contract_type: "CALL" | "PUT";
-  strike_price: number;
-  expiration: string;
-  dte: number;
-  estimated_price: number;
+  // Resolved at open (null pre-resolution). The pre-bell picker stores
+  // the symbol + contract intent only; the 9:30:00 ET at-open agent
+  // picks the actual strike + expiration + limit price from the live
+  // chain and stamps them onto the trade row when it fires the order.
+  // Cards render a "Finding contracts..." placeholder while these are
+  // null. Remain null forever for candidates the agent chose to skip.
+  strike_price: number | null;
+  expiration: string | null;
+  dte: number | null;
+  estimated_price: number | null;
+  stop_loss: number | null;
   thesis: string;
   sentiment_score: number;
   current_price: number;
   target_price: number;
-  stop_loss: number;
   risk_level: "LOW" | "MEDIUM" | "HIGH";
   catalyst: string;
   mention_count: number;
@@ -17,6 +23,11 @@ export interface Trade {
   score: number;
   rationale: string;
   model: string;
+  // Contract intent set by the picker. target_otm_pct is signed-OTM in
+  // percent (sign is implicit from contract_type); min_dte is the
+  // minimum acceptable DTE the executor uses to walk the chain.
+  target_otm_pct: number;
+  min_dte: number;
 }
 
 export interface TradeSummary {
@@ -44,7 +55,7 @@ when no qualifying pick converted to an execution that day.
 */
 export interface Execution {
   mode: "paper" | "live";
-  state: "submitted" | "holding" | "closed" | "close_failed" | "failed" | "canceled";
+  state: "submitted" | "holding" | "closed" | "close_failed" | "failed" | "canceled" | "skipped";
   symbol: string;
   contract_type: string;
   strike_price: number;
@@ -52,14 +63,21 @@ export interface Execution {
   close_price: number;
   realized_pnl: number;
   /**
-   * Number of contracts this position covers. The two-phase selector
-   * can fire a quantity > 1 order when the greedy fill duplicates a
-   * rank — UI multiplies live-holding P&L and exposure by this. Legacy
-   * single-contract executions report 1.
+   * Number of contracts this position covers. Always 1 under the
+   * top-3-only selector; legacy rows from the prior greedy-fill
+   * regime may report > 1. UI multiplies live-holding P&L and
+   * exposure by this value.
    */
   quantity: number;
   executed_at?: string | null;
   closed_at?: string | null;
+  /**
+   * For state='skipped' this is the at-open agent's reason for
+   * declining the trade. For state='failed' or 'canceled' it carries
+   * the broker error / cancellation cause. Empty / undefined for
+   * healthy states.
+   */
+  note?: string | null;
 }
 
 export interface DashboardResponse {
@@ -124,7 +142,7 @@ export interface LiveQuotesResponse {
 }
 
 /*
-QuoteUpdate is the SSE `quote` event payload — a single contract or
+QuoteUpdate is the SSE `quote` event payload, a single contract or
 ticker's latest values. Exactly one of `quote` / `option` will be set;
 the matching key is in `symbol` / `option_key`.
 */
@@ -144,10 +162,10 @@ NextClose are populated regardless of state so we can render an
 honest countdown.
 
 session is a coarse label matching the server's calendar.Status:
-  - "premarket"  — trading day, before 9:30 ET
-  - "open"       — trading day, 9:30 ET to close (16:00 or 13:00 ET)
-  - "afterhours" — trading day, after close
-  - "closed"     — weekend or holiday
+  - "premarket", trading day, before 9:30 ET
+  - "open"     , trading day, 9:30 ET to close (16:00 or 13:00 ET)
+  - "afterhours", trading day, after close
+  - "closed"   , weekend or holiday
 */
 export interface MarketStatus {
   open: boolean;
