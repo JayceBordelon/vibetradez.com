@@ -2,8 +2,9 @@ name: CI/CD Pipeline
 
 # Auto-fires on every push to main and on manual dispatch. Deploys
 # both vibetradez services (trading-server + trading-frontend) via
-# SSH to the droplet, using the unified ~/projects/docker-compose.yml
-# that owns Traefik and the shared app-network.
+# SSH to the droplet. Compose lives in this repo at the root and
+# owns Traefik + its own network; all docker commands run from
+# REPO_DIR.
 #
 # Market-hours guard runs in `defer` mode: during 09:00-16:30 ET,
 # Mon-Fri the downstream jobs are skipped silently. The 16:35 ET
@@ -26,8 +27,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PROJECTS_PATH: /home/jayce/projects
-  REPO_DIR: /home/jayce/projects/vibetradez.com
+  REPO_DIR: /home/jayce/vibetradez.com
 
 jobs:
   market_hours_guard:
@@ -92,7 +92,7 @@ jobs:
           # the lockfiles change underneath an unchanged Dockerfile.
           script: |
             set -e
-            cd ${{ env.PROJECTS_PATH }}
+            cd ${{ env.REPO_DIR }}
             docker compose build --no-cache trading-server trading-frontend
 
   deploy:
@@ -128,7 +128,7 @@ jobs:
           # problem worth failing on.
           script: |
             set -e
-            cd ${{ env.PROJECTS_PATH }}
+            cd ${{ env.REPO_DIR }}
             docker compose up -d --wait --wait-timeout 180 --force-recreate trading-server
 
       - name: Deploy trading-frontend (rolling)
@@ -145,7 +145,7 @@ jobs:
           # SSE/HTTP requests before terminating the old container.
           script: |
             set -e
-            cd ${{ env.PROJECTS_PATH }}
+            cd ${{ env.REPO_DIR }}
             docker rollout trading-frontend --timeout 120 --wait-after-healthy 30
 
       - name: Ensure Traefik is up
@@ -156,7 +156,7 @@ jobs:
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            cd ${{ env.PROJECTS_PATH }}
+            cd ${{ env.REPO_DIR }}
             docker compose up -d traefik
 
       - name: Compute status
