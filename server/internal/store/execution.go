@@ -109,6 +109,9 @@ func (s *Store) OpenPositionsForDate(tradeDate string) ([]exec.OpenPosition, err
 		FROM executions e
 		INNER JOIN trades t ON t.id = e.trade_id
 		WHERE t.date = $1
+		  AND t.strike_price IS NOT NULL
+		  AND t.expiration IS NOT NULL
+		  AND t.estimated_price IS NOT NULL
 		  AND e.side = 'open'
 		  AND e.status = 'filled'
 		  AND NOT EXISTS (
@@ -222,6 +225,9 @@ func (s *Store) WorkingOpenPositionsForDate(tradeDate string) ([]exec.OpenPositi
 		FROM executions e
 		INNER JOIN trades t ON t.id = e.trade_id
 		WHERE t.date = $1
+		  AND t.strike_price IS NOT NULL
+		  AND t.expiration IS NOT NULL
+		  AND t.estimated_price IS NOT NULL
 		  AND e.side = 'open'
 		  AND e.status = 'working'
 		  AND e.schwab_order_id IS NOT NULL
@@ -349,16 +355,23 @@ type ExecutionView struct {
 	ClosePrice   float64 `json:"close_price"`
 	RealizedPnL  float64 `json:"realized_pnl"`
 	/*
-		Quantity is the number of contracts this execution covers. The
-		two-phase selector can produce quantity > 1 when the greedy
-		fill duplicates the same rank, so realized P&L and per-card
-		"holding N" badges multiply by it. Prefer the open execution's
-		filled_quantity, fall back to requested_quantity, fall back to
-		1 for legacy single-contract rows that pre-date the rewrite.
+		Quantity is the number of contracts this execution covers.
+		Always 1 under the top-3-only selector, but legacy rows from
+		the prior greedy-fill regime may carry quantity > 1. Prefer the
+		open execution's filled_quantity, fall back to requested_quantity,
+		fall back to 1.
 	*/
 	Quantity   int        `json:"quantity"`
 	ExecutedAt *time.Time `json:"executed_at,omitempty"`
 	ClosedAt   *time.Time `json:"closed_at,omitempty"`
+	/*
+		Note carries the open-side error_message column verbatim. For
+		state='skipped' this is the at-open agent's written reason for
+		declining the trade; for state='failed' it's the broker rejection
+		reason; for healthy states it's empty. The frontend renders it
+		inline on the execution badge.
+	*/
+	Note string `json:"note,omitempty"`
 }
 
 /*
@@ -368,8 +381,8 @@ auto-execution fired that day. Paper and live are both surfaced; the
 Mode field carries the distinction. Failed open executions DO surface
 (with state='failed') so the dashboard can show what didn't work.
 
-Plural by design: the basket auto-executor can fire up to
-multiple contracts in a single morning (top 3 phase + greedy fill), and the frontend
+Plural by design: the basket auto-executor fires up to three
+contracts in a single morning (one per rank 1..3), and the frontend
 needs to find the matching execution per trade card to source
 realized P&L from broker truth instead of the modeled EOD summary.
 */
@@ -379,11 +392,71 @@ given trade_date, joined to the trade for rank/symbol/contract spec
 and aliased through exec.BasketSummaryRow so the executor service can
 render the morning summary email without importing this package.
 
-Ordered by trade rank ascending so the email reads rank-1 → rank-10.
+Ordered by trade rank ascending so the email reads rank-1 → rank-3.
 Includes every open-side execution row regardless of status (filled,
 working, canceled, failed, rejected, pending) — the email surfaces
 all of them with their final disposition.
 */
+/*
+CloseSummaryForDate returns one row per close-side execution for the
+given trade_date, joined to the trade row (rank/symbol/contract spec)
+AND to the most recent open-side execution for that trade (for the
+entry fill price). The DB does the realized-P&L math so the email
+renderer is pure presentation.
+
+Includes every close-side execution row regardless of status (filled,
+failed, working, pending). When the open-side never filled (rare; the
+close cron only acts on positions that DID open, so this is mostly a
+guard), open_fill_price comes back 0 and realized_pnl is 0.
+
+Ordered by trade rank ascending so the email reads rank-1 to rank-3.
+*/
+func (s *Store) CloseSummaryForDate(tradeDate string) ([]exec.CloseSummaryRow, error) {
+	rows, err := s.db.Query(`
+		WITH open_fills AS (
+			SELECT DISTINCT ON (trade_id)
+				trade_id,
+				fill_price
+			FROM executions
+			WHERE side = 'open' AND status = 'filled'
+			ORDER BY trade_id, id DESC
+		)
+		SELECT
+			COALESCE(t.rank, 0), t.symbol, t.contract_type, t.strike_price,
+			closeX.mode, closeX.status,
+			COALESCE(open_fills.fill_price, 0) AS open_price,
+			COALESCE(closeX.fill_price, 0) AS close_price,
+			COALESCE(NULLIF(closeX.filled_quantity, 0), NULLIF(closeX.requested_quantity, 0), 1) AS quantity,
+			COALESCE(closeX.error_message, '') AS error_message
+		FROM executions closeX
+		INNER JOIN trades t ON t.id = closeX.trade_id
+		LEFT JOIN open_fills ON open_fills.trade_id = closeX.trade_id
+		WHERE t.date = $1 AND closeX.side = 'close'
+		ORDER BY t.rank ASC, closeX.id ASC
+	`, tradeDate)
+	if err != nil {
+		return nil, fmt.Errorf("query close summary for date: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []exec.CloseSummaryRow
+	for rows.Next() {
+		var r exec.CloseSummaryRow
+		if err := rows.Scan(&r.Rank, &r.Symbol, &r.ContractType, &r.StrikePrice,
+			&r.Mode, &r.Status, &r.OpenPrice, &r.ClosePrice, &r.Quantity, &r.ErrorMessage); err != nil {
+			return nil, fmt.Errorf("scan close summary row: %w", err)
+		}
+		// Realized P&L is per-position: (close - open) × 100 shares × quantity.
+		// Only meaningful when the close actually filled; for non-filled rows
+		// the email surfaces 0 and the row's status / error_message explain why.
+		if r.Status == "filled" && r.OpenPrice > 0 && r.ClosePrice > 0 {
+			r.RealizedPnL = (r.ClosePrice - r.OpenPrice) * 100 * float64(r.Quantity)
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) BasketSummaryForDate(tradeDate string) ([]exec.BasketSummaryRow, error) {
 	rows, err := s.db.Query(`
 		SELECT
@@ -430,7 +503,8 @@ func (s *Store) GetExecutionsForDate(date string) ([]*ExecutionView, error) {
 			openX.mode, openX.status,
 			COALESCE(openX.fill_price, 0), openX.filled_at,
 			COALESCE(closeX.fill_price, 0), closeX.filled_at, closeX.status,
-			COALESCE(NULLIF(openX.filled_quantity, 0), NULLIF(openX.requested_quantity, 0), 1)
+			COALESCE(NULLIF(openX.filled_quantity, 0), NULLIF(openX.requested_quantity, 0), 1),
+			COALESCE(openX.error_message, '')
 		FROM executions openX
 		INNER JOIN trades t ON t.id = openX.trade_id
 		LEFT JOIN LATERAL (
@@ -475,7 +549,8 @@ func (s *Store) GetExecutionsForDateRange(start, end string) (map[string][]*Exec
 			openX.mode, openX.status,
 			COALESCE(openX.fill_price, 0), openX.filled_at,
 			COALESCE(closeX.fill_price, 0), closeX.filled_at, closeX.status,
-			COALESCE(NULLIF(openX.filled_quantity, 0), NULLIF(openX.requested_quantity, 0), 1)
+			COALESCE(NULLIF(openX.filled_quantity, 0), NULLIF(openX.requested_quantity, 0), 1),
+			COALESCE(openX.error_message, '')
 		FROM executions openX
 		INNER JOIN trades t ON t.id = openX.trade_id
 		LEFT JOIN LATERAL (
@@ -505,6 +580,7 @@ func (s *Store) GetExecutionsForDateRange(start, end string) (map[string][]*Exec
 			&v.OpenPrice, &executedAt,
 			&v.ClosePrice, &closedAt, &closeStatus,
 			&v.Quantity,
+			&v.Note,
 		); err != nil {
 			return nil, fmt.Errorf("scan execution range row: %w", err)
 		}
@@ -547,6 +623,7 @@ func scanExecutionViewRow(rows *sql.Rows) (*ExecutionView, error) {
 		&v.OpenPrice, &executedAt,
 		&v.ClosePrice, &closedAt, &closeStatus,
 		&v.Quantity,
+		&v.Note,
 	); err != nil {
 		return nil, fmt.Errorf("scan execution row: %w", err)
 	}
@@ -586,10 +663,9 @@ States:
     Position may be stranded at the broker:
     operator must verify and manually close.
   - 'failed'        — open never filled
-
-The close_failed state used to silently fall through to 'holding',
-which made the 3:55 retry-cancel-replace exhaustion case invisible
-on the dashboard.
+  - 'skipped'       — the at-open agent looked at this candidate and
+    deliberately chose not to trade it. error_message carries the
+    written reason; the badge surfaces it inline.
 */
 func deriveExecutionState(openStatus string, closeStatus sql.NullString) string {
 	switch openStatus {
@@ -610,6 +686,8 @@ func deriveExecutionState(openStatus string, closeStatus sql.NullString) string 
 		return "submitted"
 	case "failed", "rejected":
 		return "failed"
+	case "skipped":
+		return "skipped"
 	default:
 		return ""
 	}

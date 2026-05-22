@@ -3,7 +3,7 @@ Standalone helper to preview a rollout email locally. Pass the slug
 as the first arg, defaults to the most recent pending rollout. Run:
 
 	go run ./cmd/preview-rollout > /tmp/rollout.html && open /tmp/rollout.html
-	go run ./cmd/preview-rollout execution-rewrite-v6 > /tmp/rollout.html && open /tmp/rollout.html
+	go run ./cmd/preview-rollout agent-executes-v8 > /tmp/rollout.html && open /tmp/rollout.html
 */
 package main
 
@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	slug := "execution-rewrite-v6"
+	slug := "agent-executes-v8"
 	if len(os.Args) > 1 {
 		slug = os.Args[1]
 	}
@@ -25,8 +25,8 @@ func main() {
 		err  error
 	)
 	switch slug {
-	case "execution-rewrite-v6":
-		html, err = templates.RenderRolloutExecutionRewrite()
+	case "agent-executes-v8":
+		html, err = templates.RenderRolloutAgentExecutes()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown rollout slug: %s\n", slug)
 		os.Exit(1)

@@ -16,8 +16,9 @@ export function ExposurePanel({ trades, hasSummaries, executions }: ExposurePane
 
   /*
   Capital deployed multiplies the entry premium by the executed
-  contract count (quantity > 1 happens when the greedy fill duplicates
-  a rank). When no execution exists the pick is hypothetical at qty 1,
+  contract count (always 1 under the top-3-only selector; legacy
+  rows from the prior greedy-fill regime may carry quantity > 1).
+  When no execution exists the pick is hypothetical at qty 1,
   matching the "what if you bought one contract" model the summary
   represents.
   */
@@ -33,7 +34,7 @@ export function ExposurePanel({ trades, hasSummaries, executions }: ExposurePane
 
   const totalContracts = trades.reduce((sum, dt) => sum + executionQuantity(findExecutionForTrade(executions, dt.trade)), 0);
   const avgPremium = totalContracts > 0 ? totalExposure / totalContracts / 100 : 0;
-  const avgDte = count > 0 ? trades.reduce((sum, dt) => sum + dt.trade.dte, 0) / count : 0;
+  const avgDte = count > 0 ? trades.reduce((sum, dt) => sum + (dt.trade.dte ?? 0), 0) / count : 0;
 
   let totalReturned = 0;
   let netPnl = 0;

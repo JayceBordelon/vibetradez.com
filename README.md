@@ -1,6 +1,6 @@
 # vibetradez.com
 
-AI-powered options trading service. A language model ranks 10 options contracts before the bell, the executor resolves each pick to a real contract at the open, and the top 3 auto-fire in a real Schwab brokerage account.
+AI-powered options trading service. A language model picks 3 ranked tickers + contract intent before the bell, then the same model decides each contract spec at the open and fires real orders into a Schwab brokerage account through a locked-down tool surface.
 
 ## Related repos
 
@@ -50,21 +50,23 @@ Visitors hit Traefik, which routes by path: `/api`, `/auth`, `/admin`, `/health`
 
 ```
 vibetradez.com/
-├── server/                 Go API (cron jobs, Claude picker + at-open contract resolver, Schwab market data, in-process Google OAuth, Resend email)
+├── server/                 Go API (cron jobs, 9:25 picker + 9:30 at-open agent, Schwab market data, in-process Google OAuth, Resend email)
 │   ├── cmd/scanner/        Main entry point, cron registration, daily lifecycle
 │   ├── internal/
 │   │   ├── auth/           In-process Google OAuth: store (users + sessions in dedicated Postgres pool), Google client, service, handlers
 │   │   ├── calendar/       NYSE holiday + half-day calendar, market-hours math
 │   │   ├── config/         Environment variable loading
 │   │   ├── email/          Resend email client
-│   │   ├── exec/           Auto-execution: ResolveContractsForOpen, selector, order placement, reconcile, close
+│   │   ├── exec/           Broker entry points + reconcile + cancel-dangling + close + summary emails
+│   │   ├── execagent/      9:30 at-open agent: conversation loop, tool schemas, hard caps
 │   │   ├── quotes/         Live-quotes hub (Schwab WS to SSE fan-out)
+│   │   ├── rollouts/       One-shot rollout email registry (v8_agent_executes)
 │   │   ├── schwab/         Schwab OAuth + Market Data API + streaming client
 │   │   ├── sentiment/      Market signal aggregator (4 sources)
 │   │   ├── server/         HTTP API handlers (including SSE /api/quotes/stream)
 │   │   ├── store/          PostgreSQL data layer (trades, executions, summaries, subscribers)
 │   │   ├── templates/      HTML email templates
-│   │   └── trades/         Picker prompt + agent loop
+│   │   └── trades/         9:25 picker prompt + tool loop
 │   ├── Dockerfile          Multi-stage Go build
 │   └── go.mod
 ├── client/                 Next.js trading frontend (Next.js 16, shadcn/ui, Recharts v3)
@@ -104,7 +106,7 @@ flowchart TB
 
     subgraph Cron["robfig/cron · America/New_York · skip on holidays & weekends"]
       C1["09:25 Mon-Fri<br/>CronScheduleOpen<br/>ticker selection only"]:::cron
-      C1b["09:30:00 Mon-Fri<br/>CronScheduleExecute<br/>resolve contracts + fire"]:::cron
+      C1b["09:30:00 Mon-Fri<br/>CronScheduleExecute<br/>agent picks contracts + fires"]:::cron
       C1d["09:30 Mon-Fri<br/>quotes hub Start<br/>Schwab WS + SSE fan-out"]:::cron
       C2["* 9-15 Mon-Fri<br/>open-fill reconcile"]:::cron
       C1c["09:35 Mon-Fri<br/>CronScheduleCancelDangling<br/>cancel stale LIMITs +<br/>open-summary email"]:::cron
@@ -114,36 +116,34 @@ flowchart TB
     end
 
     OPEN["runTradeAnalysis<br/>cmd/scanner/main.go<br/>ticker selection only"]:::job
-    EXECJOB["runExecuteAtOpen<br/>cmd/scanner/main.go<br/>resolve contracts +<br/>fire basket"]:::job
-    AGENT["ClaudePicker.GetTopTrades<br/>tool-use loop: Schwab quotes,<br/>web_search, chain existence check.<br/>Output: symbol + direction + intent<br/>(target_otm_pct, min_dte)"]:::agent
+    EXECJOB["runExecuteAtOpen<br/>cmd/scanner/main.go<br/>dispatch at-open agent"]:::job
+    PICKER["ClaudePicker.GetTopTrades<br/>tool loop: Schwab quotes,<br/>web_search, chain existence check.<br/>Output: 3 candidates (symbol + intent)"]:::agent
     DB[("Postgres<br/>trades · summaries ·<br/>subscribers · exec rows")]:::store
 
-    RESOLVE["exec.ResolveContractsForOpen<br/>walk live chain per pick,<br/>snap intent to concrete contract,<br/>persist strike/exp/dte/est/sl"]:::exec
-    EXEC["exec.QualifyingBasket +<br/>HandleQualifyingPicks<br/>LIMIT × 1.10 over fresh ask<br/>top 3 always + greedy fill to $1k"]:::exec
-    CANCEL["CancelDanglingOpens<br/>+ SendExecutionSummary<br/>(single consolidated email)"]:::exec
-    RECON["ReconcileOpenOrders<br/>flip WORKING to FILLED in DB"]:::exec
-    CLOSE["CloseAllPositionsForDate +<br/>SendCloseSummary<br/>(single consolidated email)"]:::exec
+    AGENT["execagent.Agent.Run<br/>tool loop: live quotes,<br/>live chain, account funds,<br/>web search, place_options_order<br/>Output: per-candidate buy or skip+reason"]:::exec
+    CANCEL["executor.CancelDanglingOpens<br/>+ SendExecutionSummary<br/>(single consolidated email)"]:::exec
+    RECON["executor.ReconcileOpenOrders<br/>flip WORKING to FILLED in DB"]:::exec
+    CLOSE["executor.CloseAllPositionsForDate +<br/>SendCloseSummary<br/>(single consolidated email)"]:::exec
 
-    EOD["runEndOfDayAnalysis<br/>same agent loop, EOD prompt"]:::agent
+    EOD["runEndOfDayAnalysis<br/>picker tool loop, EOD prompt"]:::agent
     WEEK["runWeeklyEmail<br/>aggregate Mon-Fri summaries"]:::job
 
-    MORN_EMAIL["Resend morning email<br/>tickers + intent + thesis +<br/>Open Dashboard CTA"]:::email
-    OPEN_EMAIL["Resend execution summary<br/>(operator only, one per day)"]:::email
+    MORN_EMAIL["Resend morning email<br/>yesterday recap + 3 candidates +<br/>Open Dashboard CTA"]:::email
+    OPEN_EMAIL["Resend execution summary<br/>(operator only, one per day:<br/>buys + skips with reasons)"]:::email
     CLOSE_EMAIL["Resend close summary<br/>(operator only, one per day)"]:::email
     EOD_EMAIL["Resend EOD email<br/>closing marks + per-trade notes"]:::email
     WEEK_EMAIL["Resend weekly email<br/>win rate, P&L, best/worst"]:::email
 
     C1 --> OPEN
-    OPEN -->|"scrape 4 signal sources<br/>(StockTwits, Yahoo, Finviz, EDGAR)"| AGENT
-    AGENT -->|"10 ranked picks (symbol +<br/>direction + intent +<br/>score + rationale)"| DB
+    OPEN -->|"scrape 4 signal sources<br/>(StockTwits, Yahoo, Finviz, EDGAR)"| PICKER
+    PICKER -->|"3 candidates (symbol +<br/>direction + intent +<br/>score + rationale)"| DB
     OPEN --> MORN_EMAIL
 
     C1b --> EXECJOB
-    EXECJOB -->|"load saved picks"| DB
-    EXECJOB --> RESOLVE
-    RESOLVE -->|"UPDATE strike/exp/dte/<br/>est_price/stop_loss"| DB
-    RESOLVE --> EXEC
-    EXEC -->|"PlaceOrder (paper or live)"| DB
+    EXECJOB -->|"load saved candidates"| DB
+    EXECJOB --> AGENT
+    AGENT -->|"place_options_order tool:<br/>writes execution row +<br/>PlaceOrder (paper or live)"| DB
+    AGENT -->|"skip: writes 'skipped'<br/>execution row + reason"| DB
 
     C2 --> RECON --> DB
     C1c --> CANCEL --> DB
@@ -160,21 +160,23 @@ flowchart TB
     WEEK --> WEEK_EMAIL
 ```
 
-Picker and executor are decoupled, and so are *ticker selection* and *contract selection*. The 9:25 cron runs the picker against live Schwab equity quotes plus web search; option-chain prices are explicitly NOT consumed there because US options don't trade pre-market and Schwab's `/chains` endpoint serves yesterday's closing print until 9:30:00. Claude's output is symbol + direction + score + thesis + contract intent (`target_otm_pct`, `min_dte`), saved to `trades` with the five contract-specific columns (strike, expiration, dte, estimated_price, stop_loss) left NULL.
+Picker and at-open agent are decoupled, and so are *ticker selection* and *contract selection*. The 9:25 cron runs the picker against live Schwab equity quotes plus web search; option-chain prices are explicitly NOT consumed there because US options don't trade pre-market and Schwab's `/chains` endpoint serves yesterday's closing print until 9:30:00. Claude's output is exactly 3 candidates of `{symbol, direction, score, thesis, target_otm_pct, min_dte}`, saved to `trades` with the five contract-specific columns (strike, expiration, dte, estimated_price, stop_loss) left NULL. The morning email goes out at 9:25 with intent text ("~1.5% OTM, 3+ DTE") rather than fabricated strikes.
 
-At 9:30:00 sharp, the executor cron loads the saved picks, calls `ResolveContractsForOpen` to walk the live chain per pick and snap each intent to a real contract, `UPDATE`s the trade row with the resolved fields, and only then runs the basket selector. Resolved picks fire as LIMIT × 1.10 over the live ask (fire-and-forget). The 9:35 cron kills any LIMIT still WORKING and sends ONE consolidated open-summary email. The 15:55 cron sells every open position and sends ONE consolidated close-summary email.
+At 9:30:00 sharp, the at-open agent (`internal/execagent`) re-invokes Claude with the saved candidates plus a locked-down tool surface (live Schwab quotes, live option chain restricted to candidate symbols, account funds, web search, and a `place_options_order` tool). For each candidate the model reads the now-live chain, picks the strike + expiration + limit price, and either calls `place_options_order` (which writes the execution row + stamps the contract spec on the trade row + submits the BUY_TO_OPEN LIMIT in one shot) or declines with a written reason. Skipped candidates land in the database as `executions.status='skipped'` rows with the reason in `error_message`. The agent run is fire-and-forget; the per-minute reconcile cron flips fills throughout the morning. At 09:35 the cancel-dangling cron kills any still-WORKING LIMIT and sends ONE consolidated execution-summary email covering every candidate. The 15:55 cron sells every open position and sends ONE consolidated close-summary email.
 
 ## Auto-execution gating
 
-If `TRADING_ENABLED=true`, the 9:30:00 ET execute-at-open cron loads the picks the 9:25 picker saved, runs `ResolveContractsForOpen` to fill in each pick's strike/expiration/dte/estimated_price/stop_loss against the live chain, and runs the *resolved* picks through the selector. Picks the resolver couldn't satisfy stay unresolved and the selector skips them. Two phases on the resolved set: top 3 always fire (per-contract cap at `MaxContractPremium` of $10/share), then greedy fill from picks 1-10 toward a `MaxDailyBasketUSD` of $1,000 of cumulative exposure. Duplicates land as one `quantity=N` order per pick.
+If `TRADING_ENABLED=true`, the 9:30:00 ET cron dispatches the at-open agent against the 3 saved candidates. The model makes per-candidate decisions through tool calls; every hard cap is enforced at the tool layer (`internal/execagent/tools.go`), so a buggy prompt or jailbroken model cannot exceed them.
 
 | Constant | Value | Why |
 |---|---|---|
-| `GuaranteedBasketRank` | 3 | Phase 1 unconditional fires |
-| `GreedyFillMaxRank` | 10 | Phase 2 walks ranks 1 through 10 |
-| `MaxContractPremium` | $10/share ($1,000/contract) | Hard per-contract ceiling, applied both phases |
-| `MaxDailyBasketUSD` | $1,000 | Phase 2 target only; phase 1 can overshoot |
-| `LimitPriceMultiplier` | 1.10 | Buffer on live ask for the open LIMIT |
+| `execagent.MaxOrdersPerRun` | 3 | One order per rank, mirrors candidate basket size |
+| `execagent.MaxToolPremiumPerShare` | $10.00 | Per-share LIMIT cap, $1,000 of capital exposure per contract |
+| `exec.MaxContractPremium` | $10.00 | Broker-facing twin of the tool cap; re-validated in `PlaceBuyToOpenAgent` |
+| Symbol allowlist | the 3 morning candidates | The agent cannot order anything that wasn't in this morning's picker output |
+| `LimitPriceMultiplier` | 1.10 | Documented anchor the agent prompt references when picking limit prices |
+
+Worst-case daily blast radius is 3 × $1,000 = $3,000 capital exposure.
 
 ## Local development
 
@@ -246,14 +248,14 @@ Production deploys are handled by the operator's deploy pipeline (separate from 
 
 ## Trading service highlights
 
-- **Two-stage picker / executor split.** Pre-bell (9:25 ET) Claude does ticker selection only: symbol, direction (CALL/PUT), score, thesis, contract intent (`target_otm_pct`, `min_dte`). Specific strikes and prices are not chosen at 9:25 because US listed options don't trade pre-market and Schwab's `/chains` endpoint still serves yesterday's 4:00 PM close. At market open (9:30:00 ET) the executor walks the live chain, snaps each pick's intent to a concrete contract via `PickContract`, persists strike/expiration/dte/estimated_price/stop_loss into the trade row, then runs the basket selector.
+- **Two-Claude-call pipeline.** Pre-bell (9:25 ET) the picker returns exactly 3 ranked candidates with intent only: symbol, direction (CALL/PUT), score, thesis, `target_otm_pct`, `min_dte`. Specific strikes and prices are not chosen at 9:25 because US listed options don't trade pre-market. At market open (9:30:00 ET) the at-open agent re-invokes the same Claude model with the 3 candidates plus a locked-down tool surface (live Schwab quotes, live option chain restricted to candidate symbols, account funds, web search, and a `place_options_order` tool). For each candidate the agent decides whether to trade, picks the strike + expiration + limit price from the live chain, and either fires the order or records a skip with a written reason. Skipped candidates land in the dashboard with the explanation inline.
 - **`/trade/[symbol]?date=...` deep-link page.** Reached by clicking any trade card on `/dashboard`, any row in the EOD table, or any contract row in the Daily Breakdown. Renders the full metric grid, Claudia's rationale, and the EOD result block.
 - **Live data via Schwab WebSocket.** One outbound WS connection held during 9:30-16:00 ET, subscribed to LEVELONE_EQUITIES + LEVELONE_OPTIONS for today's picks, fanning ticks to all connected browsers over SSE at `/api/quotes/stream`. Each contract's row on the dashboard updates the instant Schwab pushes a new mark, not on a polled cadence.
 - **Stock chart.** Underlying price candles from Schwab `GetPriceHistory` plus a modeled contract-premium overlay (sticky moneyness-based delta, anchored to the real entry/exit marks the cron persists). BUY/SELL render as full-height vertical lines + price-labeled dots at the candle level.
-- **Auto-execution basket.** Two-phase selector. Phase 1 fires top 3 picks unconditionally (one contract each, gated only by the `MaxContractPremium` $10/share safety cap). Phase 2 greedy-fills additional contracts from ranks 1 through 10 toward a `MaxDailyBasketUSD` $1,000 daily-exposure target.
-- **One open-summary email + one close-summary email per day.** No per-trade receipts. The 9:35 ET cron emits the open-summary (every open-side execution attempted that morning, fill / canceled / failed / rejected, plus total filled capital). The 15:55 ET cron emits the close-summary (every position closed, realized P&L per row, total realized P&L for the day). Action-required callout fires when at least one row failed.
+- **Auto-execution basket.** Single-pass agent. The picker returns exactly 3 ranked candidates; the at-open agent fires one contract per rank against the live Schwab chain. No greedy fill, no duplicate contracts, no daily basket budget — three candidates, up to three contracts, gated by a $10/share per-contract safety cap.
+- **One execution-summary email + one close-summary email per day.** No per-trade receipts. The 9:35 ET cron emits the execution-summary (every candidate's outcome: buys with fill prices, skips with reasons). The 15:55 ET cron emits the close-summary (every position closed, realized P&L per row, total realized P&L for the day). Action-required callout fires when at least one row failed.
 - **Email delivery via Resend.** Subscribers stored in Postgres; HTML templates in `server/internal/templates/`. Render the morning email locally via `go run ./cmd/preview-email`.
-- **Granular `/health`.** One endpoint reports per-service status (database, anthropic, schwab, market_signals, api) using actual SDK clients with latencies.
+- **Granular `/health`.** One endpoint reports per-service status (database, anthropic, schwab_market_data, schwab_trading, market_signals, morning_picks, api) using actual SDK clients with latencies.
 
 ## Where the load-bearing logic lives
 
@@ -262,12 +264,14 @@ Production deploys are handled by the operator's deploy pipeline (separate from 
 | Picker (9:25) + execute-at-open (9:30) + cancel-dangling/summary (9:35) + close (15:55) + close-summary + EOD (16:00) + weekly (16:30 Fri) cron registration | `server/cmd/scanner/main.go` |
 | Market open / holiday / half-day gating | `server/internal/calendar/calendar.go` |
 | Signal scraping (4 sources) | `server/internal/sentiment/scraper.go` |
-| Picker agent loop + Anthropic SDK wiring | `server/internal/trades/picker.go` |
+| 9:25 picker tool loop + Anthropic SDK wiring | `server/internal/trades/picker.go` |
 | Picker prompts (`AnalysisPrompt`, `EndOfDayPrompt`) | `server/internal/trades/prompt.go` |
-| At-open contract resolver (`ResolveContractsForOpen`, `PickContract`) | `server/internal/exec/resolver.go` |
-| Auto-execution selector + gates | `server/internal/exec/selector.go` |
-| Order placement + reconcile + cancel-dangling + close-all + summary emails | `server/internal/exec/service.go` |
-| Email templates (morning, open-summary, close-summary, EOD, weekly, error) | `server/internal/templates/` |
+| 9:30 at-open agent (conversation loop, final-JSON reconciliation) | `server/internal/execagent/agent.go` |
+| Agent tool schemas + validation + hard caps | `server/internal/execagent/tools.go` |
+| Agent system prompt | `server/internal/execagent/prompt.go` |
+| Broker entry points (`PlaceBuyToOpenAgent`, `InsertSkippedExecutionAgent`, `AvailableFundsAgent`) + reconcile + cancel-dangling + close-all + summary emails | `server/internal/exec/service.go` |
+| Email templates (morning, execution-summary, close-summary, EOD, weekly, error) | `server/internal/templates/` |
+| Rollout v8 announcement (agent execution) | `server/internal/rollouts/v8_agent_executes.go` + `server/internal/templates/rollout_agent_executes.html` |
 | In-process Google OAuth (`/auth/google/start`, `/auth/google/callback`, AttachUser middleware) | `server/internal/auth/` |
 
 ## Common operations

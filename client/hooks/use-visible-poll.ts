@@ -15,7 +15,7 @@ endpoint. The visibilitychange listener also triggers an immediate
 refresh on return so the UI doesn't carry stale data forward.
 
 `poll` is captured in a ref so the effect doesn't re-subscribe on
-every render — callers don't need to memoize it.
+every render, callers don't need to memoize it.
 */
 export function useVisiblePoll(poll: () => void, intervalMs: number, enabled = true): void {
   const pollRef = useRef(poll);

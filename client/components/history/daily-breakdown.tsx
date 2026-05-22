@@ -13,7 +13,40 @@ import { cn } from "@/lib/utils";
 import type { DayMultiStat, TradeDetail } from "./history-shell";
 import { TIER_COLORS, TIER_KEYS, TIER_LABELS, TIER_PILL_COLORS, type TierKey } from "./tiers";
 
-const PAGE_SIZE = 25;
+/**
+mondayKey returns the ISO date of the Monday of the week containing
+the given YYYY-MM-DD date string. UTC-anchored at noon so timezone
+math can't push a day into the wrong week. Duplicated from
+daily-pnl-chart.tsx, small enough that the dupe beats a shared util
+for now.
+*/
+function mondayKey(dateStr: string): string {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  const dow = d.getUTCDay();
+  const offset = dow === 0 ? -6 : 1 - dow;
+  d.setUTCDate(d.getUTCDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
+interface Week {
+  /** Monday of the week, YYYY-MM-DD. Used as React key + label. */
+  mondayISO: string;
+  /** Trading days that fell in this week, server order (chronological). */
+  days: DayMultiStat[];
+}
+
+function groupByWeek(days: DayMultiStat[]): Week[] {
+  const buckets = new Map<string, DayMultiStat[]>();
+  for (const d of days) {
+    const k = mondayKey(d.date);
+    const existing = buckets.get(k) ?? [];
+    existing.push(d);
+    buckets.set(k, existing);
+  }
+  return Array.from(buckets.entries())
+    .map(([mondayISO, weekDays]) => ({ mondayISO, days: weekDays }))
+    .sort((a, b) => a.mondayISO.localeCompare(b.mondayISO));
+}
 
 export function DailyBreakdown({ days }: { days: DayMultiStat[] }) {
   const maxAbsPnl = useMemo(() => {
@@ -27,20 +60,22 @@ export function DailyBreakdown({ days }: { days: DayMultiStat[] }) {
     return m;
   }, [days]);
 
-  const totalPages = Math.max(1, Math.ceil(days.length / PAGE_SIZE));
-  const [page, setPage] = useState(0);
+  const weeks = useMemo(() => groupByWeek(days), [days]);
+  const totalPages = Math.max(1, weeks.length);
+  // Default to the most recent week (last index). Mirrors the
+  // "latest first" expectation users have when scanning a history
+  // page, you want to see this week before being asked to scroll
+  // back through last year.
+  const [page, setPage] = useState(Math.max(0, totalPages - 1));
 
   useEffect(() => {
-    setPage(0);
-  }, []);
-  useEffect(() => {
-    if (page >= totalPages) setPage(0);
+    if (page >= totalPages) setPage(Math.max(0, totalPages - 1));
   }, [page, totalPages]);
 
-  const start = page * PAGE_SIZE;
-  const end = Math.min(start + PAGE_SIZE, days.length);
-  const visible = days.slice(start, end);
-  const showPagination = days.length > PAGE_SIZE;
+  const currentWeek = weeks[page];
+  const visible = currentWeek?.days ?? [];
+  const showPagination = weeks.length > 1;
+  const weekLabel = currentWeek ? `Week of ${formatMonthDay(currentWeek.mondayISO)}` : "";
 
   return (
     <div className="space-y-3">
@@ -53,7 +88,8 @@ export function DailyBreakdown({ days }: { days: DayMultiStat[] }) {
       {showPagination ? (
         <div className="flex flex-col items-center justify-between gap-2 pt-2 sm:flex-row">
           <div className="text-[11px] text-muted-foreground tabular-nums">
-            Showing {start + 1}–{end} of {days.length} days
+            {weekLabel} · {visible.length} trading day
+            {visible.length === 1 ? "" : "s"}
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -64,10 +100,10 @@ export function DailyBreakdown({ days }: { days: DayMultiStat[] }) {
                 "lg-control inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-xs font-semibold transition-colors",
                 page === 0 ? "cursor-not-allowed text-muted-foreground/40" : "text-foreground hover:bg-muted/50"
               )}
-              aria-label="Previous page"
+              aria-label="Previous week"
             >
               <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
-              Prev
+              Prev week
             </button>
             <div className="px-2 font-mono text-xs text-muted-foreground tabular-nums">
               {page + 1} / {totalPages}
@@ -80,9 +116,9 @@ export function DailyBreakdown({ days }: { days: DayMultiStat[] }) {
                 "lg-control inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-xs font-semibold transition-colors",
                 page >= totalPages - 1 ? "cursor-not-allowed text-muted-foreground/40" : "text-foreground hover:bg-muted/50"
               )}
-              aria-label="Next page"
+              aria-label="Next week"
             >
-              Next
+              Next week
               <ChevronRight className="h-3.5 w-3.5" aria-hidden />
             </button>
           </div>
@@ -116,7 +152,10 @@ function TierBar({ tier, pnl, maxAbsPnl }: { tier: TierKey; pnl: number; maxAbsP
 }
 
 function DayRow({ day, maxAbsPnl }: { day: DayMultiStat; maxAbsPnl: number }) {
-  const top10 = day.tiers.top10;
+  // top3 holds the full daily basket (ranks 1..3, the universe the
+  // auto-executor fires). Use it for the day-row summary counts and
+  // for the per-trade detail list.
+  const basket = day.tiers.top3;
 
   return (
     <Collapsible className="animate-in fade-in fill-mode-backwards duration-200">
@@ -130,7 +169,7 @@ function DayRow({ day, maxAbsPnl }: { day: DayMultiStat; maxAbsPnl: number }) {
 
         <div className="hidden w-32 shrink-0 text-[11px] text-muted-foreground md:block">
           {day.totalTrades} picks
-          {top10.hasSummaries ? ` · ${top10.winners}W/${top10.losers}L` : ""}
+          {basket.hasSummaries ? ` · ${basket.winners}W/${basket.losers}L` : ""}
         </div>
 
         <div className="flex-1 space-y-1">
@@ -142,7 +181,7 @@ function DayRow({ day, maxAbsPnl }: { day: DayMultiStat; maxAbsPnl: number }) {
 
       <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
         <div className="ml-7 mt-1 border-l border-border/50 pl-4 py-2">
-          {top10.details.length > 0 ? <TradeList details={top10.details} date={day.date} /> : <div className="py-2 text-[11px] text-muted-foreground">No trade details available for this day.</div>}
+          {basket.details.length > 0 ? <TradeList details={basket.details} date={day.date} /> : <div className="py-2 text-[11px] text-muted-foreground">No trade details available for this day.</div>}
         </div>
       </CollapsibleContent>
     </Collapsible>
@@ -151,8 +190,8 @@ function DayRow({ day, maxAbsPnl }: { day: DayMultiStat; maxAbsPnl: number }) {
 
 function tierForRank(rank: number): TierKey {
   if (rank === 1) return "top1";
-  if (rank <= 3) return "top3";
-  return "top10";
+  if (rank === 2) return "top2";
+  return "top3";
 }
 
 function TradeList({ details, date }: { details: TradeDetail[]; date: string }) {

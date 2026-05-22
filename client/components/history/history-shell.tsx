@@ -11,10 +11,10 @@ import { toDateStr } from "@/lib/date-utils";
 import type { Execution, WeekResponse } from "@/types/trade";
 
 import { CapitalEfficiency } from "./capital-efficiency";
+import { ConvictionCalibration } from "./conviction-calibration";
 import { DailyBreakdown } from "./daily-breakdown";
 import { DailyPnlChart } from "./daily-pnl-chart";
 import { EquityCurveChart } from "./equity-curve-chart";
-import { ExposureReturnsChart } from "./exposure-returns-chart";
 import { HistoryStats } from "./history-stats";
 import { inTier, TIER_KEYS, type TierKey } from "./tiers";
 
@@ -29,6 +29,10 @@ export interface TradeDetail {
   pnl: number;
   pct: number;
   rank: number;
+  // Claudia's conviction score (1..10) on this pick. Used by the
+  // conviction-calibration chart to bucket settled trades and
+  // measure whether higher scores actually win more often.
+  score: number;
   result: string;
 }
 
@@ -153,8 +157,8 @@ function finalizeTier(acc: ReturnType<typeof emptyTierAccumulator>): TierAggrega
 function computeAggregates(data: WeekResponse): AggregateResult {
   const tierAcc = {
     top1: emptyTierAccumulator(),
+    top2: emptyTierAccumulator(),
     top3: emptyTierAccumulator(),
-    top10: emptyTierAccumulator(),
   } satisfies Record<TierKey, ReturnType<typeof emptyTierAccumulator>>;
 
   const days: DayMultiStat[] = [];
@@ -162,8 +166,8 @@ function computeAggregates(data: WeekResponse): AggregateResult {
   for (const day of data.days ?? []) {
     const dayTiers: Record<TierKey, DayTierStat> = {
       top1: emptyDayTier(),
+      top2: emptyDayTier(),
       top3: emptyDayTier(),
-      top10: emptyDayTier(),
     };
 
     for (const dt of day.trades ?? []) {
@@ -211,12 +215,13 @@ function computeAggregates(data: WeekResponse): AggregateResult {
         dayT.details.push({
           symbol: trade.symbol,
           type: trade.contract_type,
-          strike: trade.strike_price,
+          strike: trade.strike_price ?? 0,
           entry: result.entryPrice,
           close: result.closingPrice,
           pnl,
           pct,
           rank: trade.rank,
+          score: trade.score,
           result: pnl > 0.5 ? "profit" : pnl < -0.5 ? "loss" : "flat",
         });
       }
@@ -246,8 +251,8 @@ function computeAggregates(data: WeekResponse): AggregateResult {
   return {
     tiers: {
       top1: finalizeTier(tierAcc.top1),
+      top2: finalizeTier(tierAcc.top2),
       top3: finalizeTier(tierAcc.top3),
-      top10: finalizeTier(tierAcc.top10),
     },
     days,
   };
@@ -274,9 +279,12 @@ export function HistoryShell() {
   }, []);
 
   const agg = rawData?.days?.length ? computeAggregates(rawData) : null;
-  const top10 = agg?.tiers.top10;
+  // Aggregate stats render off the top-3 (full basket) tier, that's
+  // the universe of trades the auto-executor actually fires every
+  // morning. Top-1 is still surfaced per-tier in the charts below.
+  const basket = agg?.tiers.top3;
   const daysWithAnyPnl = agg?.days.filter((d) => TIER_KEYS.some((t) => d.tiers[t].hasSummaries)) ?? [];
-  const hasSettled = (top10?.totalWinners ?? 0) + (top10?.totalLosers ?? 0) > 0;
+  const hasSettled = (basket?.totalWinners ?? 0) + (basket?.totalLosers ?? 0) > 0;
 
   return (
     <div className="animate-in fade-in duration-300">
@@ -285,11 +293,11 @@ export function HistoryShell() {
           <HistorySkeleton />
         ) : !rawData.days?.length ? (
           <EmptyState />
-        ) : agg && top10 ? (
+        ) : agg && basket ? (
           <>
             {hasSettled && (
               <>
-                <HistoryStats {...top10} />
+                <HistoryStats {...basket} />
 
                 {agg.days.length > 1 && (
                   <Section title="Equity Curve" subtitle="Cumulative P&L over time, split by pick tier" className="mt-10 border-t border-border/40 pt-8">
@@ -303,14 +311,16 @@ export function HistoryShell() {
                   </Section>
                 )}
 
-                {daysWithAnyPnl.length > 1 && (
-                  <Section title="Exposure vs Returns" subtitle="Capital deployed compared to capital returned, per tier" className="mt-10 border-t border-border/40 pt-8">
-                    <ExposureReturnsChart days={daysWithAnyPnl} />
-                  </Section>
-                )}
-
                 <Section title="Capital Efficiency" subtitle="How efficiently capital has been deployed all-time, per tier" className="mt-10 border-t border-border/40 pt-8">
                   <CapitalEfficiency tiers={agg.tiers} />
+                </Section>
+
+                <Section
+                  title="Conviction Calibration"
+                  subtitle="Does Claudia's confidence actually predict outcomes? Win rate bucketed by the score she assigned at 9:25 ET."
+                  className="mt-10 border-t border-border/40 pt-8"
+                >
+                  <ConvictionCalibration days={agg.days} />
                 </Section>
               </>
             )}

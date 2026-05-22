@@ -18,7 +18,7 @@ export function NoTradesToday() {
 
         <div className="flex flex-col items-center gap-1.5">
           <h3 className="text-lg font-semibold tracking-tight sm:text-xl">No trades today</h3>
-          <p className="max-w-xs text-sm leading-relaxed text-muted-foreground sm:max-w-sm">Nothing on the board for today — head over to the historical breakdown to see how past picks landed.</p>
+          <p className="max-w-xs text-sm leading-relaxed text-muted-foreground sm:max-w-sm">Nothing on the board for today, head over to the historical breakdown to see how past picks landed.</p>
         </div>
 
         <Link

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -68,7 +69,37 @@ func New(databaseURL string) (*Store, error) {
 }
 
 func migrate(db *sql.DB) error {
-	_, err := db.Exec(`
+	/*
+		Serialize concurrent migrate() invocations against the same DB
+		via a session-scoped advisory lock. Postgres' CREATE TABLE IF
+		NOT EXISTS check is NOT atomic with the implicit row-type
+		creation: two concurrent CREATE TABLE statements for the same
+		not-yet-existing table can both pass the existence check and
+		then collide on pg_type_typname_nsp_index. The DO Managed DB +
+		single shared test database in CI make this race visible
+		whenever go test runs multiple packages in parallel (each
+		store.New call hits migrate()).
+
+		Picking a fixed int64 lock key based on a hash of the literal
+		"vibetradez-migrate" so it's stable across deploys and not
+		going to collide with any other advisory locks the codebase
+		might use in the future. pg_advisory_unlock fires on conn
+		release, but we explicitly unlock at the end for clarity.
+	*/
+	const migrateLockKey int64 = 7430241128549138 // hash("vibetradez-migrate") truncated to int64
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		return fmt.Errorf("acquire conn for migration lock: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+	if _, err := conn.ExecContext(context.Background(), "SELECT pg_advisory_lock($1)", migrateLockKey); err != nil {
+		return fmt.Errorf("acquire migration advisory lock: %w", err)
+	}
+	defer func() {
+		_, _ = conn.ExecContext(context.Background(), "SELECT pg_advisory_unlock($1)", migrateLockKey)
+	}()
+
+	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS trades (
 			id SERIAL PRIMARY KEY,
 			date TEXT NOT NULL,
@@ -117,6 +148,26 @@ func migrate(db *sql.DB) error {
 		ALTER TABLE trades ADD COLUMN IF NOT EXISTS score INTEGER NOT NULL DEFAULT 0;
 		ALTER TABLE trades ADD COLUMN IF NOT EXISTS rationale TEXT NOT NULL DEFAULT '';
 		ALTER TABLE trades ADD COLUMN IF NOT EXISTS model TEXT NOT NULL DEFAULT '';
+
+		/*
+		Decouple contract-selection from ticker-selection. The picker (9:25 ET,
+		pre-bell) saves symbol + direction + contract intent (target_otm_pct,
+		min_dte) only. The executor (9:30:00 ET, post-bell) resolves each pick
+		against the now-live option chain, writing strike_price / expiration /
+		dte / estimated_price / stop_loss in place. Until that resolution
+		runs, those five columns are NULL.
+
+		Pre-bell chain quotes are frozen at yesterday's 4:00 PM ET close (US
+		listed options don't trade pre-market today), so the 9:25 picker had
+		no way to price a real contract. This is the schema half of the fix.
+		*/
+		ALTER TABLE trades ALTER COLUMN strike_price DROP NOT NULL;
+		ALTER TABLE trades ALTER COLUMN expiration DROP NOT NULL;
+		ALTER TABLE trades ALTER COLUMN dte DROP NOT NULL;
+		ALTER TABLE trades ALTER COLUMN estimated_price DROP NOT NULL;
+		ALTER TABLE trades ALTER COLUMN stop_loss DROP NOT NULL;
+		ALTER TABLE trades ADD COLUMN IF NOT EXISTS target_otm_pct DOUBLE PRECISION;
+		ALTER TABLE trades ADD COLUMN IF NOT EXISTS min_dte INTEGER;
 
 		ALTER TABLE trades DROP COLUMN IF EXISTS gpt_score;
 		ALTER TABLE trades DROP COLUMN IF EXISTS gpt_rationale;
@@ -189,11 +240,11 @@ func migrate(db *sql.DB) error {
 		/*
 		Auto-execution pipeline. The cron fires the basket of qualifying
 		picks every weekday at 9:30 ET, no user confirmation step. The
-		selector runs two phases (top 3 unconditionally, then a greedy
-		fill of additional contracts from ranks 1..10 toward a $1k
-		exposure target), so a row in this table represents one order
-		lifecycle (open or close) and its requested_quantity column
-		can be > 1 when the greedy fill duplicated a rank.
+		selector fires one contract per rank 1..3 (per-contract premium
+		cap as a safety filter), so a row in this table represents one
+		order lifecycle (open or close). requested_quantity is always 1
+		under the current selector but may be > 1 on legacy rows that
+		pre-date the top-3-only rewrite.
 		*/
 		CREATE TABLE IF NOT EXISTS executions (
 			id                  SERIAL PRIMARY KEY,
@@ -439,8 +490,9 @@ func (s *Store) SaveMorningTrades(date string, tradeList []trades.Trade) error {
 			estimated_price, thesis, sentiment_score, current_price,
 			target_price, stop_loss, risk_level,
 			catalyst, mention_count, rank,
-			score, rationale, model
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+			score, rationale, model,
+			target_otm_pct, min_dte
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
 		RETURNING id
 	`)
 	if err != nil {
@@ -451,11 +503,13 @@ func (s *Store) SaveMorningTrades(date string, tradeList []trades.Trade) error {
 	for i := range tradeList {
 		t := &tradeList[i]
 		err := stmt.QueryRow(
-			date, t.Symbol, t.ContractType, t.StrikePrice, t.Expiration, t.DTE,
-			t.EstimatedPrice, t.Thesis, t.SentimentScore, t.CurrentPrice,
-			t.TargetPrice, t.StopLoss, t.RiskLevel,
+			date, t.Symbol, t.ContractType,
+			nullableFloat(t.StrikePrice), nullableString(t.Expiration), nullableIntPtr(t.DTE),
+			nullableFloat(t.EstimatedPrice), t.Thesis, t.SentimentScore, t.CurrentPrice,
+			t.TargetPrice, nullableFloat(t.StopLoss), t.RiskLevel,
 			t.Catalyst, t.MentionCount, t.Rank,
 			t.Score, t.Rationale, t.Model,
+			t.TargetOTMPct, t.MinDTE,
 		).Scan(&t.ID)
 		if err != nil {
 			return fmt.Errorf("failed to insert trade %s: %w", t.Symbol, err)
@@ -471,7 +525,8 @@ func (s *Store) GetMorningTrades(date string) ([]trades.Trade, error) {
 			estimated_price, thesis, sentiment_score, current_price,
 			target_price, stop_loss, risk_level,
 			catalyst, mention_count, rank,
-			score, rationale, model
+			score, rationale, model,
+			target_otm_pct, min_dte
 		FROM trades WHERE date = $1 ORDER BY rank, id
 	`, date)
 	if err != nil {
@@ -481,14 +536,7 @@ func (s *Store) GetMorningTrades(date string) ([]trades.Trade, error) {
 
 	var result []trades.Trade
 	for rows.Next() {
-		var t trades.Trade
-		err := rows.Scan(
-			&t.ID, &t.Symbol, &t.ContractType, &t.StrikePrice, &t.Expiration, &t.DTE,
-			&t.EstimatedPrice, &t.Thesis, &t.SentimentScore, &t.CurrentPrice,
-			&t.TargetPrice, &t.StopLoss, &t.RiskLevel,
-			&t.Catalyst, &t.MentionCount, &t.Rank,
-			&t.Score, &t.Rationale, &t.Model,
-		)
+		t, err := scanTradeRow(rows.Scan, false)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan trade row: %w", err)
 		}
@@ -568,7 +616,8 @@ func (s *Store) GetTradesForDateRange(startDate, endDate string) (map[string][]t
 			estimated_price, thesis, sentiment_score, current_price,
 			target_price, stop_loss, risk_level,
 			catalyst, mention_count, rank,
-			score, rationale, model
+			score, rationale, model,
+			target_otm_pct, min_dte
 		FROM trades WHERE date >= $1 AND date <= $2 ORDER BY date, rank, id
 	`, startDate, endDate)
 	if err != nil {
@@ -579,20 +628,126 @@ func (s *Store) GetTradesForDateRange(startDate, endDate string) (map[string][]t
 	result := make(map[string][]trades.Trade)
 	for rows.Next() {
 		var date string
-		var t trades.Trade
-		err := rows.Scan(
-			&date, &t.ID, &t.Symbol, &t.ContractType, &t.StrikePrice, &t.Expiration, &t.DTE,
-			&t.EstimatedPrice, &t.Thesis, &t.SentimentScore, &t.CurrentPrice,
-			&t.TargetPrice, &t.StopLoss, &t.RiskLevel,
-			&t.Catalyst, &t.MentionCount, &t.Rank,
-			&t.Score, &t.Rationale, &t.Model,
-		)
+		t, err := scanTradeRow(rows.Scan, true, &date)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan trade row: %w", err)
 		}
 		result[date] = append(result[date], t)
 	}
 	return result, rows.Err()
+}
+
+/*
+ResolveTradeContract is called by the at-open executor once it has
+walked the live option chain and snapped a pick's intent (target_otm_pct,
+min_dte) to a concrete contract. Writes the five formerly-NULL columns in
+place so the dashboard, the morning email, and downstream selector +
+order-builder paths can read them.
+
+Single UPDATE with all five fields so partial failures can't leave a row
+half-resolved (e.g. strike set but estimated_price still null).
+*/
+func (s *Store) ResolveTradeContract(tradeID int, strike float64, expiration string, dte int, estimatedPrice, stopLoss float64) error {
+	_, err := s.db.Exec(`
+		UPDATE trades
+		SET strike_price = $2,
+		    expiration = $3,
+		    dte = $4,
+		    estimated_price = $5,
+		    stop_loss = $6
+		WHERE id = $1
+	`, tradeID, strike, expiration, dte, estimatedPrice, stopLoss)
+	if err != nil {
+		return fmt.Errorf("failed to resolve trade %d contract: %w", tradeID, err)
+	}
+	return nil
+}
+
+/*
+scanTradeRow is the shared scan body for GetMorningTrades and
+GetTradesForDateRange. The date prefix is optional: when withDate is true,
+the first variadic arg must be a *string the scanner writes into. Pointer
+fields (StrikePrice, Expiration, DTE, EstimatedPrice, StopLoss) come back
+nil when the row is pre-resolution (picker saved intent only; executor
+hasn't run yet).
+*/
+func scanTradeRow(scan func(...any) error, withDate bool, datePtr ...*string) (trades.Trade, error) {
+	var t trades.Trade
+	var strikeNull sql.NullFloat64
+	var expirationNull sql.NullString
+	var dteNull sql.NullInt64
+	var estPriceNull sql.NullFloat64
+	var stopLossNull sql.NullFloat64
+	var targetOTMPctNull sql.NullFloat64
+	var minDTENull sql.NullInt64
+
+	dest := []any{
+		&t.ID, &t.Symbol, &t.ContractType, &strikeNull, &expirationNull, &dteNull,
+		&estPriceNull, &t.Thesis, &t.SentimentScore, &t.CurrentPrice,
+		&t.TargetPrice, &stopLossNull, &t.RiskLevel,
+		&t.Catalyst, &t.MentionCount, &t.Rank,
+		&t.Score, &t.Rationale, &t.Model,
+		&targetOTMPctNull, &minDTENull,
+	}
+	if withDate {
+		if len(datePtr) != 1 {
+			return t, fmt.Errorf("scanTradeRow: withDate=true requires exactly one datePtr")
+		}
+		dest = append([]any{datePtr[0]}, dest...)
+	}
+
+	if err := scan(dest...); err != nil {
+		return t, err
+	}
+
+	if strikeNull.Valid {
+		v := strikeNull.Float64
+		t.StrikePrice = &v
+	}
+	if expirationNull.Valid {
+		v := expirationNull.String
+		t.Expiration = &v
+	}
+	if dteNull.Valid {
+		v := int(dteNull.Int64)
+		t.DTE = &v
+	}
+	if estPriceNull.Valid {
+		v := estPriceNull.Float64
+		t.EstimatedPrice = &v
+	}
+	if stopLossNull.Valid {
+		v := stopLossNull.Float64
+		t.StopLoss = &v
+	}
+	if targetOTMPctNull.Valid {
+		t.TargetOTMPct = targetOTMPctNull.Float64
+	}
+	if minDTENull.Valid {
+		t.MinDTE = int(minDTENull.Int64)
+	}
+	return t, nil
+}
+
+func nullableFloat(p *float64) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
+func nullableString(p *string) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
+func nullableIntPtr(p *int) any {
+	if p == nil {
+		return nil
+	}
+	return *p
 }
 
 func (s *Store) GetSummariesForDateRange(startDate, endDate string) (map[string][]trades.TradeSummary, error) {

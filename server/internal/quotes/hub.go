@@ -413,14 +413,21 @@ func (h *Hub) computeSubscriptions(picks []trades.Trade) (equities, options []st
 	occToKey = make(map[string]string)
 	for _, t := range picks {
 		equitySet[t.Symbol] = struct{}{}
-		occ, err := schwab.FormatOCCSymbol(t.Symbol, t.ContractType, t.Expiration, t.StrikePrice)
+		if !t.ContractResolved() {
+			// Pre-resolution picks (executor hasn't run yet at the 9:30
+			// ET hub start, or resolution failed) have no contract to
+			// stream. Equity stream still subscribes; option stream
+			// kicks in once the contract resolves and the hub re-syncs.
+			continue
+		}
+		occ, err := schwab.FormatOCCSymbol(t.Symbol, t.ContractType, t.ExpirationStr(), t.Strike())
 		if err != nil {
 			log.Printf("quotes hub: skip pick %s (OCC build: %v)", t.Symbol, err)
 			continue
 		}
 		// Internal key matches the existing /api/quotes/live shape so
 		// the client lookup (key built from trade fields) finds it.
-		internalKey := fmt.Sprintf("%s|%s|%.2f|%s", t.Symbol, t.ContractType, t.StrikePrice, t.Expiration)
+		internalKey := fmt.Sprintf("%s|%s|%.2f|%s", t.Symbol, t.ContractType, t.Strike(), t.ExpirationStr())
 		occToKey[occ] = internalKey
 		options = append(options, occ)
 	}

@@ -86,7 +86,7 @@ function computeRow(dt: DashboardTrade, executions: Execution[] | null | undefin
     /*
     The auto-close cron exhausted its retry-cancel-replace window
     and the position is still open at the broker. Surface that
-    loudly here — the prior shape rendered "OPEN" with no warning,
+    loudly here, the prior shape rendered "OPEN" with no warning,
     making a stranded-at-broker position look identical to a
     never-executed pick.
     */
@@ -117,11 +117,21 @@ function computeRow(dt: DashboardTrade, executions: Execution[] | null | undefin
     resultLabel = "OPEN";
     resultVariant = "secondary";
     accentBorder = "border-l-transparent";
-    entry = fmtMoney(trade.estimated_price);
+    entry = trade.estimated_price !== null ? fmtMoney(trade.estimated_price) : "...";
     close = "-";
   }
 
-  return { hasSummary, pnl, pnlPct, stockMove, resultLabel, resultVariant, accentBorder, entry, close };
+  return {
+    hasSummary,
+    pnl,
+    pnlPct,
+    stockMove,
+    resultLabel,
+    resultVariant,
+    accentBorder,
+    entry,
+    close,
+  };
 }
 
 export function TradeTable({ trades, date, executions, liveQuotes }: TradeTableProps) {

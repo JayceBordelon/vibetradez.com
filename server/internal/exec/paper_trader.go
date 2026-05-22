@@ -70,7 +70,7 @@ func (pt *PaperTrader) AccountHash(_ context.Context) (string, error) {
 
 /*
 AvailableFunds returns a synthetic effectively-unlimited number for
-paper mode so the basket cap (MaxDailyBasketUSD) is the only governor.
+paper mode so the per-contract premium cap is the only governor.
 Paper mode mustn't pretend to be cash-constrained: the whole point of
 paper is to mirror what live would have done given an unconstrained
 balance, then compare to live's real-money outcome. If paper trading

@@ -19,6 +19,7 @@ import (
 	"vibetradez.com/internal/config"
 	"vibetradez.com/internal/email"
 	"vibetradez.com/internal/exec"
+	"vibetradez.com/internal/execagent"
 	"vibetradez.com/internal/quotes"
 	"vibetradez.com/internal/rollouts"
 	"vibetradez.com/internal/schwab"
@@ -236,16 +237,36 @@ func main() {
 			EmailFrom:         cfg.EmailFrom,
 			ModelLabel:        modelLabel,
 			SchwabAccountHash: trader.AccountHash,
-			OptionAsk:         schwabClient.OptionAsk,
 		}
 		executor = exec.NewService(db, trader, emailClient, execCfg)
 	}
 
-	// 9:25 ET — picker only. Runs against pre-open Schwab quotes
-	// (mark prices from the cancel-replace queue, no live spread yet)
-	// so Claude has 5 minutes to finish the tool-use loop before market
-	// open. NO executor in this path — orders are fired by the separate
-	// 9:30 cron once live quotes are available.
+	/*
+		At-open execution agent. The 9:30 cron re-invokes Claude with
+		the morning candidates + live tools (Schwab chain, equity quotes,
+		web search) and a place_options_order tool that wraps
+		executor.PlaceBuyToOpenAgent. Replaces the old deterministic
+		resolver+selector path entirely.
+
+		The agent is only constructed when both a picker model is
+		available (otherwise the morning cron writes nothing for it to
+		execute against) AND the executor service is enabled (otherwise
+		PlaceBuyToOpenAgent has no broker to talk to). Local stub keys
+		short-circuit both branches at the picker side.
+	*/
+	var execAgent *execagent.Agent
+	if cfg.TradingEnabled && claudePicker != nil && executor != nil {
+		execAgent = execagent.NewAgent(cfg.AnthropicAPIKey, cfg.AnthropicModel, schwabClient, executor)
+		log.Printf("execagent: ready (model=%s)", cfg.AnthropicModel)
+	}
+
+	// 9:25 ET — ticker selection only. Claude picks symbols + direction +
+	// contract intent (target_otm_pct, min_dte) against live Schwab equity
+	// quotes; option-chain prices are intentionally NOT consumed at this
+	// stage (US options don't trade premarket, so the chain still shows
+	// yesterday's 4:00 PM close). The 5-minute pre-bell window lets the
+	// tool-use loop finish before the 9:30 executor cron snaps each pick
+	// to a real contract against the live post-open chain.
 	openJob := func() {
 		if open, reason := isMarketOpen(); !open {
 			log.Printf("Skipping morning picker: Market closed (%s)", reason)
@@ -264,11 +285,11 @@ func main() {
 			log.Printf("Skipping execute-at-open: Market closed (%s)", reason)
 			return
 		}
-		if executor == nil {
-			log.Printf("Skipping execute-at-open: trading not enabled")
+		if execAgent == nil {
+			log.Printf("Skipping execute-at-open: agent not configured (trading disabled or no picker)")
 			return
 		}
-		runExecuteAtOpen(cfg, db, executor)
+		runExecuteAtOpen(cfg, db, emailClient, execAgent)
 	}
 
 	// 9:35 ET — cancel any still-WORKING LIMITs from the 9:30 burst,
@@ -370,6 +391,7 @@ func main() {
 				return
 			}
 			executor.CloseAllPositionsForDate(ctxBg, todayDate())
+			executor.SendCloseSummary(ctxBg, todayDate())
 		}); err != nil {
 			log.Fatalf("Failed to add 3:55pm close cron: %v", err)
 		}
@@ -383,6 +405,7 @@ func main() {
 				return
 			}
 			executor.CloseAllPositionsForDate(ctxBg, todayDate())
+			executor.SendCloseSummary(ctxBg, todayDate())
 		}); err != nil {
 			log.Fatalf("Failed to add 12:55pm half-day close cron: %v", err)
 		}
@@ -589,30 +612,21 @@ func validatePickFields(picks []trades.Trade) []trades.Trade {
 		if p.ContractType != "CALL" && p.ContractType != "PUT" {
 			reasons = append(reasons, fmt.Sprintf("contract_type=%q", p.ContractType))
 		}
-		if p.StrikePrice <= 0 {
-			reasons = append(reasons, fmt.Sprintf("strike=%v", p.StrikePrice))
-		}
-		if p.EstimatedPrice <= 0 {
-			reasons = append(reasons, fmt.Sprintf("estimated_price=%v", p.EstimatedPrice))
-		}
-		// Hard per-contract cap of $1,000 = $10.00 per share. The prompt
-		// asks Claude to stay in the $3-5 band; a pick > $10 is either
-		// a hallucination (deep-ITM mark priced as OTM) or a model
-		// misread of the chain. Drop it before the selector ever sees
-		// it — the selector clamps the LIMIT but spending budget on a
-		// hallucinated pick crowds out real ones.
-		if p.EstimatedPrice > exec.MaxContractPremium {
-			reasons = append(reasons, fmt.Sprintf("estimated_price=$%.2f > $%.2f/share cap", p.EstimatedPrice, exec.MaxContractPremium))
-		}
 		if p.CurrentPrice <= 0 {
 			reasons = append(reasons, fmt.Sprintf("current_price=%v", p.CurrentPrice))
 		}
-		if p.DTE < 0 {
-			reasons = append(reasons, fmt.Sprintf("dte=%d", p.DTE))
+		// Intent fields: TargetOTMPct can legitimately be 0 (ATM); we only
+		// reject the negative case as malformed. MinDTE must be non-negative
+		// (0DTE is fine).
+		if p.TargetOTMPct < 0 {
+			reasons = append(reasons, fmt.Sprintf("target_otm_pct=%.2f (negative)", p.TargetOTMPct))
 		}
-		if len(p.Expiration) != 10 {
-			reasons = append(reasons, fmt.Sprintf("expiration=%q", p.Expiration))
+		if p.MinDTE < 0 {
+			reasons = append(reasons, fmt.Sprintf("min_dte=%d (negative)", p.MinDTE))
 		}
+		// Contract specifics (strike/expiration/estimated_price/dte/stop_loss)
+		// are intentionally NOT validated here: they're nil at picker time
+		// and only filled by the 9:30:00 ET at-open contract-resolution path.
 		if len(reasons) > 0 {
 			log.Printf("pick validation: DROPPING #%d %s (%s)", p.Rank, p.Symbol, strings.Join(reasons, ", "))
 			continue
@@ -637,20 +651,25 @@ func renumberRanks(picks []trades.Trade) []trades.Trade {
 }
 
 /*
-validatePicksAgainstSpot drops picks whose strike is more than 25%
-away from current Schwab spot. Claude has produced internally
-inconsistent picks where its `current_price` field disagrees wildly
-with what Schwab's live feed reports (e.g., picking a $115 strike on
-a name Schwab shows at $750), which then surfaces on the dashboard as
-absurd "Current" marks like +44,000% gains on a deep-ITM contract the
-picker thought was slightly OTM. Uses GetQuotesUncached so the guard
-is an independent probe, not a read of the same 45s-cached batch the
-picker tools just warmed. A nil schwab client (local dev) is a no-op
-pass-through, as is a GetQuotes failure (we prefer shipping
-unvalidated picks to dropping everything on a transient probe error).
+validatePicksAgainstSpot reconciles each pick's reported current_price
+against a fresh Schwab quote. If the picker's current_price drifts > 25%
+from the live spot at validation time (typical cause: Claude pulled spot
+from web search or a stale tool result), we replace current_price in
+place with the Schwab number so the 9:30 at-open agent has the correct
+underlying when it reads target_otm_pct off the candidate.
+
+We do NOT drop picks here anymore: the at-open agent reads the live
+chain and picks the strike directly, so the worst-case downstream
+effect of a slightly stale current_price is the agent anchoring its
+strike search a percent or two off the picker's intended OTM band.
+That's tolerable.
+
+Uses GetQuotesUncached so the guard is an independent probe, not a read
+of the same 45s-cached batch the picker tools warmed. A nil schwab
+client (local dev) is a no-op pass-through, as is a GetQuotes failure.
 */
 func validatePicksAgainstSpot(picks []trades.Trade, schwabClient *schwab.Client) []trades.Trade {
-	const maxStrikeDistance = 0.25
+	const maxDrift = 0.25
 
 	if schwabClient == nil || len(picks) == 0 {
 		return picks
@@ -669,26 +688,23 @@ func validatePicksAgainstSpot(picks []trades.Trade, schwabClient *schwab.Client)
 		return picks
 	}
 
-	keep := make([]trades.Trade, 0, len(picks))
-	for _, p := range picks {
+	for i := range picks {
+		p := &picks[i]
 		q, ok := quotes[p.Symbol]
 		if !ok || q.LastPrice <= 0 {
-			log.Printf("pick validation: no spot for %s, keeping #%d", p.Symbol, p.Rank)
-			keep = append(keep, p)
 			continue
 		}
-		distance := (p.StrikePrice - q.LastPrice) / q.LastPrice
+		distance := (p.CurrentPrice - q.LastPrice) / q.LastPrice
 		if distance < 0 {
 			distance = -distance
 		}
-		if distance > maxStrikeDistance {
-			log.Printf("pick validation: DROPPING #%d %s %s $%.2f (spot=$%.2f, %.0f%% from spot, claude_current=$%.2f)",
-				p.Rank, p.Symbol, p.ContractType, p.StrikePrice, q.LastPrice, distance*100, p.CurrentPrice)
-			continue
+		if distance > maxDrift {
+			log.Printf("pick validation: rank=%d %s current_price=$%.2f drifted %.0f%% from spot=$%.2f, replacing with Schwab spot",
+				p.Rank, p.Symbol, p.CurrentPrice, distance*100, q.LastPrice)
+			p.CurrentPrice = q.LastPrice
 		}
-		keep = append(keep, p)
 	}
-	return keep
+	return picks
 }
 
 func sendErrorNotification(cfg *config.Config, db *store.Store, emailClient *email.Client, errMsg string) {
@@ -805,23 +821,26 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 	templateTrades := make([]templates.Trade, len(topTrades))
 	for i, t := range topTrades {
 		templateTrades[i] = templates.Trade{
-			Symbol:         t.Symbol,
-			ContractType:   t.ContractType,
-			StrikePrice:    t.StrikePrice,
-			Expiration:     t.Expiration,
-			DTE:            t.DTE,
-			EstimatedPrice: t.EstimatedPrice,
-			Thesis:         t.Thesis,
-			SentimentScore: t.SentimentScore,
-			CurrentPrice:   t.CurrentPrice,
-			TargetPrice:    t.TargetPrice,
-			StopLoss:       t.StopLoss,
-			RiskLevel:      t.RiskLevel,
-			Catalyst:       t.Catalyst,
-			MentionCount:   t.MentionCount,
-			Rank:           t.Rank,
-			Score:          t.Score,
-			Rationale:      t.Rationale,
+			Symbol:           t.Symbol,
+			ContractType:     t.ContractType,
+			StrikePrice:      t.Strike(),
+			Expiration:       t.ExpirationStr(),
+			DTE:              t.DTEVal(),
+			EstimatedPrice:   t.EstPrice(),
+			Thesis:           t.Thesis,
+			SentimentScore:   t.SentimentScore,
+			CurrentPrice:     t.CurrentPrice,
+			TargetPrice:      t.TargetPrice,
+			StopLoss:         t.StopLossVal(),
+			RiskLevel:        t.RiskLevel,
+			Catalyst:         t.Catalyst,
+			MentionCount:     t.MentionCount,
+			Rank:             t.Rank,
+			Score:            t.Score,
+			Rationale:        t.Rationale,
+			TargetOTMPct:     t.TargetOTMPct,
+			MinDTE:           t.MinDTE,
+			ContractResolved: t.ContractResolved(),
 		}
 	}
 
@@ -920,55 +939,72 @@ func currentWeekRange() (string, string) {
 }
 
 /*
-runExecuteAtOpen is the 9:30:00 ET executor entry point. Loads
-today's saved picks from the DB (written by runTradeAnalysis at
-9:25), runs them through exec.QualifyingBasket to apply the top-3 +
-greedy-fill selector, and fires each PlaceOrder with a LIMIT × 1.10
-over fresh live Schwab ask.
+runExecuteAtOpen is the 9:30:00 ET cron entry point. Loads today's
+saved candidates from the DB (written by runTradeAnalysis at 9:25),
+hands them to the execagent, and lets Claude decide which to actually
+trade and what specific contract spec to fire each one as.
 
-Fire-and-forget: this function returns as soon as PlaceOrder + the
-immediate broker-id persistence has happened for each entry. The
-per-minute reconcile cron picks up fills as they happen. The 9:35
-cron cancels any still-WORKING LIMITs and sends ONE consolidated
-email summarizing the day's open-side outcomes.
+Fire-and-forget: the agent's place_options_order tool returns the
+Schwab order id immediately and the per-minute ReconcileOpenOrders
+cron handles fill landing. The 9:35 CancelDanglingOpens +
+SendExecutionSummary cron sequence reconciles the basket and emails
+the operator one consolidated summary.
 
-No email is sent from this path — per the audit-driven redesign,
-all per-execution receipts and open-failed alerts were replaced by
-the 9:35 SendExecutionSummary email. Errors here are logged only.
+Error semantics: on agent failure (Anthropic API down, parse error,
+tool layer refusing every order), the function logs and emails the
+operator an error notification. Skip rows the agent persisted during
+its run are preserved so the summary email still surfaces what the
+agent thought before it crashed.
 */
-func runExecuteAtOpen(cfg *config.Config, db *store.Store, executor *exec.Service) {
-	_ = cfg
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+func runExecuteAtOpen(cfg *config.Config, db *store.Store, emailClient *email.Client, agent *execagent.Agent) {
+	/*
+		8-minute budget. Claude's at-open run typically takes 30-90s
+		(3 candidates × {chain fetch + 1-2 quote calls + optional
+		web search} + final JSON). The 9:35 cancel-dangling cron is the
+		downstream safety net for anything still WORKING at the broker.
+	*/
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
 
 	date := todayDate()
-	topTrades, err := db.GetMorningTrades(date)
+	candidates, err := db.GetMorningTrades(date)
 	if err != nil {
 		log.Printf("execute-at-open: load morning trades: %v", err)
+		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("execute-at-open: load morning trades for %s: %v", date, err))
 		return
 	}
-	if len(topTrades) == 0 {
-		log.Printf("execute-at-open: no saved trades for %s — picker either skipped or didn't finish in time", date)
-		return
-	}
-
-	basket := exec.QualifyingBasket(topTrades)
-	if len(basket) == 0 {
-		log.Printf("execute-at-open: no qualifying basket for %s (no ranks 1..%d eligible under $%.2f per-contract cap)",
-			date, exec.GreedyFillMaxRank, exec.MaxContractPremium)
+	if len(candidates) == 0 {
+		log.Printf("execute-at-open: no saved candidates for %s (picker skipped or didn't finish in time)", date)
 		return
 	}
 
-	summary := make([]string, 0, len(basket))
-	totalQty := 0
-	for _, b := range basket {
-		summary = append(summary, fmt.Sprintf("rank=%d %s %s@%.2f×%d", b.Trade.Rank, b.Trade.Symbol, b.Trade.ContractType, b.Trade.EstimatedPrice, b.Quantity))
-		totalQty += b.Quantity
+	log.Printf("execute-at-open: dispatching agent for %d candidates on %s", len(candidates), date)
+	result, runErr := agent.Run(ctx, execagent.CandidatesFromTrades(candidates))
+	if runErr != nil {
+		log.Printf("execute-at-open: agent run error: %v", runErr)
+		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("execute-at-open agent run for %s failed: %v", date, runErr))
+		// Fall through to log whatever decisions did persist (the agent
+		// returns a partial result on conversation errors so any orders
+		// it managed to place before the failure are still visible).
 	}
-	log.Printf("execute-at-open: basket of %d entry(ies)/%d contract(s) [%s] (mode=%s)", len(basket), totalQty, strings.Join(summary, ", "), executor.Mode())
-	if _, err := executor.HandleQualifyingPicks(ctx, basket); err != nil {
-		log.Printf("execute-at-open: handle qualifying picks: %v", err)
+
+	if result == nil {
+		return
 	}
+
+	buys, skips := 0, 0
+	for _, d := range result.Decisions {
+		switch d.Action {
+		case execagent.ActionBuy:
+			buys++
+			log.Printf("execute-at-open: BUY rank=%d %s strike=$%.2f exp=%s limit=$%.2f order=%s",
+				d.Rank, d.Symbol, d.Strike, d.Expiration, d.LimitPrice, d.OrderID)
+		case execagent.ActionSkip:
+			skips++
+			log.Printf("execute-at-open: SKIP rank=%d %s reason=%q", d.Rank, d.Symbol, d.SkipReason)
+		}
+	}
+	log.Printf("execute-at-open: agent done (%d buys, %d skips, note=%q)", buys, skips, result.FinalNote)
 }
 
 func runWeeklyEmail(cfg *config.Config, db *store.Store, emailClient *email.Client) {
@@ -1006,7 +1042,10 @@ func runWeeklyEmail(cfg *config.Config, db *store.Store, emailClient *email.Clie
 		dayRankMap := make(map[string]int)
 		if dayTrades, ok := tradesMap[date]; ok {
 			for _, t := range dayTrades {
-				key := t.Symbol + "|" + t.ContractType + "|" + fmt.Sprintf("%.2f", t.StrikePrice)
+				if !t.ContractResolved() {
+					continue
+				}
+				key := t.Symbol + "|" + t.ContractType + "|" + fmt.Sprintf("%.2f", t.Strike())
 				dayRankMap[key] = t.Rank
 			}
 		}
@@ -1175,8 +1214,19 @@ func runEndOfDayAnalysis(cfg *config.Config, db *store.Store, claudePicker *trad
 		return
 	}
 
+	// Drop picks whose contract never resolved at open. EOD analysis runs
+	// per-contract (Claude re-quotes each specific strike); a pick without
+	// a strike/expiration has nothing to re-quote.
+	resolvedTrades := savedTrades[:0:0]
+	for _, t := range savedTrades {
+		if t.ContractResolved() {
+			resolvedTrades = append(resolvedTrades, t)
+		}
+	}
+	savedTrades = resolvedTrades
+
 	if len(savedTrades) == 0 {
-		log.Println("Skipping EOD summary: no morning trades found for today")
+		log.Println("Skipping EOD summary: no resolved morning trades found for today")
 		return
 	}
 
@@ -1209,7 +1259,10 @@ func runEndOfDayAnalysis(cfg *config.Config, db *store.Store, claudePicker *trad
 	}
 	morningByKey := make(map[string]morningMeta)
 	for _, t := range savedTrades {
-		key := t.Symbol + "|" + t.ContractType + "|" + fmt.Sprintf("%.2f", t.StrikePrice)
+		if !t.ContractResolved() {
+			continue
+		}
+		key := t.Symbol + "|" + t.ContractType + "|" + fmt.Sprintf("%.2f", t.Strike())
 		morningByKey[key] = morningMeta{
 			Rank:  t.Rank,
 			Score: t.Score,

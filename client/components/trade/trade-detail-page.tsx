@@ -20,7 +20,12 @@ import type { DashboardTrade, Execution, LiveQuotesResponse, Trade } from "@/typ
 
 type LoadState =
   | { kind: "loading" }
-  | { kind: "found"; dt: DashboardTrade; resolvedDate: string; execution: Execution | null }
+  | {
+      kind: "found";
+      dt: DashboardTrade;
+      resolvedDate: string;
+      execution: Execution | null;
+    }
   | { kind: "not-found"; tried: string }
   | { kind: "error"; message: string };
 
@@ -44,7 +49,10 @@ export function TradeDetailPage({ symbol, date }: { symbol: string; date?: strin
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        setState({ kind: "error", message: e instanceof Error ? e.message : "Failed to load trade" });
+        setState({
+          kind: "error",
+          message: e instanceof Error ? e.message : "Failed to load trade",
+        });
       });
     return () => {
       cancelled = true;
@@ -80,11 +88,11 @@ function BackLink() {
 /*
 Mirrors the TradeDetailBody layout so the page doesn't jump when the
 fetch resolves: ticker header, contract grid (real labels, skeleton
-values — the labels are informative-loading), one generic live/EOD
+values, the labels are informative-loading), one generic live/EOD
 section block, and Claudia's read. Symbol is known from the URL so
 it renders as the real H1 instead of pulsing. Execution badge and
 catalyst block are conditional in the loaded view, so we don't reserve
-space for them here — a small one-line shift on those is acceptable.
+space for them here, a small one-line shift on those is acceptable.
 
 Mobile: 2-col contract grid + 2-col stat strip (matches sm:grid-cols-4
 breakpoint on the real components). Skeleton widths stay narrow enough
@@ -95,7 +103,7 @@ const SKELETON_METRIC_LABELS = ["Strike", "Expiration", "Entry", "Target", "Stop
 function TradeDetailSkeleton({ symbol }: { symbol: string }) {
   return (
     <div className="space-y-2" aria-busy="true" aria-live="polite">
-      {/* Ticker header — symbol is known, surrounding badges + date pulse */}
+      {/* Ticker header, symbol is known, surrounding badges + date pulse */}
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="font-mono text-3xl font-bold tabular-nums text-foreground sm:text-4xl">${symbol}</h1>
         <Skeleton className="h-5 w-14" />
@@ -105,24 +113,24 @@ function TradeDetailSkeleton({ symbol }: { symbol: string }) {
         <Skeleton className="ml-auto h-3 w-24" />
       </div>
 
-      {/* Catalyst — reserved (most picks have one) */}
+      {/* Catalyst, reserved (most picks have one) */}
       <div className="mt-5 rounded-md border border-amber-border/40 bg-amber-bg/60 px-4 py-3">
         <Skeleton className="h-4 w-full max-w-md" />
       </div>
 
-      {/* Contract properties — real labels, skeleton values */}
+      {/* Contract properties, real labels, skeleton values */}
       <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3 md:grid-cols-4">
         {SKELETON_METRIC_LABELS.map((label) => (
           <Metric key={label} label={label} value={<Skeleton className="ml-auto h-4 w-14" />} />
         ))}
       </div>
 
-      {/* Live / EOD section head — generic placeholder, real component picks one once loaded */}
+      {/* Live / EOD section head, generic placeholder, real component picks one once loaded */}
       <div className="mb-4 mt-2 flex flex-wrap items-baseline justify-between gap-3 border-t border-border/40 pt-8">
         <Skeleton className="h-6 w-32" />
         <Skeleton className="h-7 w-28" />
       </div>
-      {/* StatStrip — mirrors grid-cols-2 mobile / sm:grid-cols-4 desktop with hairline dividers */}
+      {/* StatStrip, mirrors grid-cols-2 mobile / sm:grid-cols-4 desktop with hairline dividers */}
       <div className="grid grid-cols-2 divide-x divide-y divide-border/50 border-y border-border/50 sm:grid-cols-4 sm:divide-y-0 sm:border-y-0 sm:border-t sm:border-b">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="min-w-0 px-4 py-4 sm:px-5">
@@ -132,7 +140,7 @@ function TradeDetailSkeleton({ symbol }: { symbol: string }) {
         ))}
       </div>
 
-      {/* Claudia's read — reserved (rationale is always set) */}
+      {/* Claudia's read, reserved (rationale is always set) */}
       <div className="mt-10 rounded-lg border border-claude-border/40 bg-claude-light px-5 py-4">
         <div className="mb-2 flex items-center gap-2">
           <ClaudeLogo className="h-4 w-4" />
@@ -199,14 +207,14 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
   /*
   Compute the live snapshot once at the body level so the hero P&L
   block at the top of the page and the Live StatStrip near the bottom
-  can share the same numbers — single source of truth, no risk of
+  can share the same numbers, single source of truth, no risk of
   drift between the two surfaces.
   */
   const liveSnap = !summary ? computeLiveSnapshot(trade, liveQuotes, execution) : null;
 
   return (
     <div className="space-y-2">
-      {/* Ticker header — flat, no card. Paper/Taken pill lives inline here instead of a separate panel. */}
+      {/* Ticker header, flat, no card. Paper/Taken pill lives inline here instead of a separate panel. */}
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="font-mono text-3xl font-bold tabular-nums text-foreground sm:text-4xl">${trade.symbol}</h1>
         <Badge variant="outline" className={cn(trade.contract_type === "CALL" ? "border-green-border text-green" : "border-red-border text-red")}>
@@ -222,17 +230,17 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
         <span className="ml-auto text-xs text-muted-foreground">{resolvedDate}</span>
       </div>
 
-      {/* Live P&L hero — the single highest-priority number on the page when a live position is active. Sits right under the ticker header so the user's eye lands on it first. */}
+      {/* Live P&L hero, the single highest-priority number on the page when a live position is active. Sits right under the ticker header so the user's eye lands on it first. */}
       {liveSnap && liveSnap.livePnl !== null && <LivePnlHero snap={liveSnap} />}
 
-      {/* Catalyst — soft tinted prose container, NOT a full card */}
+      {/* Catalyst, soft tinted prose container, NOT a full card */}
       {trade.catalyst && (
         <div className="mt-5 rounded-md border border-amber-border/40 bg-amber-bg/60 px-4 py-3 text-sm">
           <span className="font-semibold text-amber">Catalyst:</span> <span className="text-foreground/90">{trade.catalyst}</span>
         </div>
       )}
 
-      {/* Claudia's read — promoted near the top so the thesis is the first prose the user reads */}
+      {/* Claudia's read, promoted near the top so the thesis is the first prose the user reads */}
       {trade.rationale && (
         <div className="mt-5 rounded-lg border border-claude-border/50 bg-claude-light px-6 py-5">
           <div className="mb-3 flex items-center gap-2">
@@ -248,15 +256,17 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
         </div>
       )}
 
-      {/* Contract properties — properties grid, no card */}
+      {/* Contract properties, properties grid, no card. Strike/expiration/
+          entry/stop are filled in by the 9:30 ET executor; render an em-
+          dash placeholder while the contract is still being resolved. */}
       <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3 md:grid-cols-4">
-        <Metric label="Strike" value={fmtMoney(trade.strike_price)} />
-        <Metric label="Expiration" value={`${trade.expiration} (${trade.dte}d)`} />
-        <Metric label="Entry" value={fmtMoney(trade.estimated_price)} />
+        <Metric label="Strike" value={trade.strike_price !== null ? fmtMoney(trade.strike_price) : "-"} />
+        <Metric label="Expiration" value={trade.expiration !== null && trade.dte !== null ? `${trade.expiration} (${trade.dte}d)` : "Finding contracts..."} />
+        <Metric label="Entry" value={trade.estimated_price !== null ? fmtMoney(trade.estimated_price) : "-"} />
         <Metric label="Target" value={<span className={cn("text-sm font-semibold tabular-nums", trade.contract_type === "CALL" ? "text-green" : "text-red")}>{fmtMoney(trade.target_price)}</span>} />
-        <Metric label="Stop loss" value={fmtMoney(trade.stop_loss)} />
-        <Metric label="Breakeven" value={fmtMoney(breakeven)} />
-        <Metric label="Max loss" value={<span className="text-sm font-semibold tabular-nums text-red">{fmtPnlInt(-maxLoss)}</span>} />
+        <Metric label="Stop loss" value={trade.stop_loss !== null ? fmtMoney(trade.stop_loss) : "-"} />
+        <Metric label="Breakeven" value={breakeven !== null ? fmtMoney(breakeven) : "-"} />
+        <Metric label="Max loss" value={maxLoss !== null ? <span className="text-sm font-semibold tabular-nums text-red">{fmtPnlInt(-maxLoss)}</span> : "-"} />
         <Metric
           label="Sentiment"
           value={
@@ -269,10 +279,10 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
         <Metric label="Stock at entry" value={fmtMoney(trade.current_price)} />
       </div>
 
-      {/* Live block — flat section, StatStrip metrics. Same shape whether or not a position was taken; execution only nudges the P&L baseline. */}
+      {/* Live block, flat section, StatStrip metrics. Same shape whether or not a position was taken; execution only nudges the P&L baseline. */}
       {!summary && liveSnap && <LiveSection snap={liveSnap} marketOpen={liveQuotes?.market_open} />}
 
-      {/* EOD result — flat section */}
+      {/* EOD result, flat section */}
       {summary && (
         <>
           <SectionHead
@@ -311,7 +321,7 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
 /*
 PositionTag is the inline replacement for the old big "Position taken"
 panel. The trade detail page is now identical whether or not Jayce
-took the trade — this small pill is the only signal. Two normal
+took the trade, this small pill is the only signal. Two normal
 states (Paper / Taken) plus loud warnings for failed / canceled /
 close_failed so the operator notices.
 */
@@ -363,7 +373,7 @@ TradeDetailBody and shared by LivePnlHero (the giant spotlight number)
 and LiveSection (the supporting StatStrip) so the two surfaces never
 disagree.
 
-Returns null when no live data has arrived yet — both renderers
+Returns null when no live data has arrived yet, both renderers
 should skip in that case.
 */
 type LiveSnapshot = {
@@ -383,22 +393,24 @@ function computeLiveSnapshot(trade: Trade, liveQuotes: LiveQuotesResponse | null
   /*
   Reconstruct the same option key the server emits (server.go ~846):
   "<SYMBOL>|<CALL|PUT>|<strike .2f>|<expiration>".
+  Skip the option lookup entirely for pre-resolution picks: there's no
+  strike/expiration to key on yet.
   */
-  const optionKey = `${trade.symbol}|${trade.contract_type}|${trade.strike_price.toFixed(2)}|${trade.expiration}`;
-  const liveOption = liveQuotes.options?.[optionKey] ?? null;
+  const optionKey = trade.strike_price !== null && trade.expiration !== null ? `${trade.symbol}|${trade.contract_type}|${trade.strike_price.toFixed(2)}|${trade.expiration}` : null;
+  const liveOption = optionKey ? (liveQuotes.options?.[optionKey] ?? null) : null;
   const liveStock = liveQuotes.quotes?.[trade.symbol] ?? null;
 
   if (!liveOption && !liveStock) return null;
 
   /*
   P&L baseline: actual broker fill price × quantity when a holding
-  execution exists, otherwise Claude's modeled entry × 1 contract.
+  execution exists, otherwise the picker's modeled entry × 1 contract.
   Keeps the headline P&L honest for taken trades without changing
   the shape for paper / not-taken picks.
   */
   const useFill = execution?.state === "holding" && execution.open_price > 0;
   const qty = execution?.quantity && execution.quantity > 0 ? execution.quantity : 1;
-  const pnlEntry = useFill ? execution.open_price : trade.estimated_price;
+  const pnlEntry = useFill ? execution.open_price : (trade.estimated_price ?? 0);
   const pnlMultiplier = useFill ? qty : 1;
 
   const mark = liveOption?.mark ?? null;
@@ -411,14 +423,24 @@ function computeLiveSnapshot(trade: Trade, liveQuotes: LiveQuotesResponse | null
 
   const entryCaption = useFill ? `fill ${fmtMoney(pnlEntry)}${qty > 1 ? ` ×${qty}` : ""}` : `entry was ${fmtMoney(pnlEntry)}`;
 
-  return { liveOption, liveStock, mark, contractDelta, contractDeltaPct, livePnl, stockDelta, stockDeltaPct, entryCaption };
+  return {
+    liveOption,
+    liveStock,
+    mark,
+    contractDelta,
+    contractDeltaPct,
+    livePnl,
+    stockDelta,
+    stockDeltaPct,
+    entryCaption,
+  };
 }
 
 /*
 LivePnlHero is the single highest-priority number on the trade detail
 page. Sits right under the ticker header so it's the first metric the
 user's eye lands on. The supporting numbers (mark, bid/ask, stock,
-volume) still render in the StatStrip below — this block only owns
+volume) still render in the StatStrip below, this block only owns
 the headline P&L + percentage.
 */
 function LivePnlHero({ snap }: { snap: LiveSnapshot }) {
@@ -477,7 +499,13 @@ function LiveSection({ snap, marketOpen }: { snap: LiveSnapshot; marketOpen?: bo
           label="Contract mark"
           value={
             mark !== null ? (
-              <span style={{ color: contractDelta != null && contractDelta > 0 ? "var(--green)" : contractDelta != null && contractDelta < 0 ? "var(--red)" : undefined }}>{fmtMoney(mark)}</span>
+              <span
+                style={{
+                  color: contractDelta != null && contractDelta > 0 ? "var(--green)" : contractDelta != null && contractDelta < 0 ? "var(--red)" : undefined,
+                }}
+              >
+                {fmtMoney(mark)}
+              </span>
             ) : (
               <Skeleton className="inline-block h-6 w-16 align-middle" />
             )

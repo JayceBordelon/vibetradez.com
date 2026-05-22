@@ -15,8 +15,8 @@ type Granularity = "daily" | "weekly";
 interface SeriesRow {
   date: string;
   top1: number;
+  top2: number;
   top3: number;
-  top10: number;
 }
 
 function mondayKey(dateStr: string): string {
@@ -32,17 +32,17 @@ function buildSeries(days: DayMultiStat[], granularity: Granularity): SeriesRow[
     return days.map((d) => ({
       date: d.date,
       top1: d.tiers.top1.pnl,
+      top2: d.tiers.top2.pnl,
       top3: d.tiers.top3.pnl,
-      top10: d.tiers.top10.pnl,
     }));
   }
   const buckets = new Map<string, SeriesRow>();
   for (const d of days) {
     const k = mondayKey(d.date);
-    const existing = buckets.get(k) ?? { date: k, top1: 0, top3: 0, top10: 0 };
+    const existing = buckets.get(k) ?? { date: k, top1: 0, top2: 0, top3: 0 };
     existing.top1 += d.tiers.top1.pnl;
+    existing.top2 += d.tiers.top2.pnl;
     existing.top3 += d.tiers.top3.pnl;
-    existing.top10 += d.tiers.top10.pnl;
     buckets.set(k, existing);
   }
   return Array.from(buckets.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -54,8 +54,8 @@ export function DailyPnlChart({ days, granularity = "daily" }: { days: DayMultiS
 
   const chartConfig: ChartConfig = {
     top1: { label: TIER_LABELS.top1, color: TIER_COLORS.top1 },
+    top2: { label: TIER_LABELS.top2, color: TIER_COLORS.top2 },
     top3: { label: TIER_LABELS.top3, color: TIER_COLORS.top3 },
-    top10: { label: TIER_LABELS.top10, color: TIER_COLORS.top10 },
   };
 
   return (

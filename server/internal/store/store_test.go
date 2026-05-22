@@ -11,8 +11,9 @@ import (
 /*
 testDatabaseURL is the connection string used by every test in this
 package. CI exports TEST_DATABASE_URL pointing at the workflow's
-ephemeral Postgres service container; when the env var is unset
-(developer running tests locally), fall back to the dev DB string.
+ephemeral Postgres service (different user / port than my local
+machine); when the env var is unset (developer running tests
+locally), fall back to my dev DB.
 */
 var testDatabaseURL = func() string {
 	if v := os.Getenv("TEST_DATABASE_URL"); v != "" {
@@ -198,8 +199,8 @@ func TestSaveMorningTrades_GuardsAgainstReRunWithExecutions(t *testing.T) {
 	s := setupTestDB(t)
 
 	first := []trades.Trade{
-		{Symbol: "AAPL", ContractType: "CALL", StrikePrice: 150.0, Expiration: "2025-04-18", DTE: 5, EstimatedPrice: 3.5, RiskLevel: "LOW"},
-		{Symbol: "TSLA", ContractType: "PUT", StrikePrice: 200.0, Expiration: "2025-04-18", DTE: 5, EstimatedPrice: 4.0, RiskLevel: "MEDIUM"},
+		mkResolvedTrade("AAPL", "CALL", 150.0, "2025-04-18", 5, 3.5, "LOW"),
+		mkResolvedTrade("TSLA", "PUT", 200.0, "2025-04-18", 5, 4.0, "MEDIUM"),
 	}
 	if err := s.SaveMorningTrades("2025-04-13", first); err != nil {
 		t.Fatalf("first save: %v", err)
@@ -217,7 +218,7 @@ func TestSaveMorningTrades_GuardsAgainstReRunWithExecutions(t *testing.T) {
 	}
 
 	second := []trades.Trade{
-		{Symbol: "NVDA", ContractType: "CALL", StrikePrice: 700.0, Expiration: "2025-04-18", DTE: 5, EstimatedPrice: 6.0, RiskLevel: "HIGH"},
+		mkResolvedTrade("NVDA", "CALL", 700.0, "2025-04-18", 5, 6.0, "HIGH"),
 	}
 	err := s.SaveMorningTrades("2025-04-13", second)
 	if !errors.Is(err, ErrTradesAlreadyExecuted) {
@@ -247,14 +248,14 @@ func TestSaveMorningTrades_AllowsRewriteWhenNoExecutions(t *testing.T) {
 	s := setupTestDB(t)
 
 	first := []trades.Trade{
-		{Symbol: "AAPL", ContractType: "CALL", StrikePrice: 150.0, Expiration: "2025-04-18", DTE: 5, EstimatedPrice: 3.5, RiskLevel: "LOW"},
+		mkResolvedTrade("AAPL", "CALL", 150.0, "2025-04-18", 5, 3.5, "LOW"),
 	}
 	if err := s.SaveMorningTrades("2025-04-13", first); err != nil {
 		t.Fatalf("first save: %v", err)
 	}
 
 	second := []trades.Trade{
-		{Symbol: "NVDA", ContractType: "CALL", StrikePrice: 700.0, Expiration: "2025-04-18", DTE: 5, EstimatedPrice: 6.0, RiskLevel: "HIGH"},
+		mkResolvedTrade("NVDA", "CALL", 700.0, "2025-04-18", 5, 6.0, "HIGH"),
 	}
 	if err := s.SaveMorningTrades("2025-04-13", second); err != nil {
 		t.Fatalf("second save with no executions should succeed, got: %v", err)
@@ -272,24 +273,19 @@ func TestSaveMorningTrades_AllowsRewriteWhenNoExecutions(t *testing.T) {
 func TestTradesPersistence(t *testing.T) {
 	s := setupTestDB(t)
 
-	testTrades := []trades.Trade{
-		{
-			Symbol:         "AAPL",
-			ContractType:   "CALL",
-			StrikePrice:    150.0,
-			Expiration:     "2025-04-18",
-			DTE:            5,
-			EstimatedPrice: 3.50,
-			Thesis:         "Bullish momentum",
-			SentimentScore: 0.85,
-			CurrentPrice:   148.0,
-			TargetPrice:    155.0,
-			StopLoss:       145.0,
-			RiskLevel:      "MEDIUM",
-			Catalyst:       "Earnings",
-			MentionCount:   42,
-		},
+	tr := trades.Trade{
+		Symbol:         "AAPL",
+		ContractType:   "CALL",
+		Thesis:         "Bullish momentum",
+		SentimentScore: 0.85,
+		CurrentPrice:   148.0,
+		TargetPrice:    155.0,
+		RiskLevel:      "MEDIUM",
+		Catalyst:       "Earnings",
+		MentionCount:   42,
 	}
+	tr.SetResolvedContract(150.0, "2025-04-18", 5, 3.50, 145.0)
+	testTrades := []trades.Trade{tr}
 
 	if err := s.SaveMorningTrades("2025-04-13", testTrades); err != nil {
 		t.Fatalf("SaveMorningTrades failed: %v", err)
@@ -302,9 +298,22 @@ func TestTradesPersistence(t *testing.T) {
 	if len(loaded) != 1 {
 		t.Fatalf("expected 1 trade, got %d", len(loaded))
 	}
-	if loaded[0].Symbol != "AAPL" || loaded[0].StrikePrice != 150.0 {
+	if loaded[0].Symbol != "AAPL" || loaded[0].Strike() != 150.0 {
 		t.Fatalf("unexpected trade data: %+v", loaded[0])
 	}
+}
+
+// mkResolvedTrade is the test-only constructor for a fully-resolved
+// pre-refactor-shape trade. Pre-refactor the Trade literal had inline
+// strike/expiration/dte/estimated_price; post-refactor those are
+// pointers because the picker no longer produces them. Tests that care
+// about the resolved-contract pathway use this helper; tests that
+// exercise pre-resolution paths build literals directly with nil
+// pointer fields.
+func mkResolvedTrade(symbol, kind string, strike float64, expiration string, dte int, est float64, risk string) trades.Trade {
+	t := trades.Trade{Symbol: symbol, ContractType: kind, RiskLevel: risk}
+	t.SetResolvedContract(strike, expiration, dte, est, est*0.5)
+	return t
 }
 
 func TestSummariesPersistence(t *testing.T) {

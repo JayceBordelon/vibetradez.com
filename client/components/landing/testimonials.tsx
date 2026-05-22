@@ -16,7 +16,7 @@ interface Testimonial {
   initials: string;
   rating: number;
   quote: string;
-  /** Tailwind classes for the avatar gradient — keep them brand-tinted
+  /** Tailwind classes for the avatar gradient, keep them brand-tinted
    *  but distinct so the row of avatars reads as varied at a glance. */
   avatarClass: string;
 }

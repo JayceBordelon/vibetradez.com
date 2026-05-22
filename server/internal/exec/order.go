@@ -10,56 +10,33 @@ import (
 )
 
 /*
-LimitPriceMultiplier is the buffer applied to the live ask (or the
-fallback estimate) when constructing the open LIMIT order. 1.10 =
-10% above ask.
+MaxContractPremium is the per-contract premium ceiling enforced at the
+broker-facing order-submission layer. Premium is quoted per share,
+options are 100 shares, so $10/share = $1,000 of capital exposure on
+a single contract. Hard upper bound on any single order this codebase
+submits to Schwab.
 
-Bumped from 1.05 to 1.10 in the execute-at-open redesign: with the
-9:35 reprice cron removed, a LIMIT × 1.05 that misses on a fast-
-moving open (e.g. TJX gapping +5% in the first second) has no safety
-net to re-quote. The extra 5% buys headroom for the at-open spread
-to close at fill on volatile names. On calm names the LIMIT still
-fills near the ask — the bigger buffer is a ceiling, not the
-expected fill price, since Schwab routes to NBBO.
+The agent tool layer (internal/execagent/tools.go) enforces the same
+cap as MaxToolPremiumPerShare so a buggy or compromised model can't
+talk the broker out of an over-cap order; this constant is the
+defense-in-depth re-check on the way out of Service.PlaceBuyToOpenAgent.
+*/
+const MaxContractPremium = 10.00
 
-The buffer's only ceiling is MaxContractPremium ($10/share, =
-$1000/contract): any LIMIT computed above that is clamped down,
-which keeps the per-contract cap intact even on a runaway ask.
+/*
+LimitPriceMultiplier is the buffer the execagent's prompt recommends
+on top of the live ask when constructing the open LIMIT (e.g.,
+limit_price ≈ 1.10 × ask). The constant is no longer enforced in code
+— the agent picks the limit_price directly via the place_options_order
+tool — but it's kept here as a documented anchor the prompt references
+so the wider system has a single source of truth for the convention.
+
+The hard ceiling on any single LIMIT is MaxContractPremium
+($10/share = $1000/contract), enforced by the tool layer in
+internal/execagent/tools.go (MaxToolPremiumPerShare) and re-validated
+in Service.PlaceBuyToOpenAgent below.
 */
 const LimitPriceMultiplier = 1.10
-
-/*
-ComputeOpenLimitPrice picks the LIMIT price for a morning open order:
-askPrice × LimitPriceMultiplier, rounded to nearest cent, clamped to
-MaxContractPremium. Falls back to estimatedPrice (Claude's modeled
-premium at pick time) when askPrice is unavailable or zero — typical
-pre-open Schwab market data sometimes returns 0 ask on thin contracts.
-Returns 0 if neither basis is usable; callers treat 0 as "do not
-submit".
-*/
-func ComputeOpenLimitPrice(askPrice, estimatedPrice float64) float64 {
-	basis := askPrice
-	if basis <= 0 {
-		basis = estimatedPrice
-	}
-	if basis <= 0 {
-		return 0
-	}
-	limit := math.Round(basis*LimitPriceMultiplier*100) / 100
-	if limit > MaxContractPremium {
-		limit = MaxContractPremium
-	}
-	return limit
-}
-
-/*
-Contract count is now per-entry: the selector returns BasketEntry
-values carrying their own quantity, the open path passes it through
-into the order leg, the close path reads it back off the open
-execution row. There is no fixed contract-count constant any more.
-The two governors are MaxContractPremium (per-share ceiling) and
-MaxDailyBasketUSD (phase-2 fill target), both defined in selector.go.
-*/
 
 /*
 OCCSymbol builds the 21-character OCC OSI symbol that Schwab's Trader
@@ -115,8 +92,9 @@ func OCCSymbol(symbol, expiration, contractType string, strike float64) (string,
 BuildOpenOrderForTrade returns the LIMIT BUY_TO_OPEN order to submit
 for the morning auto-execution. Caller passes the qualifying Trade,
 its pre-built OCC symbol, the limit price (see ComputeOpenLimitPrice),
-and the contract quantity (from the selector's BasketEntry, which can
-be > 1 when phase-2 greedy-fills duplicate the same pick).
+and the contract quantity (always 1 under the top-3-only selector,
+but kept as a parameter for the order/execution wiring and for
+backwards compatibility with historical quantity > 1 rows).
 
 Returns ErrInvalidOrder when limitPrice is non-positive or quantity
 is < 1 — Schwab rejects LIMIT orders without a price, and qty 0

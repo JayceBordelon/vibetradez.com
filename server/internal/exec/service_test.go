@@ -12,8 +12,10 @@ import (
 type fakeStore struct {
 	inserts          []Execution
 	updates          []storeUpdate
+	resolves         []resolveCall
 	nextID           int
 	workingPositions []OpenPosition
+	closeSummaryRows []CloseSummaryRow
 }
 
 type storeUpdate struct {
@@ -23,6 +25,15 @@ type storeUpdate struct {
 	fillPrice  *float64
 	filledQty  int
 	errMessage string
+}
+
+type resolveCall struct {
+	tradeID    int
+	strike     float64
+	expiration string
+	dte        int
+	entry      float64
+	stop       float64
 }
 
 func (f *fakeStore) InsertExecution(e Execution) (int, error) {
@@ -44,6 +55,13 @@ func (f *fakeStore) OpenPositionsForDate(string) ([]OpenPosition, error) {
 func (f *fakeStore) WorkingOpenPositionsForDate(string) ([]OpenPosition, error) {
 	return f.workingPositions, nil
 }
+func (f *fakeStore) ResolveTradeContract(tradeID int, strike float64, expiration string, dte int, entry, stop float64) error {
+	f.resolves = append(f.resolves, resolveCall{tradeID, strike, expiration, dte, entry, stop})
+	return nil
+}
+func (f *fakeStore) CloseSummaryForDate(string) ([]CloseSummaryRow, error) {
+	return f.closeSummaryRows, nil
+}
 func (f *fakeStore) BasketSummaryForDate(string) ([]BasketSummaryRow, error) {
 	return nil, nil
 }
@@ -64,6 +82,12 @@ func (f *fakeMail) SendTradeEmail(from string, to []string, subject, html string
 	return nil
 }
 
+/*
+fakeTrader captures PlaceOrder calls + can be tuned to return synthetic
+fill / reject / error outcomes. AvailableFunds defaults to "comfortably
+above any test cap" so cash isn't the gating factor unless a test
+explicitly sets availFunds.
+*/
 type fakeTrader struct {
 	placeID    string
 	placeErr   error
@@ -71,6 +95,7 @@ type fakeTrader struct {
 	getErr     error
 	availFunds float64
 	availErr   error
+	placed     []Order
 }
 
 func (f *fakeTrader) AccountHash(context.Context) (string, error) { return "ACCT-HASH", nil }
@@ -79,13 +104,12 @@ func (f *fakeTrader) AvailableFunds(context.Context, string) (float64, error) {
 		return 0, f.availErr
 	}
 	if f.availFunds == 0 {
-		// Default to comfortably above the basket cap so cash isn't the
-		// gating factor for tests that don't care about it.
 		return 1e6, nil
 	}
 	return f.availFunds, nil
 }
-func (f *fakeTrader) PlaceOrder(context.Context, string, Order) (string, error) {
+func (f *fakeTrader) PlaceOrder(_ context.Context, _ string, o Order) (string, error) {
+	f.placed = append(f.placed, o)
 	return f.placeID, f.placeErr
 }
 func (f *fakeTrader) GetOrder(context.Context, string, string) (OrderStatus, error) {
@@ -94,10 +118,6 @@ func (f *fakeTrader) GetOrder(context.Context, string, string) (OrderStatus, err
 func (f *fakeTrader) CancelOrder(context.Context, string, string) error { return nil }
 
 func newTestService(trader TraderClient, store DecisionStore, mail MailSender) *Service {
-	return newTestServiceWithAsk(trader, store, mail, nil)
-}
-
-func newTestServiceWithAsk(trader TraderClient, store DecisionStore, mail MailSender, ask func(context.Context, string, string, string, float64) (float64, error)) *Service {
 	return NewService(store, trader, mail, ServiceConfig{
 		Mode:      "live",
 		Recipient: "ops@example.com",
@@ -105,439 +125,187 @@ func newTestServiceWithAsk(trader TraderClient, store DecisionStore, mail MailSe
 		SchwabAccountHash: func(ctx context.Context) (string, error) {
 			return trader.AccountHash(ctx)
 		},
-		OptionAsk: ask,
 	})
 }
 
 func sampleTrade() *trades.Trade {
-	return &trades.Trade{
-		Symbol:         "AAPL",
-		ContractType:   "CALL",
-		StrikePrice:    150,
-		Expiration:     "2026-06-19",
-		EstimatedPrice: 1.25,
-	}
+	return &trades.Trade{ID: 42, Symbol: "AAPL", ContractType: "CALL"}
 }
 
-// runSinglePick wraps handleSingleEntry with the ACCT-HASH the test
-// fakes return so per-pick tests don't have to thread the lookup
-// through the full HandleQualifyingPicks basket path. handleSingleEntry
-// is the workhorse — same code path the basket loop calls. Defaults
-// to qty=1 so the original per-pick tests keep their original meaning.
-func runSinglePick(svc *Service, tr *trades.Trade, tradeID int) (string, error) {
-	entry := &BasketEntry{Trade: *tr, Quantity: 1}
-	return svc.handleSingleEntry(context.Background(), entry, tradeID, "ACCT-HASH")
-}
+// ── PlaceBuyToOpenAgent ────────────────────────────────────────────
 
-func TestHandleSinglePick_RejectedPersistsReasonAndEmails(t *testing.T) {
+func TestPlaceBuyToOpenAgent_HappyPath_PersistsResolutionAndOrder(t *testing.T) {
 	store := &fakeStore{}
 	mail := &fakeMail{}
-	trader := &countingTrader{fakeTrader: fakeTrader{
-		placeID: "ORDER-XYZ",
-		status: OrderStatus{
-			OrderID:      "ORDER-XYZ",
-			RawStatus:    "REJECTED",
-			Terminal:     true,
-			ErrorMessage: "Buying power insufficient",
-		},
-	}}
+	trader := &fakeTrader{placeID: "ORDER-1"}
 	svc := newTestService(trader, store, mail)
 
-	if _, err := runSinglePick(svc, sampleTrade(), 42); err != nil {
-		t.Fatalf("handleSinglePick: %v", err)
+	orderID, execID, err := svc.PlaceBuyToOpenAgent(context.Background(), sampleTrade(), 150, "2099-01-15", 5, 2.30)
+	if err != nil {
+		t.Fatalf("PlaceBuyToOpenAgent: %v", err)
 	}
-
-	// Expect 2 updates: the orphan-prevention immediate write
-	// (working + orderID, set right after PlaceOrder returns) and the
-	// terminal rejected update after GetOrder confirms the broker
-	// rejection.
-	if len(store.updates) != 2 {
-		t.Fatalf("expected 2 status updates, got %d: %+v", len(store.updates), store.updates)
+	if orderID != "ORDER-1" || execID == 0 {
+		t.Errorf("expected orderID + execID, got %q / %d", orderID, execID)
 	}
-	if store.updates[0].status != "working" || store.updates[0].orderID != "ORDER-XYZ" {
-		t.Errorf("first update should persist orderID with working status, got %+v", store.updates[0])
+	if len(store.resolves) != 1 || store.resolves[0].strike != 150 {
+		t.Errorf("expected one ResolveTradeContract call with strike=150, got %+v", store.resolves)
 	}
-	upd := store.updates[1]
-	if upd.status != "rejected" {
-		t.Errorf("status: want rejected, got %q", upd.status)
+	if len(store.inserts) != 1 || store.inserts[0].Status != "pending" {
+		t.Errorf("expected one pending insert, got %+v", store.inserts)
 	}
-	if upd.orderID != "ORDER-XYZ" {
-		t.Errorf("orderID: want ORDER-XYZ, got %q", upd.orderID)
-	}
-	if upd.errMessage != "Buying power insufficient" {
-		t.Errorf("errMessage: want 'Buying power insufficient', got %q", upd.errMessage)
-	}
-
-	// Per-execution emails removed in the execute-at-open redesign;
-	// the 9:35 consolidated SendExecutionSummary covers rejected
-	// outcomes. The DB row above still carries the reason string.
-	if len(mail.sent) != 0 {
-		t.Fatalf("expected 0 inline emails (consolidated summary fires at 9:35), got %d", len(mail.sent))
-	}
-}
-
-func TestHandleSinglePick_RejectedFallsBackToRawStatusWhenNoDescription(t *testing.T) {
-	store := &fakeStore{}
-	mail := &fakeMail{}
-	trader := &countingTrader{fakeTrader: fakeTrader{
-		placeID: "ORDER-NODESC",
-		status: OrderStatus{
-			OrderID:   "ORDER-NODESC",
-			RawStatus: "EXPIRED",
-			Terminal:  true,
-		},
-	}}
-	svc := newTestService(trader, store, mail)
-
-	if _, err := runSinglePick(svc, sampleTrade(), 7); err != nil {
-		t.Fatalf("handleSinglePick: %v", err)
-	}
-
-	// 2 updates: orphan-prevention immediate working write, then
-	// terminal rejected with EXPIRED as the fallback errMessage.
-	if len(store.updates) != 2 || store.updates[1].errMessage != "EXPIRED" {
-		t.Fatalf("expected 2 updates with EXPIRED in the rejected errMessage, got %+v", store.updates)
-	}
-}
-
-func TestHandleSinglePick_PlaceErrorEmailsAndPersistsFailed(t *testing.T) {
-	store := &fakeStore{}
-	mail := &fakeMail{}
-	trader := &countingTrader{fakeTrader: fakeTrader{
-		placeErr: errors.New("HTTP 401: token expired"),
-	}}
-	svc := newTestService(trader, store, mail)
-
-	if _, err := runSinglePick(svc, sampleTrade(), 9); err == nil {
-		t.Fatal("expected error from handleSinglePick")
-	}
-
-	if len(store.updates) != 1 || store.updates[0].status != "failed" {
-		t.Fatalf("expected one 'failed' update, got %+v", store.updates)
-	}
-	if !strings.Contains(store.updates[0].errMessage, "token expired") {
-		t.Errorf("errMessage: want 'token expired', got %q", store.updates[0].errMessage)
-	}
-	// Per-execution emails removed; the 9:35 consolidated summary
-	// covers PlaceOrder failures via the DB row's error_message.
-	if len(mail.sent) != 0 {
-		t.Fatalf("expected 0 inline alert emails (consolidated at 9:35), got %d", len(mail.sent))
-	}
-}
-
-func TestHandleSinglePick_FilledPersistsOrderID(t *testing.T) {
-	store := &fakeStore{}
-	mail := &fakeMail{}
-	trader := &countingTrader{fakeTrader: fakeTrader{
-		placeID: "ORDER-FILL",
-		status: OrderStatus{
-			OrderID:        "ORDER-FILL",
-			RawStatus:      "FILLED",
-			Filled:         true,
-			Terminal:       true,
-			FillPrice:      1.27,
-			FilledQuantity: 1,
-		},
-	}}
-	svc := newTestService(trader, store, mail)
-
-	if _, err := runSinglePick(svc, sampleTrade(), 11); err != nil {
-		t.Fatalf("handleSinglePick: %v", err)
-	}
-
-	// 2 updates: orphan-prevention working write, then terminal filled.
-	if len(store.updates) != 2 {
-		t.Fatalf("expected 2 status updates, got %d", len(store.updates))
-	}
-	if store.updates[0].status != "working" || store.updates[0].orderID != "ORDER-FILL" {
-		t.Errorf("first update should persist orderID with working status, got %+v", store.updates[0])
-	}
-	upd := store.updates[1]
-	if upd.status != "filled" || upd.orderID != "ORDER-FILL" {
-		t.Errorf("filled update: want status=filled orderID=ORDER-FILL, got %+v", upd)
-	}
-	// Per-execution receipt email removed; the 9:35 consolidated
-	// summary covers filled outcomes.
-	if len(mail.sent) != 0 {
-		t.Errorf("expected 0 inline emails (consolidated at 9:35), got %+v", mail.sent)
-	}
-}
-
-func TestHandleSinglePick_LimitPriceFromLiveAsk(t *testing.T) {
-	store := &fakeStore{}
-	mail := &fakeMail{}
-	trader := &countingTrader{fakeTrader: fakeTrader{
-		placeID: "ORDER-LIMIT",
-		status:  OrderStatus{OrderID: "ORDER-LIMIT", RawStatus: "FILLED", Filled: true, Terminal: true, FillPrice: 1.20, FilledQuantity: 1},
-	}}
-	ask := func(_ context.Context, _, _, _ string, _ float64) (float64, error) {
-		return 1.20, nil
-	}
-	svc := newTestServiceWithAsk(trader, store, mail, ask)
-
-	if _, err := runSinglePick(svc, sampleTrade(), 100); err != nil {
-		t.Fatalf("handleSinglePick: %v", err)
+	// Two updates: working with orderID, then nothing else (no GetOrder
+	// post-place — agent path is fire-and-forget).
+	if len(store.updates) != 1 || store.updates[0].status != "working" || store.updates[0].orderID != "ORDER-1" {
+		t.Errorf("expected one 'working' update with orderID, got %+v", store.updates)
 	}
 	if len(trader.placed) != 1 {
-		t.Fatalf("expected 1 placed order, got %d", len(trader.placed))
-	}
-	if trader.placed[0].OrderType != "LIMIT" {
-		t.Errorf("OrderType: want LIMIT, got %q", trader.placed[0].OrderType)
-	}
-	// 1.20 * 1.10 = 1.32
-	if trader.placed[0].Price != 1.32 {
-		t.Errorf("Price: want 1.32, got %.4f", trader.placed[0].Price)
+		t.Errorf("expected one PlaceOrder call, got %d", len(trader.placed))
 	}
 }
 
-func TestHandleSinglePick_LimitFallsBackToEstimateOnAskError(t *testing.T) {
-	store := &fakeStore{}
-	mail := &fakeMail{}
-	trader := &countingTrader{fakeTrader: fakeTrader{
-		placeID: "ORDER-FALLBACK",
-		status:  OrderStatus{OrderID: "ORDER-FALLBACK", RawStatus: "WORKING", Working: true},
-	}}
-	ask := func(_ context.Context, _, _, _ string, _ float64) (float64, error) {
-		return 0, errors.New("schwab market data 503")
-	}
-	svc := newTestServiceWithAsk(trader, store, mail, ask)
-
-	tr := sampleTrade()
-	tr.EstimatedPrice = 0.80
-	if _, err := runSinglePick(svc, tr, 101); err != nil {
-		t.Fatalf("handleSinglePick: %v", err)
-	}
-	// 0.80 * 1.10 = 0.88
-	if len(trader.placed) != 1 || trader.placed[0].Price != 0.88 {
-		t.Errorf("Price: want 0.88 (fallback to estimate), got %+v", trader.placed)
+func TestPlaceBuyToOpenAgent_RefusesOverCapLimitPrice(t *testing.T) {
+	svc := newTestService(&fakeTrader{}, &fakeStore{}, &fakeMail{})
+	if _, _, err := svc.PlaceBuyToOpenAgent(context.Background(), sampleTrade(), 150, "2099-01-15", 5, 10.01); err == nil {
+		t.Fatal("expected over-cap refusal")
 	}
 }
 
-func TestHandleSinglePick_LimitClampedToMaxContractPremium(t *testing.T) {
-	store := &fakeStore{}
-	mail := &fakeMail{}
-	trader := &countingTrader{fakeTrader: fakeTrader{
-		placeID: "ORDER-CLAMP",
-		status:  OrderStatus{OrderID: "ORDER-CLAMP", RawStatus: "WORKING", Working: true},
-	}}
-	ask := func(_ context.Context, _, _, _ string, _ float64) (float64, error) {
-		return 9.90, nil // 9.90 * 1.10 = 10.89 → clamp to MaxContractPremium (10.00)
-	}
-	svc := newTestServiceWithAsk(trader, store, mail, ask)
-
-	if _, err := runSinglePick(svc, sampleTrade(), 102); err != nil {
-		t.Fatalf("handleSinglePick: %v", err)
-	}
-	if len(trader.placed) != 1 || trader.placed[0].Price != MaxContractPremium {
-		t.Errorf("Price: want %.2f (clamped), got %+v", MaxContractPremium, trader.placed)
-	}
-}
-
-func TestHandleSinglePick_AbortsWhenAskAndEstimateBothZero(t *testing.T) {
-	store := &fakeStore{}
-	mail := &fakeMail{}
-	trader := &countingTrader{fakeTrader: fakeTrader{placeID: "should-not-be-called"}}
-	ask := func(_ context.Context, _, _, _ string, _ float64) (float64, error) {
-		return 0, errors.New("no quote")
-	}
-	svc := newTestServiceWithAsk(trader, store, mail, ask)
-
-	tr := sampleTrade()
-	tr.EstimatedPrice = 0
-	if _, err := runSinglePick(svc, tr, 103); err == nil {
-		t.Fatal("expected error when no usable price basis")
-	}
-	// No order reached the broker. Inline email removed — the 9:35
-	// consolidated summary will report the failure via the DB row.
-	if len(trader.placed) != 0 {
-		t.Errorf("expected no PlaceOrder call, but trader captured %+v", trader.placed)
-	}
-	if len(mail.sent) != 0 {
-		t.Fatalf("expected 0 inline emails (consolidated at 9:35), got %d", len(mail.sent))
-	}
-}
-
-// ── HandleQualifyingPicks (basket) ────────────────────────────────
-
-// countingTrader counts PlaceOrder invocations and the cost of each so
-// the basket tests can assert exactly how many contracts the basket
-// submitted.
-type countingTrader struct {
-	fakeTrader
-	placed []Order
-}
-
-func (c *countingTrader) PlaceOrder(ctx context.Context, hash string, o Order) (string, error) {
-	c.placed = append(c.placed, o)
-	return c.fakeTrader.PlaceOrder(ctx, hash, o)
-}
-
-func basketSampleTrade(symbol string, rank int, est float64) trades.Trade {
-	return trades.Trade{
-		ID:             rank * 1000, // each rank gets a deterministic non-zero ID
-		Symbol:         symbol,
-		ContractType:   "CALL",
-		StrikePrice:    100,
-		Expiration:     "2026-06-19",
-		EstimatedPrice: est,
-		Rank:           rank,
-	}
-}
-
-// basketFromTrades wraps each trade as a qty=1 BasketEntry, so the
-// existing basket-shape tests keep their original semantics under the
-// new BasketEntry-based HandleQualifyingPicks signature.
-func basketFromTrades(picks []trades.Trade) []BasketEntry {
-	out := make([]BasketEntry, len(picks))
-	for i, p := range picks {
-		out[i] = BasketEntry{Trade: p, Quantity: 1}
-	}
-	return out
-}
-
-func TestHandleQualifyingPicks_PlacesEachWhenBasketFits(t *testing.T) {
-	store := &fakeStore{}
-	mail := &fakeMail{}
-	trader := &countingTrader{fakeTrader: fakeTrader{
-		placeID: "ORDER-OK",
-		status:  OrderStatus{OrderID: "ORDER-OK", RawStatus: "FILLED", Filled: true, Terminal: true, FillPrice: 1.25, FilledQuantity: 1},
-	}}
-	svc := newTestService(trader, store, mail)
-	picks := []trades.Trade{
-		basketSampleTrade("AKAM", 1, 1.25),
-		basketSampleTrade("RKLB", 2, 1.69),
-		basketSampleTrade("IREN", 3, 1.65),
-	}
-
-	count, err := svc.HandleQualifyingPicks(context.Background(), basketFromTrades(picks))
-	if err != nil {
-		t.Fatalf("HandleQualifyingPicks: %v", err)
-	}
-	if count != 3 {
-		t.Fatalf("submitted: want 3, got %d", count)
-	}
-	if len(trader.placed) != 3 {
-		t.Fatalf("PlaceOrder calls: want 3, got %d", len(trader.placed))
-	}
-}
-
-func TestHandleQualifyingPicks_StopsWhenSchwabCashIsLow(t *testing.T) {
-	store := &fakeStore{}
-	mail := &fakeMail{}
-	trader := &countingTrader{fakeTrader: fakeTrader{
-		availFunds: 200, // only $200 cash → only rank-1 fits, ranks 2 and 3 do not
-		placeID:    "ORDER-OK",
-		status:     OrderStatus{OrderID: "ORDER-OK", RawStatus: "FILLED", Filled: true, Terminal: true, FillPrice: 1.25, FilledQuantity: 1},
-	}}
-	svc := newTestService(trader, store, mail)
-	// Limit prices: 1.25*1.10=1.38, 1.69*1.10=1.86, 1.65*1.10=1.82 (rounded).
-	// Costs (×100): 138, 186, 182. With $200 budget: only 138 fits.
-	picks := []trades.Trade{
-		basketSampleTrade("AKAM", 1, 1.25),
-		basketSampleTrade("RKLB", 2, 1.69),
-		basketSampleTrade("IREN", 3, 1.65),
-	}
-
-	count, err := svc.HandleQualifyingPicks(context.Background(), basketFromTrades(picks))
-	if err != nil {
-		t.Fatalf("HandleQualifyingPicks: %v", err)
-	}
-	if count != 1 {
-		t.Fatalf("submitted: want 1 (cash gate), got %d", count)
-	}
-	if len(trader.placed) != 1 {
-		t.Fatalf("PlaceOrder calls: want 1, got %d", len(trader.placed))
-	}
-}
-
-func TestHandleQualifyingPicks_AvailableFundsErrorAbortsBasket(t *testing.T) {
-	store := &fakeStore{}
-	mail := &fakeMail{}
-	trader := &countingTrader{fakeTrader: fakeTrader{
-		availErr: errors.New("HTTP 401: token expired"),
-	}}
-	svc := newTestService(trader, store, mail)
-	picks := []trades.Trade{
-		basketSampleTrade("AKAM", 1, 1.25),
-	}
-
-	count, err := svc.HandleQualifyingPicks(context.Background(), basketFromTrades(picks))
-	if err == nil {
-		t.Fatal("expected error when AvailableFunds fails")
-	}
-	if count != 0 {
-		t.Errorf("submitted: want 0 on cash-lookup failure, got %d", count)
-	}
-	if len(trader.placed) != 0 {
-		t.Errorf("PlaceOrder must not be called when cash lookup fails, got %d calls", len(trader.placed))
-	}
-}
-
-func TestHandleQualifyingPicks_SkipsContractsWithoutTradeID(t *testing.T) {
-	store := &fakeStore{}
-	mail := &fakeMail{}
-	trader := &countingTrader{fakeTrader: fakeTrader{
-		placeID: "ORDER-OK",
-		status:  OrderStatus{OrderID: "ORDER-OK", RawStatus: "FILLED", Filled: true, Terminal: true, FillPrice: 1.25, FilledQuantity: 1},
-	}}
-	svc := newTestService(trader, store, mail)
-	picks := []trades.Trade{
-		basketSampleTrade("AKAM", 1, 1.25),
-		// Rank-2 missing ID — should be skipped without aborting the basket.
-		{Symbol: "RKLB", ContractType: "CALL", StrikePrice: 90, Expiration: "2026-06-19", EstimatedPrice: 1.69, Rank: 2},
-		basketSampleTrade("IREN", 3, 1.65),
-	}
-
-	count, _ := svc.HandleQualifyingPicks(context.Background(), basketFromTrades(picks))
-	if count != 2 {
-		t.Errorf("submitted: want 2 (middle pick skipped for missing ID), got %d", count)
-	}
-}
-
-func TestHandleQualifyingPicks_EmptyInputIsNoOp(t *testing.T) {
-	store := &fakeStore{}
-	mail := &fakeMail{}
-	trader := &countingTrader{}
-	svc := newTestService(trader, store, mail)
-
-	count, err := svc.HandleQualifyingPicks(context.Background(), nil)
-	if err != nil || count != 0 {
-		t.Errorf("nil input: want (0, nil), got (%d, %v)", count, err)
-	}
-	if len(trader.placed) != 0 {
-		t.Errorf("PlaceOrder must not be called for empty basket")
-	}
-}
-
-func TestHandleSinglePick_WorkingPersistsOrderID(t *testing.T) {
-	store := &fakeStore{}
-	mail := &fakeMail{}
-	trader := &countingTrader{fakeTrader: fakeTrader{
-		placeID: "ORDER-WORK",
-		status: OrderStatus{
-			OrderID:   "ORDER-WORK",
-			RawStatus: "WORKING",
-			Working:   true,
-		},
-	}}
-	svc := newTestService(trader, store, mail)
-
-	if _, err := runSinglePick(svc, sampleTrade(), 5); err != nil {
-		t.Fatalf("handleSinglePick: %v", err)
-	}
-	// 2 updates: orphan-prevention working write, then redundant
-	// working write after GetOrder confirms broker still working. The
-	// second write is harmless (same row state) and the test asserts
-	// both for clarity.
-	if len(store.updates) != 2 {
-		t.Fatalf("expected 2 status updates, got %d", len(store.updates))
-	}
-	for i, upd := range store.updates {
-		if upd.status != "working" || upd.orderID != "ORDER-WORK" {
-			t.Errorf("update[%d]: want status=working orderID=ORDER-WORK, got %+v", i, upd)
+func TestPlaceBuyToOpenAgent_RefusesNonPositiveLimit(t *testing.T) {
+	svc := newTestService(&fakeTrader{}, &fakeStore{}, &fakeMail{})
+	for _, lp := range []float64{0, -1.50} {
+		if _, _, err := svc.PlaceBuyToOpenAgent(context.Background(), sampleTrade(), 150, "2099-01-15", 5, lp); err == nil {
+			t.Errorf("limit_price=%.2f: expected refusal", lp)
 		}
 	}
-	if len(mail.sent) != 0 {
-		t.Errorf("expected no email on working state, got %d", len(mail.sent))
+}
+
+func TestPlaceBuyToOpenAgent_PersistsFailedOnPlaceError(t *testing.T) {
+	store := &fakeStore{}
+	trader := &fakeTrader{placeErr: errors.New("broker rejected: insufficient buying power")}
+	svc := newTestService(trader, store, &fakeMail{})
+
+	_, _, err := svc.PlaceBuyToOpenAgent(context.Background(), sampleTrade(), 150, "2099-01-15", 5, 2.30)
+	if err == nil {
+		t.Fatal("expected error when PlaceOrder fails")
+	}
+	// Pending insert + failed update.
+	if len(store.inserts) != 1 {
+		t.Errorf("expected one execution insert, got %d", len(store.inserts))
+	}
+	if len(store.updates) != 1 || store.updates[0].status != "failed" {
+		t.Errorf("expected a 'failed' status update, got %+v", store.updates)
+	}
+}
+
+func TestPlaceBuyToOpenAgent_RejectsMissingTradeID(t *testing.T) {
+	svc := newTestService(&fakeTrader{}, &fakeStore{}, &fakeMail{})
+	if _, _, err := svc.PlaceBuyToOpenAgent(context.Background(), &trades.Trade{Symbol: "AAPL", ContractType: "CALL"}, 150, "2099-01-15", 5, 2.30); err == nil {
+		t.Fatal("expected error on missing trade ID")
+	}
+}
+
+// ── InsertSkippedExecutionAgent ────────────────────────────────────
+
+func TestInsertSkippedExecutionAgent_PersistsRowWithReason(t *testing.T) {
+	store := &fakeStore{}
+	svc := newTestService(&fakeTrader{}, store, &fakeMail{})
+
+	id, err := svc.InsertSkippedExecutionAgent(42, "Stock gapped down 8% on overnight news")
+	if err != nil {
+		t.Fatalf("InsertSkippedExecutionAgent: %v", err)
+	}
+	if id == 0 {
+		t.Error("expected non-zero execution id")
+	}
+	if len(store.inserts) != 1 {
+		t.Fatalf("expected one insert, got %d", len(store.inserts))
+	}
+	row := store.inserts[0]
+	if row.Status != "skipped" || row.RequestedQuantity != 0 || row.Side != "open" {
+		t.Errorf("unexpected skipped row shape: %+v", row)
+	}
+	if row.ErrorMessage != "Stock gapped down 8% on overnight news" {
+		t.Errorf("reason not on row: %q", row.ErrorMessage)
+	}
+}
+
+func TestInsertSkippedExecutionAgent_RejectsMissingTradeID(t *testing.T) {
+	svc := newTestService(&fakeTrader{}, &fakeStore{}, &fakeMail{})
+	if _, err := svc.InsertSkippedExecutionAgent(0, "some reason"); err == nil {
+		t.Fatal("expected error on missing trade ID")
+	}
+}
+
+// ── AvailableFundsAgent ────────────────────────────────────────────
+
+func TestAvailableFundsAgent_DispatchesToTrader(t *testing.T) {
+	trader := &fakeTrader{availFunds: 1250.50}
+	svc := newTestService(trader, &fakeStore{}, &fakeMail{})
+
+	usd, err := svc.AvailableFundsAgent(context.Background())
+	if err != nil {
+		t.Fatalf("AvailableFundsAgent: %v", err)
+	}
+	if usd != 1250.50 {
+		t.Errorf("expected 1250.50, got %.2f", usd)
+	}
+}
+
+func TestAvailableFundsAgent_PropagatesError(t *testing.T) {
+	trader := &fakeTrader{availErr: errors.New("HTTP 401: token expired")}
+	svc := newTestService(trader, &fakeStore{}, &fakeMail{})
+
+	if _, err := svc.AvailableFundsAgent(context.Background()); err == nil {
+		t.Fatal("expected error to propagate")
+	}
+}
+
+// ── SendCloseSummary (consolidated daily close email) ──────────────
+
+func TestSendCloseSummary_SendsConsolidatedDailyEmail(t *testing.T) {
+	store := &fakeStore{
+		closeSummaryRows: []CloseSummaryRow{
+			{Rank: 1, Symbol: "AAPL", ContractType: "CALL", StrikePrice: 200, Mode: "live", Status: "filled", OpenPrice: 1.50, ClosePrice: 2.30, RealizedPnL: 80, Quantity: 1},
+			{Rank: 2, Symbol: "NVDA", ContractType: "CALL", StrikePrice: 950, Mode: "live", Status: "filled", OpenPrice: 4.20, ClosePrice: 3.10, RealizedPnL: -110, Quantity: 1},
+			{Rank: 3, Symbol: "TSLA", ContractType: "PUT", StrikePrice: 250, Mode: "live", Status: "failed", OpenPrice: 1.85, ClosePrice: 0, RealizedPnL: 0, Quantity: 1, ErrorMessage: "Position did not fill within 4-minute retry-cancel-replace window"},
+		},
+	}
+	mail := &fakeMail{}
+	svc := newTestService(&fakeTrader{}, store, mail)
+
+	svc.SendCloseSummary(context.Background(), "2026-05-21")
+
+	if len(mail.sent) != 1 {
+		t.Fatalf("expected exactly 1 consolidated email, got %d", len(mail.sent))
+	}
+	sent := mail.sent[0]
+	if !strings.Contains(sent.subject, "2/3 closed") {
+		t.Errorf("subject should mention 2/3 closed, got %q", sent.subject)
+	}
+	if !strings.Contains(sent.subject, "$-30.00") && !strings.Contains(sent.subject, "$-30") {
+		t.Errorf("subject should mention net P&L, got %q", sent.subject)
+	}
+	for _, want := range []string{"AAPL", "NVDA", "TSLA", "Position did not fill"} {
+		if !strings.Contains(sent.html, want) {
+			t.Errorf("email body missing %q", want)
+		}
+	}
+	if !strings.Contains(sent.html, "Action required") {
+		t.Error("email body missing action-required callout for failed close")
+	}
+}
+
+func TestSendCloseSummary_EmptyDayStillSendsNotice(t *testing.T) {
+	store := &fakeStore{closeSummaryRows: nil}
+	mail := &fakeMail{}
+	svc := newTestService(&fakeTrader{}, store, mail)
+
+	svc.SendCloseSummary(context.Background(), "2026-05-21")
+
+	if len(mail.sent) != 1 {
+		t.Fatalf("expected 1 email even on empty day, got %d", len(mail.sent))
+	}
+	if !strings.Contains(mail.sent[0].html, "No close-side executions") {
+		t.Errorf("empty-day email should explain the absence, body=%q", mail.sent[0].html)
 	}
 }

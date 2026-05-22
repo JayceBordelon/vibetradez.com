@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VibeTradez close summary — {{ .Date }}</title>
+</head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f1f5f9;padding:24px 0;">
+<tr><td align="center">
+<table role="presentation" width="640" cellspacing="0" cellpadding="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
+
+<tr><td style="padding:24px 28px 16px 28px;">
+<h1 style="margin:0;font-size:18px;color:#0f172a;">
+Close summary &mdash; {{ .Date }} ({{ .Mode }})
+</h1>
+<p style="margin:8px 0 0 0;color:#475569;font-size:13px;line-height:1.5;">
+{{ .Filled }} of {{ .Total }} position(s) closed.
+Realized P&amp;L:
+<strong style="color:{{ if gt .TotalRealizedPnL 0.0 }}#16a34a{{ else if lt .TotalRealizedPnL 0.0 }}#dc2626{{ else }}#0f172a{{ end }};">
+{{ if ge .TotalRealizedPnL 0.0 }}+{{ end }}${{ printf "%.2f" .TotalRealizedPnL }}
+</strong>.
+</p>
+</td></tr>
+
+<tr><td style="padding:0 28px 24px 28px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;font-size:13px;">
+<thead>
+<tr style="background:#f8fafc;color:#475569;text-align:left;">
+<th style="padding:8px 6px;border-bottom:1px solid #e2e8f0;">#</th>
+<th style="padding:8px 6px;border-bottom:1px solid #e2e8f0;">Pick</th>
+<th style="padding:8px 6px;border-bottom:1px solid #e2e8f0;">Status</th>
+<th style="padding:8px 6px;border-bottom:1px solid #e2e8f0;text-align:right;">Qty</th>
+<th style="padding:8px 6px;border-bottom:1px solid #e2e8f0;text-align:right;">Entry</th>
+<th style="padding:8px 6px;border-bottom:1px solid #e2e8f0;text-align:right;">Close</th>
+<th style="padding:8px 6px;border-bottom:1px solid #e2e8f0;text-align:right;">P&amp;L</th>
+</tr>
+</thead>
+<tbody>
+{{ range .Rows }}
+<tr>
+<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;color:#64748b;">{{ .Rank }}</td>
+<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#0f172a;">
+${{ .Symbol }} {{ .ContractType }} {{ printf "%.2f" .StrikePrice }}
+</td>
+<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;color:{{ if eq .Status "filled" }}#16a34a{{ else if eq .Status "failed" }}#dc2626{{ else if eq .Status "rejected" }}#dc2626{{ else }}#64748b{{ end }};font-weight:600;text-transform:uppercase;font-size:11px;">
+{{ .Status }}
+</td>
+<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;text-align:right;color:#475569;">{{ .Quantity }}</td>
+<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;text-align:right;font-family:ui-monospace,Menlo,monospace;color:#0f172a;">
+{{ if gt .OpenPrice 0.0 }}${{ printf "%.2f" .OpenPrice }}{{ else }}&mdash;{{ end }}
+</td>
+<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;text-align:right;font-family:ui-monospace,Menlo,monospace;color:#0f172a;">
+{{ if gt .ClosePrice 0.0 }}${{ printf "%.2f" .ClosePrice }}{{ else }}&mdash;{{ end }}
+</td>
+<td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;text-align:right;font-family:ui-monospace,Menlo,monospace;color:{{ if gt .RealizedPnL 0.0 }}#16a34a{{ else if lt .RealizedPnL 0.0 }}#dc2626{{ else }}#0f172a{{ end }};font-weight:600;">
+{{ if eq .Status "filled" }}{{ if ge .RealizedPnL 0.0 }}+{{ end }}${{ printf "%.2f" .RealizedPnL }}{{ else }}&mdash;{{ end }}
+</td>
+</tr>
+{{ if .ErrorMessage }}
+<tr><td colspan="7" style="padding:0 6px 8px 6px;color:#dc2626;font-size:11px;font-style:italic;">
+  &nbsp;&nbsp;&nbsp;{{ .ErrorMessage }}
+</td></tr>
+{{ end }}
+{{ end }}
+{{ if not .Rows }}
+<tr><td colspan="7" style="padding:24px 6px;color:#64748b;font-size:13px;text-align:center;font-style:italic;">
+No close-side executions for this date. Either no positions were open at 3:55 ET, or the close cron failed to run. Check container logs.
+</td></tr>
+{{ end }}
+</tbody>
+</table>
+</td></tr>
+
+{{ if gt .Failed 0 }}
+<tr><td style="padding:0 28px 16px 28px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;">
+<tr><td style="padding:12px 16px;color:#991b1b;font-size:13px;line-height:1.5;">
+<strong>Action required:</strong> {{ .Failed }} position(s) did not close cleanly. Manually verify and close on Schwab before 4:00 PM ET.
+<a href="{{ .SchwabPositionsURL }}" style="color:#991b1b;text-decoration:underline;">Open Schwab positions &rarr;</a>
+</td></tr>
+</table>
+</td></tr>
+{{ end }}
+
+<tr><td style="padding:0 28px 24px 28px;color:#94a3b8;font-size:11px;line-height:1.5;border-top:1px solid #e2e8f0;padding-top:16px;">
+Auto-execution pipeline &mdash; 3:55 ET close cron sold every open position with retry-cancel-replace if the first attempt didn't fill. Per-trade close receipt and close-failed emails were replaced by this single consolidated summary.
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

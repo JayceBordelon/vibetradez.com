@@ -52,7 +52,7 @@ limit was per-IP and trivially defeated).
 The audit fix replaced the trust model: every outbound vibetradez
 email carries a per-recipient HMAC-signed unsubscribe link. Click
 that, you're out. There is no longer a typed-email path from the
-website — the link is the authentication.
+website, the link is the authentication.
 */
 export function UnsubscribeForm() {
   return (

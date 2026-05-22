@@ -219,12 +219,11 @@ type dashboardResponse struct {
 	/*
 		Executions surfaces every position taken (paper or live) on a
 		trade from this date. Empty when no qualifying pick converted to
-		an actual execution that day. The basket auto-executor can fire
-		multiple per day (top 3 guaranteed phase + greedy fill from
-		ranks 1..10), so the frontend matches each entry to its trade
-		card by symbol + contract_type + strike to render badges and to
-		source realized P&L from broker truth instead of Claudia's
-		modeled summary numbers.
+		an actual execution that day. The basket auto-executor fires up
+		to three contracts per day (one per rank 1..3), so the frontend
+		matches each entry to its trade card by symbol + contract_type +
+		strike to render badges and to source realized P&L from broker
+		truth instead of Claudia's modeled summary numbers.
 	*/
 	Executions []*store.ExecutionView `json:"executions,omitempty"`
 }
@@ -278,8 +277,12 @@ func (s *Server) handleTradesToday(w http.ResponseWriter, r *http.Request) {
 
 	result := make([]dashboardTrade, len(morningTrades))
 	for i, t := range morningTrades {
-		key := t.Symbol + "|" + t.ContractType + "|" + fmt.Sprintf("%.2f", t.StrikePrice)
-		result[i] = dashboardTrade{Trade: t, Summary: summaryMap[key]}
+		var summary *trades.TradeSummary
+		if t.ContractResolved() {
+			key := t.Symbol + "|" + t.ContractType + "|" + fmt.Sprintf("%.2f", t.Strike())
+			summary = summaryMap[key]
+		}
+		result[i] = dashboardTrade{Trade: t, Summary: summary}
 	}
 
 	/*
@@ -338,8 +341,12 @@ func (s *Server) handleTradesWeek(w http.ResponseWriter, r *http.Request) {
 
 		result := make([]dashboardTrade, len(dayTrades))
 		for i, t := range dayTrades {
-			key := t.Symbol + "|" + t.ContractType + "|" + fmt.Sprintf("%.2f", t.StrikePrice)
-			result[i] = dashboardTrade{Trade: t, Summary: summaryMap[key]}
+			var summary *trades.TradeSummary
+			if t.ContractResolved() {
+				key := t.Symbol + "|" + t.ContractType + "|" + fmt.Sprintf("%.2f", t.Strike())
+				summary = summaryMap[key]
+			}
+			result[i] = dashboardTrade{Trade: t, Summary: summary}
 		}
 
 		days = append(days, weekDay{Date: date, Trades: result, Executions: executionsMap[date]})

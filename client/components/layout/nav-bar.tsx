@@ -23,7 +23,7 @@ export function NavBar({ onSubscribe }: NavBarProps) {
 
   return (
     <header className="sticky top-0 z-30 border-b border-foreground/5 bg-background/55 backdrop-blur-2xl backdrop-saturate-150 dark:border-white/5">
-      {/* Specular top edge — same idea as .lg-edge-shine but inline so we
+      {/* Specular top edge, same idea as .lg-edge-shine but inline so we
           don't paint a pseudo-element across the full-width header. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-b from-foreground/15 to-transparent dark:from-white/15" aria-hidden />
       <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-7 sm:py-3">

@@ -19,7 +19,7 @@ func (f *fakeMarks) OptionMark(_ context.Context, _, _, _ string, _ float64) (fl
 
 func TestPaperTrader_PlaceFillsAtMark(t *testing.T) {
 	pt := NewPaperTrader(&fakeMarks{mark: 3.50})
-	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: 150, Expiration: "2024-01-19"}
+	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: trades.PtrFloat(150), Expiration: trades.PtrString("2024-01-19")}
 	order, err := BuildOpenOrderForTrade(tr, "AAPL  240119C00150000", 1.50, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +45,7 @@ func TestPaperTrader_PlaceFillsAtMark(t *testing.T) {
 
 func TestPaperTrader_RejectsWhenMarkLookupFails(t *testing.T) {
 	pt := NewPaperTrader(&fakeMarks{err: errors.New("schwab down")})
-	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: 150, Expiration: "2024-01-19"}
+	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: trades.PtrFloat(150), Expiration: trades.PtrString("2024-01-19")}
 	order, _ := BuildOpenOrderForTrade(tr, "AAPL  240119C00150000", 1.50, 1)
 	id, err := pt.PlaceOrder(context.Background(), "PAPER-ACCOUNT", order)
 	if err != nil {
