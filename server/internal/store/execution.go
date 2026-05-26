@@ -460,7 +460,11 @@ func (s *Store) CloseSummaryForDate(tradeDate string) ([]exec.CloseSummaryRow, e
 func (s *Store) BasketSummaryForDate(tradeDate string) ([]exec.BasketSummaryRow, error) {
 	rows, err := s.db.Query(`
 		SELECT
-			COALESCE(t.rank, 0), t.symbol, t.contract_type, t.strike_price,
+			COALESCE(t.rank, 0), t.symbol, t.contract_type,
+			-- Skipped candidates never had a strike chosen at open, so
+			-- trades.strike_price is NULL for them. Coalesce to 0 so the
+			-- scan doesn't crash; the template suppresses zero strikes.
+			COALESCE(t.strike_price, 0),
 			openX.mode, openX.status,
 			-- Schwab returns the LIMIT price as the order.price field; we
 			-- don't currently persist it separately. For reporting we
