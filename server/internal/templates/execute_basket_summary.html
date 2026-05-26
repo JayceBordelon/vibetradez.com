@@ -35,7 +35,7 @@ Execution summary — {{ .Date }} ({{ .Mode }})
 <tr>
 <td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;color:#64748b;">{{ .Rank }}</td>
 <td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#0f172a;">
-${{ .Symbol }} {{ .ContractType }} {{ printf "%.2f" .StrikePrice }}
+${{ .Symbol }} {{ .ContractType }}{{ if gt .StrikePrice 0.0 }} {{ printf "%.2f" .StrikePrice }}{{ end }}
 </td>
 <td style="padding:8px 6px;border-bottom:1px solid #f1f5f9;color:{{ if eq .Status "filled" }}#16a34a{{ else if eq .Status "canceled" }}#ea580c{{ else if eq .Status "failed" }}#dc2626{{ else if eq .Status "rejected" }}#dc2626{{ else if eq .Status "skipped" }}#64748b{{ else }}#64748b{{ end }};font-weight:600;text-transform:uppercase;font-size:11px;">
 {{ .Status }}
