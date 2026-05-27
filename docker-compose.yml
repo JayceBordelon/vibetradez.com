@@ -70,7 +70,7 @@ services:
       - "traefik.enable=true"
       # API + auth + health routes — higher priority than the
       # catch-all frontend router. /auth/google/* lands here.
-      - "traefik.http.routers.trading-api.rule=(Host(`vibetradez.com`) || Host(`www.vibetradez.com`)) && (PathPrefix(`/api`) || PathPrefix(`/auth`) || Path(`/health`))"
+      - "traefik.http.routers.trading-api.rule=(Host(`vibetradez.com`) || Host(`www.vibetradez.com`) || Host(`jaycetrades.com`) || Host(`www.jaycetrades.com`)) && (PathPrefix(`/api`) || PathPrefix(`/auth`) || Path(`/health`))"
       - "traefik.http.routers.trading-api.entrypoints=websecure"
       - "traefik.http.routers.trading-api.tls.certresolver=letsencrypt"
       - "traefik.http.routers.trading-api.priority=20"
@@ -107,7 +107,7 @@ services:
       - "traefik.enable=true"
       # Catch-all frontend — lower priority than trading-api so
       # /api/* and /auth/* don't route here.
-      - "traefik.http.routers.trading-frontend.rule=Host(`vibetradez.com`) || Host(`www.vibetradez.com`)"
+      - "traefik.http.routers.trading-frontend.rule=Host(`vibetradez.com`) || Host(`www.vibetradez.com`) || Host(`jaycetrades.com`) || Host(`www.jaycetrades.com`)"
       - "traefik.http.routers.trading-frontend.entrypoints=websecure"
       - "traefik.http.routers.trading-frontend.tls.certresolver=letsencrypt"
       - "traefik.http.routers.trading-frontend.priority=10"
