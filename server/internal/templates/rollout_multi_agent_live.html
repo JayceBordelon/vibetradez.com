@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>{{.Subject}}</title>
+  <style>
+    :root { color-scheme: light dark; }
+    @media (prefers-color-scheme: dark) {
+      .body-bg { background-color: #0f172a !important; }
+      .header-bg { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important; }
+      .content-bg { background-color: #1e293b !important; }
+      .footer-bg { background-color: #0f172a !important; border-color: #334155 !important; }
+      .text-primary { color: #ffffff !important; }
+      .text-secondary { color: #e2e8f0 !important; }
+      .label-muted { color: #cbd5e1 !important; }
+      .panel-bg { background-color: #0b1220 !important; border-color: #334155 !important; }
+      .green-panel-bg { background-color: #052e1c !important; border-color: #16a34a !important; }
+      .green-text { color: #4ade80 !important; }
+      .meme-frame { border-color: #334155 !important; }
+    }
+  </style>
+</head>
+<body class="body-bg" style="margin:0;padding:0;background-color:#fafafa;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="body-bg" style="background-color:#fafafa;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;max-width:620px;">
+
+          <!-- Brand accent bar -->
+          <tr>
+            <td style="height:4px;background:linear-gradient(90deg,#10a37f,#D97757);border-radius:12px 12px 0 0;font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
+          <!-- Header -->
+          <tr>
+            <td class="header-bg" bgcolor="#0f172a" style="padding:24px 28px;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td>
+                    <span style="font-size:24px;font-weight:800;color:#10a37f;letter-spacing:-0.5px;">Vibe</span><span style="font-size:24px;font-weight:800;color:#D97757;letter-spacing:-0.5px;">Tradez</span>
+                  </td>
+                  <td align="right">
+                    <span style="color:#a5b4fc;font-size:12px;font-weight:700;background:rgba(165,180,252,0.18);padding:5px 11px;border-radius:6px;letter-spacing:0.4px;">Live on dashboard</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Headline -->
+          <tr>
+            <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:32px 28px 8px 28px;">
+              <h1 class="text-primary" style="margin:0 0 12px 0;font-size:28px;font-weight:800;color:#0f172a;letter-spacing:-0.5px;line-height:1.2;">
+                The multi-agent picker is live. <span style="background:linear-gradient(90deg,#10a37f,#22c55e);-webkit-background-clip:text;background-clip:text;color:transparent;">You can finally watch it work.</span>
+              </h1>
+            </td>
+          </tr>
+
+          <!-- Meme -->
+          <tr>
+            <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:8px 28px 4px 28px;" align="center">
+              <img
+                src="https://cdn-useast1.kapwing.com/static/templates/spider-man-triple-meme-template-full-a9a8b78a.webp"
+                alt="Three identical pickers facing off, one for each candidate the model returns at 9:25 ET"
+                width="540"
+                class="meme-frame"
+                style="display:block;width:100%;max-width:540px;height:auto;border-radius:10px;border:1px solid #e2e8f0;"
+              >
+              <p class="text-secondary label-muted" style="margin:10px 0 0 0;font-size:11px;color:#64748b;letter-spacing:0.3px;text-transform:uppercase;font-weight:700;">
+                Pre-bell pick. At-open contract. Skip with a reason. Same model, three jobs.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:24px 28px 8px 28px;">
+              <p class="text-secondary" style="margin:0 0 14px 0;font-size:15px;color:#475569;line-height:1.7;">
+                The multi-agent picker has been firing real trades for a handful of sessions, but two dashboard bugs were hiding the most interesting half of the flow. Both are fixed in today's deploy. When the pre-bell picker hands the at-open agent three candidates, the dashboard now renders each one with full state: a live ticking option mark for the contracts the agent decided to trade, and the agent's written reasoning for any candidate it chose to skip.
+              </p>
+              <p class="text-secondary" style="margin:0;font-size:15px;color:#475569;line-height:1.7;">
+                Open <a href="https://vibetradez.com/dashboard" style="color:#10a37f;text-decoration:none;font-weight:700;">vibetradez.com/dashboard</a> any weekday between 9:30 and 4 ET to see this morning's basket move in real time. Click any candidate for the pre-bell thesis plus the at-open decision (or the skip reason, if the agent declined).
+              </p>
+            </td>
+          </tr>
+
+          <!-- "Fixed today" panel -->
+          <tr>
+            <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:20px 28px 8px 28px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="green-panel-bg panel-bg" bgcolor="#f0fdf4" style="background-color:#f0fdf4;border:1px solid #86efac;border-radius:10px;">
+                <tr>
+                  <td style="padding:14px 18px;">
+                    <p class="text-secondary green-text" style="margin:0 0 8px 0;font-size:13px;color:#166534;line-height:1.55;font-weight:700;">
+                      Fixed in today's deploy
+                    </p>
+                    <ul class="text-secondary green-text" style="margin:0;padding-left:20px;font-size:13px;color:#166534;line-height:1.7;">
+                      <li>Skipped candidates now render the agent's written reason on the dashboard and the trade detail page instead of an endless "finding contracts..." placeholder.</li>
+                      <li>Live option mark, bid, ask, and volume start ticking within 30 seconds of the at-open agent resolving its contract, even when the quotes hub had already started.</li>
+                    </ul>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- CTA -->
+          <tr>
+            <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:24px 28px 32px 28px;" align="center">
+              <table role="presentation" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td bgcolor="#0f172a" style="border-radius:8px;background:#0f172a;">
+                    <a href="https://vibetradez.com/dashboard" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:800;color:#ffffff;text-decoration:none;letter-spacing:-0.2px;">
+                      Open the live dashboard
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="footer-bg" bgcolor="#f1f5f9" style="background-color:#f1f5f9;padding:20px 28px;border-top:1px solid #e2e8f0;border-radius:0 0 12px 12px;">
+              <p class="text-secondary label-muted" style="margin:0;font-size:11px;color:#64748b;line-height:1.6;text-align:center;">
+                Free, no credit card, no premium tier. Reply or unsubscribe whenever.<br>
+                <a href="https://github.com/JayceBordelon/vibetradez.com" style="color:#64748b;text-decoration:underline;">github.com/JayceBordelon/vibetradez.com</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
