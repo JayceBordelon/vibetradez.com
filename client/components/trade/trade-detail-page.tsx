@@ -183,6 +183,7 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
   const moneyness = calcMoneyness(trade);
   const breakeven = calcBreakeven(trade);
   const maxLoss = calcMaxLoss(trade);
+  const isSkipped = execution?.state === "skipped";
 
   /*
   P&L preference for the EOD block: when a closed live execution
@@ -198,11 +199,13 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
 
   /*
   Live quotes streaming: only open when (a) the pick is still mid-day
-  (no summary yet) and (b) the market is open. Outside hours, the SSE
-  endpoint 503s anyway and the EOD result block below is what matters.
+  (no summary yet), (b) the agent actually fired an order (skipped
+  picks have no position to watch), and (c) the market is open.
+  Outside hours, the SSE endpoint 503s anyway and the EOD result
+  block below is what matters.
   */
   const marketStatus = useMarketStatus();
-  const liveQuotes = useQuoteStream(!summary && marketStatus?.open === true);
+  const liveQuotes = useQuoteStream(!summary && !isSkipped && marketStatus?.open === true);
 
   /*
   Compute the live snapshot once at the body level so the hero P&L
@@ -210,7 +213,7 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
   can share the same numbers, single source of truth, no risk of
   drift between the two surfaces.
   */
-  const liveSnap = !summary ? computeLiveSnapshot(trade, liveQuotes, execution) : null;
+  const liveSnap = !summary && !isSkipped ? computeLiveSnapshot(trade, liveQuotes, execution) : null;
 
   return (
     <div className="space-y-2">
@@ -258,10 +261,16 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
 
       {/* Contract properties, properties grid, no card. Strike/expiration/
           entry/stop are filled in by the 9:30 ET executor; render an em-
-          dash placeholder while the contract is still being resolved. */}
+          dash placeholder while the contract is still being resolved.
+          For skipped picks, no contract was ever chosen — collapse the
+          unresolved fields to em-dashes (no "Finding contracts..."
+          placeholder, the contract search ended with a decline). */}
       <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3 md:grid-cols-4">
         <Metric label="Strike" value={trade.strike_price !== null ? fmtMoney(trade.strike_price) : "-"} />
-        <Metric label="Expiration" value={trade.expiration !== null && trade.dte !== null ? `${trade.expiration} (${trade.dte}d)` : "Finding contracts..."} />
+        <Metric
+          label="Expiration"
+          value={trade.expiration !== null && trade.dte !== null ? `${trade.expiration} (${trade.dte}d)` : isSkipped ? "-" : "Finding contracts..."}
+        />
         <Metric label="Entry" value={trade.estimated_price !== null ? fmtMoney(trade.estimated_price) : "-"} />
         <Metric label="Target" value={<span className={cn("text-sm font-semibold tabular-nums", trade.contract_type === "CALL" ? "text-green" : "text-red")}>{fmtMoney(trade.target_price)}</span>} />
         <Metric label="Stop loss" value={trade.stop_loss !== null ? fmtMoney(trade.stop_loss) : "-"} />
@@ -279,8 +288,18 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
         <Metric label="Stock at entry" value={fmtMoney(trade.current_price)} />
       </div>
 
+      {/* Skipped picks get a dedicated reason block in place of the
+          live/EOD section. The agent looked at this candidate at 9:30
+          and chose not to fire; the reason is the entire payload. */}
+      {isSkipped && execution && (
+        <div className="mt-8 rounded-lg border border-border bg-muted/30">
+          <div className="border-b border-border px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Skipped at open by the at-open agent</div>
+          <div className="px-4 py-3 text-sm leading-relaxed text-foreground/85">{execution.note?.trim() ? execution.note : "No reason provided."}</div>
+        </div>
+      )}
+
       {/* Live block, flat section, StatStrip metrics. Same shape whether or not a position was taken; execution only nudges the P&L baseline. */}
-      {!summary && liveSnap && <LiveSection snap={liveSnap} marketOpen={liveQuotes?.market_open} />}
+      {!summary && !isSkipped && liveSnap && <LiveSection snap={liveSnap} marketOpen={liveQuotes?.market_open} />}
 
       {/* EOD result, flat section */}
       {summary && (

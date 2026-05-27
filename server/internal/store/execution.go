@@ -503,7 +503,8 @@ func (s *Store) BasketSummaryForDate(tradeDate string) ([]exec.BasketSummaryRow,
 func (s *Store) GetExecutionsForDate(date string) ([]*ExecutionView, error) {
 	rows, err := s.db.Query(`
 		SELECT
-			t.symbol, t.contract_type, t.strike_price,
+			t.symbol, t.contract_type,
+			COALESCE(t.strike_price, 0),
 			openX.mode, openX.status,
 			COALESCE(openX.fill_price, 0), openX.filled_at,
 			COALESCE(closeX.fill_price, 0), closeX.filled_at, closeX.status,
@@ -549,7 +550,8 @@ func (s *Store) GetExecutionsForDateRange(start, end string) (map[string][]*Exec
 	rows, err := s.db.Query(`
 		SELECT
 			t.date,
-			t.symbol, t.contract_type, t.strike_price,
+			t.symbol, t.contract_type,
+			COALESCE(t.strike_price, 0),
 			openX.mode, openX.status,
 			COALESCE(openX.fill_price, 0), openX.filled_at,
 			COALESCE(closeX.fill_price, 0), closeX.filled_at, closeX.status,
