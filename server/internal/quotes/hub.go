@@ -176,6 +176,17 @@ func (h *Hub) Start(ctx context.Context) error {
 		}
 		h.wg.Add(1)
 		go h.runReadLoop(hubCtx)
+		/*
+			Resync picks every 30s so newly-resolved contracts get an
+			option subscription. The hub Start cron and the at-open agent
+			both run at 9:30:00 ET, so on most days the initial
+			computeSubscriptions runs before the agent has stamped strikes
+			on the trade rows — without this loop, the option stream
+			would stay empty for the day and the dashboard's contract
+			mark / bid / ask / volume would skeleton-pulse forever.
+		*/
+		h.wg.Add(1)
+		go h.runResyncLoop(hubCtx)
 	}
 
 	log.Printf("quotes hub: started with %d equity subscriptions, %d option subscriptions", len(equities), len(options))
@@ -310,6 +321,69 @@ func (h *Hub) runReadLoop(ctx context.Context) {
 			h.handleEvent(ev)
 		}
 	}
+}
+
+/*
+runResyncLoop periodically re-reads today's picks and ADDs any
+newly-resolved option contracts to the Schwab subscription. Catches
+the race between hub Start (9:30 ET cron) and the at-open agent
+(9:30:00 ET) — whichever wins, the loop's next tick pulls in any
+options the agent has just stamped onto trade rows. Subscribe()
+dedupes internally so calling it repeatedly with the full set is
+cheap, no UNSUBS frames are sent.
+*/
+func (h *Hub) runResyncLoop(ctx context.Context) {
+	defer h.wg.Done()
+	if h.stream == nil {
+		return
+	}
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := h.ResyncSubscriptions(); err != nil {
+				log.Printf("quotes hub: resync: %v", err)
+			}
+		}
+	}
+}
+
+/*
+ResyncSubscriptions reads today's picks, recomputes the equity and
+option subscription set, ADDs the difference to the Schwab stream,
+and merges new OCC→key mappings into the hub. Idempotent — calling
+with no new picks is a no-op. Exposed for tests and for any future
+event-driven trigger (e.g. the executor calling this directly after
+stamping a contract). Returns the first error encountered; the
+caller should log and continue.
+*/
+func (h *Hub) ResyncSubscriptions() error {
+	if h.stream == nil {
+		return nil
+	}
+	picks, _ := h.loadPicks()
+	equities, options, occToKey := h.computeSubscriptions(picks)
+
+	h.mu.Lock()
+	addedOptions := 0
+	for occ, key := range occToKey {
+		if _, ok := h.occToKey[occ]; !ok {
+			h.occToKey[occ] = key
+			addedOptions++
+		}
+	}
+	h.mu.Unlock()
+
+	if err := h.stream.Subscribe(equities, options); err != nil {
+		return fmt.Errorf("subscribe: %w", err)
+	}
+	if addedOptions > 0 {
+		log.Printf("quotes hub: resync added %d option subscription(s)", addedOptions)
+	}
+	return nil
 }
 
 func (h *Hub) handleEvent(ev schwab.StreamEvent) {

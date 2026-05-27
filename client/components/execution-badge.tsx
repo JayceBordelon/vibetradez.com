@@ -293,8 +293,16 @@ history surfaces to find which card or row to render the badge on.
 */
 export function matchesTrade(execution: Execution | null | undefined, trade: { symbol: string; contract_type: string; strike_price: number | null }): boolean {
   if (!execution) return false;
-  if (trade.strike_price === null) return false;
-  return execution.symbol === trade.symbol && execution.contract_type === trade.contract_type && Math.abs(execution.strike_price - trade.strike_price) < 0.005;
+  if (execution.symbol !== trade.symbol || execution.contract_type !== trade.contract_type) return false;
+  /*
+  Skipped picks never resolved a strike: trade.strike_price stays
+  NULL forever and the execution row carries strike=0 (the SQL
+  COALESCE default for the same NULL). Match by symbol + contract
+  type alone in that case — the top-3 selector guarantees
+  uniqueness per (symbol, contract_type) within a day.
+  */
+  if (trade.strike_price === null) return execution.state === "skipped";
+  return Math.abs(execution.strike_price - trade.strike_price) < 0.005;
 }
 
 /**
@@ -307,7 +315,6 @@ after resolution.
 */
 export function findExecutionForTrade(executions: Execution[] | null | undefined, trade: { symbol: string; contract_type: string; strike_price: number | null }): Execution | null {
   if (!executions || executions.length === 0) return null;
-  if (trade.strike_price === null) return null;
   for (const e of executions) {
     if (matchesTrade(e, trade)) return e;
   }

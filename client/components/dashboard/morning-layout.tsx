@@ -132,6 +132,7 @@ function HeroPick({ dt, liveQuotes, date, executions }: { dt: DashboardTrade; li
   const moneyness = calcMoneyness(trade);
   const { mark, delta, deltaPct, anomalous } = liveDelta(trade, liveQuotes);
   const execution = findExecutionForTrade(executions, trade);
+  const skipped = execution?.state === "skipped";
   const showDeltaPct = deltaPct !== null && Math.abs(deltaPct) <= 500;
   const riskVariant = trade.risk_level === "HIGH" ? "destructive" : trade.risk_level === "MEDIUM" ? "outline" : "secondary";
 
@@ -152,6 +153,10 @@ function HeroPick({ dt, liveQuotes, date, executions }: { dt: DashboardTrade; li
                   </Badge>
                   <Badge variant={moneyness.variant}>{moneyness.label}</Badge>
                 </>
+              ) : skipped ? (
+                <Badge variant="outline" className={cn("text-[11px] font-semibold", trade.contract_type === "CALL" ? "border-green-border text-green" : "border-red-border text-red")}>
+                  {trade.contract_type}
+                </Badge>
               ) : (
                 <Badge variant="outline" className={cn("text-[11px] font-semibold", trade.contract_type === "CALL" ? "border-green-border text-green" : "border-red-border text-red")}>
                   {trade.contract_type} · finding contracts...
@@ -202,6 +207,8 @@ function HeroPick({ dt, liveQuotes, date, executions }: { dt: DashboardTrade; li
                 subClassName={mark !== null && showDeltaPct ? pnlColor(delta ?? 0) : undefined}
               />
             </div>
+          ) : skipped ? (
+            <SkippedContractBlock reason={execution?.note ?? null} />
           ) : (
             <PendingContractBlock intent={contractIntentLabel(trade)} />
           )}
@@ -232,6 +239,18 @@ function PendingContractBlock({ intent }: { intent: string }) {
   );
 }
 
+function SkippedContractBlock({ reason }: { reason: string | null }) {
+  return (
+    <div className="flex min-w-0 flex-col items-start gap-2 rounded-lg border border-border/70 bg-muted/30 px-4 py-3 lg:min-w-[280px]">
+      <div className="flex items-center gap-2">
+        <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/60" />
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Skipped at open</span>
+      </div>
+      <div className="line-clamp-3 text-[13px] leading-relaxed text-foreground/80">{reason?.trim() ? reason : "Agent declined without a written reason."}</div>
+    </div>
+  );
+}
+
 function PriceBlock({ label, value, sub, subClassName }: { label: string; value: React.ReactNode; sub?: React.ReactNode; subClassName?: string }) {
   return (
     <div>
@@ -248,6 +267,7 @@ function RailPick({ dt, liveQuotes, date, executions }: { dt: DashboardTrade; li
   const moneyness = calcMoneyness(trade);
   const { mark, delta, deltaPct } = liveDelta(trade, liveQuotes);
   const execution = findExecutionForTrade(executions, trade);
+  const skipped = execution?.state === "skipped";
   const showDeltaPct = deltaPct !== null && Math.abs(deltaPct) <= 500;
 
   return (
@@ -266,6 +286,10 @@ function RailPick({ dt, liveQuotes, date, executions }: { dt: DashboardTrade; li
                   {moneyness.label}
                 </Badge>
               </>
+            ) : skipped ? (
+              <Badge variant="outline" className={cn("text-[10px] font-semibold", trade.contract_type === "CALL" ? "border-green-border text-green" : "border-red-border text-red")}>
+                {trade.contract_type}
+              </Badge>
             ) : (
               <Badge variant="outline" className={cn("text-[10px] font-semibold", trade.contract_type === "CALL" ? "border-green-border text-green" : "border-red-border text-red")}>
                 {trade.contract_type} · finding contracts...
@@ -303,6 +327,10 @@ function RailPick({ dt, liveQuotes, date, executions }: { dt: DashboardTrade; li
                   )}
                 </div>
               </div>
+            </div>
+          ) : skipped ? (
+            <div className="mt-3 text-[11px] text-muted-foreground">
+              <span className="font-medium text-foreground/80">Skipped at open.</span> {execution?.note?.trim() || "No reason provided."}
             </div>
           ) : (
             <div className="mt-3 text-[11px] text-muted-foreground">
