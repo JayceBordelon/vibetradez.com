@@ -219,3 +219,86 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           script: |
             docker image prune -af --filter "until=24h"
+
+  summary:
+    name: Summary
+    # if: always() so the summary panel exists on every run — green
+    # deploy, failed deploy, deferred-by-market-hours, override fire,
+    # all show up with a stage-by-stage breakdown. The summary lands
+    # in $GITHUB_STEP_SUMMARY which is the panel GitHub renders at
+    # the top of the run page.
+    needs: [market_hours_guard, sync, build, deploy, healthcheck, cleanup]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write run summary
+        env:
+          MARKET_GUARD: ${{ needs.market_hours_guard.result }}
+          IN_WINDOW: ${{ needs.market_hours_guard.outputs.in_window }}
+          SYNC: ${{ needs.sync.result }}
+          BUILD: ${{ needs.build.result }}
+          DEPLOY: ${{ needs.deploy.result }}
+          DEPLOY_STATUS: ${{ needs.deploy.outputs.status }}
+          HEALTHCHECK: ${{ needs.healthcheck.result }}
+          CLEANUP: ${{ needs.cleanup.result }}
+          OVERRIDE: ${{ inputs.override_market_hours_guard }}
+          TRIGGER: ${{ github.event_name }}
+          ACTOR: ${{ github.actor }}
+          SHA: ${{ github.sha }}
+          REF: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          short_sha="${SHA:0:7}"
+          subject="${COMMIT_MSG%%$'\n'*}"
+
+          # badge() collapses a job result string into a short token. Keeps
+          # the table column narrow and skips emoji per repo convention.
+          badge() {
+            case "$1" in
+              success)   echo "ok" ;;
+              failure)   echo "FAIL" ;;
+              cancelled) echo "cancelled" ;;
+              skipped)   echo "skipped" ;;
+              "")        echo "—" ;;
+              *)         echo "$1" ;;
+            esac
+          }
+
+          {
+            echo "# CI/CD pipeline summary"
+            echo ""
+            echo "**Trigger:** \`$TRIGGER\` by \`$ACTOR\` on \`$REF\` @ \`$short_sha\`"
+            if [ "$TRIGGER" = "workflow_dispatch" ]; then
+              echo "**Override market guard:** \`${OVERRIDE:-false}\`"
+            elif [ -n "$subject" ]; then
+              echo "**Commit:** $subject"
+            fi
+            echo "**Run:** $RUN_URL"
+            echo ""
+            echo "| Stage | Result | Notes |"
+            echo "|---|---|---|"
+            if [ "$IN_WINDOW" = "true" ]; then
+              guard_note="deferred (inside 09:00-16:30 ET window)"
+            else
+              guard_note="proceeded"
+            fi
+            echo "| Market hours guard | $(badge "$MARKET_GUARD") | $guard_note |"
+            echo "| Sync | $(badge "$SYNC") | git pull on droplet |"
+            echo "| Build | $(badge "$BUILD") | docker compose build trading-server + trading-frontend |"
+            deploy_note="server force-recreate, frontend rolling"
+            if [ -n "$DEPLOY_STATUS" ]; then
+              deploy_note="$deploy_note (status=$DEPLOY_STATUS)"
+            fi
+            echo "| Deploy | $(badge "$DEPLOY") | $deploy_note |"
+            echo "| Health check | $(badge "$HEALTHCHECK") | / and /health probes |"
+            echo "| Cleanup | $(badge "$CLEANUP") | docker image prune |"
+            echo ""
+            if [ "$IN_WINDOW" = "true" ]; then
+              echo "> Inside the market-hours window. Downstream jobs deliberately skipped. The 16:35 ET post-market replay (\`post-market-deploy.yml\`) re-fires this workflow with the override input set so the deferred push goes out post-close."
+            fi
+            if [ "$DEPLOY" = "failure" ] || [ "$BUILD" = "failure" ] || [ "$SYNC" = "failure" ] || [ "$HEALTHCHECK" = "failure" ]; then
+              echo ""
+              echo "> **One or more stages failed.** Open the failing job above for the full droplet SSH output."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

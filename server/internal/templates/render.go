@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_open_failed.html execute_basket_summary.html execute_close_summary.html rollout_agent_executes.html schwab_reauth.html
+//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_open_failed.html execute_basket_summary.html execute_close_summary.html rollout_multi_agent_live.html schwab_reauth.html
 var templateFS embed.FS
 
 type Trade struct {
@@ -392,16 +392,16 @@ func RenderCloseSummary(d CloseSummaryData) (string, error) {
 }
 
 /*
-RenderRolloutAgentExecutes renders the v8 rollout email announcing the
-agent-driven execution model: Claude is re-invoked at 9:30:00 ET with
-live chain tools + a place_options_order tool, picks the actual
-contracts to trade for the 3 morning candidates, and may skip any
-candidate with a written reason that lands in the dashboard and the
-operator summary email. Static content, no parameters beyond Subject.
+RenderRolloutMultiAgentLive renders the v9 rollout email announcing
+that the multi-agent picker is now fully visible on the dashboard.
+The picker + at-open agent flow had been firing real trades for a
+handful of sessions, but two dashboard bugs were hiding the skip
+reasoning and the live option marks; both fixes ship in the deploy
+this rollout chases. Static content, no parameters beyond Subject.
 */
-func RenderRolloutAgentExecutes() (string, error) {
-	return renderOne("rollout_agent_executes.html", map[string]string{
-		"Subject": "Claudia now picks the contracts at the open, too",
+func RenderRolloutMultiAgentLive() (string, error) {
+	return renderOne("rollout_multi_agent_live.html", map[string]string{
+		"Subject": "The multi-agent picker is live on your dashboard",
 	})
 }
 
