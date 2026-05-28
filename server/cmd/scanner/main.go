@@ -1269,17 +1269,48 @@ func runEndOfDayAnalysis(cfg *config.Config, db *store.Store, claudePicker *trad
 		}
 	}
 
+	/*
+		Broker fills beat Claude's modeled re-quote whenever both are
+		available. Claude's EOD pass reads the closing chain and re-prices
+		each contract, which is fine when no order ever fired, but for a
+		taken position the only number that matches what hit the account
+		is the Schwab fill price. Build a lookup keyed the same way as
+		morningByKey so a closed live execution overrides EntryPrice +
+		ClosingPrice; rows without a closed execution (paper-only days,
+		skipped picks, close failures) fall through to the modeled values.
+	*/
+	executions, execErr := db.GetExecutionsForDate(date)
+	if execErr != nil {
+		log.Printf("Warning: failed to load executions for EOD email override (%s): %v", date, execErr)
+	}
+	type fillOverride struct {
+		EntryPrice   float64
+		ClosingPrice float64
+	}
+	fillByKey := make(map[string]fillOverride)
+	for _, ev := range executions {
+		if ev.State != "closed" || ev.OpenPrice <= 0 || ev.ClosePrice <= 0 {
+			continue
+		}
+		key := ev.Symbol + "|" + ev.ContractType + "|" + fmt.Sprintf("%.2f", ev.StrikePrice)
+		fillByKey[key] = fillOverride{EntryPrice: ev.OpenPrice, ClosingPrice: ev.ClosePrice}
+	}
+
 	templateSummaries := make([]templates.SummaryTrade, len(summaries))
 	for i, s := range summaries {
 		key := s.Symbol + "|" + s.ContractType + "|" + fmt.Sprintf("%.2f", s.StrikePrice)
 		meta := morningByKey[key]
+		entry, closing := s.EntryPrice, s.ClosingPrice
+		if override, ok := fillByKey[key]; ok {
+			entry, closing = override.EntryPrice, override.ClosingPrice
+		}
 		templateSummaries[i] = templates.SummaryTrade{
 			Symbol:       s.Symbol,
 			ContractType: s.ContractType,
 			StrikePrice:  s.StrikePrice,
 			Expiration:   s.Expiration,
-			EntryPrice:   s.EntryPrice,
-			ClosingPrice: s.ClosingPrice,
+			EntryPrice:   entry,
+			ClosingPrice: closing,
 			StockOpen:    s.StockOpen,
 			StockClose:   s.StockClose,
 			Notes:        s.Notes,
