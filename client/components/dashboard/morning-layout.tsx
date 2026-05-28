@@ -41,9 +41,26 @@ interface LiveDelta {
   anomalous: boolean;
 }
 
-function liveDelta(trade: Trade, liveQuotes: LiveQuotesResponse | null | undefined): LiveDelta {
+/*
+entryBaseline picks the price the live mark should be compared against.
+A filled execution gives us the real per-share cost (Schwab's fill, which
+routinely improves on the agent's protective LIMIT). Without a fill we
+fall back to the agent's saved limit (trade.estimated_price), which is
+what the picker stamped onto the row but NOT what Schwab actually
+charged. Keeping the dashboard math anchored to the fill keeps the card
+and the /trade/[symbol] detail page in agreement.
+*/
+function entryBaseline(trade: Trade, execution: Execution | null): number | null {
+  if (execution && execution.open_price > 0 && (execution.state === "holding" || execution.state === "closed" || execution.state === "close_failed")) {
+    return execution.open_price;
+  }
+  return trade.estimated_price !== null && trade.estimated_price > 0 ? trade.estimated_price : null;
+}
+
+function liveDelta(trade: Trade, liveQuotes: LiveQuotesResponse | null | undefined, execution: Execution | null): LiveDelta {
   const lo = getLiveOption(liveQuotes, trade);
-  if (!lo?.mark || lo.mark <= 0 || trade.estimated_price === null) {
+  const baseline = entryBaseline(trade, execution);
+  if (!lo?.mark || lo.mark <= 0 || baseline === null) {
     return {
       mark: lo?.mark ?? null,
       delta: null,
@@ -51,17 +68,17 @@ function liveDelta(trade: Trade, liveQuotes: LiveQuotesResponse | null | undefin
       anomalous: false,
     };
   }
-  const delta = lo.mark - trade.estimated_price;
-  const deltaPct = trade.estimated_price > 0 ? (delta / trade.estimated_price) * 100 : null;
+  const delta = lo.mark - baseline;
+  const deltaPct = (delta / baseline) * 100;
   /*
   Anomaly heuristic kept as a defense-in-depth backstop: a >500% gain
-  on a saved entry almost always means Schwab's live mark and the
-  saved fill are pricing different worlds. Under the at-open
+  on the chosen baseline almost always means Schwab's live mark and the
+  saved entry are pricing different worlds. Under the at-open
   resolution model this should be impossible (the executor saves a
   live ask, not a stale picker mark), but the badge still flags any
   drift large enough to look like a UI mistake.
   */
-  const anomalous = deltaPct !== null && deltaPct > 500;
+  const anomalous = deltaPct > 500;
   return { mark: lo.mark, delta, deltaPct, anomalous };
 }
 
@@ -130,9 +147,12 @@ function HeroPick({ dt, liveQuotes, date, executions }: { dt: DashboardTrade; li
   const { trade } = dt;
   const resolved = isContractResolved(trade);
   const moneyness = calcMoneyness(trade);
-  const { mark, delta, deltaPct, anomalous } = liveDelta(trade, liveQuotes);
   const execution = findExecutionForTrade(executions, trade);
+  const { mark, delta, deltaPct, anomalous } = liveDelta(trade, liveQuotes, execution);
   const skipped = execution?.state === "skipped";
+  const filledEntry = entryBaseline(trade, execution);
+  const buyPrice = filledEntry ?? trade.estimated_price ?? 0;
+  const buySource: "fill" | "limit" = execution && execution.open_price > 0 && filledEntry === execution.open_price ? "fill" : "limit";
   const showDeltaPct = deltaPct !== null && Math.abs(deltaPct) <= 500;
   const riskVariant = trade.risk_level === "HIGH" ? "destructive" : trade.risk_level === "MEDIUM" ? "outline" : "secondary";
 
@@ -199,7 +219,11 @@ function HeroPick({ dt, liveQuotes, date, executions }: { dt: DashboardTrade; li
 
           {resolved ? (
             <div className="grid grid-cols-2 gap-x-8 gap-y-1 lg:min-w-[280px]">
-              <PriceBlock label="Buy" value={fmtMoney(trade.estimated_price ?? 0)} sub={`${fmtMoneyInt((trade.estimated_price ?? 0) * 100)} / contract`} />
+              <PriceBlock
+                label={buySource === "fill" ? "Filled" : "Buy"}
+                value={fmtMoney(buyPrice)}
+                sub={`${fmtMoneyInt(buyPrice * 100)} / contract`}
+              />
               <PriceBlock
                 label="Current"
                 value={mark !== null ? <span className={cn(pnlColor(delta ?? 0))}>{fmtMoney(mark)}</span> : <Skeleton className="inline-block h-9 w-24 align-middle" />}
@@ -265,10 +289,13 @@ function RailPick({ dt, liveQuotes, date, executions }: { dt: DashboardTrade; li
   const { trade } = dt;
   const resolved = isContractResolved(trade);
   const moneyness = calcMoneyness(trade);
-  const { mark, delta, deltaPct } = liveDelta(trade, liveQuotes);
   const execution = findExecutionForTrade(executions, trade);
+  const { mark, delta, deltaPct } = liveDelta(trade, liveQuotes, execution);
   const skipped = execution?.state === "skipped";
   const showDeltaPct = deltaPct !== null && Math.abs(deltaPct) <= 500;
+  const filledEntry = entryBaseline(trade, execution);
+  const buyPrice = filledEntry ?? trade.estimated_price ?? 0;
+  const buySource: "fill" | "limit" = execution && execution.open_price > 0 && filledEntry === execution.open_price ? "fill" : "limit";
 
   return (
     <Link href={tradeHref(trade.symbol, date)} className="group block h-full">
@@ -306,8 +333,8 @@ function RailPick({ dt, liveQuotes, date, executions }: { dt: DashboardTrade; li
           {resolved ? (
             <div className="mt-3 grid grid-cols-2 gap-x-4">
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Buy</div>
-                <div className="mt-0.5 text-xl font-semibold leading-none tabular-nums">{fmtMoney(trade.estimated_price ?? 0)}</div>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{buySource === "fill" ? "Filled" : "Buy"}</div>
+                <div className="mt-0.5 text-xl font-semibold leading-none tabular-nums">{fmtMoney(buyPrice)}</div>
               </div>
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Current</div>
