@@ -85,7 +85,7 @@ vibetradez.com/
 
 | Component | Choice |
 |---|---|
-| Server | Go 1.25, PostgreSQL (DO managed), Anthropic Claude Opus 4.7, Schwab Market Data + Trader API, Resend email |
+| Server | Go 1.25, PostgreSQL (DO managed), Anthropic Claude Opus 4.8, Schwab Market Data + Trader API, Resend email |
 | Client | Next.js 16, React 19, Tailwind CSS v4, shadcn/ui (new-york), Recharts v3, TradingView Lightweight Charts |
 | Auth | In-process Google OAuth (`golang.org/x/oauth2`); sessions in a dedicated Postgres pool |
 | Live data | Schwab WebSocket Streamer API, fanned out to browsers via SSE |

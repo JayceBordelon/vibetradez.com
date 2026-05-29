@@ -36,11 +36,11 @@ Registry is the ordered list of currently-pending rollouts. Once a
 rollout has been sent it can be retired by removing its entry here
 and deleting the file: the slug stays recorded in sent_rollouts
 forever so the once-only guarantee still holds if a future deploy
-ever reintroduces the slug. Retired rollouts v1..v5 each lived here
+ever reintroduces the slug. Retired rollouts v1..v9 each lived here
 once and have all been recorded as sent on production.
 */
 var Registry = []Rollout{
-	multiAgentLiveV9,
+	opus48UpgradeV10,
 }
 
 /*

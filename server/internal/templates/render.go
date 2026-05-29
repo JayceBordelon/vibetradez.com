@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_open_failed.html execute_basket_summary.html execute_close_summary.html rollout_multi_agent_live.html schwab_reauth.html
+//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_open_failed.html execute_basket_summary.html execute_close_summary.html rollout_opus_4_8.html schwab_reauth.html
 var templateFS embed.FS
 
 type Trade struct {
@@ -392,16 +392,15 @@ func RenderCloseSummary(d CloseSummaryData) (string, error) {
 }
 
 /*
-RenderRolloutMultiAgentLive renders the v9 rollout email announcing
-that the multi-agent picker is now fully visible on the dashboard.
-The picker + at-open agent flow had been firing real trades for a
-handful of sessions, but two dashboard bugs were hiding the skip
-reasoning and the live option marks; both fixes ship in the deploy
-this rollout chases. Static content, no parameters beyond Subject.
+RenderRolloutOpus48 renders the v10 rollout email announcing that the
+trade picker and at-open agent have both moved to Claude Opus 4.8,
+Anthropic's newest production model, from Opus 4.7. The flow, the
+candidate count, and every hard cap are unchanged. Static content,
+no parameters beyond Subject.
 */
-func RenderRolloutMultiAgentLive() (string, error) {
-	return renderOne("rollout_multi_agent_live.html", map[string]string{
-		"Subject": "The multi-agent picker is live on your dashboard",
+func RenderRolloutOpus48() (string, error) {
+	return renderOne("rollout_opus_4_8.html", map[string]string{
+		"Subject": "Your trade picker just upgraded to Claude Opus 4.8",
 	})
 }
 

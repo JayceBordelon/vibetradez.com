@@ -103,7 +103,7 @@ documentation each time work touches the trade picker. It should always
 point at the latest production Claude model available in the SDK at the
 time of the edit. See CLAUDE.md "Model version refresh" for the policy.
 */
-const DefaultAnthropicModel = "claude-opus-4-7"
+const DefaultAnthropicModel = "claude-opus-4-8"
 
 /*
 CurrentModelLabel is the user-facing label for the picker model. Emails,
