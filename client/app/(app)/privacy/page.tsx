@@ -43,7 +43,7 @@ export default function PrivacyPage() {
         </div>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Privacy Policy</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Last updated: April 2026</p>
+          <p className="mt-1 text-sm text-muted-foreground">Last updated: May 2026</p>
         </div>
       </div>
 
@@ -82,8 +82,8 @@ export default function PrivacyPage() {
                 <strong>Email address</strong> (from Google OAuth) and the <strong>Google account display name</strong>. Used to send you the daily picks email and to identify you in server logs.
               </li>
               <li>
-                <strong>An opaque session token</strong> issued by the auth service after you sign in with Google. Stored as an HTTP-only cookie on vibetradez.com (named <code>vt_session</code>) so
-                you stay logged in across visits.
+                <strong>An opaque session token</strong> issued by the server&apos;s in-process Google OAuth layer after you sign in with Google. Stored as an HTTP-only cookie on vibetradez.com (named{" "}
+                <code>vt_session</code>) so you stay logged in across visits.
               </li>
               <li>
                 <strong>Email-delivery state</strong>: timestamps of when each daily picks email was sent to you, plus your active/unsubscribed status. No open or click tracking pixels.
@@ -162,8 +162,8 @@ export default function PrivacyPage() {
             <p>VibeTradez sets exactly one cookie:</p>
             <ul>
               <li>
-                <code>vt_session</code> &mdash; HTTP-only, SameSite=Lax, Secure (in production). Holds the opaque access token issued by the auth service. Required for sign-in to work. Cleared when
-                you sign out, expires after 30 days of inactivity.
+                <code>vt_session</code> &mdash; HTTP-only, SameSite=Lax, Secure (in production). Holds the opaque session token issued by the server when you sign in with Google. Required for sign-in to
+                work. Cleared when you sign out, expires after 30 days of inactivity.
               </li>
             </ul>
             <p>No analytics cookies, no ad cookies, no fingerprinting.</p>
@@ -172,8 +172,8 @@ export default function PrivacyPage() {
           <Section id="security" num={9} title="Security">
             <p>
               All traffic to vibetradez.com is served over HTTPS via Let&apos;s Encrypt. The Postgres database is on a private network only the application server can reach. The Anthropic and Schwab
-              API keys are stored as environment variables on the server, never in client-side code or version control. Subscriber-list emails are sent via Resend with subscriber addresses BCC&apos;d
-              so recipients don&apos;t see each other.
+              API keys are stored as environment variables on the server, never in client-side code or version control. Subscriber emails are sent individually through Resend (one message per
+              recipient, each with its own one-click unsubscribe link), so recipients never see each other&apos;s addresses.
             </p>
             <p>
               That said: this is a side project, not a regulated financial institution. Treat the security posture accordingly. The data we hold is minimal by design specifically because we don&apos;t
