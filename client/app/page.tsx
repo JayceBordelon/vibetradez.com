@@ -149,33 +149,28 @@ export default function LandingPage() {
       {/* ── Trusted-by parody marquee (warm-up before the open-source + subscribe CTAs) ── */}
       <TrustedBy />
 
-      {/* ── Open source / contribute, its own section, sits above the signup CTA so devs see it on the first scroll ── */}
-      <section className="relative px-5 pb-12 sm:px-6 sm:pb-16">
-        <div className="relative mx-auto max-w-3xl">
+      {/* ── Open source / contribute, flat centered block matching the section rhythm, sits above the signup CTA so devs see it on the first scroll ── */}
+      <section className="relative px-5 pb-20 sm:px-6 sm:pb-24">
+        <div className="relative z-10 mx-auto max-w-2xl text-center">
           <Reveal effect="rise" duration={700}>
-            <div className="lg-panel relative overflow-hidden rounded-2xl px-6 py-7 sm:px-8 sm:py-8">
-              <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-                <div className="min-w-0">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Open source · contributors welcome</span>
-                  <h3 className="mt-1.5 text-xl font-bold tracking-tight sm:text-2xl">
-                    The whole stack lives on <span className="text-gradient-brand">GitHub</span>
-                  </h3>
-                  <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-                    Go backend, Next.js frontend, Schwab + Anthropic wiring, the whole picker prompt, all open source. If you&apos;re a dev with an idea, ping me to contribute and I&apos;ll merge your
-                    changes in. Real code, real users, real money on the line.
-                  </p>
-                </div>
-                <a
-                  href="https://github.com/JayceBordelon/vibetradez.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-foreground/10 bg-foreground/[0.03] px-5 text-sm font-semibold text-foreground transition-colors hover:border-foreground/25 hover:bg-foreground/[0.06]"
-                >
-                  <GitHubMark className="h-4 w-4" />
-                  View on GitHub
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </a>
-              </div>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Open source · contributors welcome</span>
+            <h2 className="mt-3 text-2xl font-extrabold tracking-tight sm:text-3xl">
+              The whole stack lives on <span className="text-gradient-brand">GitHub</span>
+            </h2>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+              Go backend, Next.js frontend, Schwab + Anthropic wiring, the whole picker prompt, all open. Got an idea? Ping me to contribute and I&apos;ll merge it in.
+            </p>
+            <div className="mt-7 flex justify-center">
+              <a
+                href="https://github.com/JayceBordelon/vibetradez.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-foreground/10 bg-foreground/[0.03] px-5 text-sm font-semibold text-foreground transition-colors hover:border-foreground/25 hover:bg-foreground/[0.06]"
+              >
+                <GitHubMark className="h-4 w-4" />
+                View on GitHub
+                <ArrowRight className="h-3.5 w-3.5" />
+              </a>
             </div>
           </Reveal>
         </div>
@@ -274,15 +269,13 @@ const pipeline = [
   {
     time: "9:25 AM ET",
     title: "Claudia picks 3 tickers",
-    detail:
-      "Before the bell, an LLM pulls market signals, scrapes overnight news, calls Schwab for the live equity spot, and returns 3 high-conviction tickers with direction (call vs put), score, written rationale, and intent (how far out-of-the-money, minimum days to expiry).",
+    detail: "Before the bell, an LLM reads overnight news and live market signals, then returns 3 tickers, each with a direction, a conviction score, and a written rationale.",
     Icon: Sparkles,
   },
   {
     time: "9:30:00 AM ET",
     title: "Claudia picks the contracts and fires",
-    detail:
-      "She wakes up again with the 3 candidates plus live Schwab chain tools and a real order tool. For each candidate she picks a strike, expiration, limit price, and how many contracts to buy from the live chain, then either fires a real BUY_TO_OPEN LIMIT or declines with a written reason. She runs against a $1,000 daily exposure budget and sizes up on her highest-conviction picks. Safety caps at $10 per share and $1,000 of total exposure for the day.",
+    detail: "At the open she reads the live chain and, per pick, chooses the contract and how many to buy or skips it with a reason. She deploys up to a $1,000 daily budget, sizing up on conviction.",
     Icon: Zap,
   },
   {
