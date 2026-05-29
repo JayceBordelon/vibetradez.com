@@ -24,7 +24,6 @@ const sections = [
   { id: "experimental", title: "Experimental Nature of This Service" },
   { id: "not-advice", title: "Not Financial Advice" },
   { id: "risk", title: "Significant Risk Disclosure" },
-  { id: "hypothetical", title: "Hypothetical Performance" },
   { id: "auto-execution", title: "Auto-Execution Pipeline" },
   { id: "data", title: "Data Sources & Accuracy" },
   { id: "warranty", title: "No Warranty & Limitation of Liability" },
@@ -40,7 +39,7 @@ export default function TermsPage() {
         </div>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Terms of Service</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Last updated: April 2026</p>
+          <p className="mt-1 text-sm text-muted-foreground">Last updated: May 2026</p>
         </div>
       </div>
 
@@ -69,9 +68,10 @@ export default function TermsPage() {
               informational and entertainment purposes only. It is not a registered investment advisory service, broker-dealer, or financial institution.
             </p>
             <p>
-              All trade ideas presented on this platform are machine-generated suggestions, not recommendations. They are produced by a single large language model (Claude) running with a fixed prompt
-              and a fixed toolset (Schwab market data plus web search) over publicly available sentiment data and live market information. None of these outputs have been reviewed, verified, or
-              endorsed by any licensed financial professional.
+              All trade ideas presented on this platform are machine-generated suggestions, not recommendations. They are produced by a single large language model (Claude) running across two
+              invocations a day: a pre-bell run (around 9:25 AM ET) that selects three candidate tickers with direction and intent from publicly available sentiment data and live market information,
+              and an at-open run (9:30 AM ET) that reads the live option chain and chooses the specific contracts. Both runs use a fixed prompt and a fixed, locked-down toolset (Schwab market data, web
+              search, and a single order-placement tool). None of these outputs have been reviewed, verified, or endorsed by any licensed financial professional.
             </p>
           </Section>
 
@@ -92,28 +92,18 @@ export default function TermsPage() {
               initial investment. Short-dated options (0 to 7 DTE), which are the focus of this platform, are especially volatile and carry elevated risk of total loss.
             </p>
             <p>
-              Past performance displayed on this platform, whether hypothetical, simulated, or based on actual market data, does not guarantee future results. The P&amp;L figures shown are estimates
-              based on option mark prices at market open and close, and may not reflect actual executable prices due to bid-ask spreads, liquidity, and market microstructure.
+              Past performance displayed on this platform does not guarantee future results. Realized profit and loss for the three daily picks is sourced from actual broker fills on the
+              operator&apos;s Schwab account. Any intraday option-price overlays, modeled premiums, or pre-fill estimates shown on the dashboard are illustrative and may not reflect actual executable
+              prices due to bid-ask spreads, liquidity, and market microstructure.
             </p>
             <p>By using this platform, you acknowledge that you understand these risks and accept full responsibility for any trading decisions you make.</p>
           </Section>
 
-          <Section id="hypothetical" num={4} title="Hypothetical Performance (picks #4 through #10)">
+          <Section id="auto-execution" num={4} title="Auto-Execution Pipeline">
             <p>
-              Performance metrics for picks #4 through #10 on VibeTradez are <strong>hypothetical</strong>. They assume that each suggested trade was entered at the estimated market open price and
-              exited at the closing mark price, with one contract per trade. No actual orders are placed for picks #4 through #10. The top 3 picks are different and are covered in the next section.
-            </p>
-            <p>
-              Hypothetical results have inherent limitations. Unlike actual trading, simulated results do not account for slippage, commissions, margin requirements, the impact of liquidity, or the
-              psychological factors of real capital at risk.
-            </p>
-          </Section>
-
-          <Section id="auto-execution" num={5} title="Auto-Execution Pipeline (top 3 picks)">
-            <p>
-              The top 3 picks of each trading day are automatically executed by the platform as <strong>real live orders</strong> against the operator&apos;s personal Schwab brokerage account using
-              the Schwab Trader API. Real money, real fills, real positions. The operator (Jayce Bordelon) is the only party with capital at risk on these orders. Subscribers receive informational
-              notifications about the trades but no order is ever placed on a subscriber&apos;s behalf, and subscribers cannot configure or disable the pipeline.
+              All three of each trading day&apos;s picks are automatically executed by the platform as <strong>real live orders</strong> against the operator&apos;s personal Schwab brokerage account
+              using the Schwab Trader API. Real money, real fills, real positions. The operator (Jayce Bordelon) is the only party with capital at risk on these orders. Subscribers receive
+              informational notifications about the trades but no order is ever placed on a subscriber&apos;s behalf, and subscribers cannot configure or disable the pipeline.
             </p>
             <p>
               The platform retains a <strong>paper-trade mode</strong> as a fallback (configured server-side via an environment variable) used during testing windows or operator absence. When this
@@ -121,13 +111,14 @@ export default function TermsPage() {
               PAPER so the actual mode is never ambiguous; the badge state reflects the real mode the order was placed in, never inferred or extrapolated.
             </p>
             <p>
-              The auto-execution pipeline operates with four hard guardrails regardless of mode: (1) a per-contract price cap of $5/share (= $500 of capital exposure per contract); (2) a $1,000 daily
-              basket ceiling across all three picks combined, so worst-case daily exposure is bounded regardless of how the picks land; (3) a mandatory close at 3:55 PM ET (12:55 PM ET on half-trading
-              days) regardless of P&amp;L; and (4) a single contract per trade, hardcoded at the package level.
+              The auto-execution pipeline operates with hard guardrails enforced in code at the order-tool layer, so a faulty prompt or model output cannot exceed them: (1) a per-contract premium cap
+              of $10/share (= $1,000 of capital exposure per contract); (2) at most one order per candidate and at most three orders per run, so worst-case daily exposure is bounded at $3,000 (three
+              contracts) regardless of how the picks land; (3) a symbol allowlist, so the agent can only buy the three tickers chosen that morning; (4) a mandatory close at 3:55 PM ET (12:55 PM ET on
+              half-trading days) regardless of P&amp;L; and (5) a single contract per order. Any opening LIMIT that has not filled by 9:35 AM ET is canceled and that pick is dead for the day.
             </p>
           </Section>
 
-          <Section id="data" num={6} title="Data Sources & Accuracy">
+          <Section id="data" num={5} title="Data Sources & Accuracy">
             <p>
               Trade suggestions are generated using data from third-party sources including StockTwits, Yahoo Finance, Finviz, SEC EDGAR, the Anthropic Claude API, and the Schwab Market Data API.
               While we strive for accuracy, we make no guarantees regarding the completeness, reliability, or timeliness of any data presented.
@@ -135,7 +126,7 @@ export default function TermsPage() {
             <p>Market data, option prices, and stock quotes may be delayed or inaccurate. Always verify prices with your broker before placing any trades.</p>
           </Section>
 
-          <Section id="warranty" num={7} title="No Warranty & Limitation of Liability">
+          <Section id="warranty" num={6} title="No Warranty & Limitation of Liability">
             <p>
               VibeTradez is provided without warranty of any kind, express or implied. The creator of this platform shall not be held liable for any financial losses, damages, or other consequences
               arising from your use of or reliance on the information provided.
@@ -143,7 +134,7 @@ export default function TermsPage() {
             <p>This platform may experience downtime, data inaccuracies, or system errors. Trade suggestions may be delayed, missing, or incorrect. Use the platform at your own risk.</p>
           </Section>
 
-          <Section id="contact" num={8} title="Contact">
+          <Section id="contact" num={7} title="Contact">
             <p>
               This project is built and maintained by{" "}
               <a href="https://jaycebordelon.com" target="_blank" rel="noopener noreferrer">
