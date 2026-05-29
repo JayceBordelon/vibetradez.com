@@ -156,8 +156,10 @@ const TESTIMONIALS: Testimonial[] = [
 Round-robin testimonials into 3 columns so adding new entries keeps
 distribution balanced automatically. Each column then animates at a
 different speed for a parallax wall effect. On mobile the wall
-collapses to a static stack since vertical auto-scroll inside a
-vertically-scrolling page is hostile UX.
+collapses to a single horizontal auto-scrolling marquee (see
+Testimonials) since a vertical auto-scroll wall inside a
+vertically-scrolling page is hostile UX and a full static stack scrolls
+forever.
 */
 const COLUMN_GROUPS: Testimonial[][] = (() => {
   const cols: Testimonial[][] = [[], [], []];
@@ -180,11 +182,19 @@ export function Testimonials() {
           <p className="mt-3 text-sm text-muted-foreground sm:text-base">Loved by titans of industry. Allegedly.</p>
         </Reveal>
 
-        {/* Mobile: static stack */}
-        <div className="space-y-4 sm:hidden">
-          {TESTIMONIALS.map((t) => (
-            <TestimonialCard key={t.name} t={t} />
-          ))}
+        {/* Mobile: auto-scrolling horizontal marquee, mirrors the desktop
+            wall. Doubled track + .animate-marquee (translateX 0 -> -50%)
+            loops seamlessly; a 16-card vertical stack scrolled forever and
+            a manual swipe needed a nudge, so it auto-advances instead.
+            CSS-only, no JS; respects prefers-reduced-motion via globals. */}
+        <div className="-mx-5 overflow-hidden sm:hidden [-webkit-mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)] [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
+          <div className="flex w-max animate-marquee gap-4 py-1" style={{ animationDuration: "55s" }}>
+            {[...TESTIMONIALS, ...TESTIMONIALS].map((t, i) => (
+              <div key={`${t.name}-${i}`} aria-hidden={i >= TESTIMONIALS.length || undefined} className="flex w-[78vw] max-w-[340px] shrink-0">
+                <TestimonialCard t={t} />
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Desktop: scrolling parallax columns */}
@@ -212,14 +222,14 @@ function TestimonialCard({ t, hidden }: { t: Testimonial; hidden?: boolean }) {
   return (
     <article
       aria-hidden={hidden || undefined}
-      className="group flex shrink-0 flex-col gap-4 rounded-2xl border border-foreground/[0.08] bg-foreground/[0.015] p-6 transition-all duration-300 hover:border-foreground/20 hover:bg-foreground/[0.04] dark:border-white/[0.06] dark:bg-white/[0.015] dark:hover:border-white/15 dark:hover:bg-white/[0.04]"
+      className="group flex w-full shrink-0 flex-col gap-4 rounded-2xl border border-foreground/[0.08] bg-foreground/[0.015] p-6 transition-all duration-300 hover:border-foreground/20 hover:bg-foreground/[0.04] dark:border-white/[0.06] dark:bg-white/[0.015] dark:hover:border-white/15 dark:hover:bg-white/[0.04]"
     >
       <div className="flex items-center justify-between gap-3">
         <Stars rating={t.rating} />
         <Quote className="h-4 w-4 shrink-0 text-foreground/20" aria-hidden />
       </div>
       <p className="text-[15px] leading-relaxed text-foreground/85">&ldquo;{t.quote}&rdquo;</p>
-      <div className="flex items-start gap-3 border-t border-foreground/5 pt-4 dark:border-white/5">
+      <div className="mt-auto flex items-start gap-3 border-t border-foreground/5 pt-4 dark:border-white/5">
         <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-bold", t.avatarClass)} aria-hidden>
           {t.initials}
         </div>
