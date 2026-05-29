@@ -24,6 +24,18 @@ defense-in-depth re-check on the way out of Service.PlaceBuyToOpenAgent.
 const MaxContractPremium = 10.00
 
 /*
+MaxOrderCost is the total-dollar ceiling on any single agent order,
+accounting for quantity: limit_price × 100 × quantity. It is the
+broker-side twin of the execagent's MaxDailyExposure ($1,000/day) and
+re-validated in Service.PlaceBuyToOpenAgent so that even a buggy or
+compromised tool layer cannot submit one order that blows the day's
+budget on its own. The cumulative-across-orders accounting lives in
+the dispatcher (internal/execagent/tools.go); this is the per-order
+defense-in-depth check.
+*/
+const MaxOrderCost = 1000.00
+
+/*
 LimitPriceMultiplier is the buffer the execagent's prompt recommends
 on top of the live ask when constructing the open LIMIT (e.g.,
 limit_price ≈ 1.10 × ask). The constant is no longer enforced in code

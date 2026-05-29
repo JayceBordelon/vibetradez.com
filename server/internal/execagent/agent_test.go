@@ -34,6 +34,7 @@ func TestReconcile_BuyFromTool_TakesPrecedence(t *testing.T) {
 			Strike     float64 `json:"strike,omitempty"`
 			Expiration string  `json:"expiration,omitempty"`
 			LimitPrice float64 `json:"limit_price,omitempty"`
+			Quantity   int     `json:"quantity,omitempty"`
 			SkipReason string  `json:"skip_reason,omitempty"`
 		}{
 			{Rank: 1, Action: "skip", SkipReason: "later second thoughts"},
@@ -80,6 +81,7 @@ func TestReconcile_MissingJSON_SynthesizesSkip(t *testing.T) {
 			Strike     float64 `json:"strike,omitempty"`
 			Expiration string  `json:"expiration,omitempty"`
 			LimitPrice float64 `json:"limit_price,omitempty"`
+			Quantity   int     `json:"quantity,omitempty"`
 			SkipReason string  `json:"skip_reason,omitempty"`
 		}{
 			{Rank: 1, Action: "buy", OrderID: "ord-1"},
@@ -120,6 +122,7 @@ func TestReconcile_PreservesOrderByCandidate(t *testing.T) {
 			Strike     float64 `json:"strike,omitempty"`
 			Expiration string  `json:"expiration,omitempty"`
 			LimitPrice float64 `json:"limit_price,omitempty"`
+			Quantity   int     `json:"quantity,omitempty"`
 			SkipReason string  `json:"skip_reason,omitempty"`
 		}{
 			{Rank: 2, Action: "skip", SkipReason: "spread too wide"},

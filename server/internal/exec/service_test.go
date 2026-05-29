@@ -140,7 +140,7 @@ func TestPlaceBuyToOpenAgent_HappyPath_PersistsResolutionAndOrder(t *testing.T) 
 	trader := &fakeTrader{placeID: "ORDER-1"}
 	svc := newTestService(trader, store, mail)
 
-	orderID, execID, err := svc.PlaceBuyToOpenAgent(context.Background(), sampleTrade(), 150, "2099-01-15", 5, 2.30)
+	orderID, execID, err := svc.PlaceBuyToOpenAgent(context.Background(), sampleTrade(), 150, "2099-01-15", 5, 2.30, 1)
 	if err != nil {
 		t.Fatalf("PlaceBuyToOpenAgent: %v", err)
 	}
@@ -150,8 +150,8 @@ func TestPlaceBuyToOpenAgent_HappyPath_PersistsResolutionAndOrder(t *testing.T) 
 	if len(store.resolves) != 1 || store.resolves[0].strike != 150 {
 		t.Errorf("expected one ResolveTradeContract call with strike=150, got %+v", store.resolves)
 	}
-	if len(store.inserts) != 1 || store.inserts[0].Status != "pending" {
-		t.Errorf("expected one pending insert, got %+v", store.inserts)
+	if len(store.inserts) != 1 || store.inserts[0].Status != "pending" || store.inserts[0].RequestedQuantity != 1 {
+		t.Errorf("expected one pending insert with qty 1, got %+v", store.inserts)
 	}
 	// Two updates: working with orderID, then nothing else (no GetOrder
 	// post-place — agent path is fire-and-forget).
@@ -163,9 +163,44 @@ func TestPlaceBuyToOpenAgent_HappyPath_PersistsResolutionAndOrder(t *testing.T) 
 	}
 }
 
+func TestPlaceBuyToOpenAgent_MultiQuantity_ThreadsThroughOrderAndExecution(t *testing.T) {
+	store := &fakeStore{}
+	trader := &fakeTrader{placeID: "ORDER-1"}
+	svc := newTestService(trader, store, &fakeMail{})
+
+	// 3 contracts at $2.00 = $600 total cost, within the $1000 per-order cap.
+	if _, _, err := svc.PlaceBuyToOpenAgent(context.Background(), sampleTrade(), 150, "2099-01-15", 5, 2.00, 3); err != nil {
+		t.Fatalf("PlaceBuyToOpenAgent qty 3: %v", err)
+	}
+	if len(store.inserts) != 1 || store.inserts[0].RequestedQuantity != 3 {
+		t.Errorf("expected insert RequestedQuantity 3, got %+v", store.inserts)
+	}
+	if len(trader.placed) != 1 || trader.placed[0].OrderLegCollection[0].Quantity != 3 {
+		t.Errorf("expected broker order leg quantity 3, got %+v", trader.placed)
+	}
+}
+
+func TestPlaceBuyToOpenAgent_RefusesOverPerOrderCost(t *testing.T) {
+	svc := newTestService(&fakeTrader{}, &fakeStore{}, &fakeMail{})
+	// 6 contracts at $2.00 = $1200, over MaxOrderCost ($1000), even though
+	// the $2.00/share limit is well under the per-share cap.
+	if _, _, err := svc.PlaceBuyToOpenAgent(context.Background(), sampleTrade(), 150, "2099-01-15", 5, 2.00, 6); err == nil {
+		t.Fatal("expected per-order cost refusal")
+	}
+}
+
+func TestPlaceBuyToOpenAgent_RejectsNonPositiveQuantity(t *testing.T) {
+	svc := newTestService(&fakeTrader{}, &fakeStore{}, &fakeMail{})
+	for _, q := range []int{0, -1} {
+		if _, _, err := svc.PlaceBuyToOpenAgent(context.Background(), sampleTrade(), 150, "2099-01-15", 5, 2.30, q); err == nil {
+			t.Errorf("quantity=%d: expected refusal", q)
+		}
+	}
+}
+
 func TestPlaceBuyToOpenAgent_RefusesOverCapLimitPrice(t *testing.T) {
 	svc := newTestService(&fakeTrader{}, &fakeStore{}, &fakeMail{})
-	if _, _, err := svc.PlaceBuyToOpenAgent(context.Background(), sampleTrade(), 150, "2099-01-15", 5, 10.01); err == nil {
+	if _, _, err := svc.PlaceBuyToOpenAgent(context.Background(), sampleTrade(), 150, "2099-01-15", 5, 10.01, 1); err == nil {
 		t.Fatal("expected over-cap refusal")
 	}
 }
@@ -173,7 +208,7 @@ func TestPlaceBuyToOpenAgent_RefusesOverCapLimitPrice(t *testing.T) {
 func TestPlaceBuyToOpenAgent_RefusesNonPositiveLimit(t *testing.T) {
 	svc := newTestService(&fakeTrader{}, &fakeStore{}, &fakeMail{})
 	for _, lp := range []float64{0, -1.50} {
-		if _, _, err := svc.PlaceBuyToOpenAgent(context.Background(), sampleTrade(), 150, "2099-01-15", 5, lp); err == nil {
+		if _, _, err := svc.PlaceBuyToOpenAgent(context.Background(), sampleTrade(), 150, "2099-01-15", 5, lp, 1); err == nil {
 			t.Errorf("limit_price=%.2f: expected refusal", lp)
 		}
 	}
@@ -184,7 +219,7 @@ func TestPlaceBuyToOpenAgent_PersistsFailedOnPlaceError(t *testing.T) {
 	trader := &fakeTrader{placeErr: errors.New("broker rejected: insufficient buying power")}
 	svc := newTestService(trader, store, &fakeMail{})
 
-	_, _, err := svc.PlaceBuyToOpenAgent(context.Background(), sampleTrade(), 150, "2099-01-15", 5, 2.30)
+	_, _, err := svc.PlaceBuyToOpenAgent(context.Background(), sampleTrade(), 150, "2099-01-15", 5, 2.30, 1)
 	if err == nil {
 		t.Fatal("expected error when PlaceOrder fails")
 	}
@@ -199,7 +234,7 @@ func TestPlaceBuyToOpenAgent_PersistsFailedOnPlaceError(t *testing.T) {
 
 func TestPlaceBuyToOpenAgent_RejectsMissingTradeID(t *testing.T) {
 	svc := newTestService(&fakeTrader{}, &fakeStore{}, &fakeMail{})
-	if _, _, err := svc.PlaceBuyToOpenAgent(context.Background(), &trades.Trade{Symbol: "AAPL", ContractType: "CALL"}, 150, "2099-01-15", 5, 2.30); err == nil {
+	if _, _, err := svc.PlaceBuyToOpenAgent(context.Background(), &trades.Trade{Symbol: "AAPL", ContractType: "CALL"}, 150, "2099-01-15", 5, 2.30, 1); err == nil {
 		t.Fatal("expected error on missing trade ID")
 	}
 }

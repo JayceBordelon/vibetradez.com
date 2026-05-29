@@ -55,6 +55,7 @@ type Decision struct {
 	Strike      float64
 	Expiration  string
 	LimitPrice  float64
+	Quantity    int
 	ExecutionID int // executions.id row written for this buy
 
 	// Populated on skip outcomes only.

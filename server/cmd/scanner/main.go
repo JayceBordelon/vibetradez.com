@@ -997,8 +997,8 @@ func runExecuteAtOpen(cfg *config.Config, db *store.Store, emailClient *email.Cl
 		switch d.Action {
 		case execagent.ActionBuy:
 			buys++
-			log.Printf("execute-at-open: BUY rank=%d %s strike=$%.2f exp=%s limit=$%.2f order=%s",
-				d.Rank, d.Symbol, d.Strike, d.Expiration, d.LimitPrice, d.OrderID)
+			log.Printf("execute-at-open: BUY rank=%d %s strike=$%.2f exp=%s limit=$%.2f qty=%d exposure=$%.2f order=%s",
+				d.Rank, d.Symbol, d.Strike, d.Expiration, d.LimitPrice, d.Quantity, d.LimitPrice*100*float64(d.Quantity), d.OrderID)
 		case execagent.ActionSkip:
 			skips++
 			log.Printf("execute-at-open: SKIP rank=%d %s reason=%q", d.Rank, d.Symbol, d.SkipReason)
@@ -1019,6 +1019,19 @@ func runWeeklyEmail(cfg *config.Config, db *store.Store, emailClient *email.Clie
 	}
 
 	tradesMap, _ := db.GetTradesForDateRange(startDate, endDate)
+
+	/*
+		Broker fills beat Claude's modeled EOD re-quote whenever both are
+		available, same as the daily EOD email. Load every execution in
+		the week keyed by date so a closed live execution overrides
+		EntryPrice + ClosingPrice for that contract; rows without a closed
+		execution (paper-only days, skipped picks, close failures) fall
+		through to the modeled summary values.
+	*/
+	execsMap, execErr := db.GetExecutionsForDateRange(startDate, endDate)
+	if execErr != nil {
+		log.Printf("Warning: failed to load executions for weekly email override (%s to %s): %v", startDate, endDate, execErr)
+	}
 
 	var dates []string
 	for d := range summariesMap {
@@ -1050,6 +1063,19 @@ func runWeeklyEmail(cfg *config.Config, db *store.Store, emailClient *email.Clie
 			}
 		}
 
+		type weeklyFill struct {
+			entry, closing float64
+			qty            int
+		}
+		fillByKey := make(map[string]weeklyFill)
+		for _, ev := range execsMap[date] {
+			if ev.State != "closed" || ev.OpenPrice <= 0 || ev.ClosePrice <= 0 {
+				continue
+			}
+			key := ev.Symbol + "|" + ev.ContractType + "|" + fmt.Sprintf("%.2f", ev.StrikePrice)
+			fillByKey[key] = weeklyFill{entry: ev.OpenPrice, closing: ev.ClosePrice, qty: ev.Quantity}
+		}
+
 		dayTrades := make([]templates.SummaryTrade, len(summaries))
 		dayWinners, dayLosers := 0, 0
 		dayPnL := 0.0
@@ -1058,10 +1084,22 @@ func runWeeklyEmail(cfg *config.Config, db *store.Store, emailClient *email.Clie
 		dayFirstTrade := true
 
 		for i, s := range summaries {
-			pnlPerContract := (s.ClosingPrice - s.EntryPrice) * 100
+			summaryKey := s.Symbol + "|" + s.ContractType + "|" + fmt.Sprintf("%.2f", s.StrikePrice)
+			entry, closing := s.EntryPrice, s.ClosingPrice
+			// qty defaults to a 1-contract illustration; a closed live
+			// execution carries the real number of contracts bought.
+			qty := 1
+			if override, ok := fillByKey[summaryKey]; ok {
+				entry, closing = override.entry, override.closing
+				if override.qty >= 1 {
+					qty = override.qty
+				}
+			}
+
+			pnl := (closing - entry) * 100 * float64(qty)
 			pctChange := 0.0
-			if s.EntryPrice > 0 {
-				pctChange = ((s.ClosingPrice - s.EntryPrice) / s.EntryPrice) * 100
+			if entry > 0 {
+				pctChange = ((closing - entry) / entry) * 100
 			}
 			stockPct := 0.0
 			if s.StockOpen > 0 {
@@ -1069,21 +1107,22 @@ func runWeeklyEmail(cfg *config.Config, db *store.Store, emailClient *email.Clie
 			}
 
 			result := "FLAT"
-			if pnlPerContract > 0 {
+			if pnl > 0 {
 				result = "PROFIT"
 				dayWinners++
-			} else if pnlPerContract < 0 {
+			} else if pnl < 0 {
 				result = "LOSS"
 				dayLosers++
 			}
 
-			summaryKey := s.Symbol + "|" + s.ContractType + "|" + fmt.Sprintf("%.2f", s.StrikePrice)
 			dayTrades[i] = templates.SummaryTrade{
 				Symbol: s.Symbol, ContractType: s.ContractType,
 				StrikePrice: s.StrikePrice, Expiration: s.Expiration,
-				EntryPrice: s.EntryPrice, ClosingPrice: s.ClosingPrice,
-				PriceChange:    s.ClosingPrice - s.EntryPrice,
+				EntryPrice: entry, ClosingPrice: closing,
+				PriceChange:    closing - entry,
 				PctChange:      pctChange,
+				Quantity:       qty,
+				PnL:            pnl,
 				StockOpen:      s.StockOpen,
 				StockClose:     s.StockClose,
 				StockPctChange: stockPct,
@@ -1092,17 +1131,17 @@ func runWeeklyEmail(cfg *config.Config, db *store.Store, emailClient *email.Clie
 				Rank:           dayRankMap[summaryKey],
 			}
 
-			dayPnL += pnlPerContract
-			totalInvested += s.EntryPrice * 100
-			totalReturn += s.ClosingPrice * 100
+			dayPnL += pnl
+			totalInvested += entry * 100 * float64(qty)
+			totalReturn += closing * 100 * float64(qty)
 
-			if dayFirstTrade || pnlPerContract > dayBestPnL {
+			if dayFirstTrade || pnl > dayBestPnL {
 				dayBest = s.Symbol
-				dayBestPnL = pnlPerContract
+				dayBestPnL = pnl
 			}
-			if dayFirstTrade || pnlPerContract < dayWorstPnL {
+			if dayFirstTrade || pnl < dayWorstPnL {
 				dayWorst = s.Symbol
-				dayWorstPnL = pnlPerContract
+				dayWorstPnL = pnl
 			}
 			dayFirstTrade = false
 		}
@@ -1286,6 +1325,7 @@ func runEndOfDayAnalysis(cfg *config.Config, db *store.Store, claudePicker *trad
 	type fillOverride struct {
 		EntryPrice   float64
 		ClosingPrice float64
+		Quantity     int
 	}
 	fillByKey := make(map[string]fillOverride)
 	for _, ev := range executions {
@@ -1293,7 +1333,7 @@ func runEndOfDayAnalysis(cfg *config.Config, db *store.Store, claudePicker *trad
 			continue
 		}
 		key := ev.Symbol + "|" + ev.ContractType + "|" + fmt.Sprintf("%.2f", ev.StrikePrice)
-		fillByKey[key] = fillOverride{EntryPrice: ev.OpenPrice, ClosingPrice: ev.ClosePrice}
+		fillByKey[key] = fillOverride{EntryPrice: ev.OpenPrice, ClosingPrice: ev.ClosePrice, Quantity: ev.Quantity}
 	}
 
 	templateSummaries := make([]templates.SummaryTrade, len(summaries))
@@ -1301,8 +1341,11 @@ func runEndOfDayAnalysis(cfg *config.Config, db *store.Store, claudePicker *trad
 		key := s.Symbol + "|" + s.ContractType + "|" + fmt.Sprintf("%.2f", s.StrikePrice)
 		meta := morningByKey[key]
 		entry, closing := s.EntryPrice, s.ClosingPrice
+		// qty 0 → RenderSummaryEmail normalizes to a 1-contract illustration
+		// for picks without a closed live execution (paper / skipped days).
+		qty := 0
 		if override, ok := fillByKey[key]; ok {
-			entry, closing = override.EntryPrice, override.ClosingPrice
+			entry, closing, qty = override.EntryPrice, override.ClosingPrice, override.Quantity
 		}
 		templateSummaries[i] = templates.SummaryTrade{
 			Symbol:       s.Symbol,
@@ -1311,6 +1354,7 @@ func runEndOfDayAnalysis(cfg *config.Config, db *store.Store, claudePicker *trad
 			Expiration:   s.Expiration,
 			EntryPrice:   entry,
 			ClosingPrice: closing,
+			Quantity:     qty,
 			StockOpen:    s.StockOpen,
 			StockClose:   s.StockClose,
 			Notes:        s.Notes,

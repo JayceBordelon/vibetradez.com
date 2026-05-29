@@ -66,14 +66,22 @@ type EmailData struct {
 }
 
 type SummaryTrade struct {
-	Symbol         string
-	ContractType   string
-	StrikePrice    float64
-	Expiration     string
-	EntryPrice     float64
-	ClosingPrice   float64
+	Symbol       string
+	ContractType string
+	StrikePrice  float64
+	Expiration   string
+	EntryPrice   float64
+	ClosingPrice float64
+	// PriceChange / PctChange are per-contract (per-share × 100 is the
+	// dollar move on one contract). Quantity is the number of contracts
+	// actually bought (≥ 1; the agent can size up with duplicates). PnL
+	// is the realized dollar P&L INCLUDING quantity: PriceChange × 100 ×
+	// Quantity. Templates render PnL for dollar figures and PctChange for
+	// the per-contract percentage.
 	PriceChange    float64
 	PctChange      float64
+	Quantity       int
+	PnL            float64
 	StockOpen      float64
 	StockClose     float64
 	StockPctChange float64
@@ -454,7 +462,7 @@ func VerifyTemplates() HealthCheck {
 		{
 			Symbol: "SPY", ContractType: "CALL", StrikePrice: 500,
 			Expiration: "2026-04-01", EntryPrice: 1.50, ClosingPrice: 2.10,
-			StockOpen: 498, StockClose: 503, Notes: "Startup verification",
+			Quantity: 3, PnL: 180, StockOpen: 498, StockClose: 503, Notes: "Startup verification",
 		},
 	}
 	if _, err := RenderSummaryEmail(sampleSummaries); err != nil {
@@ -466,15 +474,15 @@ func VerifyTemplates() HealthCheck {
 		Days: []WeeklyDayData{
 			{
 				Date: "2026-03-25", DayName: "Monday",
-				TotalTrades: 1, Winners: 1, DayPnL: 60.0,
-				BestTrade: "SPY", BestPnL: 60.0,
-				WorstTrade: "SPY", WorstPnL: 60.0,
+				TotalTrades: 1, Winners: 1, DayPnL: 180.0,
+				BestTrade: "SPY", BestPnL: 180.0,
+				WorstTrade: "SPY", WorstPnL: 180.0,
 				Trades: sampleSummaries,
 			},
 		},
-		TotalTrades: 1, TotalWinners: 1, TotalPnL: 60.0,
-		WinRate: 100.0, TotalInvested: 150.0, TotalReturn: 210.0,
-		BestTrade: "SPY", BestPnL: 60.0, WorstTrade: "SPY", WorstPnL: 60.0,
+		TotalTrades: 1, TotalWinners: 1, TotalPnL: 180.0,
+		WinRate: 100.0, TotalInvested: 450.0, TotalReturn: 630.0,
+		BestTrade: "SPY", BestPnL: 180.0, WorstTrade: "SPY", WorstPnL: 180.0,
 		DashboardURL: "https://vibetradez.com/dashboard",
 	}
 	if _, err := RenderWeeklyEmail(sampleWeekly); err != nil {
@@ -503,7 +511,11 @@ func topNPnl(trades []SummaryTrade, n int, score func(SummaryTrade) float64) flo
 	}
 	var total float64
 	for _, t := range sorted {
-		total += (t.ClosingPrice - t.EntryPrice) * 100
+		qty := t.Quantity
+		if qty < 1 {
+			qty = 1
+		}
+		total += (t.ClosingPrice - t.EntryPrice) * 100 * float64(qty)
 	}
 	return total
 }
@@ -578,6 +590,11 @@ func RenderSummaryEmail(summaryTrades []SummaryTrade) (string, error) {
 	totalPnL := 0.0
 	for i := range summaryTrades {
 		t := &summaryTrades[i]
+		// No execution row means a hypothetical one-contract illustration;
+		// a real fill carries the quantity the agent actually bought.
+		if t.Quantity < 1 {
+			t.Quantity = 1
+		}
 		t.PriceChange = t.ClosingPrice - t.EntryPrice
 		if t.EntryPrice > 0 {
 			t.PctChange = (t.PriceChange / t.EntryPrice) * 100
@@ -585,6 +602,7 @@ func RenderSummaryEmail(summaryTrades []SummaryTrade) (string, error) {
 		if t.StockOpen > 0 {
 			t.StockPctChange = ((t.StockClose - t.StockOpen) / t.StockOpen) * 100
 		}
+		t.PnL = t.PriceChange * 100 * float64(t.Quantity)
 		if t.PriceChange > 0 {
 			t.Result = "PROFIT"
 			winners++
@@ -594,7 +612,7 @@ func RenderSummaryEmail(summaryTrades []SummaryTrade) (string, error) {
 		} else {
 			t.Result = "FLAT"
 		}
-		totalPnL += t.PriceChange * 100
+		totalPnL += t.PnL
 	}
 
 	top3Pnl := topNPnl(summaryTrades, 3, func(t SummaryTrade) float64 { return float64(t.Score) })

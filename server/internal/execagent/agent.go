@@ -260,6 +260,7 @@ type finalJSONShape struct {
 		Strike     float64 `json:"strike,omitempty"`
 		Expiration string  `json:"expiration,omitempty"`
 		LimitPrice float64 `json:"limit_price,omitempty"`
+		Quantity   int     `json:"quantity,omitempty"`
 		SkipReason string  `json:"skip_reason,omitempty"`
 	} `json:"decisions"`
 	FinalNote string `json:"final_note"`
