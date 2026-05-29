@@ -16,11 +16,11 @@ export function ExposurePanel({ trades, hasSummaries, executions }: ExposurePane
 
   /*
   Capital deployed multiplies the entry premium by the executed
-  contract count (always 1 under the top-3-only selector; legacy
-  rows from the prior greedy-fill regime may carry quantity > 1).
-  When no execution exists the pick is hypothetical at qty 1,
-  matching the "what if you bought one contract" model the summary
-  represents.
+  contract count. The at-open agent sizes up on conviction — it can
+  buy duplicate contracts (quantity > 1) of a pick within the $1,000
+  daily exposure budget — so quantity is read off the execution row
+  per pick rather than assumed to be 1. When no execution exists yet
+  (pre-open / hypothetical), the pick is shown at qty 1.
   */
   const totalExposure = trades.reduce((sum, dt) => {
     const exec = findExecutionForTrade(executions, dt.trade);

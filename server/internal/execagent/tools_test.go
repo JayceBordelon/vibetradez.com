@@ -78,6 +78,7 @@ type placeArgs struct {
 	Expiration string
 	DTE        int
 	LimitPrice float64
+	Quantity   int
 }
 
 type skipArgs struct {
@@ -85,13 +86,13 @@ type skipArgs struct {
 	Reason  string
 }
 
-func (s *stubExec) PlaceBuyToOpenAgent(_ context.Context, t *trades.Trade, strike float64, expiration string, dte int, limitPrice float64) (string, int, error) {
+func (s *stubExec) PlaceBuyToOpenAgent(_ context.Context, t *trades.Trade, strike float64, expiration string, dte int, limitPrice float64, quantity int) (string, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.placeErr != nil {
 		return "", 0, s.placeErr
 	}
-	s.placeCalls = append(s.placeCalls, placeArgs{TradeID: t.ID, Strike: strike, Expiration: expiration, DTE: dte, LimitPrice: limitPrice})
+	s.placeCalls = append(s.placeCalls, placeArgs{TradeID: t.ID, Strike: strike, Expiration: expiration, DTE: dte, LimitPrice: limitPrice, Quantity: quantity})
 	s.nextOrderID++
 	return "order-" + itoa(s.nextOrderID), 100 + s.nextOrderID, nil
 }
@@ -179,8 +180,84 @@ func TestPlaceOptionsOrder_HappyPath(t *testing.T) {
 	if parsed["orders_left"].(float64) != 2 {
 		t.Errorf("expected 2 orders left, got %v", parsed["orders_left"])
 	}
-	if len(exec.placeCalls) != 1 || exec.placeCalls[0].Strike != 150 {
+	// Omitted quantity defaults to 1; exposure = 2.30 × 100 × 1 = 230.
+	if parsed["quantity"].(float64) != 1 {
+		t.Errorf("expected quantity 1 default, got %v", parsed["quantity"])
+	}
+	if got := parsed["budget_remaining"].(float64); got != MaxDailyExposure-230 {
+		t.Errorf("expected budget_remaining %.2f, got %v", MaxDailyExposure-230, got)
+	}
+	if len(exec.placeCalls) != 1 || exec.placeCalls[0].Strike != 150 || exec.placeCalls[0].Quantity != 1 {
 		t.Fatalf("place call not recorded as expected: %+v", exec.placeCalls)
+	}
+}
+
+func TestPlaceOptionsOrder_DuplicateQuantityHappyPath(t *testing.T) {
+	candidates := []Candidate{mkCandidate(1, "AAPL", "CALL")}
+	exec := &stubExec{}
+	d := NewToolDispatcher(&stubChain{}, exec, candidates)
+
+	// 3 contracts at $2.00 = $600 exposure, well within the $1000 budget.
+	input := []byte(`{"rank":1,"symbol":"AAPL","contract_type":"CALL","strike":150,"expiration":"2099-01-01","limit_price":2.00,"quantity":3}`)
+	parsed := mustExtractOK(t, d.Dispatch(context.Background(), "place_options_order", input))
+
+	if parsed["quantity"].(float64) != 3 {
+		t.Errorf("expected quantity 3, got %v", parsed["quantity"])
+	}
+	if parsed["order_exposure"].(float64) != 600 {
+		t.Errorf("expected order_exposure 600, got %v", parsed["order_exposure"])
+	}
+	if got := parsed["budget_remaining"].(float64); got != 400 {
+		t.Errorf("expected budget_remaining 400, got %v", got)
+	}
+	if len(exec.placeCalls) != 1 || exec.placeCalls[0].Quantity != 3 {
+		t.Fatalf("expected quantity 3 to reach exec, got %+v", exec.placeCalls)
+	}
+}
+
+func TestPlaceOptionsOrder_RefusesOverDailyBudget(t *testing.T) {
+	candidates := []Candidate{mkCandidate(1, "AAPL", "CALL")}
+	exec := &stubExec{}
+	d := NewToolDispatcher(&stubChain{}, exec, candidates)
+
+	// 6 contracts at $2.00 = $1200 exposure, over the $1000 budget.
+	input := []byte(`{"rank":1,"symbol":"AAPL","contract_type":"CALL","strike":150,"expiration":"2099-01-01","limit_price":2.00,"quantity":6}`)
+	errStr := mustExtractErr(t, d.Dispatch(context.Background(), "place_options_order", input))
+	if !strings.Contains(errStr, "exceeds remaining daily budget") {
+		t.Errorf("expected daily-budget refusal, got %q", errStr)
+	}
+	if len(exec.placeCalls) != 0 {
+		t.Fatalf("over-budget order must not reach the broker, got %+v", exec.placeCalls)
+	}
+}
+
+func TestPlaceOptionsOrder_BudgetAccumulatesAcrossRanks(t *testing.T) {
+	candidates := []Candidate{mkCandidate(1, "AAPL", "CALL"), mkCandidate(2, "TSLA", "PUT")}
+	exec := &stubExec{}
+	d := NewToolDispatcher(&stubChain{}, exec, candidates)
+
+	// Rank 1: 4 × $2.00 = $800 committed; $200 left.
+	first := []byte(`{"rank":1,"symbol":"AAPL","contract_type":"CALL","strike":150,"expiration":"2099-01-01","limit_price":2.00,"quantity":4}`)
+	p1 := mustExtractOK(t, d.Dispatch(context.Background(), "place_options_order", first))
+	if got := p1["budget_remaining"].(float64); got != 200 {
+		t.Fatalf("after first order expected 200 remaining, got %v", got)
+	}
+
+	// Rank 2: 2 × $2.00 = $400 would exceed the $200 left — refused.
+	second := []byte(`{"rank":2,"symbol":"TSLA","contract_type":"PUT","strike":250,"expiration":"2099-01-01","limit_price":2.00,"quantity":2}`)
+	errStr := mustExtractErr(t, d.Dispatch(context.Background(), "place_options_order", second))
+	if !strings.Contains(errStr, "exceeds remaining daily budget") {
+		t.Errorf("expected second order refused on budget, got %q", errStr)
+	}
+
+	// Rank 2 resized to 1 × $2.00 = $200 fits exactly.
+	third := []byte(`{"rank":2,"symbol":"TSLA","contract_type":"PUT","strike":250,"expiration":"2099-01-01","limit_price":2.00,"quantity":1}`)
+	p2 := mustExtractOK(t, d.Dispatch(context.Background(), "place_options_order", third))
+	if got := p2["budget_remaining"].(float64); got != 0 {
+		t.Errorf("after sizing to fit expected 0 remaining, got %v", got)
+	}
+	if len(exec.placeCalls) != 2 {
+		t.Fatalf("expected exactly 2 successful broker calls, got %d", len(exec.placeCalls))
 	}
 }
 

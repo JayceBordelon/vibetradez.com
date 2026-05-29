@@ -111,10 +111,12 @@ export default function TermsPage() {
               PAPER so the actual mode is never ambiguous; the badge state reflects the real mode the order was placed in, never inferred or extrapolated.
             </p>
             <p>
-              The auto-execution pipeline operates with hard guardrails enforced in code at the order-tool layer, so a faulty prompt or model output cannot exceed them: (1) a per-contract premium cap
-              of $10/share (= $1,000 of capital exposure per contract); (2) at most one order per candidate and at most three orders per run, so worst-case daily exposure is bounded at $3,000 (three
-              contracts) regardless of how the picks land; (3) a symbol allowlist, so the agent can only buy the three tickers chosen that morning; (4) a mandatory close at 3:55 PM ET (12:55 PM ET on
-              half-trading days) regardless of P&amp;L; and (5) a single contract per order. Any opening LIMIT that has not filled by 9:35 AM ET is canceled and that pick is dead for the day.
+              The auto-execution pipeline operates with hard guardrails enforced in code at the order-tool layer, so a faulty prompt or model output cannot exceed them: (1) a per-share premium cap of
+              $10/share; (2) a $1,000 total daily exposure budget enforced cumulatively across every order placed that day, so worst-case daily exposure is bounded at $1,000 regardless of how the picks
+              land or how many contracts are bought; (3) at most one order per candidate and at most three orders per run, where the agent may buy duplicate contracts of a single pick by setting the
+              order quantity but can never push the day past the $1,000 budget; (4) a per-order total-cost cap of $1,000, so no single order can exhaust the budget on a pricing error; (5) a symbol
+              allowlist, so the agent can only buy the three tickers chosen that morning; and (6) a mandatory close at 3:55 PM ET (12:55 PM ET on half-trading days) regardless of P&amp;L. Any opening
+              LIMIT that has not filled by 9:35 AM ET is canceled and that pick is dead for the day.
             </p>
           </Section>
 

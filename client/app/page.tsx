@@ -282,7 +282,7 @@ const pipeline = [
     time: "9:30:00 AM ET",
     title: "Claudia picks the contracts and fires",
     detail:
-      "She wakes up again with the 3 candidates plus live Schwab chain tools and a real order tool. For each candidate she picks a strike, expiration, and limit price from the live chain and either fires a real BUY_TO_OPEN LIMIT or declines with a written reason. Per-contract safety cap at $10/share, capped at 3 orders per run.",
+      "She wakes up again with the 3 candidates plus live Schwab chain tools and a real order tool. For each candidate she picks a strike, expiration, limit price, and how many contracts to buy from the live chain, then either fires a real BUY_TO_OPEN LIMIT or declines with a written reason. She runs against a $1,000 daily exposure budget and sizes up on her highest-conviction picks. Safety caps at $10 per share and $1,000 of total exposure for the day.",
     Icon: Zap,
   },
   {

@@ -134,10 +134,10 @@ export function DashboardShell() {
         ) : stats?.hasSummaries ? (
           <>
             <StatsGrid totalPnl={stats.totalPnl} winRate={stats.winRate} profitFactor={stats.profitFactor} bestPnl={stats.bestPnl} bestSym={stats.bestSym} />
-            <Section title="P&L by Trade" subtitle="Per-contract performance, sorted" className="mt-10 border-t border-border/40 pt-8">
+            <Section title="P&L by Trade" subtitle="Realized P&L per pick, sorted" className="mt-10 border-t border-border/40 pt-8">
               <PnlChart trades={trades} executions={executions} />
             </Section>
-            <Section title="Trade Details" subtitle="Click any row to view the single-contract page" className="mt-10 border-t border-border/40 pt-8">
+            <Section title="Trade Details" subtitle="Click any row to view the contract page" className="mt-10 border-t border-border/40 pt-8">
               <TradeTable trades={trades} executions={executions} date={rawData.date} liveQuotes={liveQuotes} />
             </Section>
             <Section title="Exposure" subtitle="How capital was deployed today. For long options, max loss is the premium paid." className="mt-10 border-t border-border/40 pt-8">

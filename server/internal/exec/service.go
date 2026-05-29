@@ -179,11 +179,15 @@ cron handles anything still working at the cutoff. Returns the broker
 order_id and the executions.id row id; caller surfaces the order_id to
 the agent's tool response so Claude can reference it in its final JSON.
 
-Single-contract only (quantity hard-coded to 1) — the execagent fires
-at most one order per pick per day. Caller (the tool layer in
+Quantity may be > 1 — the execagent buys duplicate contracts of the
+same spec on high-conviction picks, bounded by the $1,000/day exposure
+budget the tool layer tracks across the run. Caller (the tool layer in
 internal/execagent/tools.go) enforces the per-rank uniqueness, the
-3-orders-per-day cap, and the off-list-symbol refusal. This method's
-contract is "given a validated single-contract buy, submit it".
+3-orders-per-day cap, the off-list-symbol refusal, and the cumulative
+daily-budget accounting. This method's contract is "given a validated
+buy, submit it" plus a defense-in-depth re-check that this single
+order's total cost (limit_price × 100 × quantity) does not exceed
+MaxOrderCost on its own.
 */
 func (s *Service) PlaceBuyToOpenAgent(
 	ctx context.Context,
@@ -192,6 +196,7 @@ func (s *Service) PlaceBuyToOpenAgent(
 	expiration string,
 	dte int,
 	limitPrice float64,
+	quantity int,
 ) (orderID string, execID int, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -199,8 +204,14 @@ func (s *Service) PlaceBuyToOpenAgent(
 	if t == nil || t.ID == 0 {
 		return "", 0, errors.New("trade is nil or missing ID")
 	}
+	if quantity < 1 {
+		return "", 0, fmt.Errorf("quantity %d must be >= 1", quantity)
+	}
 	if limitPrice <= 0 || limitPrice > MaxContractPremium {
 		return "", 0, fmt.Errorf("limit price %.2f outside (0, %.2f]", limitPrice, MaxContractPremium)
+	}
+	if orderCost := limitPrice * 100 * float64(quantity); orderCost > MaxOrderCost+1e-6 {
+		return "", 0, fmt.Errorf("order cost %.2f (%d × %.2f × 100) exceeds per-order cap %.2f", orderCost, quantity, limitPrice, MaxOrderCost)
 	}
 
 	occ, err := OCCSymbol(t.Symbol, expiration, t.ContractType, strike)
@@ -228,7 +239,7 @@ func (s *Service) PlaceBuyToOpenAgent(
 	*/
 	t.SetResolvedContract(strike, expiration, dte, limitPrice, limitPrice*0.5)
 
-	order, err := BuildOpenOrderForTrade(t, occ, limitPrice, 1)
+	order, err := BuildOpenOrderForTrade(t, occ, limitPrice, quantity)
 	if err != nil {
 		return "", 0, fmt.Errorf("build open order: %w", err)
 	}
@@ -243,7 +254,7 @@ func (s *Service) PlaceBuyToOpenAgent(
 		Mode:              s.cfg.Mode,
 		Side:              "open",
 		Status:            "pending",
-		RequestedQuantity: 1,
+		RequestedQuantity: quantity,
 	}
 	execID, err = s.store.InsertExecution(execRow)
 	if err != nil {
@@ -267,8 +278,8 @@ func (s *Service) PlaceBuyToOpenAgent(
 		log.Printf("execution: warning: persist mid-flight orderID for trade %d (order=%s): %v", t.ID, orderID, err)
 	}
 
-	log.Printf("execagent: open order submitted (trade=%d, rank=%d, %s %s $%.2f exp=%s limit=$%.2f, order=%s)",
-		t.ID, t.Rank, t.Symbol, t.ContractType, strike, expiration, limitPrice, orderID)
+	log.Printf("execagent: open order submitted (trade=%d, rank=%d, %s %s $%.2f exp=%s limit=$%.2f qty=%d cost=$%.2f, order=%s)",
+		t.ID, t.Rank, t.Symbol, t.ContractType, strike, expiration, limitPrice, quantity, limitPrice*100*float64(quantity), orderID)
 	return orderID, execID, nil
 }
 
