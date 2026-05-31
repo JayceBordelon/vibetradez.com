@@ -68,7 +68,7 @@ function bucketByScore(days: DayMultiStat[]): ScoreBucket[] {
 
 const chartConfig: ChartConfig = {
   winners: { label: "Winners", color: "var(--brand-green)" },
-  losers: { label: "Losers", color: "var(--claude)" },
+  losers: { label: "Losers", color: "var(--brand-red)" },
 };
 
 export function ConvictionCalibration({ days }: { days: DayMultiStat[] }) {
