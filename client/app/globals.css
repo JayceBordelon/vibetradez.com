@@ -602,6 +602,32 @@ body {
   .prose-terms a:hover {
     color: var(--foreground);
   }
+  .prose-terms ul {
+    margin: 0 0 1rem;
+    padding-left: 1.25rem;
+    list-style: disc;
+  }
+  .prose-terms li {
+    margin-bottom: 0.4rem;
+    line-height: 1.7;
+    color: var(--muted-foreground);
+    font-size: 15px;
+  }
+  .prose-terms li:last-child {
+    margin-bottom: 0;
+  }
+  .prose-terms li strong {
+    color: var(--foreground);
+    font-weight: 600;
+  }
+  .prose-terms code {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 13px;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.3rem;
+    background: var(--muted);
+    color: var(--foreground);
+  }
 
   /*
   Infinite horizontal scroller. The consumer doubles its child list and
