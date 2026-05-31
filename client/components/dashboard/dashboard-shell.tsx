@@ -13,7 +13,7 @@ import { computeTradePnl } from "@/lib/calculations";
 import type { DashboardResponse, DashboardTrade, Execution } from "@/types/trade";
 
 import { ExposurePanel } from "./exposure-panel";
-import { MarketClosedPage } from "./market-closed-page";
+import { MarketClosedBanner } from "./market-closed-banner";
 import { MorningLayout } from "./morning-layout";
 import { NoTradesToday } from "./no-trades-today";
 import { PnlChart } from "./pnl-chart";
@@ -80,10 +80,18 @@ export function DashboardShell() {
       });
   }, []);
 
-  // Auto-refresh: pauses when the tab is hidden, immediate refresh on return.
-  // Disabled when the market is closed, the page is just the closed-page
-  // CTA, no point polling.
-  useVisiblePoll(loadDay, REFRESH_SECONDS * 1000, marketStatus?.open !== false);
+  // Auto-refresh while the market is open: pauses when the tab is hidden,
+  // immediate refresh on return. No recurring poll when closed, the last
+  // trading day's data is static until the next session.
+  useVisiblePoll(loadDay, REFRESH_SECONDS * 1000, marketStatus?.open === true);
+
+  // When the market is closed we still load the most recent trading day
+  // once (server resolves it via GetLatestTradeDate) so the dashboard
+  // shows real picks + EOD outcomes behind a "closed" banner instead of
+  // a blank placeholder. One-shot, no interval.
+  useEffect(() => {
+    if (marketStatus && !marketStatus.open) loadDay();
+  }, [marketStatus, loadDay]);
 
   /*
   Live quotes via SSE stream. Each tick lands one symbol or one
@@ -107,26 +115,21 @@ export function DashboardShell() {
   const stats = trades.length ? computeStats(trades, executions) : null;
 
   /*
-  Market closed → render the closed-page full-bleed. No SSE stream,
-  no auto-refresh, no skeleton spinner. The page links to /history,
-  which is DB-only and the right home for "what did the model do
-  recently?" while the live dashboard is dark.
+  Market closed → don't blank the page. We render the most recent
+  trading day's picks + EOD outcomes (loaded above) behind a slim
+  banner that says the data is the last session, not live. No SSE
+  stream and no recurring poll while dark.
 
-  marketStatus is null on first render (mid-fetch); we show the
-  loading state then so we don't briefly flash the closed-page on a
+  marketStatus is null on first render (mid-fetch); the skeleton
+  branch below covers that, so we never flash a "closed" banner on a
   page where the market is actually open.
   */
-  if (marketStatus && !marketStatus.open) {
-    return (
-      <div className="animate-in fade-in duration-300">
-        <MarketClosedPage status={marketStatus} />
-      </div>
-    );
-  }
+  const marketClosed = !!marketStatus && !marketStatus.open;
 
   return (
     <div className="animate-in fade-in duration-300">
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-7">
+        {marketClosed && rawData && trades.length > 0 && <MarketClosedBanner status={marketStatus} date={rawData.date} />}
         {!rawData || !marketStatus ? (
           <DashboardSkeleton />
         ) : !trades.length ? (
