@@ -188,7 +188,7 @@ export function Testimonials() {
             a manual swipe needed a nudge, so it auto-advances instead.
             CSS-only, no JS; respects prefers-reduced-motion via globals. */}
         <div className="-mx-5 overflow-hidden sm:hidden [-webkit-mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)] [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
-          <div className="flex w-max animate-marquee gap-4 py-1" style={{ animationDuration: "55s" }}>
+          <div className="flex w-max animate-marquee gap-4 py-1" style={{ animationDuration: "85s" }}>
             {[...TESTIMONIALS, ...TESTIMONIALS].map((t, i) => (
               <div key={`${t.name}-${i}`} aria-hidden={i >= TESTIMONIALS.length || undefined} className="flex w-[78vw] max-w-[340px] shrink-0">
                 <TestimonialCard t={t} />
