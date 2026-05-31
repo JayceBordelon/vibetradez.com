@@ -126,6 +126,11 @@ export function DashboardShell() {
   */
   const marketClosed = !!marketStatus && !marketStatus.open;
 
+  // When closed we're showing the last session, so the copy can't say "today".
+  const picksTitle = marketClosed ? "Latest Picks" : "Today's Picks";
+  const deployedSubtitle = `How capital was deployed ${marketClosed ? "that session" : "today"}. For long options, max loss is the premium paid.`;
+  const atRiskSubtitle = `Capital at risk for ${marketClosed ? "the latest picks" : "today's picks"}. For long options, max loss is the premium paid.`;
+
   return (
     <div className="animate-in fade-in duration-300">
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-7">
@@ -143,16 +148,16 @@ export function DashboardShell() {
             <Section title="Trade Details" subtitle="Click any row to view the contract page" className="mt-10 border-t border-border/40 pt-8">
               <TradeTable trades={trades} executions={executions} date={rawData.date} liveQuotes={liveQuotes} />
             </Section>
-            <Section title="Exposure" subtitle="How capital was deployed today. For long options, max loss is the premium paid." className="mt-10 border-t border-border/40 pt-8">
+            <Section title="Exposure" subtitle={deployedSubtitle} className="mt-10 border-t border-border/40 pt-8">
               <ExposurePanel trades={trades} executions={executions} hasSummaries />
             </Section>
           </>
         ) : (
           <>
-            <Section title="Today's Picks" subtitle={`${trades.length} ranked play${trades.length === 1 ? "" : "s"} · click any pick for the full single-contract view`}>
+            <Section title={picksTitle} subtitle={`${trades.length} ranked play${trades.length === 1 ? "" : "s"} · click any pick for the full single-contract view`}>
               <MorningLayout trades={trades} liveQuotes={liveQuotes} date={rawData.date} executions={executions} />
             </Section>
-            <Section title="Exposure" subtitle="Capital at risk for today's picks. For long options, max loss is the premium paid." className="mt-10 border-t border-border/40 pt-8">
+            <Section title="Exposure" subtitle={atRiskSubtitle} className="mt-10 border-t border-border/40 pt-8">
               {/*
               Pass executions (not null) to ExposurePanel on the morning
               branch too. exposure-panel.tsx multiplies premium by
