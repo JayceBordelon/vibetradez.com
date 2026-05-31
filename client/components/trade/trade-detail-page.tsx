@@ -217,20 +217,33 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
 
   return (
     <div className="space-y-2">
-      {/* Ticker header, flat, no card. Paper/Taken pill lives inline here instead of a separate panel. */}
+      {/* Ticker header. Primary line carries identity (ticker, side, moneyness)
+          plus the at-a-glance result only; the secondary metadata (rank, risk,
+          position) drops to a quieter dot-separated line so the header doesn't
+          read as a wall of competing badges. */}
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="font-mono text-3xl font-bold tabular-nums text-foreground sm:text-4xl">${trade.symbol}</h1>
         <Badge variant="outline" className={cn(trade.contract_type === "CALL" ? "border-green-border text-green" : "border-red-border text-red")}>
           {trade.contract_type}
         </Badge>
         <Badge variant={moneyness.variant}>{moneyness.label}</Badge>
-        <Badge variant="secondary">Rank #{trade.rank}</Badge>
-        <Badge variant="secondary" className="text-xs">
-          {trade.risk_level}
-        </Badge>
-        {execution && <PositionTag execution={execution} />}
-        {summary && <Badge variant={pnl > 0 ? "default" : pnl < 0 ? "destructive" : "secondary"}>EOD {fmtPnlInt(pnl)}</Badge>}
+        {summary && (
+          <Badge variant={pnl > 0 ? "default" : pnl < 0 ? "destructive" : "secondary"} className="tabular-nums">
+            EOD {fmtPnlInt(pnl)}
+          </Badge>
+        )}
         <span className="ml-auto text-xs text-muted-foreground">{resolvedDate}</span>
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground">
+        <span>Rank #{trade.rank}</span>
+        <span aria-hidden className="text-muted-foreground/40">·</span>
+        <span className="capitalize">{trade.risk_level.toLowerCase()} risk</span>
+        {execution && (
+          <>
+            <span aria-hidden className="text-muted-foreground/40">·</span>
+            <PositionTag execution={execution} />
+          </>
+        )}
       </div>
 
       {/* Live P&L hero, the single highest-priority number on the page when a live position is active. Sits right under the ticker header so the user's eye lands on it first. */}
@@ -265,7 +278,7 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
           For skipped picks, no contract was ever chosen — collapse the
           unresolved fields to em-dashes (no "Finding contracts..."
           placeholder, the contract search ended with a decline). */}
-      <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3 md:grid-cols-4">
+      <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3 md:grid-cols-4">
         <Metric label="Strike" value={trade.strike_price !== null ? fmtMoney(trade.strike_price) : "-"} />
         <Metric
           label="Expiration"
@@ -285,7 +298,8 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
           }
         />
         <Metric label="Mentions" value={String(trade.mention_count)} />
-        <Metric label="Stock at entry" value={fmtMoney(trade.current_price)} />
+        {/* Stock at entry duplicates the EOD strip's "Stock open" once a result exists; only show it pre-close. */}
+        {!summary && <Metric label="Stock at entry" value={fmtMoney(trade.current_price)} />}
       </div>
 
       {/* Skipped picks get a dedicated reason block in place of the
