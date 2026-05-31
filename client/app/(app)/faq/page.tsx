@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { Badge } from "@/components/ui/badge";
 import FaqContent from "@/content/faq.mdx";
 
-const OG_IMAGE = "/opengraph-image";
+const OG_IMAGE = "/og/faq.png";
 
 export const metadata: Metadata = {
   title: "FAQ",

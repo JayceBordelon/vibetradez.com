@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     description: "One silly model, live market data, conviction-scored picks. Delivered free right at the open.",
     images: [
       {
-        url: "/opengraph-image",
+        url: "/og/landing.png",
         width: 1200,
         height: 630,
         alt: "VibeTradez",
@@ -50,7 +50,7 @@ export const metadata: Metadata = {
     title: "VibeTradez | AI-Powered Options Picks",
     description: "One silly model, live market data, conviction-scored picks. Delivered free right at the open.",
     creator: "@JayceBordelon",
-    images: ["/opengraph-image"],
+    images: ["/og/landing.png"],
   },
   robots: {
     index: true,

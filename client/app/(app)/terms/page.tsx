@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 
 import TermsContent from "@/content/terms.mdx";
 
-const OG_IMAGE = "/opengraph-image";
+const OG_IMAGE = "/og/terms.png";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
