@@ -127,13 +127,13 @@ function MorningBreakdown({ trades, totalExposure, executions }: { trades: Dashb
     <div className="space-y-2">
       <div className="text-xs text-muted-foreground">Capital by risk level</div>
       <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
-        {lowPct > 0 && <div className="h-full bg-blue-500/80 transition-all" style={{ width: `${lowPct}%` }} />}
+        {lowPct > 0 && <div className="h-full bg-green transition-all" style={{ width: `${lowPct}%` }} />}
         {medPct > 0 && <div className="h-full bg-amber transition-all" style={{ width: `${medPct}%` }} />}
         {highPct > 0 && <div className="h-full bg-red transition-all" style={{ width: `${highPct}%` }} />}
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full bg-blue-500/80" />
+          <span className="inline-block h-2 w-2 rounded-full bg-green" />
           LOW {fmtMoneyInt(buckets.LOW)} ({lowPct.toFixed(0)}%)
         </span>
         <span className="flex items-center gap-1.5">

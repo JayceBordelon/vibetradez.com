@@ -5,7 +5,7 @@ import { motion, type Variants } from "motion/react";
 
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
 import { useCountUp } from "@/hooks/use-count-up";
-import { fmtPnlInt, percentHueColor } from "@/lib/format";
+import { fmtPnlInt } from "@/lib/format";
 
 interface StatsGridProps {
   totalPnl: number;
@@ -46,7 +46,7 @@ export function StatsGrid({ totalPnl, winRate, profitFactor, bestPnl, bestSym }:
           <Stat label="Net P&L" value={fmtPnlInt(animatedPnl)} tone={pnlTone} icon={pnlIcon} />
         </motion.div>
         <motion.div variants={itemVariants}>
-          <Stat label="Win Rate" value={`${winRate.toFixed(0)}%`} sub="winners / closed" valueColor={percentHueColor(winRate)} icon={Target} />
+          <Stat label="Win Rate" value={`${winRate.toFixed(0)}%`} sub="winners / closed" valueColor={winRate >= 50 ? "var(--green)" : undefined} icon={Target} />
         </motion.div>
         <motion.div variants={itemVariants}>
           <Stat label="Profit Factor" value={profitFactorValue} sub={profitFactorSub} icon={Percent} />
