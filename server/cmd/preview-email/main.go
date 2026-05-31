@@ -22,8 +22,8 @@ func main() {
 	trades := []templates.Trade{
 		{
 			Symbol: "NVDA", ContractType: "CALL",
-			Thesis:         "AI keynote scheduled for tomorrow with hyperscaler capex commentary expected; vol-of-vol elevated.",
-			SentimentScore: 0.45, CurrentPrice: 945, TargetPrice: 970,
+			Thesis:       "AI keynote scheduled for tomorrow with hyperscaler capex commentary expected; vol-of-vol elevated.",
+			CurrentPrice: 945, TargetPrice: 970,
 			RiskLevel: "MEDIUM",
 			Catalyst:  "Jensen keynote post-close", MentionCount: 320,
 			Rank:             1,
@@ -36,13 +36,13 @@ func main() {
 		{
 			Symbol: "AMD", ContractType: "PUT", StrikePrice: 168,
 			Expiration: "2026-05-02", DTE: 5, EstimatedPrice: 1.85,
-			Thesis:         "AMD trading rich vs peer multiples; bearish flow detected on AI-comparable names.",
-			SentimentScore: -0.2, CurrentPrice: 170, TargetPrice: 165, StopLoss: 0.90,
+			Thesis:       "AMD trading rich vs peer multiples; bearish flow detected on AI-comparable names.",
+			CurrentPrice: 170, TargetPrice: 165, StopLoss: 0.90,
 			RiskLevel: "HIGH",
 			Catalyst:  "Bearish dark-pool prints", MentionCount: 78,
 			Rank:             2,
 			Score:            8,
-			Rationale:        "Cleanest contrarian setup on the screen. Dark-pool prints into a name trading 35x forward earnings during a sentiment-driven rally is textbook reversion. Strike is right at the gamma flip and DTE gives one full session for any post-keynote AI tape softness to spread.",
+			Rationale:        "Cleanest contrarian setup on the screen. Dark-pool prints into a name trading 35x forward earnings during a momentum-driven rally is textbook reversion. Strike is right at the gamma flip and DTE gives one full session for any post-keynote AI tape softness to spread.",
 			TargetOTMPct:     1.2,
 			MinDTE:           3,
 			ContractResolved: true,

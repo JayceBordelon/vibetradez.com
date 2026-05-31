@@ -69,7 +69,7 @@ export default function TermsPage() {
             </p>
             <p>
               All trade ideas presented on this platform are machine-generated suggestions, not recommendations. They are produced by a single large language model (Claude) running across two
-              invocations a day: a pre-bell run (around 9:25 AM ET) that selects three candidate tickers with direction and intent from publicly available sentiment data and live market information,
+              invocations a day: a pre-bell run (around 9:25 AM ET) that selects three candidate tickers with direction and intent from publicly available trending-ticker data and live market information,
               and an at-open run (9:30 AM ET) that reads the live option chain and chooses the specific contracts. Both runs use a fixed prompt and a fixed, locked-down toolset (Schwab market data, web
               search, and a single order-placement tool). None of these outputs have been reviewed, verified, or endorsed by any licensed financial professional.
             </p>

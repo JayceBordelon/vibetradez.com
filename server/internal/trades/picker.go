@@ -72,16 +72,15 @@ type Trade struct {
 	// the public JSON wire) so dashboard responses don't leak the row id.
 	ID int `json:"-"`
 
-	Symbol         string  `json:"symbol"`
-	ContractType   string  `json:"contract_type"`
-	Thesis         string  `json:"thesis"`
-	SentimentScore float64 `json:"sentiment_score"`
-	CurrentPrice   float64 `json:"current_price"`
-	TargetPrice    float64 `json:"target_price"`
-	RiskLevel      string  `json:"risk_level"`
-	Catalyst       string  `json:"catalyst"`
-	MentionCount   int     `json:"mention_count"`
-	Rank           int     `json:"rank"`
+	Symbol       string  `json:"symbol"`
+	ContractType string  `json:"contract_type"`
+	Thesis       string  `json:"thesis"`
+	CurrentPrice float64 `json:"current_price"`
+	TargetPrice  float64 `json:"target_price"`
+	RiskLevel    string  `json:"risk_level"`
+	Catalyst     string  `json:"catalyst"`
+	MentionCount int     `json:"mention_count"`
+	Rank         int     `json:"rank"`
 
 	Score     int    `json:"score"`
 	Rationale string `json:"rationale"`
@@ -230,10 +229,10 @@ type claudeTradeOutput struct {
 	MinDTE       int     `json:"min_dte"`
 }
 
-func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentiment.TickerMention) ([]Trade, error) {
-	sentimentJSON, err := json.Marshal(sentimentData)
+func (p *ClaudePicker) GetTopTrades(ctx context.Context, trendingData []sentiment.TickerMention) ([]Trade, error) {
+	trendingJSON, err := json.Marshal(trendingData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal sentiment data: %w", err)
+		return nil, fmt.Errorf("failed to marshal trending data: %w", err)
 	}
 
 	// Container runs in UTC. The morning cron firing at 09:30 ET is
@@ -245,7 +244,7 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentime
 	today := nowET.Format("2006-01-02")
 	weekday := nowET.Weekday().String()
 
-	prompt := fmt.Sprintf(AnalysisPrompt, today, weekday, string(sentimentJSON))
+	prompt := fmt.Sprintf(AnalysisPrompt, today, weekday, string(trendingJSON))
 
 	content, err := p.runConversation(ctx, prompt, maxOutputTokensPicks)
 	if err != nil {
@@ -276,18 +275,13 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, sentimentData []sentime
 		})
 	}
 
-	type sentimentInfo struct {
-		Score    float64
-		Mentions int
-	}
-	sentimentMap := make(map[string]sentimentInfo, len(sentimentData))
-	for _, s := range sentimentData {
-		sentimentMap[s.Symbol] = sentimentInfo{Score: s.Sentiment, Mentions: s.Mentions}
+	mentionMap := make(map[string]int, len(trendingData))
+	for _, s := range trendingData {
+		mentionMap[s.Symbol] = s.Mentions
 	}
 	for i := range trades {
-		if info, ok := sentimentMap[trades[i].Symbol]; ok {
-			trades[i].SentimentScore = info.Score
-			trades[i].MentionCount = info.Mentions
+		if mentions, ok := mentionMap[trades[i].Symbol]; ok {
+			trades[i].MentionCount = mentions
 		}
 	}
 

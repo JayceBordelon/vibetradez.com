@@ -110,7 +110,6 @@ func migrate(db *sql.DB) error {
 			dte INTEGER NOT NULL,
 			estimated_price DOUBLE PRECISION NOT NULL,
 			thesis TEXT NOT NULL DEFAULT '',
-			sentiment_score DOUBLE PRECISION NOT NULL DEFAULT 0,
 			current_price DOUBLE PRECISION NOT NULL DEFAULT 0,
 			target_price DOUBLE PRECISION NOT NULL DEFAULT 0,
 			stop_loss DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -179,6 +178,14 @@ func migrate(db *sql.DB) error {
 		ALTER TABLE trades DROP COLUMN IF EXISTS combined_score;
 		ALTER TABLE trades DROP COLUMN IF EXISTS picked_by_openai;
 		ALTER TABLE trades DROP COLUMN IF EXISTS picked_by_claude;
+
+		/*
+		Sentiment was retired from the product: the multi-source scraper only
+		reliably produces a mention count, so the per-pick sentiment_score was
+		effectively always 0. Drop the column; the scraper now feeds mentions
+		and trending only.
+		*/
+		ALTER TABLE trades DROP COLUMN IF EXISTS sentiment_score;
 
 		CREATE INDEX IF NOT EXISTS idx_trades_date ON trades(date);
 
@@ -487,12 +494,12 @@ func (s *Store) SaveMorningTrades(date string, tradeList []trades.Trade) error {
 	stmt, err := tx.Prepare(`
 		INSERT INTO trades (
 			date, symbol, contract_type, strike_price, expiration, dte,
-			estimated_price, thesis, sentiment_score, current_price,
+			estimated_price, thesis, current_price,
 			target_price, stop_loss, risk_level,
 			catalyst, mention_count, rank,
 			score, rationale, model,
 			target_otm_pct, min_dte
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 		RETURNING id
 	`)
 	if err != nil {
@@ -505,7 +512,7 @@ func (s *Store) SaveMorningTrades(date string, tradeList []trades.Trade) error {
 		err := stmt.QueryRow(
 			date, t.Symbol, t.ContractType,
 			nullableFloat(t.StrikePrice), nullableString(t.Expiration), nullableIntPtr(t.DTE),
-			nullableFloat(t.EstimatedPrice), t.Thesis, t.SentimentScore, t.CurrentPrice,
+			nullableFloat(t.EstimatedPrice), t.Thesis, t.CurrentPrice,
 			t.TargetPrice, nullableFloat(t.StopLoss), t.RiskLevel,
 			t.Catalyst, t.MentionCount, t.Rank,
 			t.Score, t.Rationale, t.Model,
@@ -522,7 +529,7 @@ func (s *Store) SaveMorningTrades(date string, tradeList []trades.Trade) error {
 func (s *Store) GetMorningTrades(date string) ([]trades.Trade, error) {
 	rows, err := s.db.Query(`
 		SELECT id, symbol, contract_type, strike_price, expiration, dte,
-			estimated_price, thesis, sentiment_score, current_price,
+			estimated_price, thesis, current_price,
 			target_price, stop_loss, risk_level,
 			catalyst, mention_count, rank,
 			score, rationale, model,
@@ -613,7 +620,7 @@ func (s *Store) GetTradeDates(limit int) ([]string, error) {
 func (s *Store) GetTradesForDateRange(startDate, endDate string) (map[string][]trades.Trade, error) {
 	rows, err := s.db.Query(`
 		SELECT date, id, symbol, contract_type, strike_price, expiration, dte,
-			estimated_price, thesis, sentiment_score, current_price,
+			estimated_price, thesis, current_price,
 			target_price, stop_loss, risk_level,
 			catalyst, mention_count, rank,
 			score, rationale, model,
@@ -683,7 +690,7 @@ func scanTradeRow(scan func(...any) error, withDate bool, datePtr ...*string) (t
 
 	dest := []any{
 		&t.ID, &t.Symbol, &t.ContractType, &strikeNull, &expirationNull, &dteNull,
-		&estPriceNull, &t.Thesis, &t.SentimentScore, &t.CurrentPrice,
+		&estPriceNull, &t.Thesis, &t.CurrentPrice,
 		&t.TargetPrice, &stopLossNull, &t.RiskLevel,
 		&t.Catalyst, &t.MentionCount, &t.Rank,
 		&t.Score, &t.Rationale, &t.Model,

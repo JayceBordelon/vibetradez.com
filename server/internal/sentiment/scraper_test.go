@@ -1,23 +1,18 @@
 package sentiment
 
 import (
-	"math"
 	"testing"
 )
 
 /*
-TestMergeSourcesPreservesSignalAgainstZeroOpinionSources is the
-regression test for the "Sentiment always reads 0.00" UI bug. A ticker
-appears in Yahoo's day_losers list (-0.5 vote) AND in Finviz unusual-
-volume AND in EDGAR 8-K catalysts. Pre-fix the cross-source merge did a
-running average against the trailing zero-opinion sources and decayed
-the final score to roughly -0.02, which the 2dp display rounded to
-"0.00". Post-fix only the Yahoo source has sentimentSamples > 0, so the
-final reads -0.5.
+TestMergeSourcesAccumulatesMentions confirms a ticker appearing across
+several sources sums its mention count. A name in Yahoo movers AND
+Finviz unusual-volume AND EDGAR 8-K catalysts should read Mentions=3,
+since mention count is the trending-strength signal the picker reads.
 */
-func TestMergeSourcesPreservesSignalAgainstZeroOpinionSources(t *testing.T) {
+func TestMergeSourcesAccumulatesMentions(t *testing.T) {
 	yahooMover := []TickerMention{
-		{Symbol: "TGT", Mentions: 1, sentimentSum: -0.5, sentimentSamples: 1, Sources: []string{"yahoo-movers"}},
+		{Symbol: "TGT", Mentions: 1, Sources: []string{"yahoo-movers"}},
 	}
 	finvizUnusual := []TickerMention{
 		{Symbol: "TGT", Mentions: 1, Sources: []string{"finviz-unusual-volume"}},
@@ -37,63 +32,6 @@ func TestMergeSourcesPreservesSignalAgainstZeroOpinionSources(t *testing.T) {
 	}
 	if got.Mentions != 3 {
 		t.Errorf("expected Mentions=3, got %d", got.Mentions)
-	}
-	if math.Abs(got.Sentiment-(-0.5)) > 1e-9 {
-		t.Errorf("expected Sentiment=-0.5 (one negative vote, two no-opinion sources), got %f", got.Sentiment)
-	}
-}
-
-/*
-TestMergeSourcesAveragesAcrossMultipleSentimentVotes confirms the
-mention-weighted average actually averages when multiple sources do
-have an opinion: two Yahoo movers entries (-0.5 each, samples=2) plus
-StockTwits trending (+0.3, samples=1). Final = (-1.0 + 0.3) / 3.
-*/
-func TestMergeSourcesAveragesAcrossMultipleSentimentVotes(t *testing.T) {
-	yahoo := []TickerMention{
-		{Symbol: "TGT", Mentions: 2, sentimentSum: -1.0, sentimentSamples: 2, Sources: []string{"yahoo-movers", "yahoo-movers"}},
-	}
-	stocktwits := []TickerMention{
-		{Symbol: "TGT", Mentions: 2, sentimentSum: 0.3, sentimentSamples: 1, Sources: []string{"stocktwits-trending"}},
-	}
-
-	result := mergeSources(yahoo, stocktwits)
-
-	if len(result) != 1 {
-		t.Fatalf("expected 1 ticker, got %d", len(result))
-	}
-	expected := (-1.0 + 0.3) / 3.0
-	if math.Abs(result[0].Sentiment-expected) > 1e-9 {
-		t.Errorf("expected Sentiment=%f, got %f", expected, result[0].Sentiment)
-	}
-	if result[0].Mentions != 4 {
-		t.Errorf("expected Mentions=4, got %d", result[0].Mentions)
-	}
-}
-
-/*
-TestMergeSourcesNoOpinionLeavesSentimentZero confirms that a ticker
-appearing only in zero-opinion sources reads exactly 0.0 — those
-sources don't synthesize a fake signal in either direction.
-*/
-func TestMergeSourcesNoOpinionLeavesSentimentZero(t *testing.T) {
-	finviz := []TickerMention{
-		{Symbol: "TGT", Mentions: 1, Sources: []string{"finviz-unusual-volume"}},
-	}
-	edgar := []TickerMention{
-		{Symbol: "TGT", Mentions: 1, Sources: []string{"edgar-8k-catalyst"}},
-	}
-
-	result := mergeSources(finviz, edgar)
-
-	if len(result) != 1 {
-		t.Fatalf("expected 1 ticker, got %d", len(result))
-	}
-	if result[0].Sentiment != 0 {
-		t.Errorf("expected Sentiment=0, got %f", result[0].Sentiment)
-	}
-	if result[0].Mentions != 2 {
-		t.Errorf("expected Mentions=2, got %d", result[0].Mentions)
 	}
 }
 

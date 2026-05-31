@@ -171,7 +171,7 @@ func TestUnsubscribeRejectsForgedToken(t *testing.T) {
 /*
 TestHealthEndpoint exercises the granular /health shape. In a test
 env no downstream services are configured (no Anthropic key, no
-Schwab client, sentiment scrapers can't reach the internet), so the
+Schwab client, signal scrapers can't reach the internet), so the
 overall status is legitimately 503 and `ok` is false. We assert the
 response SHAPE: JSON parses, includes the per-service breakdown, and
 the api self-check reports ok. The deploy healthcheck job is what

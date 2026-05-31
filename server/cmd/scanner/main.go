@@ -743,7 +743,7 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 	}
 
 	/*
-		Wall-clock budget for the entire morning analysis: sentiment scrape +
+		Wall-clock budget for the entire morning analysis: signal scrape +
 		Claude's full multi-round conversation + DB write + email render +
 		auto-execution submit. Set to 60 minutes so Claude has room to walk
 		the option chains for many tickers without ever hitting a deadline,
@@ -755,15 +755,15 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 	log.Println("Starting trade analysis...")
 
 	log.Println("Scraping market signals...")
-	sentimentData, err := scraper.GetTrendingTickers(ctx, 20)
+	trendingData, err := scraper.GetTrendingTickers(ctx, 20)
 	if err != nil {
-		log.Printf("Warning: error getting sentiment data: %v", err)
-		sentimentData = nil
+		log.Printf("Warning: error getting trending data: %v", err)
+		trendingData = nil
 	}
-	log.Printf("Found %d trending tickers", len(sentimentData))
+	log.Printf("Found %d trending tickers", len(trendingData))
 
 	log.Printf("Analyzing trades with %s...", modelLabel)
-	topTrades, err := claudePicker.GetTopTrades(ctx, sentimentData)
+	topTrades, err := claudePicker.GetTopTrades(ctx, trendingData)
 	if err != nil {
 		log.Printf("Trade picker failed: %v", err)
 		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("Trade picker failed: %v", err))
@@ -828,7 +828,6 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 			DTE:              t.DTEVal(),
 			EstimatedPrice:   t.EstPrice(),
 			Thesis:           t.Thesis,
-			SentimentScore:   t.SentimentScore,
 			CurrentPrice:     t.CurrentPrice,
 			TargetPrice:      t.TargetPrice,
 			StopLoss:         t.StopLossVal(),

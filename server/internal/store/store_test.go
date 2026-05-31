@@ -274,15 +274,14 @@ func TestTradesPersistence(t *testing.T) {
 	s := setupTestDB(t)
 
 	tr := trades.Trade{
-		Symbol:         "AAPL",
-		ContractType:   "CALL",
-		Thesis:         "Bullish momentum",
-		SentimentScore: 0.85,
-		CurrentPrice:   148.0,
-		TargetPrice:    155.0,
-		RiskLevel:      "MEDIUM",
-		Catalyst:       "Earnings",
-		MentionCount:   42,
+		Symbol:       "AAPL",
+		ContractType: "CALL",
+		Thesis:       "Bullish momentum",
+		CurrentPrice: 148.0,
+		TargetPrice:  155.0,
+		RiskLevel:    "MEDIUM",
+		Catalyst:     "Earnings",
+		MentionCount: 42,
 	}
 	tr.SetResolvedContract(150.0, "2025-04-18", 5, 3.50, 145.0)
 	testTrades := []trades.Trade{tr}

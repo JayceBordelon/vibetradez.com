@@ -16,21 +16,9 @@ import (
 )
 
 type TickerMention struct {
-	Symbol    string
-	Mentions  int
-	Sentiment float64 // averaged final score in [-1, 1]
-	Sources   []string
-	/*
-		sentimentSum and sentimentSamples are merge accumulators populated
-		by scrapers that have a directional opinion (Yahoo movers
-		contributes ±0.5 per qualifying mover; StockTwits contributes a
-		keyword-scan score). mergeSources averages sum / samples at the
-		end. Sources without an opinion (Finviz, EDGAR) leave both at zero
-		so they don't dilute the score of sources that do — that was the
-		root cause of the "Sentiment always reads 0.00" UI bug.
-	*/
-	sentimentSum     float64
-	sentimentSamples int
+	Symbol   string
+	Mentions int
+	Sources  []string
 }
 
 type Scraper struct {
@@ -92,11 +80,8 @@ func (s *Scraper) GetTrendingTickers(ctx context.Context, limit int) ([]TickerMe
 
 /*
 mergeSources combines per-source mention slices into a deduped, sorted
-list. Sentiment is averaged only across the sources that actually
-contributed a directional signal (sentimentSamples > 0). Sources that
-left sentimentSamples=0 (Finviz, EDGAR) add to Mentions and Sources
-but don't pull the score toward zero — they're "no opinion" votes,
-not "neutral" votes.
+list. Mentions and Sources accumulate across every source that names a
+ticker; the result is sorted by total mention count (trending strength).
 
 Extracted from GetTrendingTickers so it can be unit-tested with
 hand-crafted slices without the live HTTP scrapers.
@@ -107,8 +92,6 @@ func mergeSources(sources ...[]TickerMention) []TickerMention {
 		for _, m := range src {
 			if existing, ok := allMentions[m.Symbol]; ok {
 				existing.Mentions += m.Mentions
-				existing.sentimentSum += m.sentimentSum
-				existing.sentimentSamples += m.sentimentSamples
 				existing.Sources = append(existing.Sources, m.Sources...)
 			} else {
 				copy := m
@@ -119,11 +102,6 @@ func mergeSources(sources ...[]TickerMention) []TickerMention {
 
 	result := make([]TickerMention, 0, len(allMentions))
 	for _, m := range allMentions {
-		if m.sentimentSamples > 0 {
-			m.Sentiment = m.sentimentSum / float64(m.sentimentSamples)
-		}
-		m.sentimentSum = 0
-		m.sentimentSamples = 0
 		result = append(result, *m)
 	}
 
@@ -169,14 +147,6 @@ func (s *Scraper) scrapeStockTwitsTrending(ctx context.Context) ([]TickerMention
 			Symbol:   ticker,
 			Mentions: 2, // weight StockTwits trending higher than a single mention
 			Sources:  []string{"stocktwits-trending"},
-		}
-		// Only contribute a sentiment vote when the keyword scan
-		// actually found bull or bear language. A blurb with neither
-		// is "no opinion", not "exactly neutral" — leaving samples=0
-		// keeps it from diluting other sources' real signal.
-		if sentiment := estimateSentimentFromText(sym.Summary); sentiment != 0 {
-			tm.sentimentSum = sentiment
-			tm.sentimentSamples = 1
 		}
 		mentions = append(mentions, tm)
 	}
@@ -264,18 +234,6 @@ func (s *Scraper) scrapeYahooTrending(ctx context.Context) ([]TickerMention, err
 					}
 					mentions[sym].Mentions++
 					mentions[sym].Sources = append(mentions[sym].Sources, "yahoo-movers")
-					// Large move = stronger sentiment signal. Each
-					// qualifying movers entry counts as one sample;
-					// mergeSources averages across samples globally,
-					// so we leave sum/samples unaveraged here.
-					pct := q.RegularMarketChangePercent.Raw
-					if pct > 3 {
-						mentions[sym].sentimentSum += 0.5
-						mentions[sym].sentimentSamples++
-					} else if pct < -3 {
-						mentions[sym].sentimentSum -= 0.5
-						mentions[sym].sentimentSamples++
-					}
 				}
 			}
 		}
@@ -516,42 +474,6 @@ func (s *Scraper) fetchHTML(ctx context.Context, url string) (string, error) {
 		return "", err
 	}
 	return string(body), nil
-}
-
-/*
-estimateSentimentFromText does a quick keyword scan on a short text
-blurb (like StockTwits' trending_summary) and returns a value between
--1 (bearish) and 1 (bullish).
-*/
-func estimateSentimentFromText(text string) float64 {
-	lower := strings.ToLower(text)
-
-	bullish := []string{
-		"buy", "bull", "upgrade", "beat", "surge", "rally", "breakout",
-		"squeeze", "calls", "upside", "growth", "profit", "gain",
-	}
-	bearish := []string{
-		"sell", "bear", "downgrade", "miss", "crash", "drop", "puts",
-		"downside", "loss", "decline", "warning", "risk", "short",
-	}
-
-	bull, bear := 0, 0
-	for _, w := range bullish {
-		if strings.Contains(lower, w) {
-			bull++
-		}
-	}
-	for _, w := range bearish {
-		if strings.Contains(lower, w) {
-			bear++
-		}
-	}
-
-	total := bull + bear
-	if total == 0 {
-		return 0
-	}
-	return float64(bull-bear) / float64(total)
 }
 
 // SourceStatus describes the health of a single market signal source.

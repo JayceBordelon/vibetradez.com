@@ -13,7 +13,6 @@ export interface Trade {
   estimated_price: number | null;
   stop_loss: number | null;
   thesis: string;
-  sentiment_score: number;
   current_price: number;
   target_price: number;
   risk_level: "LOW" | "MEDIUM" | "HIGH";

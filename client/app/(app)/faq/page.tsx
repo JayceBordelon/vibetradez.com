@@ -48,7 +48,7 @@ const faqs = [
   },
   {
     question: "Where does the market data come from?",
-    answer: `Schwab Market Data API for quotes and option chains (bid, ask, mark, greeks, open interest, volume). All real prices, OAuth-gated. Sentiment and trending tickers come from StockTwits, Yahoo Finance, Finviz, and SEC EDGAR. Claudia calls all of these as actual function tools, so the prices it sees are real and not hallucinated. That said: the LLM still picks the trades, so "the data is real" is doing a lot of heavy lifting in that sentence.`,
+    answer: `Schwab Market Data API for quotes and option chains (bid, ask, mark, greeks, open interest, volume). All real prices, OAuth-gated. Trending tickers come from StockTwits, Yahoo Finance, Finviz, and SEC EDGAR. Claudia calls all of these as actual function tools, so the prices it sees are real and not hallucinated. That said: the LLM still picks the trades, so "the data is real" is doing a lot of heavy lifting in that sentence.`,
   },
   {
     question: "How often are emails sent, and what do they contain?",
