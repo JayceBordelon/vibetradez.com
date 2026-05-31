@@ -172,7 +172,7 @@ const COLUMN_DURATIONS = ["68s", "54s", "78s"];
 
 export function Testimonials() {
   return (
-    <section className="relative px-5 pb-20 sm:px-6 sm:pb-28">
+    <section className="relative px-5 pb-28 sm:px-6 sm:pb-40">
       <div className="relative z-10 mx-auto max-w-6xl">
         <Reveal effect="blur" duration={1000} className="mx-auto mb-10 max-w-2xl text-center sm:mb-14">
           <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Five-star reviews</span>

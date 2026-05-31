@@ -44,7 +44,7 @@ export default function LandingPage() {
       </nav>
 
       {/* ── Hero ── */}
-      <section className="relative px-5 pt-32 pb-20 sm:px-6 sm:pt-40 sm:pb-28">
+      <section className="relative px-5 pt-32 pb-28 sm:px-6 sm:pt-44 sm:pb-40">
         <div className="relative z-10 mx-auto max-w-4xl text-center">
           <Reveal effect="fall" duration={600}>
             <span className="lg-pill inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-medium text-foreground/80 sm:text-[13px]">
@@ -87,7 +87,7 @@ export default function LandingPage() {
           </Reveal>
 
           <Reveal effect="rise" delay={580} duration={700}>
-            <div className="mt-12 flex items-center justify-center gap-2 text-[13px] text-muted-foreground">
+            <div className="mt-14 flex items-center justify-center gap-2 text-[13px] text-muted-foreground">
               <span className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground/70">Powered by</span>
               <ClaudeLogo className="h-4 w-4" />
               <span className="font-medium">Claudia</span>
@@ -98,7 +98,7 @@ export default function LandingPage() {
 
       {/* ── Pipeline as a market-hours bar: one gradient track spanning the trading day with the
               four moments pinned as icon markers. Horizontal on desktop, vertical rail on mobile. ── */}
-      <section className="relative px-5 pb-24 sm:px-6 sm:pb-32">
+      <section className="relative px-5 pb-28 sm:px-6 sm:pb-40">
         <div className="relative z-10 mx-auto max-w-6xl">
           <Reveal effect="rise" duration={700}>
             <div className="mx-auto max-w-2xl text-center">
@@ -110,7 +110,7 @@ export default function LandingPage() {
           </Reveal>
 
           {/* Desktop: horizontal market-hours bar */}
-          <div className="mt-16 hidden md:block">
+          <div className="mt-20 hidden md:block">
             <div className="mb-5 flex items-center justify-between px-[12.5%] text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/60">
               <span>Market open</span>
               <span>Close</span>
@@ -135,7 +135,7 @@ export default function LandingPage() {
           </div>
 
           {/* Mobile: vertical rail with the same markers */}
-          <Reveal effect="rise" delay={150} duration={700} className="mt-12 block md:hidden">
+          <Reveal effect="rise" delay={150} duration={700} className="mt-14 block md:hidden">
             <ol className="relative space-y-7">
               <div className="absolute top-3 bottom-3 left-[19px] w-1.5 -translate-x-1/2 rounded-full bg-gradient-brand opacity-25" aria-hidden />
               {pipeline.map((p) => (
@@ -160,7 +160,7 @@ export default function LandingPage() {
               source tree, separated by a single hairline so it reads as page content, not a card.
               Sits right after the pipeline so the genuine "read the code" trust beat lands before
               the two parody social-proof sections, not buried among them. ── */}
-      <section className="relative px-5 pb-20 sm:px-6 sm:pb-24">
+      <section className="relative px-5 pb-28 sm:px-6 sm:pb-40">
         <div className="relative z-10 mx-auto max-w-5xl">
           <Reveal effect="rise" duration={700}>
             <div className="grid gap-10 md:grid-cols-[1.05fr_0.95fr] md:items-start md:gap-14">
@@ -228,7 +228,7 @@ export default function LandingPage() {
       <TrustedBy />
 
       {/* ── Subscribe CTA, flat hero-style block, no outer panel ── */}
-      <section className="relative px-5 pb-24 sm:px-6 sm:pb-32">
+      <section className="relative px-5 pt-4 pb-28 sm:px-6 sm:pb-40">
         <div className="relative z-10 mx-auto max-w-3xl text-center">
           <div className="lg-orb lg-orb-claude absolute h-[420px] w-[420px] -top-24 -left-24 opacity-30" aria-hidden />
           <div className="lg-orb lg-orb-cyan absolute h-[360px] w-[360px] -bottom-24 -right-20 opacity-30" aria-hidden />
