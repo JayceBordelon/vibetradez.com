@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Lora, Plus_Jakarta_Sans } from "next/font/google";
+import { Inter, JetBrains_Mono, Lora } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { SessionProvider } from "@/lib/session";
 import "./globals.css";
 
-const jakarta = Plus_Jakarta_Sans({
+const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
 });
@@ -14,10 +14,8 @@ const lora = Lora({
   variable: "--font-serif",
 });
 
-// IBM Plex Mono is not a variable font, so weights must be declared.
-const plexMono = IBM_Plex_Mono({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
   variable: "--font-mono",
 });
 
@@ -63,7 +61,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body suppressHydrationWarning className={`${jakarta.variable} ${lora.variable} ${plexMono.variable} font-sans antialiased`}>
+      <body suppressHydrationWarning className={`${inter.variable} ${lora.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <SessionProvider>{children}</SessionProvider>
         </ThemeProvider>

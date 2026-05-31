@@ -67,7 +67,7 @@ function bucketByScore(days: DayMultiStat[]): ScoreBucket[] {
 }
 
 const chartConfig: ChartConfig = {
-  winners: { label: "Winners", color: "var(--brand-green)" },
+  winners: { label: "Winners", color: "var(--green)" },
   losers: { label: "Losers", color: "var(--brand-red)" },
 };
 
@@ -128,7 +128,7 @@ export function ConvictionCalibration({ days }: { days: DayMultiStat[] }) {
             }
           />
           <ChartLegend content={<ChartLegendContent />} />
-          <Bar dataKey="winners" name="winners" fill="var(--brand-green)" stackId="result" radius={[0, 0, 0, 0]} isAnimationActive={false} />
+          <Bar dataKey="winners" name="winners" fill="var(--green)" stackId="result" radius={[0, 0, 0, 0]} isAnimationActive={false} />
           <Bar dataKey="losers" name="losers" fill="var(--claude)" stackId="result" radius={[3, 3, 0, 0]} isAnimationActive={false}>
             <LabelList
               dataKey="winRateLabel"
