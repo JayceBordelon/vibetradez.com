@@ -20,7 +20,6 @@ type Trade struct {
 	DTE            int     // zero until contract resolved at open
 	EstimatedPrice float64 // zero until contract resolved at open
 	Thesis         string
-	SentimentScore float64
 	CurrentPrice   float64
 	TargetPrice    float64
 	StopLoss       float64 // zero until contract resolved at open
@@ -435,7 +434,7 @@ func VerifyTemplates() HealthCheck {
 		{
 			Symbol: "SPY", ContractType: "CALL", StrikePrice: 500,
 			Expiration: "2026-04-01", DTE: 5, EstimatedPrice: 1.50,
-			Thesis: "Startup verification", SentimentScore: 0.5,
+			Thesis:       "Startup verification",
 			CurrentPrice: 498, TargetPrice: 505, StopLoss: 0.75,
 			RiskLevel: "MEDIUM",
 			Catalyst:  "System test", MentionCount: 42,

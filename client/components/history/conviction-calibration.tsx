@@ -67,8 +67,8 @@ function bucketByScore(days: DayMultiStat[]): ScoreBucket[] {
 }
 
 const chartConfig: ChartConfig = {
-  winners: { label: "Winners", color: "var(--green)" },
-  losers: { label: "Losers", color: "var(--red)" },
+  winners: { label: "Winners", color: "var(--brand-green)" },
+  losers: { label: "Losers", color: "var(--brand-red)" },
 };
 
 export function ConvictionCalibration({ days }: { days: DayMultiStat[] }) {
@@ -128,8 +128,8 @@ export function ConvictionCalibration({ days }: { days: DayMultiStat[] }) {
             }
           />
           <ChartLegend content={<ChartLegendContent />} />
-          <Bar dataKey="winners" name="winners" fill="var(--green)" stackId="result" radius={[0, 0, 0, 0]} isAnimationActive={false} />
-          <Bar dataKey="losers" name="losers" fill="var(--red)" stackId="result" radius={[3, 3, 0, 0]} isAnimationActive={false}>
+          <Bar dataKey="winners" name="winners" fill="var(--brand-green)" stackId="result" radius={[0, 0, 0, 0]} isAnimationActive={false} />
+          <Bar dataKey="losers" name="losers" fill="var(--claude)" stackId="result" radius={[3, 3, 0, 0]} isAnimationActive={false}>
             <LabelList
               dataKey="winRateLabel"
               position="top"
@@ -144,7 +144,7 @@ export function ConvictionCalibration({ days }: { days: DayMultiStat[] }) {
       </ChartContainer>
 
       <p className="text-[11px] leading-relaxed text-muted-foreground">
-        Each bar is the number of settled trades at that conviction score, split into winners (green) and losers (red). The number above each bar is the win rate among decided trades. If
+        Each bar is the number of settled trades at that conviction score, split into winners and losers per the legend. The number above each bar is the win rate among decided trades. If
         Claudia&apos;s scores are well-calibrated, win rate should climb monotonically left-to-right.
       </p>
     </div>

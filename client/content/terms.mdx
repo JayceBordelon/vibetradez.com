@@ -1,0 +1,59 @@
+import { Section } from "@/components/legal/section";
+
+<Section id="experimental" num={1} title="Experimental Nature of This Service">
+
+VibeTradez is an **experimental, educational project** that generates AI-powered options trade suggestions. The platform is provided on an "as-is" basis for informational and entertainment purposes only. It is not a registered investment advisory service, broker-dealer, or financial institution.
+
+All trade ideas presented on this platform are machine-generated suggestions, not recommendations. They are produced by a single large language model (Claude) running across two invocations a day: a pre-bell run (around 9:25 AM ET) that selects three candidate tickers with direction and intent from publicly available trending-ticker data and live market information, and an at-open run (9:30 AM ET) that reads the live option chain and chooses the specific contracts. Both runs use a fixed prompt and a fixed, locked-down toolset (Schwab market data, web search, and a single order-placement tool). None of these outputs have been reviewed, verified, or endorsed by any licensed financial professional.
+
+</Section>
+
+<Section id="not-advice" num={2} title="Not Financial Advice">
+
+**Nothing on VibeTradez constitutes financial, investment, tax, or legal advice.** The trade suggestions, performance analytics, and any other content should not be interpreted as a recommendation to buy, sell, or hold any security or financial instrument.
+
+You should always consult with a qualified, licensed financial advisor before making any investment decisions. Do not rely on this platform as a substitute for professional financial guidance.
+
+</Section>
+
+<Section id="risk" num={3} title="Significant Risk Disclosure">
+
+**Options trading involves substantial risk of loss and is not suitable for all investors.** You can lose your entire investment, and in some cases, losses can exceed your initial investment. Short-dated options (0 to 7 DTE), which are the focus of this platform, are especially volatile and carry elevated risk of total loss.
+
+Past performance displayed on this platform does not guarantee future results. Realized profit and loss for the three daily picks is sourced from actual broker fills on the operator's Schwab account. Any intraday option-price overlays, modeled premiums, or pre-fill estimates shown on the dashboard are illustrative and may not reflect actual executable prices due to bid-ask spreads, liquidity, and market microstructure.
+
+By using this platform, you acknowledge that you understand these risks and accept full responsibility for any trading decisions you make.
+
+</Section>
+
+<Section id="auto-execution" num={4} title="Auto-Execution Pipeline">
+
+All three of each trading day's picks are automatically executed by the platform as **real live orders** against the operator's personal Schwab brokerage account using the Schwab Trader API. Real money, real fills, real positions. The operator (Jayce Bordelon) is the only party with capital at risk on these orders. Subscribers receive informational notifications about the trades but no order is ever placed on a subscriber's behalf, and subscribers cannot configure or disable the pipeline.
+
+The platform retains a **paper-trade mode** as a fallback (configured server-side via an environment variable) used during testing windows or operator absence. When this mode is active the orders fill at the live Schwab option mark in a simulated environment with no real money or real positions. The dashboard always badges every fill as either LIVE or PAPER so the actual mode is never ambiguous; the badge state reflects the real mode the order was placed in, never inferred or extrapolated.
+
+The auto-execution pipeline operates with hard guardrails enforced in code at the order-tool layer, so a faulty prompt or model output cannot exceed them: (1) a per-share premium cap of $10/share; (2) a $1,000 total daily exposure budget enforced cumulatively across every order placed that day, so worst-case daily exposure is bounded at $1,000 regardless of how the picks land or how many contracts are bought; (3) at most one order per candidate and at most three orders per run, where the agent may buy duplicate contracts of a single pick by setting the order quantity but can never push the day past the $1,000 budget; (4) a per-order total-cost cap of $1,000, so no single order can exhaust the budget on a pricing error; (5) a symbol allowlist, so the agent can only buy the three tickers chosen that morning; and (6) a mandatory close at 3:55 PM ET (12:55 PM ET on half-trading days) regardless of P&L. Any opening LIMIT that has not filled by 9:35 AM ET is canceled and that pick is dead for the day.
+
+</Section>
+
+<Section id="data" num={5} title="Data Sources & Accuracy">
+
+Trade suggestions are generated using data from third-party sources including StockTwits, Yahoo Finance, Finviz, SEC EDGAR, the Anthropic Claude API, and the Schwab Market Data API. While we strive for accuracy, we make no guarantees regarding the completeness, reliability, or timeliness of any data presented.
+
+Market data, option prices, and stock quotes may be delayed or inaccurate. Always verify prices with your broker before placing any trades.
+
+</Section>
+
+<Section id="warranty" num={6} title="No Warranty & Limitation of Liability">
+
+VibeTradez is provided without warranty of any kind, express or implied. The creator of this platform shall not be held liable for any financial losses, damages, or other consequences arising from your use of or reliance on the information provided.
+
+This platform may experience downtime, data inaccuracies, or system errors. Trade suggestions may be delayed, missing, or incorrect. Use the platform at your own risk.
+
+</Section>
+
+<Section id="contact" num={7} title="Contact">
+
+This project is built and maintained by [Jayce Bordelon](https://jaycebordelon.com). For questions or concerns, reach out via the contact information on the personal site.
+
+</Section>

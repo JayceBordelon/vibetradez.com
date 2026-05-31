@@ -566,7 +566,7 @@ var serverStartTime = time.Now()
 handleLiveness is the lightweight liveness probe wired to the
 docker-compose healthcheck. Returns 200 if the process is responsive
 and the DB is reachable, 503 otherwise. No external upstream probes
-(Schwab, Anthropic, sentiment scrapers) — those live on /health,
+(Schwab, Anthropic, signal scrapers) — those live on /health,
 which the post-deploy healthcheck.yml workflow exercises. Without
 this split, the compose healthcheck's 5s timeout would trip on the
 first slow Schwab response and trigger a restart cascade.

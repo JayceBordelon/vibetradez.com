@@ -37,7 +37,7 @@ REQUIREMENTS:
 - Return EXACTLY 3 trades. No more, no less. Every trade you return will be executed live with real money.
 - Each trade MUST be a DIFFERENT ticker symbol, no duplicate tickers allowed
 - Each trade should be a short-term option: min_dte of 0 (same day) up to 7 (one week out)
-- Include both CALL and PUT opportunities based on sentiment and market analysis (mix is not required — pick the 3 best ideas regardless of direction)
+- Include both CALL and PUT opportunities based on your market analysis (mix is not required — pick the 3 best ideas regardless of direction)
 - Provide a clear thesis for each trade explaining WHY it should be made
 - Use REAL prices from get_stock_quotes for current_price. The current_price field MUST come from a get_stock_quotes call you made in THIS conversation, NEVER from your training data or web search.
 
@@ -63,7 +63,7 @@ RESPOND WITH ONLY A JSON ARRAY containing exactly 3 trades:
     "min_dte": 3,
     "risk_level": "MEDIUM",
     "catalyst": "Earnings report on Friday",
-    "thesis": "Detailed explanation of why this trade makes sense, including sentiment analysis, technical factors, and any catalysts.",
+    "thesis": "Detailed explanation of why this trade makes sense, including technical factors and any catalysts.",
     "score": 9,
     "rationale": "Why I scored this 9/10: cite specific evidence, the strongest bullish/bearish factors, and the most plausible failure mode."
   }

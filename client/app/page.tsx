@@ -66,8 +66,7 @@ export default function LandingPage() {
 
           <Reveal effect="rise" delay={280} duration={900}>
             <p className="mx-auto mt-7 max-w-[640px] text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Every weekday, a language model picks 3 options contracts before the bell and auto-fires all 3 in my real brokerage account at the open. By close, you see whether Claudia was right.{" "}
-              <span className="italic">(She is sometimes.)</span>
+              Every weekday, a language model picks 3 options contracts before the bell and auto-fires all 3 in my real brokerage account at the open. By close, you see whether Claudia was right. She is sometimes.
             </p>
           </Reveal>
 
@@ -97,7 +96,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Pipeline as a flat horizontal timeline ── */}
+      {/* ── Pipeline as a market-hours bar: one gradient track spanning the trading day with the
+              four moments pinned as icon markers. Horizontal on desktop, vertical rail on mobile. ── */}
       <section className="relative px-5 pb-24 sm:px-6 sm:pb-32">
         <div className="relative z-10 mx-auto max-w-6xl">
           <Reveal effect="rise" duration={700}>
@@ -109,72 +109,123 @@ export default function LandingPage() {
             </div>
           </Reveal>
 
-          {/* Timeline, connecting hairline runs through the middle of the row on desktop;
-              vertical accent line on mobile. */}
-          <div className="relative mt-14">
-            <div className="absolute top-[34px] left-[12.5%] hidden h-px w-[75%] bg-gradient-to-r from-transparent via-foreground/15 to-transparent md:block" aria-hidden />
-            <div className="absolute top-0 bottom-0 left-[14px] w-px bg-gradient-to-b from-transparent via-foreground/15 to-transparent md:hidden" aria-hidden />
+          {/* Desktop: horizontal market-hours bar */}
+          <div className="mt-16 hidden md:block">
+            <div className="mb-5 flex items-center justify-between px-[12.5%] text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/60">
+              <span>Market open</span>
+              <span>Close</span>
+            </div>
+            <div className="relative">
+              {/* the trading-day track, marker centers sit at 12.5% / 37.5% / 62.5% / 87.5% */}
+              <div className="absolute top-[19px] left-[12.5%] h-1.5 w-[75%] rounded-full bg-gradient-brand opacity-30" aria-hidden />
+              <ol className="relative grid grid-cols-4 gap-6">
+                {pipeline.map((p, i) => (
+                  <Reveal as="li" key={p.time} effect="rise" delay={i * 100} duration={600} className="flex flex-col items-center text-center">
+                    <span className="relative z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-background ring-1 ring-foreground/15">
+                      <span className="absolute -inset-1 rounded-full bg-gradient-brand opacity-15" aria-hidden />
+                      <p.Icon className="relative h-4 w-4 text-foreground/70" aria-hidden />
+                    </span>
+                    <span className="mt-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{p.time}</span>
+                    <h3 className="mt-1.5 text-[15px] font-bold tracking-tight text-foreground">{p.title}</h3>
+                    <p className="mt-1.5 max-w-[15rem] text-[13px] leading-relaxed text-muted-foreground">{p.detail}</p>
+                  </Reveal>
+                ))}
+              </ol>
+            </div>
+          </div>
 
-            <ol className="grid grid-cols-1 gap-10 md:grid-cols-4 md:gap-6">
-              {pipeline.map((p, i) => (
-                <Reveal key={p.time} effect="rise" delay={i * 100} duration={600}>
-                  <li className="relative flex gap-4 md:block">
-                    {/* Numbered dot, sits on the timeline */}
-                    <div className="flex shrink-0 flex-col items-center md:items-start">
-                      <span className="relative inline-flex h-8 w-8 items-center justify-center rounded-full bg-background text-xs font-bold ring-1 ring-foreground/15">
-                        <span className="absolute -inset-[5px] rounded-full bg-gradient-brand opacity-10" aria-hidden />
-                        <span className="relative">{String(i + 1).padStart(2, "0")}</span>
-                      </span>
-                    </div>
-
-                    <div className="min-w-0 flex-1 md:mt-5">
-                      <div className="flex items-center gap-2">
-                        <p.Icon className="h-3.5 w-3.5 text-foreground/60" aria-hidden />
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{p.time}</span>
-                      </div>
-                      <h3 className="mt-2 text-base font-bold tracking-tight text-foreground">{p.title}</h3>
-                      <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">{p.detail}</p>
-                    </div>
-                  </li>
-                </Reveal>
+          {/* Mobile: vertical rail with the same markers */}
+          <Reveal effect="rise" delay={150} duration={700} className="mt-12 block md:hidden">
+            <ol className="relative space-y-7">
+              <div className="absolute top-3 bottom-3 left-[19px] w-1.5 -translate-x-1/2 rounded-full bg-gradient-brand opacity-25" aria-hidden />
+              {pipeline.map((p) => (
+                <li key={p.time} className="relative flex gap-4">
+                  <span className="relative z-10 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-foreground/15">
+                    <span className="absolute -inset-1 rounded-full bg-gradient-brand opacity-15" aria-hidden />
+                    <p.Icon className="relative h-4 w-4 text-foreground/70" aria-hidden />
+                  </span>
+                  <div className="min-w-0 flex-1 pt-0.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{p.time}</span>
+                    <h3 className="mt-1 text-[15px] font-bold tracking-tight text-foreground">{p.title}</h3>
+                    <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{p.detail}</p>
+                  </div>
+                </li>
               ))}
             </ol>
-          </div>
+          </Reveal>
         </div>
       </section>
 
-      {/* ── Testimonials ── */}
-      <Testimonials />
-
-      {/* ── Trusted-by parody marquee (warm-up before the open-source + subscribe CTAs) ── */}
-      <TrustedBy />
-
-      {/* ── Open source / contribute, flat centered block matching the section rhythm, sits above the signup CTA so devs see it on the first scroll ── */}
+      {/* ── Open source: flat two-column block (no panel/card), left pitch + right plain-text
+              source tree, separated by a single hairline so it reads as page content, not a card.
+              Sits right after the pipeline so the genuine "read the code" trust beat lands before
+              the two parody social-proof sections, not buried among them. ── */}
       <section className="relative px-5 pb-20 sm:px-6 sm:pb-24">
-        <div className="relative z-10 mx-auto max-w-2xl text-center">
+        <div className="relative z-10 mx-auto max-w-5xl">
           <Reveal effect="rise" duration={700}>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Open source · contributors welcome</span>
-            <h2 className="mt-3 text-2xl font-extrabold tracking-tight sm:text-3xl">
-              The whole stack lives on <span className="text-gradient-brand">GitHub</span>
-            </h2>
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Go backend, Next.js frontend, Schwab + Anthropic wiring, the whole picker prompt, all open. Got an idea? Ping me to contribute and I&apos;ll merge it in.
-            </p>
-            <div className="mt-7 flex justify-center">
-              <a
-                href="https://github.com/JayceBordelon/vibetradez.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-foreground/10 bg-foreground/[0.03] px-5 text-sm font-semibold text-foreground transition-colors hover:border-foreground/25 hover:bg-foreground/[0.06]"
-              >
-                <GitHubMark className="h-4 w-4" />
-                View on GitHub
-                <ArrowRight className="h-3.5 w-3.5" />
-              </a>
+            <div className="grid gap-10 md:grid-cols-[1.05fr_0.95fr] md:items-start md:gap-14">
+              {/* Left: the pitch */}
+              <div>
+                <span className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  <GitHubMark className="h-3.5 w-3.5" />
+                  Open source
+                </span>
+                <h2 className="mt-3 text-2xl font-extrabold tracking-tight sm:text-3xl">
+                  No black box. <span className="text-gradient-brand">Read the code.</span>
+                </h2>
+                <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground sm:text-[15px]">
+                  Backend, frontend, broker wiring, and the exact prompt Claudia runs on, all public. See a smarter way to pick? Open a PR and I&apos;ll merge it in.
+                </p>
+                <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
+                  <a
+                    href="https://github.com/JayceBordelon/vibetradez.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-foreground/10 bg-foreground/[0.03] px-5 text-sm font-semibold text-foreground transition-colors hover:border-foreground/25 hover:bg-foreground/[0.06]"
+                  >
+                    <GitHubMark className="h-4 w-4" />
+                    View on GitHub
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </a>
+                  <a
+                    href="https://github.com/JayceBordelon/vibetradez.com/issues"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+                  >
+                    Browse open issues
+                  </a>
+                </div>
+              </div>
+
+              {/* Right: plain-text source tree, no box, just a hairline rule on desktop */}
+              <div className="font-mono text-[13px] md:border-l md:border-foreground/10 md:pl-14">
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <GitHubMark className="h-3.5 w-3.5" />
+                  JayceBordelon/vibetradez.com
+                </div>
+                <ul className="mt-4 space-y-2.5">
+                  {stack.map((s, i) => (
+                    <li key={s.path} className="grid grid-cols-[auto_1fr] items-baseline gap-x-3">
+                      <span className="text-foreground/85">
+                        <span className="text-muted-foreground/50">{i === stack.length - 1 ? "└─ " : "├─ "}</span>
+                        {s.path}
+                      </span>
+                      <span className="text-[12px] text-muted-foreground">{s.note}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </Reveal>
         </div>
       </section>
+
+      {/* ── Testimonials (parody social proof) ── */}
+      <Testimonials />
+
+      {/* ── Trusted-by parody marquee, comedic warm-up straight into the subscribe CTA ── */}
+      <TrustedBy />
 
       {/* ── Subscribe CTA, flat hero-style block, no outer panel ── */}
       <section className="relative px-5 pb-24 sm:px-6 sm:pb-32">
@@ -188,19 +239,19 @@ export default function LandingPage() {
                 Start getting <span className="text-gradient-brand">picks</span>
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-                Free, no credit card, no premium tier. Unsubscribe any time. <span className="italic">(I won&apos;t email you a sad cat photo.)</span>
+                Free, no credit card, no premium tier. Unsubscribe any time. <span className="italic">(I will hate you.)</span>
               </p>
-              <div className="mt-8 flex w-full flex-col items-center justify-center gap-3 sm:flex-row">
-                <SubscribeCTA className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gradient-brand px-7 text-[15px] font-semibold text-white shadow-lg transition-opacity hover:opacity-90">
+              <div className="mt-8 flex flex-col items-center gap-4">
+                <SubscribeCTA className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gradient-brand px-8 text-[15px] font-semibold text-white shadow-lg transition-opacity hover:opacity-90">
                   <LogIn className="h-4 w-4" />
                   Sign in or sign up
                 </SubscribeCTA>
                 <Link
                   href="/dashboard"
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-foreground/10 bg-foreground/[0.03] px-7 text-[15px] font-semibold text-foreground transition-colors hover:border-foreground/25 hover:bg-foreground/[0.06]"
+                  className="group inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  Open dashboard
-                  <ArrowRight className="h-4 w-4" />
+                  or just watch the picks live
+                  <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                 </Link>
               </div>
             </div>
@@ -265,29 +316,37 @@ function GitHubMark({ className }: { className?: string }) {
   );
 }
 
+const stack = [
+  { path: "server/", note: "Go · cron · daily lifecycle" },
+  { path: "execagent/", note: "at-open trader · hard caps" },
+  { path: "trades/prompt.go", note: "the exact picker prompt" },
+  { path: "schwab/", note: "live quotes · order wiring" },
+  { path: "client/", note: "Next.js 16 · React 19" },
+];
+
 const pipeline = [
   {
     time: "9:25 AM ET",
-    title: "Claudia picks 3 tickers",
-    detail: "Before the bell, an LLM reads overnight news and live market signals, then returns 3 tickers, each with a direction, a conviction score, and a written rationale.",
+    title: "Picks 3 tickers",
+    detail: "Reads overnight news and live signals, then returns 3 tickers, each with a direction and a rationale.",
     Icon: Sparkles,
   },
   {
     time: "9:30:00 AM ET",
-    title: "Claudia picks the contracts and fires",
-    detail: "At the open she reads the live chain and, per pick, chooses the contract and how many to buy or skips it with a reason. She deploys up to a $1,000 daily budget, sizing up on conviction.",
+    title: "Buys the contracts",
+    detail: "Reads the live chain and fires real orders, sizing up on conviction against a $1,000 daily budget.",
     Icon: Zap,
   },
   {
     time: "Mid-day",
     title: "Live dashboard",
-    detail: "Buy and Current marks tick in real time. Position is clearly badged so there's no mystery about whether the trade is real (it is).",
+    detail: "Buy and current marks tick in real time. Every position is badged real, because it is.",
     Icon: Eye,
   },
   {
     time: "3:55 PM ET",
     title: "Mandatory close",
-    detail: "Position is unconditionally closed five minutes before the bell. No overnight risk.",
+    detail: "Every position closes five minutes before the bell. No overnight risk.",
     Icon: Clock,
   },
 ];

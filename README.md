@@ -301,3 +301,7 @@ docker compose logs trading-frontend --tail 50  # View Next.js logs
 docker compose restart trading-server           # Restart Go server
 docker compose up -d --force-recreate trading-server  # Full recreate
 ```
+
+## License
+
+MIT. See [LICENSE](LICENSE). Use it, fork it, run your own. Contributions are welcome by PR; opening one means you agree to license your contribution under the same terms.

@@ -58,7 +58,7 @@ export function UnsubscribeForm() {
   return (
     <div className="space-y-3 text-xs leading-relaxed text-muted-foreground">
       <p>
-        Every email we send (morning picks, EOD summary, weekly recap) has a one-click <strong className="font-semibold text-foreground">Unsubscribe</strong> link in the footer. Click that link in any
+        Every email we send (morning picks, EOD summary, weekly recap) has a one-click <strong className="font-semibold text-foreground">Unsubscribe</strong>{" "}link in the footer. Click that link in any
         vibetradez.com email and you&apos;re out instantly.
       </p>
       <p>Lost all the emails? Reply to any vibetradez.com address from your subscribed inbox and the operator will remove you manually.</p>

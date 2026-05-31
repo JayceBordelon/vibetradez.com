@@ -42,18 +42,6 @@ export function isContractResolved(trade: Trade): boolean {
   return trade.strike_price !== null && trade.expiration !== null && trade.estimated_price !== null;
 }
 
-export function sentimentLabel(score: number): string {
-  if (score > 0.3) return "Bullish";
-  if (score < -0.3) return "Bearish";
-  return "Neutral";
-}
-
-export function sentimentColor(score: number): string {
-  if (score > 0.3) return "text-green";
-  if (score < -0.3) return "text-red";
-  return "text-muted-foreground";
-}
-
 /**
 TradePnl bundles the entry/close prices, $ P&L, % change, and the
 source flag the caller can use to badge "actual fill" vs "modeled".

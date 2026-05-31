@@ -91,6 +91,11 @@
   --claude: #b04a30;
   --claude-light: rgba(217, 119, 87, 0.10);
   --claude-border: rgba(217, 119, 87, 0.25);
+  /* --brand-red is the loss-side companion to --brand-green: a calmer,
+     slightly muted pomegranate red that reads clearly as "loss" without
+     the neon bite of the raw semantic --red, so it sits with the warm
+     emerald/terracotta brand palette in charts. */
+  --brand-red: #c0392b;
 }
 
 .dark {
@@ -170,6 +175,9 @@
   --claude: #f4a27a;
   --claude-light: rgba(217, 119, 87, 0.12);
   --claude-border: rgba(244, 162, 122, 0.3);
+  /* See light-mode comment. Dark mode lifts to a muted coral-red so it
+     reads on the near-black bg without the neon coral of the raw --red. */
+  --brand-red: #e06c75;
 }
 
 @theme inline {
@@ -592,6 +600,32 @@ body {
     text-underline-offset: 2px;
   }
   .prose-terms a:hover {
+    color: var(--foreground);
+  }
+  .prose-terms ul {
+    margin: 0 0 1rem;
+    padding-left: 1.25rem;
+    list-style: disc;
+  }
+  .prose-terms li {
+    margin-bottom: 0.4rem;
+    line-height: 1.7;
+    color: var(--muted-foreground);
+    font-size: 15px;
+  }
+  .prose-terms li:last-child {
+    margin-bottom: 0;
+  }
+  .prose-terms li strong {
+    color: var(--foreground);
+    font-weight: 600;
+  }
+  .prose-terms code {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 13px;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.3rem;
+    background: var(--muted);
     color: var(--foreground);
   }
 
