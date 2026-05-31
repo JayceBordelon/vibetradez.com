@@ -89,9 +89,15 @@
   --brand-green: oklch(0.5106 0.2301 276.9656);
   --brand-green-light: oklch(0.5106 0.2301 276.9656 / 0.1);
   --brand-green-border: oklch(0.5106 0.2301 276.9656 / 0.25);
-  --claude: oklch(0.5413 0.2466 293.009);
-  --claude-light: oklch(0.5413 0.2466 293.009 / 0.1);
-  --claude-border: oklch(0.5413 0.2466 293.009 / 0.25);
+  /* --brand-violet is the gradient/ambient companion to the indigo
+     --brand-green (wordmark gradient, glass orbs, mesh wash). */
+  --brand-violet: oklch(0.5413 0.2466 293.009);
+  --brand-violet-border: oklch(0.5413 0.2466 293.009 / 0.25);
+  /* --claude is Claudia's own signature clay accent, kept distinct from
+     the indigo/violet brand so "Claudia's read" reads as her color. */
+  --claude: #b04a30;
+  --claude-light: rgba(217, 119, 87, 0.1);
+  --claude-border: rgba(217, 119, 87, 0.25);
   /* --brand-red is the loss-side companion to --brand-green: a calmer,
      slightly muted pomegranate red that reads clearly as "loss" without
      the neon bite of the raw semantic --red, so it sits with the warm
@@ -174,9 +180,11 @@
   --brand-green: oklch(0.5679 0.2113 276.7065);
   --brand-green-light: oklch(0.5679 0.2113 276.7065 / 0.14);
   --brand-green-border: oklch(0.5679 0.2113 276.7065 / 0.3);
-  --claude: oklch(0.6 0.25 293.009);
-  --claude-light: oklch(0.6 0.25 293.009 / 0.14);
-  --claude-border: oklch(0.6 0.25 293.009 / 0.3);
+  --brand-violet: oklch(0.6 0.25 293.009);
+  --brand-violet-border: oklch(0.6 0.25 293.009 / 0.3);
+  --claude: #f4a27a;
+  --claude-light: rgba(244, 162, 122, 0.12);
+  --claude-border: rgba(244, 162, 122, 0.3);
   /* See light-mode comment. Dark mode lifts to a muted coral-red so it
      reads on the near-black bg without the neon coral of the raw --red. */
   --brand-red: #e06c75;
@@ -302,21 +310,21 @@ body {
   /* Brand-green → Claude two-tone gradient used by the marketing
      wordmark and the cross-section underlines. */
   .text-gradient-brand {
-    background: linear-gradient(135deg, var(--brand-green), var(--claude));
+    background: linear-gradient(135deg, var(--brand-green), var(--brand-violet));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
   .bg-gradient-brand {
-    background: linear-gradient(135deg, var(--brand-green), var(--claude));
+    background: linear-gradient(135deg, var(--brand-green), var(--brand-violet));
   }
   .border-gradient-brand {
-    border-image: linear-gradient(135deg, var(--brand-green-border), var(--claude-border)) 1;
+    border-image: linear-gradient(135deg, var(--brand-green-border), var(--brand-violet-border)) 1;
   }
 
   /* Active nav tab gradient underline */
   .nav-tab-active {
-    border-image: linear-gradient(90deg, var(--brand-green), var(--claude)) 1;
+    border-image: linear-gradient(90deg, var(--brand-green), var(--brand-violet)) 1;
     border-bottom-width: 2px;
   }
 
@@ -481,7 +489,7 @@ body {
     filter: blur(120px);
   }
   .lg-orb-claude {
-    background: radial-gradient(circle at center, var(--claude) 0%, transparent 70%);
+    background: radial-gradient(circle at center, var(--brand-violet) 0%, transparent 70%);
   }
   .lg-orb-cyan {
     background: radial-gradient(circle at center, var(--primary) 0%, transparent 70%);
@@ -508,7 +516,7 @@ body {
     will-change: transform;
     background:
       radial-gradient(ellipse 90% 70% at 12% 8%, color-mix(in oklab, var(--primary) 22%, transparent) 0%, transparent 60%),
-      radial-gradient(ellipse 95% 75% at 92% 96%, color-mix(in oklab, var(--claude) 18%, transparent) 0%, transparent 62%),
+      radial-gradient(ellipse 95% 75% at 92% 96%, color-mix(in oklab, var(--brand-violet) 18%, transparent) 0%, transparent 62%),
       radial-gradient(ellipse 80% 90% at 60% 40%, color-mix(in oklab, var(--primary) 10%, transparent) 0%, transparent 70%);
     filter: blur(40px) saturate(120%);
     animation: lg-mesh-breathe 48s ease-in-out infinite;
@@ -516,7 +524,7 @@ body {
   .dark .lg-mesh {
     background:
       radial-gradient(ellipse 90% 70% at 12% 8%, color-mix(in oklab, var(--primary) 28%, transparent) 0%, transparent 62%),
-      radial-gradient(ellipse 95% 75% at 92% 96%, color-mix(in oklab, var(--claude) 22%, transparent) 0%, transparent 64%),
+      radial-gradient(ellipse 95% 75% at 92% 96%, color-mix(in oklab, var(--brand-violet) 22%, transparent) 0%, transparent 64%),
       radial-gradient(ellipse 80% 90% at 60% 40%, color-mix(in oklab, var(--primary) 14%, transparent) 0%, transparent 72%);
     filter: blur(56px) saturate(110%);
   }

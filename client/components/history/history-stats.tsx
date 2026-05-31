@@ -2,7 +2,7 @@ import { Activity, Percent, Scale, Sigma, Target, TrendingDown, TrendingUp } fro
 import { motion, type Variants } from "motion/react";
 
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
-import { fmt, fmtPctDec, fmtPnlInt, percentHueColor } from "@/lib/format";
+import { fmt, fmtPctDec, fmtPnlInt } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const containerVariants: Variants = {
@@ -74,7 +74,7 @@ export function HistoryStats({
             <Stat label="Net P&L" value={fmtPnlInt(totalPnl)} sub={`${totalTrades} trades`} tone={signTone(totalPnl)} icon={totalPnl >= 0 ? TrendingUp : TrendingDown} />
           </motion.div>
           <motion.div variants={itemVariants}>
-            <Stat label="Win Rate" value={`${winRate.toFixed(0)}%`} sub={`${totalWinners}W · ${totalLosers}L`} valueColor={percentHueColor(winRate)} icon={Target} />
+            <Stat label="Win Rate" value={`${winRate.toFixed(0)}%`} sub={`${totalWinners}W · ${totalLosers}L`} valueColor={winRate >= 50 ? "var(--green)" : undefined} icon={Target} />
           </motion.div>
           <motion.div variants={itemVariants}>
             <Stat label="Return on Capital" value={fmtPctDec(roc)} sub="Net P&L / capital deployed" tone={signTone(roc)} icon={Percent} />

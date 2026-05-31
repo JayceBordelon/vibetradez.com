@@ -27,7 +27,7 @@ export function PnlChart({ trades, executions }: PnlChartProps) {
         return {
           name: `$${dt.trade.symbol} ${dt.trade.contract_type}`,
           pnl: result.pnl,
-          fill: result.pnl >= 0 ? "#10b981" : "#ef4444",
+          fill: result.pnl >= 0 ? "var(--green)" : "var(--red)",
         };
       })
       .filter((d): d is { name: string; pnl: number; fill: string } => d !== null)
