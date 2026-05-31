@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 
 import PrivacyContent from "@/content/privacy.mdx";
 
-const OG_IMAGE = "/opengraph-image";
+const OG_IMAGE = "/og/privacy.png";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",

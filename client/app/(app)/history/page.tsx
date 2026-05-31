@@ -3,7 +3,7 @@ import { HistoryShell } from "@/components/history/history-shell";
 import { serverFetch } from "@/lib/api";
 import type { WeekResponse } from "@/types/trade";
 
-const OG_IMAGE = "/opengraph-image";
+const OG_IMAGE = "/og/history.png";
 
 function currentWeekRange(): { start: string; end: string } {
   const now = new Date();

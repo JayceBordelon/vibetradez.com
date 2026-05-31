@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { TradeDetailPage } from "@/components/trade/trade-detail-page";
 
-const OG_IMAGE = "/opengraph-image";
+const OG_IMAGE = "/og/landing.png";
 
 interface PageProps {
   params: Promise<{ symbol: string }>;
