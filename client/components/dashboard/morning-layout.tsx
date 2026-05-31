@@ -205,7 +205,7 @@ function HeroPick({ dt, liveQuotes, date, executions }: { dt: DashboardTrade; li
 
             {trade.catalyst && (
               <div className="mt-4 rounded-md bg-amber-bg px-3 py-2 text-sm">
-                <span className="font-semibold text-amber">Catalyst:</span> {trade.catalyst}
+                <span className="font-semibold text-amber">Catalyst:</span>{" "}{trade.catalyst}
               </div>
             )}
 

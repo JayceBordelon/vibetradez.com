@@ -66,8 +66,7 @@ export default function LandingPage() {
 
           <Reveal effect="rise" delay={280} duration={900}>
             <p className="mx-auto mt-7 max-w-[640px] text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Every weekday, a language model picks 3 options contracts before the bell and auto-fires all 3 in my real brokerage account at the open. By close, you see whether Claudia was right.{" "}
-              <span className="italic">(She is sometimes.)</span>
+              Every weekday, a language model picks 3 options contracts before the bell and auto-fires all 3 in my real brokerage account at the open. By close, you see whether Claudia was right. She is sometimes.
             </p>
           </Reveal>
 
@@ -240,7 +239,7 @@ export default function LandingPage() {
                 Start getting <span className="text-gradient-brand">picks</span>
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-                Free, no credit card, no premium tier. Unsubscribe any time. <span className="italic">(I won&apos;t email you a sad cat photo.)</span>
+                Free, no credit card, no premium tier. Unsubscribe any time. <span className="italic">(I will hate you.)</span>
               </p>
               <div className="mt-8 flex flex-col items-center gap-4">
                 <SubscribeCTA className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gradient-brand px-8 text-[15px] font-semibold text-white shadow-lg transition-opacity hover:opacity-90">
