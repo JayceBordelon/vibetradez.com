@@ -27,7 +27,7 @@ flowchart LR
       DB[("Postgres<br/>trades + sessions")]
       Schwab["Schwab API<br/>data · orders · WS"]
       Claude["Anthropic Claude"]
-      Signals["Sentiment scrapers<br/>StockTwits · Yahoo · Finviz · EDGAR"]
+      Signals["Trending scrapers<br/>StockTwits · Yahoo · Finviz · EDGAR"]
       Resend["Resend"]
     end
 
@@ -44,7 +44,7 @@ flowchart LR
     TS --> Resend
 ```
 
-Visitors hit Traefik, which routes by path: `/api`, `/auth`, `/admin`, `/health` go to the Go trading-server; everything else goes to the Next.js trading-frontend. The trading-server owns every outbound dependency: Postgres for picks / executions / summaries / users / sessions, Schwab for live quotes + WebSocket ticks + Trader API orders, Anthropic Claude for the morning picker and EOD analysis, four sentiment scrapers for the morning signal aggregation, and Resend for email. Sign-in is a direct Google OAuth flow handled in the trading-server binary; the session cookie is validated against a local sessions table on each `/api/*` request. The trading-frontend doesn't talk to anything outside the droplet directly; live option ticks flow back to it as SSE from the trading-server.
+Visitors hit Traefik, which routes by path: `/api`, `/auth`, `/admin`, `/health` go to the Go trading-server; everything else goes to the Next.js trading-frontend. The trading-server owns every outbound dependency: Postgres for picks / executions / summaries / users / sessions, Schwab for live quotes + WebSocket ticks + Trader API orders, Anthropic Claude for the morning picker and EOD analysis, four trending-ticker scrapers for the morning signal aggregation, and Resend for email. Sign-in is a direct Google OAuth flow handled in the trading-server binary; the session cookie is validated against a local sessions table on each `/api/*` request. The trading-frontend doesn't talk to anything outside the droplet directly; live option ticks flow back to it as SSE from the trading-server.
 
 ## What's here
 
