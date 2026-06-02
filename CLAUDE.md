@@ -51,19 +51,19 @@ This is the load-bearing architectural invariant. Read it before touching any pi
 
 **Pre-bell (9:25 ET) does ticker selection only.** Claude reads sentiment + overnight news + live Schwab equity spot. Output: exactly **3 ranked candidates**, each `{symbol, contract_type, score, thesis, target_otm_pct, min_dte}`. Specific strikes / expirations / estimated prices are NOT chosen because US listed options don't trade pre-market and Schwab's `/chains` endpoint serves yesterday's 4:00 PM close.
 
-**At market open (9:30:00 ET) the agent picks contracts and fires orders.** Same model, re-invoked via `internal/execagent` with a locked-down tool surface: live Schwab quotes, live option chain restricted to the candidate symbols, account funds, web search, and `place_options_order` (the only side-effectful tool — submits one BUY_TO_OPEN LIMIT per call, for a quantity the agent chooses). For each candidate the agent reads the now-live chain, picks the strike + expiration + limit price + quantity, and either calls `place_options_order` (which writes the execution row + stamps the contract spec on the trade row + submits the order in one atomic step) or declines with a written reason. Skipped candidates land in `executions` with `status='skipped'` and the reason in `error_message`.
+**At market open (9:30:00 ET) the agent picks contracts and fires orders.** Same model, re-invoked via `internal/execagent` with a locked-down tool surface: live Schwab quotes, live option chain restricted to the candidate symbols, account funds, web search, and `place_options_order` (the only side-effectful tool — submits one BUY_TO_OPEN LIMIT for a single contract per call). For each candidate the agent reads the now-live chain, picks the strike + expiration + limit price, and either calls `place_options_order` (which writes the execution row + stamps the contract spec on the trade row + submits the order in one atomic step) or declines with a written reason. Skipped candidates land in `executions` with `status='skipped'` and the reason in `error_message`.
 
-**Daily exposure budget — sizing up is allowed.** The agent has a $1,000 total exposure budget for the whole day across all orders combined. Exposure for one order is `limit_price × 100 × quantity`. The prompt encourages the agent to buy duplicate contracts (quantity > 1) of a high-conviction pick to approach the budget rather than reflexively buying one contract each, while still skipping picks whose setup has deteriorated. The cumulative-across-orders accounting lives in the dispatcher (`spentExposure` vs `MaxDailyExposure`); the budget is the master money ceiling.
+**One contract per pick, no sizing up.** The agent buys at most one contract of each of the up-to-3 picks whose setup still holds. Conviction is expressed by which picks it takes, not by how many contracts of one. There is no budget to deploy, and the combined price of the three contracts is never a reason to drop a pick (buy one of each you believe in regardless of the consolidated cost). The agent still skips freely on a deteriorated setup.
 
 Hard caps live at the tool layer in `internal/execagent/tools.go`, enforced even if the system prompt is bypassed:
 
-- `MaxDailyExposure = $1,000.00` — cumulative `limit_price × 100 × quantity` across ALL orders this run. This is the master money ceiling and the worst-case daily blast radius (down from the old $3,000 = 3 × $1,000)
-- `MaxOrdersPerRun = 3` — mirrors candidate basket size
+- `MaxContractsPerOrder = 1` — every order is exactly one contract; the tool refuses any `quantity` above 1. This is the rule that keeps the day to one contract per pick
+- `MaxOrdersPerRun = 3` — mirrors candidate basket size, so at most one order per pick
 - `MaxToolPremiumPerShare = $10.00` — per-share LIMIT cap (sanity ceiling on a single share price)
-- quantity ≥ 1 — duplicates are how the agent sizes up on conviction
-- One order per rank (one order per candidate; size up via quantity in that single order, not via repeat fires)
+- One order per rank (one order per candidate; the tool refuses a second order for the same rank)
 - Symbol allowlist (only the 3 morning candidates can be ordered)
-- `exec.MaxContractPremium = $10.00` (per-share) and `exec.MaxOrderCost = $1,000.00` (per-order total cost) re-validate at the broker entry point so a buggy tool-layer change can't widen a single order past the day budget
+- `MaxDailyExposure = $3,000.00` — a defensive outer ceiling on cumulative `limit_price × 100 × quantity`. With one contract per pick, three picks max, and the $10/share cap, the day can never exceed `3 × $10 × 100 = $3,000`, so this never blocks buying one of each; it only matters if the per-share or per-order caps were ever loosened
+- `exec.MaxContractPremium = $10.00` (per-share) and `exec.MaxOrderCost = $1,000.00` (per-order total cost) re-validate at the broker entry point so a buggy tool-layer change can't widen a single order
 
 **Don't try to "improve" the picker by giving it the chain pre-bell.** It was that way before and produced wrong orders on overnight-gap names (INTU 2026-05-21: $1.48 stale LIMIT vs $13+ true post-open ask, +$1,180 floor missed). The split exists because pre-bell chain data is fossilized; the picker prompt now explicitly tells Claude this.
 
