@@ -252,7 +252,7 @@ function contractIntentLabel(trade: Trade): string {
 
 function PendingContractBlock({ intent }: { intent: string }) {
   return (
-    <div className="flex min-w-0 flex-col items-start gap-1 rounded-lg border border-dashed border-border/70 bg-muted/20 px-4 py-3 lg:min-w-[280px]">
+    <div className="flex min-w-0 flex-col items-start gap-1 rounded-lg border border-dashed border-border/70 bg-muted/20 px-4 py-3 lg:min-w-[280px] lg:max-w-[320px]">
       <div className="flex items-center gap-2">
         <Skeleton className="h-3 w-3 rounded-full" />
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Finding contracts</span>
@@ -265,7 +265,7 @@ function PendingContractBlock({ intent }: { intent: string }) {
 
 function SkippedContractBlock({ reason }: { reason: string | null }) {
   return (
-    <div className="flex min-w-0 flex-col items-start gap-2 rounded-lg border border-border/70 bg-muted/30 px-4 py-3 lg:min-w-[280px]">
+    <div className="flex min-w-0 flex-col items-start gap-2 rounded-lg border border-border/70 bg-muted/30 px-4 py-3 lg:min-w-[280px] lg:max-w-[320px]">
       <div className="flex items-center gap-2">
         <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/60" />
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Skipped at open</span>
