@@ -29,28 +29,39 @@ const MaxToolPremiumPerShare = 10.00
 Maximum number of place_options_order calls the tool layer accepts in
 a single agent run. Equal to the candidate basket size — the agent
 should never fire more orders than there are picks. Enforced even if
-the model tries to spam the tool. Each call may request quantity > 1
-(duplicate contracts) subject to MaxDailyExposure below.
+the model tries to spam the tool. Each call places exactly one contract
+(see MaxContractsPerOrder).
 */
 const MaxOrdersPerRun = 3
 
 /*
-MaxDailyExposure is the total dollar exposure the agent may commit
-across ALL orders in a single run. Exposure for one order is
-limit_price × 100 × quantity. The agent is encouraged to size up
-(buy duplicate contracts) on high-conviction picks until it approaches
-this budget, but the cumulative spend across every order it places is
-hard-capped here — this is the master money ceiling for the day,
-replacing the old per-contract-only model whose worst case was 3 ×
-$1,000 = $3,000. With this budget the worst case is $1,000/day.
+MaxContractsPerOrder caps every order at a single contract. The agent
+buys at most one contract of each of the up-to-3 picks it believes in
+and never sizes up — conviction is expressed by which picks it takes,
+not by how many contracts of one. Enforced at the tool layer regardless
+of what the prompt says, in keeping with the dispatcher being the
+security boundary between the model and real money.
+*/
+const MaxContractsPerOrder = 1
+
+/*
+MaxDailyExposure is a defensive outer ceiling on the total dollar
+exposure the agent may commit across ALL orders in a single run.
+Exposure for one order is limit_price × 100 × quantity. With one
+contract per pick (MaxContractsPerOrder), at most MaxOrdersPerRun picks,
+and the per-share premium capped at MaxToolPremiumPerShare, the largest
+the day can ever reach is 3 × $10.00 × 100 × 1 = $3,000 — so this
+ceiling is set there and, by construction, never blocks buying one
+contract of each pick (the basket's combined price is not a reason to
+drop a pick). It exists purely as a backstop if the per-share or
+per-order caps were ever loosened.
 
 The exec.Service re-validates each single order's total cost against
 exec.MaxOrderCost so a buggy tool-layer change can't widen a single
-order past the day budget; the cumulative-across-orders accounting
-lives here in the dispatcher because only the dispatcher sees the
-whole run.
+order; the cumulative-across-orders accounting lives here in the
+dispatcher because only the dispatcher sees the whole run.
 */
-const MaxDailyExposure = 1000.00
+const MaxDailyExposure = 3000.00
 
 /*
 ChainReader is the read-side dependency the tool layer needs. The
@@ -175,7 +186,7 @@ func ToolDefinitions() []anthropic.ToolUnionParam {
 		}},
 		{OfTool: &anthropic.ToolParam{
 			Name:        "get_account_funds",
-			Description: anthropic.String("Returns the available USD cash in the Schwab trading account. Informational: your real constraint today is the $1000 daily exposure budget enforced by place_options_order, not account cash, but you can check funds if you want to confirm settlement headroom before sizing up."),
+			Description: anthropic.String("Returns the available USD cash in the Schwab trading account. Informational: you buy exactly one contract per pick, so account cash is rarely the constraint, but you can check funds if you want to confirm settlement headroom."),
 			InputSchema: anthropic.ToolInputSchemaParam{
 				Properties: map[string]any{},
 				Required:   []string{},
@@ -183,10 +194,10 @@ func ToolDefinitions() []anthropic.ToolUnionParam {
 		}},
 		{OfTool: &anthropic.ToolParam{
 			Name: "place_options_order",
-			Description: anthropic.String("Submit a BUY_TO_OPEN LIMIT order for a single contract spec, with a quantity you choose. Fire-and-forget — returns the Schwab order id immediately, fills land via the per-minute reconcile cron. " +
-				"Quantity lets you buy DUPLICATE contracts of the same strike/expiration on a high-conviction pick: order exposure = limit_price × 100 × quantity. " +
-				"Hard rules enforced by the tool: (1) symbol must match one of the 3 candidates, (2) one order per rank, (3) maximum 3 orders per run, (4) limit_price must be in (0, $10.00] per share, (5) quantity >= 1, (6) the day's cumulative exposure across all orders must stay <= $1000.00, (7) expiration must be YYYY-MM-DD and in the future. " +
-				"Tool returns a clear error string on refusal (including how much budget is left) — copy that error verbatim into skip_reason if it forces a skip."),
+			Description: anthropic.String("Submit a BUY_TO_OPEN LIMIT order for a single contract. Fire-and-forget — returns the Schwab order id immediately, fills land via the per-minute reconcile cron. " +
+				"You buy exactly one contract of each pick you take; there is no sizing up. " +
+				"Hard rules enforced by the tool: (1) symbol must match one of the 3 candidates, (2) one order per rank, (3) maximum 3 orders per run, (4) limit_price must be in (0, $10.00] per share, (5) quantity must be 1 (omit it; values above 1 are refused), (6) expiration must be YYYY-MM-DD and in the future. " +
+				"Tool returns a clear error string on refusal — copy that error verbatim into skip_reason if it forces a skip."),
 			InputSchema: anthropic.ToolInputSchemaParam{
 				Properties: map[string]any{
 					"rank":          map[string]any{"type": "integer", "description": "Candidate rank 1..3 — must match the candidate this order is for."},
@@ -195,7 +206,7 @@ func ToolDefinitions() []anthropic.ToolUnionParam {
 					"strike":        map[string]any{"type": "number", "description": "Strike price (must exist on the live chain)."},
 					"expiration":    map[string]any{"type": "string", "description": "Expiration date YYYY-MM-DD (must exist on the live chain)."},
 					"limit_price":   map[string]any{"type": "number", "description": "Per-share LIMIT price in USD. Must be > 0 and <= 10.00. Suggest ~1.10× the live ask."},
-					"quantity":      map[string]any{"type": "integer", "description": "Number of contracts to buy at this spec (>= 1). Use >1 to double/triple up on a high-conviction pick. Order exposure = limit_price × 100 × quantity and must fit in the $1000 daily budget remaining. Defaults to 1 if omitted."},
+					"quantity":      map[string]any{"type": "integer", "description": "Always 1. VibeTradez buys exactly one contract of each pick and never sizes up. Omit this (it defaults to 1); any value above 1 is refused."},
 				},
 				Required: []string{"rank", "symbol", "contract_type", "strike", "expiration", "limit_price"},
 			},
@@ -309,8 +320,9 @@ func (d *ToolDispatcher) dispatchPlaceOptionsOrder(ctx context.Context, input js
 	}
 	args.Symbol = strings.ToUpper(strings.TrimSpace(args.Symbol))
 	args.ContractType = strings.ToUpper(strings.TrimSpace(args.ContractType))
-	// Omitted quantity means a single contract — the model can leave it
-	// off when it isn't sizing up.
+	// Quantity is always a single contract. The model should omit it
+	// entirely; an omitted (zero) quantity resolves to 1, and any value
+	// above 1 is refused by validatePlaceArgsLocked.
 	if args.Quantity == 0 {
 		args.Quantity = 1
 	}
@@ -343,7 +355,7 @@ func (d *ToolDispatcher) dispatchPlaceOptionsOrder(ctx context.Context, input js
 	remaining := MaxDailyExposure - d.spentExposure
 	if orderExposure > remaining+1e-6 {
 		return jsonError(fmt.Sprintf(
-			"place_options_order: refused, order exposure $%.2f (%d × $%.2f × 100) exceeds remaining daily budget $%.2f (cap $%.2f, already committed $%.2f). Reduce quantity or limit_price.",
+			"place_options_order: refused, order exposure $%.2f (%d × $%.2f × 100) exceeds the remaining daily ceiling $%.2f (cap $%.2f, already committed $%.2f). Pick a cheaper strike or skip this pick.",
 			orderExposure, args.Quantity, args.LimitPrice, remaining, MaxDailyExposure, d.spentExposure))
 	}
 
@@ -460,6 +472,9 @@ func (d *ToolDispatcher) validatePlaceArgsLocked(args *placeOptionsOrderArgs) er
 	}
 	if args.Quantity < 1 {
 		return fmt.Errorf("place_options_order: quantity %d must be >= 1", args.Quantity)
+	}
+	if args.Quantity > MaxContractsPerOrder {
+		return fmt.Errorf("place_options_order: quantity %d exceeds the cap of %d contract per pick — VibeTradez buys exactly one contract of each pick and does not size up", args.Quantity, MaxContractsPerOrder)
 	}
 	if _, already := d.placedByRank[args.Rank]; already {
 		return fmt.Errorf("place_options_order: already placed an order for rank %d this run", args.Rank)

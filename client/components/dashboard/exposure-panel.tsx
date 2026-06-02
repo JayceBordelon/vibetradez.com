@@ -16,11 +16,12 @@ export function ExposurePanel({ trades, hasSummaries, executions }: ExposurePane
 
   /*
   Capital deployed multiplies the entry premium by the executed
-  contract count. The at-open agent sizes up on conviction — it can
-  buy duplicate contracts (quantity > 1) of a pick within the $1,000
-  daily exposure budget — so quantity is read off the execution row
-  per pick rather than assumed to be 1. When no execution exists yet
-  (pre-open / hypothetical), the pick is shown at qty 1.
+  contract count. The at-open agent buys one contract of each pick it
+  still believes in and never sizes up, so new rows carry quantity 1.
+  Quantity is still read off the execution row per pick (rather than
+  hardcoded to 1) so days predating the one-contract-per-pick policy,
+  whose rows can carry more, still total correctly. When no execution
+  exists yet (pre-open / hypothetical), the pick is shown at qty 1.
   */
   const totalExposure = trades.reduce((sum, dt) => {
     const exec = findExecutionForTrade(executions, dt.trade);
