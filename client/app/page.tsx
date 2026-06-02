@@ -334,7 +334,7 @@ const pipeline = [
   {
     time: "9:30:00 AM ET",
     title: "Buys the contracts",
-    detail: "Reads the live chain and fires real orders, sizing up on conviction against a $1,000 daily budget.",
+    detail: "Reads the live chain and fires real orders, buying one contract of each pick whose setup still holds.",
     Icon: Zap,
   },
   {

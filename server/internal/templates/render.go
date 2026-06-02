@@ -73,8 +73,10 @@ type SummaryTrade struct {
 	ClosingPrice float64
 	// PriceChange / PctChange are per-contract (per-share × 100 is the
 	// dollar move on one contract). Quantity is the number of contracts
-	// actually bought (≥ 1; the agent can size up with duplicates). PnL
-	// is the realized dollar P&L INCLUDING quantity: PriceChange × 100 ×
+	// actually bought: 1 under the one-contract-per-pick policy, though
+	// rows predating that policy can carry more, so totals always honor
+	// the stored value rather than assuming 1. PnL is the realized dollar
+	// P&L INCLUDING quantity: PriceChange × 100 ×
 	// Quantity. Templates render PnL for dollar figures and PctChange for
 	// the per-contract percentage.
 	PriceChange    float64
