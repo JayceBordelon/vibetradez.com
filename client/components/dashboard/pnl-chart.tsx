@@ -44,7 +44,21 @@ export function PnlChart({ trades, executions }: PnlChartProps) {
     <div>
       <ChartContainer config={chartConfig} className="w-full" style={{ height: chartHeight }}>
         <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
-          <XAxis type="number" tickFormatter={(v: number) => fmtPnlInt(v)} fontSize={11} />
+          {/*
+            Force the number axis to always include 0. Bars draw from a
+            baseline of 0, but Recharts' default auto-domain is
+            [dataMin, dataMax], which drops 0 when every bar shares a
+            sign (e.g. an all-losses day). With 0 off-axis the
+            least-extreme bar collapses to zero width and appears to
+            vanish. Anchoring the domain to 0 on the data side keeps
+            every bar measured from the same baseline.
+          */}
+          <XAxis
+            type="number"
+            domain={[(dataMin: number) => Math.min(0, dataMin), (dataMax: number) => Math.max(0, dataMax)]}
+            tickFormatter={(v: number) => fmtPnlInt(v)}
+            fontSize={11}
+          />
           <YAxis type="category" dataKey="name" width={120} fontSize={11} tickLine={false} />
           <ChartTooltip content={<ChartTooltipContent formatter={(value) => fmtPnlInt(Number(value))} hideIndicator />} />
           {/*
