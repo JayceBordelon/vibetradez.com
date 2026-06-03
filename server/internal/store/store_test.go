@@ -1,12 +1,28 @@
 package store
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
+	"reflect"
 	"testing"
 
 	"vibetradez.com/internal/trades"
 )
+
+// jsonEqual reports whether two JSON byte slices are semantically equal,
+// ignoring key order and whitespace (JSONB normalizes both on storage).
+func jsonEqual(t *testing.T, a, b []byte) bool {
+	t.Helper()
+	var av, bv any
+	if err := json.Unmarshal(a, &av); err != nil {
+		t.Fatalf("jsonEqual: bad JSON %s: %v", a, err)
+	}
+	if err := json.Unmarshal(b, &bv); err != nil {
+		t.Fatalf("jsonEqual: bad JSON %s: %v", b, err)
+	}
+	return reflect.DeepEqual(av, bv)
+}
 
 /*
 testDatabaseURL is the connection string used by every test in this
@@ -37,6 +53,60 @@ func setupTestDB(t *testing.T) *Store {
 	_, _ = s.db.Exec("DELETE FROM summaries")
 	_, _ = s.db.Exec("DELETE FROM sent_rollouts")
 	return s
+}
+
+func TestTranscriptRoundTripAndUpsert(t *testing.T) {
+	s := setupTestDB(t)
+	_, _ = s.db.Exec("DELETE FROM transcripts")
+
+	// Missing row → (nil, nil), not an error.
+	tv, err := s.GetTranscript("2026-06-03", "selection")
+	if err != nil {
+		t.Fatalf("GetTranscript(missing) error: %v", err)
+	}
+	if tv != nil {
+		t.Fatalf("GetTranscript(missing) = %+v, want nil", tv)
+	}
+
+	events := []byte(`[{"round":0,"type":"text","text":"hello"}]`)
+	if err := s.SaveTranscript("2026-06-03", "selection", "claude-opus-4-8", events); err != nil {
+		t.Fatalf("SaveTranscript failed: %v", err)
+	}
+
+	tv, err = s.GetTranscript("2026-06-03", "selection")
+	if err != nil {
+		t.Fatalf("GetTranscript failed: %v", err)
+	}
+	if tv == nil {
+		t.Fatal("GetTranscript returned nil after save")
+	}
+	if tv.Model != "claude-opus-4-8" || tv.Kind != "selection" || tv.Date != "2026-06-03" {
+		t.Fatalf("unexpected transcript metadata: %+v", tv)
+	}
+	// JSONB normalizes key order + whitespace on storage, so compare the
+	// parsed content, not the raw bytes.
+	if !jsonEqual(t, tv.Events, events) {
+		t.Fatalf("events round-trip mismatch: got %s want %s", tv.Events, events)
+	}
+
+	// Upsert on (date, kind) overwrites.
+	newEvents := []byte(`[{"round":0,"type":"text","text":"updated"}]`)
+	if err := s.SaveTranscript("2026-06-03", "selection", "claude-sonnet-4-6", newEvents); err != nil {
+		t.Fatalf("SaveTranscript (upsert) failed: %v", err)
+	}
+	tv, _ = s.GetTranscript("2026-06-03", "selection")
+	if tv.Model != "claude-sonnet-4-6" || !jsonEqual(t, tv.Events, newEvents) {
+		t.Fatalf("upsert did not overwrite: %+v", tv)
+	}
+
+	// Different kind is an independent row.
+	if err := s.SaveTranscript("2026-06-03", "execution", "claude-opus-4-8", events); err != nil {
+		t.Fatalf("SaveTranscript(execution) failed: %v", err)
+	}
+	exec, _ := s.GetTranscript("2026-06-03", "execution")
+	if exec == nil || exec.Kind != "execution" {
+		t.Fatalf("execution transcript not stored independently: %+v", exec)
+	}
 }
 
 func TestSubscriberLifecycle(t *testing.T) {

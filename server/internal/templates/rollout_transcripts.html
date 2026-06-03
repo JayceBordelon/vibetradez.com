@@ -16,10 +16,11 @@
       .text-secondary { color: #e2e8f0 !important; }
       .label-muted { color: #cbd5e1 !important; }
       .panel-bg { background-color: #0b1220 !important; border-color: #334155 !important; }
-      .green-panel-bg { background-color: #052e1c !important; border-color: #16a34a !important; }
-      .green-text { color: #4ade80 !important; }
-      .chip-old { background-color: #0b1220 !important; border-color: #334155 !important; color: #94a3b8 !important; }
-      .chip-new { background-color: #052e1c !important; border-color: #16a34a !important; }
+      .accent-panel-bg { background-color: #1e1b4b !important; border-color: #6366f1 !important; }
+      .accent-text { color: #c7d2fe !important; }
+      .transcript-bg { background-color: #0b1220 !important; border-color: #334155 !important; }
+      .transcript-muted { color: #94a3b8 !important; }
+      .transcript-text { color: #e2e8f0 !important; }
     }
   </style>
 </head>
@@ -43,7 +44,7 @@
                     <span style="font-size:24px;font-weight:800;color:#4f46e5;letter-spacing:-0.5px;">Vibe</span><span style="font-size:24px;font-weight:800;color:#7c3aed;letter-spacing:-0.5px;">Tradez</span>
                   </td>
                   <td align="right">
-                    <span style="color:#a5b4fc;font-size:12px;font-weight:700;background:rgba(165,180,252,0.18);padding:5px 11px;border-radius:6px;letter-spacing:0.4px;">Model upgrade</span>
+                    <span style="color:#a5b4fc;font-size:12px;font-weight:700;background:rgba(165,180,252,0.18);padding:5px 11px;border-radius:6px;letter-spacing:0.4px;">New feature</span>
                   </td>
                 </tr>
               </table>
@@ -54,55 +55,51 @@
           <tr>
             <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:32px 28px 8px 28px;">
               <h1 class="text-primary" style="margin:0 0 12px 0;font-size:28px;font-weight:800;color:#0f172a;letter-spacing:-0.5px;line-height:1.2;">
-                The model picking your trades got smarter. <span style="background:linear-gradient(90deg,#4f46e5,#7c3aed);-webkit-background-clip:text;background-clip:text;color:transparent;">Say hi to Claude Opus 4.8.</span>
+                You used to see what Claudia picked. <span style="background:linear-gradient(90deg,#4f46e5,#7c3aed);-webkit-background-clip:text;background-clip:text;color:transparent;">Now you can read why.</span>
               </h1>
             </td>
           </tr>
 
-          <!-- Version chips -->
+          <!-- Body -->
           <tr>
-            <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:8px 28px 4px 28px;" align="center">
-              <table role="presentation" cellspacing="0" cellpadding="0">
+            <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:20px 28px 8px 28px;">
+              <p class="text-secondary" style="margin:0 0 14px 0;font-size:15px;color:#475569;line-height:1.7;">
+                Every weekday a Claude model makes two calls for you. At 9:25 ET it reads the overnight news and the morning signals and ranks three tickers. At 9:30 ET it reads the live option chain and decides which contracts to actually buy. Until now the only thing you saw was the result.
+              </p>
+              <p class="text-secondary" style="margin:0;font-size:15px;color:#475569;line-height:1.7;">
+                Starting today you can read the whole thought process. Every quote it pulled, every chain it walked, every order it placed, and the reasoning it wrote along the way is captured and published on the dashboard for each trading day.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Transcript preview snippet -->
+          <tr>
+            <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:16px 28px 4px 28px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="transcript-bg panel-bg" bgcolor="#f8fafc" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
                 <tr>
-                  <td class="chip-old" style="padding:8px 16px;border:1px solid #e2e8f0;border-radius:8px;background-color:#f8fafc;font-size:13px;font-weight:700;color:#94a3b8;">
-                    Opus 4.7
-                  </td>
-                  <td style="padding:0 12px;font-size:13px;font-weight:800;color:#64748b;letter-spacing:0.4px;text-transform:uppercase;">
-                    upgraded to
-                  </td>
-                  <td class="chip-new" style="padding:8px 16px;border:1px solid #86efac;border-radius:8px;background-color:#f0fdf4;font-size:13px;font-weight:800;color:#166534;">
-                    Opus 4.8
+                  <td style="padding:16px 18px;font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;">
+                    <p class="transcript-muted" style="margin:0 0 6px 0;font-size:11px;color:#94a3b8;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;">9:30 ET execution</p>
+                    <p class="transcript-text" style="margin:0 0 10px 0;font-size:13px;color:#334155;line-height:1.6;">"Rank 1 NVDA call. Opening print is holding the level from the 9:25 read, and the chain is liquid. Taking the strike in the intended band at a limit just over the ask so it fills into the open."</p>
+                    <p class="transcript-muted" style="margin:0;font-size:12px;color:#64748b;line-height:1.5;">called get_option_chain, get_account_funds, place_options_order</p>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
 
-          <!-- Body -->
+          <!-- "What's new" panel -->
           <tr>
-            <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:24px 28px 8px 28px;">
-              <p class="text-secondary" style="margin:0 0 14px 0;font-size:15px;color:#475569;line-height:1.7;">
-                Every weekday at 9:25 ET, a Claude model reads the overnight news plus the morning market signals and hands the at-open agent three ranked candidates. At 9:30 the same model reads the live option chain and decides which contracts to actually buy. As of today that model is Anthropic's newest and most capable release, Claude Opus 4.8, taking over from Opus 4.7.
-              </p>
-              <p class="text-secondary" style="margin:0;font-size:15px;color:#475569;line-height:1.7;">
-                Same flow, same safety caps, same three candidates a day. The brain doing the picking is just sharper. Opus 4.8 reasons better over long context and reads market signals with more nuance, which happens to be the exact part of the job that decides what lands in your morning email. The silly little model is now a slightly less silly little model.
-              </p>
-            </td>
-          </tr>
-
-          <!-- "What changed" panel -->
-          <tr>
-            <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:20px 28px 8px 28px;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="green-panel-bg panel-bg" bgcolor="#f0fdf4" style="background-color:#f0fdf4;border:1px solid #86efac;border-radius:10px;">
+            <td class="content-bg" bgcolor="#ffffff" style="background-color:#ffffff;padding:16px 28px 8px 28px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="accent-panel-bg panel-bg" bgcolor="#eef2ff" style="background-color:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;">
                 <tr>
                   <td style="padding:14px 18px;">
-                    <p class="text-secondary green-text" style="margin:0 0 8px 0;font-size:13px;color:#166534;line-height:1.55;font-weight:700;">
-                      What changed
+                    <p class="text-secondary accent-text" style="margin:0 0 8px 0;font-size:13px;color:#3730a3;line-height:1.55;font-weight:700;">
+                      What is new
                     </p>
-                    <ul class="text-secondary green-text" style="margin:0;padding-left:20px;font-size:13px;color:#166534;line-height:1.7;">
-                      <li>Both the pre-bell picker (9:25 ET) and the at-open agent (9:30 ET) now run on Claude Opus 4.8.</li>
-                      <li>Every hard cap is unchanged. Still three candidates a day, still a $10 per share limit on any contract the agent fires.</li>
-                      <li>Nothing for you to do. Your next morning email is already powered by the new model.</li>
+                    <ul class="text-secondary accent-text" style="margin:0;padding-left:20px;font-size:13px;color:#3730a3;line-height:1.7;">
+                      <li>Two transcripts per day: the 9:25 selection conversation and the 9:30 execution conversation.</li>
+                      <li>Reach them from the dashboard, from any trade page, and from each day in your history.</li>
+                      <li>Account balances are redacted. Everything else is the model in its own words.</li>
                     </ul>
                   </td>
                 </tr>
@@ -117,7 +114,7 @@
                 <tr>
                   <td bgcolor="#0f172a" style="border-radius:8px;background:#0f172a;">
                     <a href="https://vibetradez.com/dashboard" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:800;color:#ffffff;text-decoration:none;letter-spacing:-0.2px;">
-                      Open the live dashboard
+                      Read today's reasoning
                     </a>
                   </td>
                 </tr>

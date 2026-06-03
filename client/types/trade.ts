@@ -177,3 +177,39 @@ export interface ApiResponse {
   ok: boolean;
   message: string;
 }
+
+/*
+TranscriptEvent mirrors the Go transcript.Event. One entry in the
+ordered conversation stream captured during a daily run. `round` groups
+a turn's narration, tool calls, and their results. Exactly one shape is
+populated per type:
+  - "text" / "thinking" → `text`
+  - "tool_use"          → `tool_name` + `tool_input` (+ `tool_use_id`)
+  - "tool_result"       → `tool_name` + `tool_result` (+ `tool_use_id`)
+The execution agent's get_account_funds balance is redacted server-side
+before it ever reaches this payload.
+*/
+export interface TranscriptEvent {
+  round: number;
+  type: "text" | "thinking" | "tool_use" | "tool_result";
+  text?: string;
+  tool_name?: string;
+  tool_use_id?: string;
+  tool_input?: unknown;
+  tool_result?: string;
+}
+
+/*
+TranscriptResponse is GET /api/transcript?date=&kind=. `available` is
+false (with an empty events array) when no transcript was captured for
+that date+kind, so the UI renders an empty state instead of an error.
+kind is "selection" (9:25 picker) or "execution" (9:30 at-open agent).
+*/
+export interface TranscriptResponse {
+  date: string;
+  kind: "selection" | "execution";
+  model: string;
+  available: boolean;
+  created_at?: string;
+  events: TranscriptEvent[];
+}

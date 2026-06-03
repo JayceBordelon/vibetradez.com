@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { ReasoningLinks } from "@/components/transcript/reasoning-links";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { formatDayName, formatMonthDay } from "@/lib/date-utils";
@@ -182,6 +183,7 @@ function DayRow({ day, maxAbsPnl }: { day: DayMultiStat; maxAbsPnl: number }) {
       <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
         <div className="ml-7 mt-1 border-l border-border/50 pl-4 py-2">
           {basket.details.length > 0 ? <TradeList details={basket.details} date={day.date} /> : <div className="py-2 text-[11px] text-muted-foreground">No trade details available for this day.</div>}
+          <ReasoningLinks date={day.date} variant="inline" className="mt-3 border-t border-border/40 pt-3" />
         </div>
       </CollapsibleContent>
     </Collapsible>

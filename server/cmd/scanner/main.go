@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -28,6 +29,7 @@ import (
 	"vibetradez.com/internal/store"
 	"vibetradez.com/internal/templates"
 	"vibetradez.com/internal/trades"
+	"vibetradez.com/internal/transcript"
 	"vibetradez.com/internal/unsub"
 
 	"github.com/robfig/cron/v3"
@@ -736,6 +738,30 @@ func getRecipients(db *store.Store) []string {
 	return emails
 }
 
+/*
+saveTranscript persists a captured model conversation for the
+dashboard's /transcript/<date>/<kind> view. Best-effort: a nil
+transcript (capture disabled / no run) and any marshal or DB error are
+logged and swallowed so a transcript write can never break the picks,
+the morning email, or the at-open basket. kind is "selection" or
+"execution".
+*/
+func saveTranscript(db *store.Store, date, kind string, tr *transcript.Transcript) {
+	if tr == nil {
+		return
+	}
+	eventsJSON, err := json.Marshal(tr.Events)
+	if err != nil {
+		log.Printf("transcript: marshal %s for %s failed: %v", kind, date, err)
+		return
+	}
+	if err := db.SaveTranscript(date, kind, tr.Model, eventsJSON); err != nil {
+		log.Printf("transcript: save %s for %s failed: %v", kind, date, err)
+		return
+	}
+	log.Printf("transcript: saved %s for %s (%d events)", kind, date, len(tr.Events))
+}
+
 func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Scraper, claudePicker *trades.ClaudePicker, schwabClient *schwab.Client, emailClient *email.Client, modelLabel string, executor *exec.Service) {
 	if claudePicker == nil {
 		log.Println("Skipping trade analysis: Claude picker not configured (local stub or missing key)")
@@ -763,7 +789,7 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 	log.Printf("Found %d trending tickers", len(trendingData))
 
 	log.Printf("Analyzing trades with %s...", modelLabel)
-	topTrades, err := claudePicker.GetTopTrades(ctx, trendingData)
+	topTrades, selectionTranscript, err := claudePicker.GetTopTrades(ctx, trendingData)
 	if err != nil {
 		log.Printf("Trade picker failed: %v", err)
 		sendErrorNotification(cfg, db, emailClient, fmt.Sprintf("Trade picker failed: %v", err))
@@ -807,6 +833,11 @@ func runTradeAnalysis(cfg *config.Config, db *store.Store, scraper *sentiment.Sc
 		return
 	}
 	log.Printf("Saved %d trades to database for %s", len(topTrades), date)
+
+	// Persist the picker's reasoning transcript for the dashboard's
+	// /transcript/<date>/selection view. Non-fatal: a transcript write
+	// failure must never break the picks or the morning email.
+	saveTranscript(db, date, "selection", selectionTranscript)
 
 	/*
 		The picker no longer fires the executor inline. Picks are saved
@@ -990,6 +1021,12 @@ func runExecuteAtOpen(cfg *config.Config, db *store.Store, emailClient *email.Cl
 	if result == nil {
 		return
 	}
+
+	// Persist the agent's reasoning transcript for the dashboard's
+	// /transcript/<date>/execution view. Saved even on a partial/error
+	// run so whatever the agent reasoned before failing is visible.
+	// Non-fatal: never let a transcript write affect the basket.
+	saveTranscript(db, date, "execution", result.Transcript)
 
 	buys, skips := 0, 0
 	for _, d := range result.Decisions {
