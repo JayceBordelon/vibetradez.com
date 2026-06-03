@@ -168,6 +168,88 @@ func TestUnsubscribeRejectsForgedToken(t *testing.T) {
 	}
 }
 
+func TestTranscriptEndpoint(t *testing.T) {
+	srv := setupTestServer(t)
+
+	events := json.RawMessage(`[{"round":0,"type":"text","text":"picking AAPL"},{"round":0,"type":"tool_use","tool_name":"get_option_chain","tool_input":{"symbol":"AAPL"}}]`)
+	if err := srv.db.SaveTranscript("2026-06-03", "selection", "claude-opus-4-8", events); err != nil {
+		t.Fatalf("seed SaveTranscript: %v", err)
+	}
+
+	// Present transcript → available=true with events + model.
+	req := apiRequest(http.MethodGet, "/api/transcript?date=2026-06-03&kind=selection", nil)
+	w := httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp transcriptResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !resp.Available || resp.Model != "claude-opus-4-8" || resp.Kind != "selection" {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+	if !jsonArrayLen(t, resp.Events, 2) {
+		t.Fatalf("expected 2 events, got %s", resp.Events)
+	}
+
+	// Missing transcript → available=false, empty events, still 200.
+	req = apiRequest(http.MethodGet, "/api/transcript?date=2026-06-03&kind=execution", nil)
+	w = httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for missing transcript, got %d", w.Code)
+	}
+	resp = transcriptResponse{}
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+	if resp.Available {
+		t.Fatalf("expected available=false for missing transcript, got %+v", resp)
+	}
+	if !jsonArrayLen(t, resp.Events, 0) {
+		t.Fatalf("expected empty events array, got %s", resp.Events)
+	}
+}
+
+func TestTranscriptEndpointValidation(t *testing.T) {
+	srv := setupTestServer(t)
+
+	cases := []struct {
+		name string
+		url  string
+	}{
+		{"invalid kind", "/api/transcript?date=2026-06-03&kind=bogus"},
+		{"missing kind", "/api/transcript?date=2026-06-03"},
+		{"missing date", "/api/transcript?kind=selection"},
+	}
+	for _, c := range cases {
+		req := apiRequest(http.MethodGet, c.url, nil)
+		w := httptest.NewRecorder()
+		srv.mux.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d", c.name, w.Code)
+		}
+	}
+
+	// External caller (no X-VT-Source) is rejected.
+	req := httptest.NewRequest(http.MethodGet, "/api/transcript?date=2026-06-03&kind=selection", nil)
+	w := httptest.NewRecorder()
+	srv.mux.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 without X-VT-Source, got %d", w.Code)
+	}
+}
+
+// jsonArrayLen reports whether raw is a JSON array of exactly n elements.
+func jsonArrayLen(t *testing.T, raw json.RawMessage, n int) bool {
+	t.Helper()
+	var arr []json.RawMessage
+	if err := json.Unmarshal(raw, &arr); err != nil {
+		t.Fatalf("events is not a JSON array: %v (%s)", err, raw)
+	}
+	return len(arr) == n
+}
+
 /*
 TestHealthEndpoint exercises the granular /health shape. In a test
 env no downstream services are configured (no Anthropic key, no

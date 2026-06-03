@@ -12,6 +12,8 @@ import { api } from "@/lib/api";
 import { computeTradePnl } from "@/lib/calculations";
 import type { DashboardResponse, DashboardTrade, Execution } from "@/types/trade";
 
+import { ReasoningLinks } from "@/components/transcript/reasoning-links";
+
 import { ExposurePanel } from "./exposure-panel";
 import { MarketClosedBanner } from "./market-closed-banner";
 import { MorningLayout } from "./morning-layout";
@@ -135,6 +137,7 @@ export function DashboardShell() {
     <div className="animate-in fade-in duration-300">
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-7">
         {marketClosed && rawData && trades.length > 0 && <MarketClosedBanner status={marketStatus} date={rawData.date} />}
+        {rawData && trades.length > 0 && <ReasoningLinks date={rawData.date} variant="callout" className="mb-8" />}
         {!rawData || !marketStatus ? (
           <DashboardSkeleton />
         ) : !trades.length ? (

@@ -34,6 +34,7 @@ Usage:
 from __future__ import annotations
 
 import datetime as dt
+import json
 import random
 from typing import List
 
@@ -141,7 +142,18 @@ CREATE TABLE IF NOT EXISTS sent_rollouts (
     recipient_count INTEGER NOT NULL
 );
 
-TRUNCATE trades, summaries, executions, subscribers, sent_rollouts RESTART IDENTITY;
+CREATE TABLE IF NOT EXISTS transcripts (
+    id SERIAL PRIMARY KEY,
+    date TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    model TEXT NOT NULL DEFAULT '',
+    events JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (date, kind)
+);
+CREATE INDEX IF NOT EXISTS idx_transcripts_date ON transcripts(date);
+
+TRUNCATE trades, summaries, executions, subscribers, sent_rollouts, transcripts RESTART IDENTITY;
 
 INSERT INTO subscribers (email, name, active) VALUES
     ('local@vibetradez.local', 'Local Test', true),
@@ -317,6 +329,228 @@ def simulate_close(estimated: float) -> float:
     return round(estimated * ret, 2)
 
 
+MODEL = "claude-opus-4-7"
+
+
+def intent_otm_pct(p: dict) -> float:
+    """Reconstruct the picker's signed-OTM intent (percent) from the
+    seeded strike vs stock price."""
+    stock = p["stock_price"]
+    if stock <= 0:
+        return 0.0
+    return round(abs(p["strike"] - stock) / stock * 100, 1)
+
+
+def quote_row(p: dict, *, post_open: bool) -> dict:
+    """A realistic Schwab-style equity quote for one pick's symbol.
+    post_open nudges the print slightly off the picker's pre-bell mark
+    so the at-open agent's re-quote looks like a fresh tick."""
+    last = round(p["stock_price"] * (RNG.uniform(0.998, 1.006) if post_open else 1.0), 2)
+    spread = round(max(0.01, last * 0.0002), 2)
+    open_px = round(p["stock_price"] * RNG.uniform(0.995, 1.005), 2)
+    change = round(last - open_px, 2)
+    return {
+        "last_price": last,
+        "bid": round(last - spread, 2),
+        "ask": round(last + spread, 2),
+        "open": open_px,
+        "net_change": change,
+        "net_change_pct": round((change / open_px) * 100, 2) if open_px else 0.0,
+        "volume": RNG.randint(1_200_000, 48_000_000),
+    }
+
+
+def chain_excerpt(p: dict) -> dict:
+    """A small live-chain excerpt around the chosen strike, with the
+    picked contract's row priced near the seeded entry premium. Mirrors
+    the shape schwab.OptionChain serializes (a few strikes with greeks
+    + liquidity)."""
+    step = 5.0 if p["stock_price"] >= 200 else (1.0 if p["stock_price"] >= 25 else 0.5)
+    rows = []
+    for k in (-step, 0.0, step):
+        strike = round(p["strike"] + k, 2)
+        # The chosen strike (k==0) is priced at ~the seeded entry; the
+        # neighbors drift from it so the agent has a real choice.
+        base = p["estimated_price"] * (1.0 if k == 0 else RNG.uniform(0.6, 1.5))
+        mark = round(base, 2)
+        spread = round(max(0.02, mark * 0.04), 2)
+        rows.append({
+            "strike": strike,
+            "bid": round(mark - spread, 2),
+            "ask": round(mark + spread, 2),
+            "mark": mark,
+            "delta": round(RNG.uniform(0.25, 0.6) * (1 if p["contract_type"] == "CALL" else -1), 3),
+            "theta": round(-RNG.uniform(0.02, 0.12), 3),
+            "open_interest": RNG.randint(400, 22_000),
+            "volume": RNG.randint(60, 9_000),
+        })
+    return {
+        "symbol": p["symbol"],
+        "contract_type": p["contract_type"],
+        "expiration": p["expiration"],
+        "contracts": rows,
+    }
+
+
+def ev(round_no: int, etype: str, **kw) -> dict:
+    """Build one transcript event dict matching transcript.Event JSON.
+    tool_result values are stored as STRINGS (that's what the Go loop
+    threads back), so dict results are json-encoded here."""
+    e = {"round": round_no, "type": etype}
+    if "text" in kw:
+        e["text"] = kw["text"]
+    if "tool_name" in kw:
+        e["tool_name"] = kw["tool_name"]
+    if "tool_use_id" in kw:
+        e["tool_use_id"] = kw["tool_use_id"]
+    if "tool_input" in kw:
+        e["tool_input"] = kw["tool_input"]
+    if "tool_result" in kw:
+        r = kw["tool_result"]
+        e["tool_result"] = r if isinstance(r, str) else json.dumps(r)
+    return e
+
+
+def build_selection_events(picks: List[dict], date_str: str) -> List[dict]:
+    """The 9:25 ET picker conversation: read the trending tape, re-quote
+    candidates against live equities, sanity-check liquidity, and commit
+    to three symbols + contract intent. No strikes are priced pre-bell
+    (options don't trade pre-market) — that's deliberate."""
+    syms = ", ".join(f"${p['symbol']}" for p in picks)
+    events: List[dict] = []
+    events.append(ev(0, "text", text=(
+        f"Pre-bell scan for {date_str}. I pulled the overnight trending tape across StockTwits, "
+        f"Yahoo, Finviz and EDGAR, and the names carrying the most flow into the open are "
+        f"{syms}. Listed options don't trade pre-market and Schwab's chain still shows "
+        f"yesterday's 4pm close, so at 9:25 I only commit to ticker, direction and contract "
+        f"intent — the actual strike gets chosen against the live chain at 9:30. Let me re-quote "
+        f"the underlyings first.")))
+    quote_payload = {p["symbol"]: quote_row(p, post_open=False) for p in picks}
+    events.append(ev(0, "tool_use", tool_name="get_stock_quotes", tool_use_id="toolu_sel_quotes",
+                     tool_input={"symbols": ",".join(p["symbol"] for p in picks)}))
+    events.append(ev(0, "tool_result", tool_name="get_stock_quotes", tool_use_id="toolu_sel_quotes",
+                     tool_result=quote_payload))
+
+    top = picks[0]
+    events.append(ev(1, "text", text=(
+        f"Quotes line up with the tape. ${top['symbol']} is my highest-conviction name — "
+        f"{top['thesis'][:140].rstrip('. ')}. Before I lock it in I want to confirm the weekly "
+        f"chain is liquid enough to actually fill one contract at the open, so I'll glance at the "
+        f"{top['symbol']} chain for open interest and spreads (not for pricing — that's stale "
+        f"pre-bell).")))
+    events.append(ev(1, "tool_use", tool_name="get_option_chain", tool_use_id="toolu_sel_chain",
+                     tool_input={
+                         "symbol": top["symbol"],
+                         "contract_type": top["contract_type"],
+                         "from_date": date_str,
+                         "to_date": top["expiration"],
+                     }))
+    events.append(ev(1, "tool_result", tool_name="get_option_chain", tool_use_id="toolu_sel_chain",
+                     tool_result=chain_excerpt(top)))
+
+    lines = []
+    for p in picks:
+        lines.append(
+            f"#{p['rank']} ${p['symbol']} {p['contract_type']} — ~{intent_otm_pct(p)}% OTM, "
+            f">={max(1, p['dte'] - 1)} DTE, conviction {p['score']}/10")
+    events.append(ev(2, "text", text=(
+        "Liquidity checks out — tight enough spreads and healthy open interest on the front weeklies. "
+        "Locking in the three-name basket:\n\n" + "\n".join(lines) + "\n\n"
+        "Each is one contract, conviction expressed by which names I take rather than by sizing up. "
+        "Emitting the ranked JSON now; the at-open agent will price the contracts at 9:30.")))
+    return events
+
+
+def build_execution_events(picks: List[dict], fills: "dict[int, float]", date_str: str) -> List[dict]:
+    """The 9:30:00 ET at-open agent: chain is live, re-quote, walk each
+    candidate's chain, check funds once (balance redacted), and fire one
+    contract per name. Mirrors the real execagent tool surface."""
+    events: List[dict] = []
+    head = ", ".join(f"${p['symbol']} {p['contract_type']}" for p in picks)
+    events.append(ev(0, "text", text=(
+        f"9:30:00 ET — the bell rang and the chain is live. Three candidates from the 9:25 picker: "
+        f"{head}. I'll re-quote the underlyings on the opening prints, then walk each live chain, "
+        f"snap a strike near the intended OTM band, and fire exactly one contract per name whose "
+        f"setup still holds.")))
+    events.append(ev(0, "tool_use", tool_name="get_stock_quotes", tool_use_id="toolu_exec_quotes",
+                     tool_input={"symbols": ",".join(p["symbol"] for p in picks)}))
+    events.append(ev(0, "tool_result", tool_name="get_stock_quotes", tool_use_id="toolu_exec_quotes",
+                     tool_result={p["symbol"]: quote_row(p, post_open=True) for p in picks}))
+
+    rnd = 1
+    for idx, p in enumerate(picks):
+        r = p["rank"]
+        fill = float(fills.get(r) or round(p["estimated_price"] * 1.01, 2))
+        limit = round(min(10.0, fill * 1.10), 2)
+        ask = round(fill * 1.03, 2)
+        events.append(ev(rnd, "text", text=(
+            f"Rank {r}: ${p['symbol']} {p['contract_type']}. Opening print is around "
+            f"${p['stock_price']:.2f} and the intent was ~{intent_otm_pct(p)}% OTM at >="
+            f"{max(1, p['dte'] - 1)} DTE. Pulling the live {p['symbol']} chain to find the strike.")))
+        events.append(ev(rnd, "tool_use", tool_name="get_option_chain",
+                         tool_use_id=f"toolu_exec_chain_{r}",
+                         tool_input={
+                             "symbol": p["symbol"],
+                             "contract_type": p["contract_type"],
+                             "from_date": date_str,
+                             "to_date": p["expiration"],
+                         }))
+        events.append(ev(rnd, "tool_result", tool_name="get_option_chain",
+                         tool_use_id=f"toolu_exec_chain_{r}", tool_result=chain_excerpt(p)))
+        rnd += 1
+
+        # Check funds once, on the first pick. The balance is redacted at
+        # capture time — this is exactly what the stored transcript shows.
+        if idx == 0:
+            events.append(ev(rnd, "tool_use", tool_name="get_account_funds",
+                             tool_use_id="toolu_exec_funds", tool_input={}))
+            events.append(ev(rnd, "tool_result", tool_name="get_account_funds",
+                             tool_use_id="toolu_exec_funds",
+                             tool_result={"available_usd": "[redacted]", "currency": "USD"}))
+            events.append(ev(rnd, "text", text=(
+                "Settlement headroom is fine (balance redacted in the public transcript), and one "
+                "contract is never the binding constraint anyway. Proceeding.")))
+            rnd += 1
+
+        events.append(ev(rnd, "text", text=(
+            f"The ${p['strike']:.2f} {p['expiration']} {p['contract_type'].lower()} is sitting right in "
+            f"the OTM band with a ~${ask:.2f} ask and healthy open interest. Taking one contract at a "
+            f"${limit:.2f} limit (~1.1x the ask) so it fills into the opening liquidity.")))
+        events.append(ev(rnd, "tool_use", tool_name="place_options_order",
+                         tool_use_id=f"toolu_exec_order_{r}",
+                         tool_input={
+                             "rank": r,
+                             "symbol": p["symbol"],
+                             "contract_type": p["contract_type"],
+                             "strike": p["strike"],
+                             "expiration": p["expiration"],
+                             "limit_price": limit,
+                         }))
+        events.append(ev(rnd, "tool_result", tool_name="place_options_order",
+                         tool_use_id=f"toolu_exec_order_{r}",
+                         tool_result={
+                             "ok": True,
+                             "order_id": f"100{RNG.randint(2_000_000, 9_999_999)}",
+                             "rank": r,
+                             "symbol": p["symbol"],
+                             "strike": p["strike"],
+                             "expiration": p["expiration"],
+                             "limit_price": limit,
+                             "quantity": 1,
+                             "contract_type": p["contract_type"],
+                             "orders_placed": idx + 1,
+                             "orders_left": len(picks) - (idx + 1),
+                         }))
+        rnd += 1
+
+    names = ", ".join(f"${p['symbol']}" for p in picks)
+    events.append(ev(rnd, "text", text=(
+        "Basket is in. Fired one contract on each of " + names + " — every setup held into the open, "
+        "so no skips today. Orders are working as LIMITs; the reconcile cron will flip fills and the "
+        "9:35 sweep cancels anything still resting. Done.")))
+    return events
+
+
 def main() -> None:
     today = dt.date(2026, 5, 15)
     start = today - dt.timedelta(days=365)
@@ -329,6 +563,12 @@ def main() -> None:
     trade_inserts: List[str] = []
     summary_inserts: List[str] = []
     execution_inserts: List[str] = []
+
+    # Today's picks + the actual open-fill prices, captured so the
+    # seeded selection/execution transcripts reference the exact same
+    # contracts the dashboard shows holding.
+    today_picks: List[dict] = []
+    today_fills: "dict[int, float]" = {}
 
     per_contract_cap_usd = 10.0
     picks_per_day = 3
@@ -351,6 +591,9 @@ def main() -> None:
                 p = gen_pick(rank=rank, day=day)
             picks.append(p)
             seen_symbols.add(p["symbol"])
+
+        if is_today:
+            today_picks = picks
 
         # Auto-executor: every pick whose premium fits the per-contract cap
         # fires. No greedy fill, no basket budget.
@@ -417,6 +660,8 @@ def main() -> None:
             tid = day_trade_ids[rank - 1]
             mode = "live" if is_today else RNG.choices(["live", "paper"], weights=[0.6, 0.4])[0]
             entry_fill = round(p["estimated_price"] * RNG.uniform(0.97, 1.03), 2)
+            if is_today:
+                today_fills[rank] = entry_fill
 
             # OPEN side
             execution_id_counter += 1
@@ -460,6 +705,25 @@ def main() -> None:
     if execution_inserts:
         print("INSERT INTO executions (trade_id, mode, side, schwab_order_id, status, fill_price, requested_quantity, filled_quantity, submitted_at, filled_at, error_message, created_at) VALUES")
         print(",\n".join(execution_inserts) + ";\n")
+
+    # ─── Transcripts ─────────────────────────────────────────────────────
+    # Realistic 9:25 selection + 9:30 execution conversations for today,
+    # referencing the exact three picks the dashboard shows holding. The
+    # execution transcript includes a get_account_funds call whose balance
+    # is already redacted, exactly as the production capture path stores it.
+    if today_picks:
+        today_str = today.isoformat()
+        transcript_rows = []
+        for kind, events in (
+            ("selection", build_selection_events(today_picks, today_str)),
+            ("execution", build_execution_events(today_picks, today_fills, today_str)),
+        ):
+            events_json = sql_escape(json.dumps(events))
+            transcript_rows.append(
+                f"('{today_str}', '{kind}', '{MODEL}', '{events_json}'::jsonb)"
+            )
+        print("INSERT INTO transcripts (date, kind, model, events) VALUES")
+        print(",\n".join(transcript_rows) + ";\n")
 
     # Re-sync the SERIAL sequences past the explicit IDs we inserted on
     # trades so future inserts don't collide. Other tables didn't get

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_open_failed.html execute_basket_summary.html execute_close_summary.html rollout_opus_4_8.html schwab_reauth.html
+//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_open_failed.html execute_basket_summary.html execute_close_summary.html rollout_transcripts.html schwab_reauth.html
 var templateFS embed.FS
 
 type Trade struct {
@@ -401,15 +401,15 @@ func RenderCloseSummary(d CloseSummaryData) (string, error) {
 }
 
 /*
-RenderRolloutOpus48 renders the v10 rollout email announcing that the
-trade picker and at-open agent have both moved to Claude Opus 4.8,
-Anthropic's newest production model, from Opus 4.7. The flow, the
-candidate count, and every hard cap are unchanged. Static content,
-no parameters beyond Subject.
+RenderRolloutTranscripts renders the v11 rollout email announcing the
+daily model-reasoning transcripts: subscribers can now read the full
+9:25 selection conversation and 9:30 execution conversation (narration,
+tool calls, and decisions) on the dashboard for each trading day.
+Static content, no parameters beyond Subject.
 */
-func RenderRolloutOpus48() (string, error) {
-	return renderOne("rollout_opus_4_8.html", map[string]string{
-		"Subject": "Your trade picker just upgraded to Claude Opus 4.8",
+func RenderRolloutTranscripts() (string, error) {
+	return renderOne("rollout_transcripts.html", map[string]string{
+		"Subject": "You can now read the reasoning behind every trade",
 	})
 }
 

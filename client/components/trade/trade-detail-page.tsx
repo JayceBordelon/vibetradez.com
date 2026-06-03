@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { findExecutionForTrade } from "@/components/execution-badge";
+import { ReasoningLinks } from "@/components/transcript/reasoning-links";
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
 import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
@@ -269,6 +270,8 @@ function TradeDetailBody({ dt, resolvedDate, execution }: { dt: DashboardTrade; 
             )}
           </div>
           <p className="text-[15px] leading-relaxed text-foreground/90">{trade.rationale}</p>
+          {/* Bridge from the one-line rationale to the full captured run for this day. */}
+          <ReasoningLinks date={resolvedDate} variant="inline" className="mt-4 border-t border-claude-border/30 pt-4" />
         </div>
       )}
 

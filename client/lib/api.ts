@@ -1,4 +1,4 @@
-import type { ApiResponse, DashboardResponse, MarketStatus, WeekResponse } from "@/types/trade";
+import type { ApiResponse, DashboardResponse, MarketStatus, TranscriptResponse, WeekResponse } from "@/types/trade";
 
 export interface SessionUser {
   id: number;
@@ -104,6 +104,15 @@ export const api = {
   getTrades: (date?: string) => clientFetch<DashboardResponse>(date ? `/api/trades/today?date=${date}` : "/api/trades/today"),
 
   getWeekTrades: (start: string, end: string) => clientFetch<WeekResponse>(`/api/trades/week?start=${start}&end=${end}`),
+
+  /*
+  Daily model-reasoning transcript. kind is "selection" (the 9:25
+  picker conversation) or "execution" (the 9:30 at-open agent). Returns
+  available:false with empty events when nothing was captured for the
+  date.
+  */
+  getTranscript: (date: string, kind: "selection" | "execution") =>
+    clientFetch<TranscriptResponse>(`/api/transcript?date=${encodeURIComponent(date)}&kind=${kind}`),
 
   /*
   Live quotes are now an SSE stream at /api/quotes/stream, see

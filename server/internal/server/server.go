@@ -166,6 +166,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/me", requireInternal(s.auth.AttachUser(s.sessionCookie, s.handleMe)))
 	s.mux.HandleFunc("/api/trades/today", requireInternal(s.handleTradesToday))
 	s.mux.HandleFunc("/api/trades/week", requireInternal(s.handleTradesWeek))
+	s.mux.HandleFunc("/api/transcript", requireInternal(s.handleTranscript))
 	s.mux.HandleFunc("/api/market/status", requireInternal(s.handleMarketStatus))
 	/*
 		SSE stream — intentionally NOT gated by requireInternal. The
@@ -354,6 +355,72 @@ func (s *Server) handleTradesWeek(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Cache-Control", "public, max-age=30")
 	writeJSON(w, http.StatusOK, weekResponse{Start: start, End: end, Days: days})
+}
+
+/*
+transcriptResponse is the wire shape for GET /api/transcript. Available
+is false (with an empty Events array) when no transcript exists for the
+date+kind, so the client renders a clean "no transcript yet" state
+rather than treating a missing row as an error — same convention the
+trades endpoints use for empty days. Events is the raw stored JSONB
+event array (ordered), passed through verbatim.
+*/
+type transcriptResponse struct {
+	Date      string          `json:"date"`
+	Kind      string          `json:"kind"`
+	Model     string          `json:"model"`
+	Available bool            `json:"available"`
+	CreatedAt string          `json:"created_at,omitempty"`
+	Events    json.RawMessage `json:"events"`
+}
+
+/*
+handleTranscript serves the captured model conversation for a given
+trading day and kind. kind is "selection" (the 9:25 picker) or
+"execution" (the 9:30 at-open agent); both are required query params.
+The get_account_funds balance is already redacted at capture time, so
+this is safe to serve on the same public (internal-header-gated) surface
+as the dashboard trades.
+*/
+func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request) {
+	date := r.URL.Query().Get("date")
+	kind := r.URL.Query().Get("kind")
+
+	if kind != "selection" && kind != "execution" {
+		writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Message: "kind must be 'selection' or 'execution'"})
+		return
+	}
+	if date == "" {
+		writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Message: "date query param required (YYYY-MM-DD)"})
+		return
+	}
+
+	tv, err := s.db.GetTranscript(date, kind)
+	if err != nil {
+		log.Printf("handleTranscript: GetTranscript(%s, %s): %v", date, kind, err)
+		writeJSON(w, http.StatusInternalServerError, apiResponse{OK: false, Message: "failed to load transcript"})
+		return
+	}
+
+	if tv == nil {
+		writeJSON(w, http.StatusOK, transcriptResponse{
+			Date:      date,
+			Kind:      kind,
+			Available: false,
+			Events:    json.RawMessage("[]"),
+		})
+		return
+	}
+
+	w.Header().Set("Cache-Control", "public, max-age=30")
+	writeJSON(w, http.StatusOK, transcriptResponse{
+		Date:      tv.Date,
+		Kind:      tv.Kind,
+		Model:     tv.Model,
+		Available: true,
+		CreatedAt: tv.CreatedAt.UTC().Format(time.RFC3339),
+		Events:    tv.Events,
+	})
 }
 
 func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request) {

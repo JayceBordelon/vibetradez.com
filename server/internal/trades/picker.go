@@ -16,6 +16,7 @@ import (
 
 	"vibetradez.com/internal/schwab"
 	"vibetradez.com/internal/sentiment"
+	"vibetradez.com/internal/transcript"
 )
 
 /*
@@ -229,10 +230,18 @@ type claudeTradeOutput struct {
 	MinDTE       int     `json:"min_dte"`
 }
 
-func (p *ClaudePicker) GetTopTrades(ctx context.Context, trendingData []sentiment.TickerMention) ([]Trade, error) {
+/*
+GetTopTrades runs the 9:25 ticker-selection conversation and returns
+the picks plus the captured transcript (the model's narration + tool
+calls/results across the run). The transcript is non-nil even on a
+parse error so the caller can persist whatever reasoning was produced;
+callers that don't want it can ignore the second return value.
+*/
+func (p *ClaudePicker) GetTopTrades(ctx context.Context, trendingData []sentiment.TickerMention) ([]Trade, *transcript.Transcript, error) {
+	rec := transcript.New()
 	trendingJSON, err := json.Marshal(trendingData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal trending data: %w", err)
+		return nil, nil, fmt.Errorf("failed to marshal trending data: %w", err)
 	}
 
 	// Container runs in UTC. The morning cron firing at 09:30 ET is
@@ -246,14 +255,15 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, trendingData []sentimen
 
 	prompt := fmt.Sprintf(AnalysisPrompt, today, weekday, string(trendingJSON))
 
-	content, err := p.runConversation(ctx, prompt, maxOutputTokensPicks)
+	content, err := p.runConversation(ctx, prompt, maxOutputTokensPicks, rec)
+	tr := rec.Transcript()
 	if err != nil {
-		return nil, err
+		return nil, &tr, err
 	}
 
 	var raw []claudeTradeOutput
 	if err := parseJSONResponse(content, &raw, "Claude trades"); err != nil {
-		return nil, fmt.Errorf("failed to parse trades from claude response: %w", err)
+		return nil, &tr, fmt.Errorf("failed to parse trades from claude response: %w", err)
 	}
 
 	trades := make([]Trade, 0, len(raw))
@@ -285,7 +295,7 @@ func (p *ClaudePicker) GetTopTrades(ctx context.Context, trendingData []sentimen
 		}
 	}
 
-	return trades, nil
+	return trades, &tr, nil
 }
 
 func (p *ClaudePicker) GetEndOfDayAnalysis(ctx context.Context, morningTrades []Trade) ([]TradeSummary, error) {
@@ -302,7 +312,9 @@ func (p *ClaudePicker) GetEndOfDayAnalysis(ctx context.Context, morningTrades []
 
 	prompt := fmt.Sprintf(EndOfDayPrompt, today, weekday, string(tradesJSON))
 
-	content, err := p.runConversation(ctx, prompt, maxOutputTokensEOD)
+	// EOD analysis is not surfaced as a transcript (only selection +
+	// execution are), so capture is disabled with a nil recorder.
+	content, err := p.runConversation(ctx, prompt, maxOutputTokensEOD, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -426,8 +438,9 @@ func backoffDelay(attempt int) time.Duration {
 	return d - d/4 + jitter
 }
 
-func (p *ClaudePicker) runConversation(ctx context.Context, prompt string, maxTokens int64) (string, error) {
+func (p *ClaudePicker) runConversation(ctx context.Context, prompt string, maxTokens int64, rec *transcript.Recorder) (string, error) {
 	tools := p.buildTools()
+	rec.SetModel(p.model)
 
 	messages := []anthropic.MessageParam{
 		anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
@@ -436,7 +449,6 @@ func (p *ClaudePicker) runConversation(ctx context.Context, prompt string, maxTo
 	var containerID string
 
 	for round := 0; round < maxToolRounds; round++ {
-		_ = round
 		params := anthropic.MessageNewParams{
 			Model:     anthropic.Model(p.model),
 			MaxTokens: maxTokens,
@@ -466,9 +478,12 @@ func (p *ClaudePicker) runConversation(ctx context.Context, prompt string, maxTo
 			switch b := block.AsAny().(type) {
 			case anthropic.TextBlock:
 				finalText.WriteString(b.Text)
+				rec.AddText(round, b.Text)
 			case anthropic.ToolUseBlock:
+				rec.AddToolUse(round, b.Name, b.ID, b.Input)
 				out := p.executeTool(ctx, b.Name, b.Input)
 				log.Printf("Claude tool call: %s -> %d bytes", b.Name, len(out))
+				rec.AddToolResult(round, b.Name, b.ID, out)
 				toolResults = append(toolResults, anthropic.NewToolResultBlock(b.ID, out, false))
 			}
 		}

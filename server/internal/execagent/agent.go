@@ -15,6 +15,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
 
 	"vibetradez.com/internal/trades"
+	"vibetradez.com/internal/transcript"
 )
 
 /*
@@ -97,7 +98,8 @@ func (a *Agent) Run(ctx context.Context, candidates []Candidate) (*ExecagentResu
 		return nil, fmt.Errorf("build prompt: %w", err)
 	}
 
-	finalJSON, convErr := a.runConversation(ctx, prompt, dispatcher)
+	rec := transcript.New()
+	finalJSON, convErr := a.runConversation(ctx, prompt, dispatcher, rec)
 	// Even on conversation error, persist skips for every candidate
 	// that didn't get a buy — the user gets a fully-reconciled basket
 	// regardless of whether the model crashed mid-loop.
@@ -107,6 +109,8 @@ func (a *Agent) Run(ctx context.Context, candidates []Candidate) (*ExecagentResu
 	parseErr := parseFinalJSON(finalJSON, &parsed)
 
 	result := reconcile(candidates, placed, parsed, dispatcher)
+	tr := rec.Transcript()
+	result.Transcript = &tr
 	if convErr != nil {
 		return result, fmt.Errorf("agent conversation: %w", convErr)
 	}
@@ -125,15 +129,15 @@ Returns the final assistant text (expected to be the JSON object
 described in prompt.go) or an error. The text is empty if the model
 hit the round cap without producing a final response.
 */
-func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *ToolDispatcher) (string, error) {
+func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *ToolDispatcher, rec *transcript.Recorder) (string, error) {
 	tools := ToolDefinitions()
+	rec.SetModel(a.model)
 	messages := []anthropic.MessageParam{
 		anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
 	}
 	var containerID string
 
 	for round := 0; round < maxToolRounds; round++ {
-		_ = round
 		params := anthropic.MessageNewParams{
 			Model:     anthropic.Model(a.model),
 			MaxTokens: maxOutputTokens,
@@ -157,9 +161,12 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 			switch b := block.AsAny().(type) {
 			case anthropic.TextBlock:
 				finalText.WriteString(b.Text)
+				rec.AddText(round, b.Text)
 			case anthropic.ToolUseBlock:
+				rec.AddToolUse(round, b.Name, b.ID, b.Input)
 				out := dispatcher.Dispatch(ctx, b.Name, b.Input)
 				log.Printf("execagent: tool=%s -> %d bytes", b.Name, len(out))
+				rec.AddToolResult(round, b.Name, b.ID, out)
 				toolResults = append(toolResults, anthropic.NewToolResultBlock(b.ID, out, false))
 			}
 		}

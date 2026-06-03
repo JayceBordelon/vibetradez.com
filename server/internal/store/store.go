@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -303,6 +304,18 @@ func migrate(db *sql.DB) error {
 			sent_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			recipient_count  INTEGER NOT NULL
 		);
+
+		CREATE TABLE IF NOT EXISTS transcripts (
+			id          SERIAL PRIMARY KEY,
+			date        TEXT NOT NULL,
+			kind        TEXT NOT NULL,
+			model       TEXT NOT NULL DEFAULT '',
+			events      JSONB NOT NULL,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE (date, kind)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_transcripts_date ON transcripts(date);
 	`)
 	return err
 }
@@ -322,6 +335,7 @@ func (s *Store) RemoveAllForTest() {
 	_, _ = s.db.Exec("DELETE FROM subscribers")
 	_, _ = s.db.Exec("DELETE FROM trades")
 	_, _ = s.db.Exec("DELETE FROM summaries")
+	_, _ = s.db.Exec("DELETE FROM transcripts")
 }
 
 // --- Subscriber methods ---
@@ -902,4 +916,61 @@ func (s *Store) GetEODSummaries(date string) ([]trades.TradeSummary, error) {
 	}
 
 	return result, rows.Err()
+}
+
+// --- Transcript methods ---
+
+/*
+TranscriptView is one stored model conversation for a date + kind.
+Events is the raw JSONB array (ordered transcript events) handed back
+to the API layer verbatim — the store doesn't import the transcript
+package, it just persists and returns the bytes.
+*/
+type TranscriptView struct {
+	Date      string
+	Kind      string
+	Model     string
+	Events    json.RawMessage
+	CreatedAt time.Time
+}
+
+/*
+SaveTranscript upserts the captured conversation for a (date, kind).
+A re-run of a day's cron overwrites the prior transcript so the row
+always reflects the latest run. eventsJSON must be a JSON array (the
+ordered transcript events); model is the model id that produced it.
+*/
+func (s *Store) SaveTranscript(date, kind, model string, eventsJSON []byte) error {
+	_, err := s.db.Exec(`
+		INSERT INTO transcripts (date, kind, model, events, created_at)
+		VALUES ($1, $2, $3, $4, NOW())
+		ON CONFLICT (date, kind) DO UPDATE SET
+			model = EXCLUDED.model,
+			events = EXCLUDED.events,
+			created_at = NOW()
+	`, date, kind, model, eventsJSON)
+	if err != nil {
+		return fmt.Errorf("failed to save %s transcript for %s: %w", kind, date, err)
+	}
+	return nil
+}
+
+/*
+GetTranscript returns the stored transcript for a (date, kind), or
+(nil, nil) when no row exists so the caller can render an empty state
+instead of treating a missing transcript as an error.
+*/
+func (s *Store) GetTranscript(date, kind string) (*TranscriptView, error) {
+	var tv TranscriptView
+	err := s.db.QueryRow(`
+		SELECT date, kind, model, events, created_at
+		FROM transcripts WHERE date = $1 AND kind = $2
+	`, date, kind).Scan(&tv.Date, &tv.Kind, &tv.Model, &tv.Events, &tv.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to query %s transcript for %s: %w", kind, date, err)
+	}
+	return &tv, nil
 }

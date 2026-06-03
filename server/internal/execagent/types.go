@@ -21,7 +21,10 @@ Design constraints (this package is the only place these are enforced):
 */
 package execagent
 
-import "vibetradez.com/internal/trades"
+import (
+	"vibetradez.com/internal/trades"
+	"vibetradez.com/internal/transcript"
+)
 
 /*
 DecisionAction is the per-pick outcome the agent reconciles in its
@@ -85,4 +88,11 @@ picks up the persisted execution rows.
 type ExecagentResult struct {
 	Decisions []Decision
 	FinalNote string
+
+	// Transcript is the captured at-open conversation (the model's
+	// narration + tool calls/results). Non-nil even on a partial/error
+	// run so the caller can persist whatever reasoning was produced
+	// before the failure. The get_account_funds balance is redacted at
+	// capture time (see internal/transcript).
+	Transcript *transcript.Transcript
 }
