@@ -181,35 +181,6 @@ func (c *Client) getQuotes(symbols []string, useCache bool) (map[string]StockQuo
 }
 
 /*
-OptionMark returns the current mark price for a single option
-contract, or the bid-ask midpoint if mark is missing. Used by the
-auto-execution paper trader to synthesize a fill at the prevailing
-market price. Wraps GetOptionChain (which is cached 15s) and scans
-for the matching strike.
-*/
-func (c *Client) OptionMark(_ context.Context, symbol, expiration, contractType string, strike float64) (float64, error) {
-	chain, err := c.GetOptionChain(symbol, contractType, expiration, expiration, strike)
-	if err != nil {
-		return 0, err
-	}
-	contracts := chain.Calls
-	if contractType == "PUT" {
-		contracts = chain.Puts
-	}
-	for _, oc := range contracts {
-		if oc.StrikePrice == strike {
-			if oc.Mark > 0 {
-				return oc.Mark, nil
-			}
-			if oc.Bid > 0 && oc.Ask > 0 {
-				return (oc.Bid + oc.Ask) / 2, nil
-			}
-		}
-	}
-	return 0, fmt.Errorf("no quote found for %s %s %s %.2f", symbol, expiration, contractType, strike)
-}
-
-/*
 OptionAsk returns the live ask price for a single option contract. Used
 by the auto-execution morning open path to size the LIMIT price (Schwab
 rejects MARKET option orders pre-market). Wraps GetOptionChain (15s

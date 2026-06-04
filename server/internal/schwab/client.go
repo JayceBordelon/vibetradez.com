@@ -189,6 +189,9 @@ func (c *Client) RefreshTokenIssuedAt() (time.Time, bool) {
 
 // ValidToken returns a valid access token, refreshing if necessary.
 func (c *Client) ValidToken() (string, error) {
+	if c == nil {
+		return "", fmt.Errorf("schwab not configured: client is nil")
+	}
 	c.mu.RLock()
 	tok := c.accessToken
 	exp := c.expiresAt

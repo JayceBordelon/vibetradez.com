@@ -121,6 +121,71 @@ func (lt *LiveTrader) AvailableFunds(ctx context.Context, accountHash string) (f
 	return cb.AvailableFunds, nil
 }
 
+/*
+GetPositions fetches the account's open positions from Schwab's Trader
+API (GET /accounts/{hash}?fields=positions) and normalizes them to
+[]BrokerPosition. Net long quantity is longQuantity minus shortQuantity;
+the v2 portfolio manager is long-only so short legs should be absent, but
+the subtraction is defensive. Underlying keys to the equity ticker
+(instrument.underlyingSymbol for options, symbol for equity) so
+concentration accounting can group an equity and its options together.
+*/
+func (lt *LiveTrader) GetPositions(ctx context.Context, accountHash string) ([]BrokerPosition, error) {
+	url := fmt.Sprintf("%s/accounts/%s?fields=positions", traderBase, accountHash)
+	resp, err := lt.c.AuthenticatedDo("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("get positions: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("get positions HTTP %d: %s", resp.StatusCode, string(body))
+	}
+	var raw struct {
+		SecuritiesAccount struct {
+			Positions []struct {
+				ShortQuantity float64 `json:"shortQuantity"`
+				LongQuantity  float64 `json:"longQuantity"`
+				AveragePrice  float64 `json:"averagePrice"`
+				MarketValue   float64 `json:"marketValue"`
+				Instrument    struct {
+					AssetType        string `json:"assetType"`
+					Symbol           string `json:"symbol"`
+					PutCall          string `json:"putCall"`
+					UnderlyingSymbol string `json:"underlyingSymbol"`
+				} `json:"instrument"`
+			} `json:"positions"`
+		} `json:"securitiesAccount"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, fmt.Errorf("decode positions: %w", err)
+	}
+	out := make([]BrokerPosition, 0, len(raw.SecuritiesAccount.Positions))
+	for _, p := range raw.SecuritiesAccount.Positions {
+		underlying := p.Instrument.UnderlyingSymbol
+		if underlying == "" {
+			underlying = p.Instrument.Symbol
+		}
+		var ctype string
+		switch p.Instrument.PutCall {
+		case "CALL":
+			ctype = "CALL"
+		case "PUT":
+			ctype = "PUT"
+		}
+		out = append(out, BrokerPosition{
+			Symbol:       p.Instrument.Symbol,
+			AssetType:    p.Instrument.AssetType,
+			Underlying:   underlying,
+			Quantity:     p.LongQuantity - p.ShortQuantity,
+			MarketValue:  p.MarketValue,
+			AverageCost:  p.AveragePrice,
+			ContractType: ctype,
+		})
+	}
+	return out, nil
+}
+
 func (lt *LiveTrader) PlaceOrder(ctx context.Context, accountHash string, order Order) (string, error) {
 	body, err := json.Marshal(order)
 	if err != nil {

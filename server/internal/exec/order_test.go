@@ -1,10 +1,6 @@
 package exec
 
-import (
-	"testing"
-
-	"vibetradez.com/internal/trades"
-)
+import "testing"
 
 func TestOCCSymbol_KnownFixtures(t *testing.T) {
 	cases := []struct {
@@ -71,97 +67,6 @@ func TestOCCSymbol_Errors(t *testing.T) {
 				t.Fatal("expected error")
 			}
 		})
-	}
-}
-
-func TestBuildOpenOrderForTrade_LimitShape(t *testing.T) {
-	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: trades.PtrFloat(150), Expiration: trades.PtrString("2024-01-19")}
-	o, err := BuildOpenOrderForTrade(tr, "AAPL  240119C00150000", 1.50, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if o.OrderType != "LIMIT" || o.Session != "NORMAL" || o.Duration != "DAY" || o.OrderStrategyType != "SINGLE" {
-		t.Errorf("envelope wrong: %+v", o)
-	}
-	if o.Price != 1.50 {
-		t.Errorf("price wrong: want 1.50 got %.2f", o.Price)
-	}
-	if len(o.OrderLegCollection) != 1 {
-		t.Fatalf("want 1 leg got %d", len(o.OrderLegCollection))
-	}
-	leg := o.OrderLegCollection[0]
-	if leg.Instruction != "BUY_TO_OPEN" {
-		t.Errorf("instruction must be BUY_TO_OPEN, got %q", leg.Instruction)
-	}
-	if leg.Quantity != 1 {
-		t.Errorf("quantity must be 1, got %d", leg.Quantity)
-	}
-	if leg.Instrument.AssetType != "OPTION" {
-		t.Errorf("asset type must be OPTION, got %q", leg.Instrument.AssetType)
-	}
-}
-
-func TestBuildOpenOrderForTrade_PassesQuantityThrough(t *testing.T) {
-	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: trades.PtrFloat(150), Expiration: trades.PtrString("2024-01-19")}
-	o, err := BuildOpenOrderForTrade(tr, "AAPL  240119C00150000", 1.50, 7)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := o.OrderLegCollection[0].Quantity; got != 7 {
-		t.Errorf("quantity must be 7, got %d", got)
-	}
-}
-
-func TestBuildOpenOrderForTrade_RejectsNilTrade(t *testing.T) {
-	if _, err := BuildOpenOrderForTrade(nil, "AAPL  240119C00150000", 1.50, 1); err == nil {
-		t.Fatal("expected error")
-	}
-}
-
-func TestBuildOpenOrderForTrade_RejectsMissingOCC(t *testing.T) {
-	if _, err := BuildOpenOrderForTrade(&trades.Trade{Symbol: "AAPL"}, "", 1.50, 1); err == nil {
-		t.Fatal("expected error")
-	}
-}
-
-func TestBuildOpenOrderForTrade_RejectsNonPositiveLimit(t *testing.T) {
-	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: trades.PtrFloat(150), Expiration: trades.PtrString("2024-01-19")}
-	for _, p := range []float64{0, -0.5} {
-		if _, err := BuildOpenOrderForTrade(tr, "AAPL  240119C00150000", p, 1); err == nil {
-			t.Fatalf("expected error for limit %.2f", p)
-		}
-	}
-}
-
-func TestBuildOpenOrderForTrade_RejectsNonPositiveQuantity(t *testing.T) {
-	tr := &trades.Trade{Symbol: "AAPL", ContractType: "CALL", StrikePrice: trades.PtrFloat(150), Expiration: trades.PtrString("2024-01-19")}
-	for _, q := range []int{0, -1} {
-		if _, err := BuildOpenOrderForTrade(tr, "AAPL  240119C00150000", 1.50, q); err == nil {
-			t.Fatalf("expected error for quantity %d", q)
-		}
-	}
-}
-
-func TestBuildCloseOrderForPosition_SellToClose(t *testing.T) {
-	p := &OpenPosition{Symbol: "AAPL", ContractType: "CALL", StrikePrice: 150, Expiration: "2024-01-19"}
-	o, err := BuildCloseOrderForPosition(p, 3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if o.OrderLegCollection[0].Instruction != "SELL_TO_CLOSE" {
-		t.Errorf("expected SELL_TO_CLOSE, got %q", o.OrderLegCollection[0].Instruction)
-	}
-	if got := o.OrderLegCollection[0].Quantity; got != 3 {
-		t.Errorf("quantity must be 3, got %d", got)
-	}
-}
-
-func TestBuildCloseOrderForPosition_RejectsNonPositiveQuantity(t *testing.T) {
-	p := &OpenPosition{Symbol: "AAPL", ContractType: "CALL", StrikePrice: 150, Expiration: "2024-01-19"}
-	for _, q := range []int{0, -1} {
-		if _, err := BuildCloseOrderForPosition(p, q); err == nil {
-			t.Fatalf("expected error for quantity %d", q)
-		}
 	}
 }
 

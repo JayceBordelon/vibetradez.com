@@ -5,50 +5,7 @@ import (
 	"math"
 	"strings"
 	"time"
-
-	"vibetradez.com/internal/trades"
 )
-
-/*
-MaxContractPremium is the per-contract premium ceiling enforced at the
-broker-facing order-submission layer. Premium is quoted per share,
-options are 100 shares, so $10/share = $1,000 of capital exposure on
-a single contract. Hard upper bound on any single order this codebase
-submits to Schwab.
-
-The agent tool layer (internal/execagent/tools.go) enforces the same
-cap as MaxToolPremiumPerShare so a buggy or compromised model can't
-talk the broker out of an over-cap order; this constant is the
-defense-in-depth re-check on the way out of Service.PlaceBuyToOpenAgent.
-*/
-const MaxContractPremium = 10.00
-
-/*
-MaxOrderCost is the total-dollar ceiling on any single agent order,
-accounting for quantity: limit_price × 100 × quantity. It is the
-broker-side twin of the execagent's MaxDailyExposure ($1,000/day) and
-re-validated in Service.PlaceBuyToOpenAgent so that even a buggy or
-compromised tool layer cannot submit one order that blows the day's
-budget on its own. The cumulative-across-orders accounting lives in
-the dispatcher (internal/execagent/tools.go); this is the per-order
-defense-in-depth check.
-*/
-const MaxOrderCost = 1000.00
-
-/*
-LimitPriceMultiplier is the buffer the execagent's prompt recommends
-on top of the live ask when constructing the open LIMIT (e.g.,
-limit_price ≈ 1.10 × ask). The constant is no longer enforced in code
-— the agent picks the limit_price directly via the place_options_order
-tool — but it's kept here as a documented anchor the prompt references
-so the wider system has a single source of truth for the convention.
-
-The hard ceiling on any single LIMIT is MaxContractPremium
-($10/share = $1000/contract), enforced by the tool layer in
-internal/execagent/tools.go (MaxToolPremiumPerShare) and re-validated
-in Service.PlaceBuyToOpenAgent below.
-*/
-const LimitPriceMultiplier = 1.10
 
 /*
 OCCSymbol builds the 21-character OCC OSI symbol that Schwab's Trader
@@ -101,23 +58,61 @@ func OCCSymbol(symbol, expiration, contractType string, strike float64) (string,
 }
 
 /*
-BuildOpenOrderForTrade returns the LIMIT BUY_TO_OPEN order to submit
-for the morning auto-execution. Caller passes the qualifying Trade,
-its pre-built OCC symbol, the limit price (see ComputeOpenLimitPrice),
-and the contract quantity (always 1 under the top-3-only selector,
-but kept as a parameter for the order/execution wiring and for
-backwards compatibility with historical quantity > 1 rows).
-
-Returns ErrInvalidOrder when limitPrice is non-positive or quantity
-is < 1 — Schwab rejects LIMIT orders without a price, and qty 0
-orders are nonsensical.
+DecodeOCCSymbol is the exported inverse of OCCSymbol: it recovers the
+(underlying, expiration, contractType, strike) a 21-char OCC option symbol
+encodes. The v2 portfolio manager's read path uses it to turn a held
+option's broker symbol back into its contract spec (strike / expiration /
+DTE) for the snapshot it shows the agent.
 */
-func BuildOpenOrderForTrade(t *trades.Trade, occSymbol string, limitPrice float64, quantity int) (Order, error) {
-	if t == nil {
-		return Order{}, ErrInvalidOrder
+func DecodeOCCSymbol(occ string) (symbol, expiration, contractType string, strike float64, err error) {
+	if len(occ) != 21 {
+		return "", "", "", 0, fmt.Errorf("OCC symbol must be 21 chars, got %d", len(occ))
 	}
-	if occSymbol == "" {
-		return Order{}, fmt.Errorf("missing OCC symbol")
+	symbol = strings.TrimRight(occ[:6], " ")
+	yymmdd := occ[6:12]
+	t, perr := time.Parse("060102", yymmdd)
+	if perr != nil {
+		return "", "", "", 0, fmt.Errorf("OCC date %q: %w", yymmdd, perr)
+	}
+	expiration = t.Format("2006-01-02")
+	switch occ[12] {
+	case 'C':
+		contractType = "CALL"
+	case 'P':
+		contractType = "PUT"
+	default:
+		return "", "", "", 0, fmt.Errorf("OCC direction byte %q invalid", string(occ[12]))
+	}
+	strikeStr := occ[13:21]
+	var strikeInt int64
+	for _, c := range strikeStr {
+		if c < '0' || c > '9' {
+			return "", "", "", 0, fmt.Errorf("OCC strike contains non-digit %q", string(c))
+		}
+		strikeInt = strikeInt*10 + int64(c-'0')
+	}
+	strike = float64(strikeInt) / 1000.0
+	return symbol, expiration, contractType, strike, nil
+}
+
+/*
+BuildEquityOrder returns a single-leg equity LIMIT order. side is "BUY"
+or "SELL" (Schwab's plain equity instructions, distinct from the options
+BUY_TO_OPEN / SELL_TO_CLOSE). Used by the v2 portfolio manager; the v1
+options path never calls it. Quantity is whole shares.
+
+Returns ErrInvalidOrder-style errors on a bad side, non-positive limit,
+or quantity < 1. LIMIT (not MARKET) so the portfolio agent's chosen price
+is always honored and a fat-finger mark can't fill at any price.
+*/
+func BuildEquityOrder(symbol, side string, quantity int, limitPrice float64) (Order, error) {
+	sym := strings.ToUpper(strings.TrimSpace(symbol))
+	if sym == "" {
+		return Order{}, fmt.Errorf("missing equity symbol")
+	}
+	instruction := strings.ToUpper(strings.TrimSpace(side))
+	if instruction != "BUY" && instruction != "SELL" {
+		return Order{}, fmt.Errorf("invalid equity side %q (must be BUY or SELL)", side)
 	}
 	if limitPrice <= 0 {
 		return Order{}, fmt.Errorf("limit price must be positive (got %.2f)", limitPrice)
@@ -132,42 +127,47 @@ func BuildOpenOrderForTrade(t *trades.Trade, occSymbol string, limitPrice float6
 		OrderStrategyType: "SINGLE",
 		Price:             limitPrice,
 		OrderLegCollection: []OrderLeg{{
-			Instruction: "BUY_TO_OPEN",
+			Instruction: instruction,
 			Quantity:    quantity,
 			Instrument: Instrument{
-				Symbol:    occSymbol,
-				AssetType: "OPTION",
+				Symbol:    sym,
+				AssetType: "EQUITY",
 			},
 		}},
 	}, nil
 }
 
 /*
-BuildCloseOrderForPosition mirrors BuildOpenOrderForTrade for the
-3:55pm mandatory close. SELL_TO_CLOSE the same number of contracts
-that the open execution recorded, so callers pass the
-Execution.RequestedQuantity (or FilledQuantity once available) from
-the open row. Quantity < 1 is rejected to avoid leaving open
-contracts at the broker after a malformed close attempt.
+BuildOptionLimitOrder returns a single-leg option LIMIT order against a
+pre-built OCC symbol, for either side. instruction is "BUY_TO_OPEN" or
+"SELL_TO_CLOSE". Unlike BuildOpenOrderForTrade (which derives the OCC from
+a trades.Trade) and BuildCloseOrderForPosition (which submits a MARKET
+close), this is the symbol-in, LIMIT-out builder the v2 portfolio manager
+uses, since the agent picks the limit price for both opens and closes.
 */
-func BuildCloseOrderForPosition(p *OpenPosition, quantity int) (Order, error) {
-	if p == nil {
-		return Order{}, ErrInvalidOrder
+func BuildOptionLimitOrder(occSymbol, instruction string, quantity int, limitPrice float64) (Order, error) {
+	occ := strings.ToUpper(strings.TrimSpace(occSymbol))
+	if occ == "" {
+		return Order{}, fmt.Errorf("missing OCC symbol")
+	}
+	ins := strings.ToUpper(strings.TrimSpace(instruction))
+	if ins != "BUY_TO_OPEN" && ins != "SELL_TO_CLOSE" {
+		return Order{}, fmt.Errorf("invalid option instruction %q (must be BUY_TO_OPEN or SELL_TO_CLOSE)", instruction)
+	}
+	if limitPrice <= 0 {
+		return Order{}, fmt.Errorf("limit price must be positive (got %.2f)", limitPrice)
 	}
 	if quantity < 1 {
 		return Order{}, fmt.Errorf("quantity must be >= 1 (got %d)", quantity)
 	}
-	occ, err := OCCSymbol(p.Symbol, p.Expiration, p.ContractType, p.StrikePrice)
-	if err != nil {
-		return Order{}, fmt.Errorf("rebuild OCC: %w", err)
-	}
 	return Order{
-		OrderType:         "MARKET",
+		OrderType:         "LIMIT",
 		Session:           "NORMAL",
 		Duration:          "DAY",
 		OrderStrategyType: "SINGLE",
+		Price:             limitPrice,
 		OrderLegCollection: []OrderLeg{{
-			Instruction: "SELL_TO_CLOSE",
+			Instruction: ins,
 			Quantity:    quantity,
 			Instrument: Instrument{
 				Symbol:    occ,
