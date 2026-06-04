@@ -17,7 +17,7 @@ function slug(q: string): string {
 
 export function FaqList({ children }: { children: React.ReactNode }) {
   return (
-    <Accordion type="single" collapsible className="lg-card overflow-hidden">
+    <Accordion type="single" collapsible className="border-t border-border/60">
       {children}
     </Accordion>
   );
@@ -25,9 +25,9 @@ export function FaqList({ children }: { children: React.ReactNode }) {
 
 export function QA({ q, children }: { q: string; children: React.ReactNode }) {
   return (
-    <AccordionItem value={slug(q)} className="border-b last:border-b-0">
-      <AccordionTrigger className="px-5 text-left text-base font-semibold hover:no-underline">{q}</AccordionTrigger>
-      <AccordionContent className="px-5 text-[15px] leading-relaxed text-muted-foreground">{children}</AccordionContent>
+    <AccordionItem value={slug(q)} className="border-b border-border/60 last:border-b-0">
+      <AccordionTrigger className="text-left text-base font-semibold hover:no-underline">{q}</AccordionTrigger>
+      <AccordionContent className="text-[15px] leading-relaxed text-muted-foreground">{children}</AccordionContent>
     </AccordionItem>
   );
 }

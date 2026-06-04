@@ -2,45 +2,73 @@ import { Section } from "@/components/legal/section";
 
 <Section id="experimental" num={1} title="Experimental Nature of This Service">
 
-VibeTradez is an **experimental, educational project** that generates AI-powered options trade suggestions. The platform is provided on an "as-is" basis for informational and entertainment purposes only. It is not a registered investment advisory service, broker-dealer, or financial institution.
+VibeTradez is an **experimental, educational project** in which a large language model (Claude) runs a single personal brokerage account as an autonomous portfolio manager. The platform is provided on an "as-is" basis for informational and entertainment purposes only. It is not a registered investment advisory service, a broker-dealer, or a financial institution, and it does not manage money for anyone other than the operator.
 
-All trade ideas presented on this platform are machine-generated suggestions, not recommendations. They are produced by a single large language model (Claude) running across two invocations a day: a pre-bell run (around 9:25 AM ET) that selects three candidate tickers with direction and intent from publicly available trending-ticker data and live market information, and an at-open run (9:30 AM ET) that reads the live option chain and chooses the specific contracts. Both runs use a fixed prompt and a fixed, locked-down toolset (Schwab market data, web search, and a single order-placement tool). None of these outputs have been reviewed, verified, or endorsed by any licensed financial professional.
+Once per trading day the model is invoked with a fixed prompt and a fixed, locked-down toolset. It reads the current account and the market, then decides for itself what to do with the money: buy a stock, buy an option, add to a position, trim it, sell it, or hold cash. It holds positions across days. None of its outputs are reviewed, verified, or endorsed by any licensed financial professional.
 
 </Section>
 
 <Section id="not-advice" num={2} title="Not Financial Advice">
 
-**Nothing on VibeTradez constitutes financial, investment, tax, or legal advice.** The trade suggestions, performance analytics, and any other content should not be interpreted as a recommendation to buy, sell, or hold any security or financial instrument.
+**Nothing on VibeTradez constitutes financial, investment, tax, or legal advice.** The moves the model makes, the rationales it writes, the performance figures, and any other content are not a recommendation to buy, sell, or hold any security or financial instrument.
 
-You should always consult with a qualified, licensed financial advisor before making any investment decisions. Do not rely on this platform as a substitute for professional financial guidance.
+You should always consult a qualified, licensed financial advisor before making any investment decision. Do not rely on this platform as a substitute for professional financial guidance, and do not copy what the model does with your own money.
 
 </Section>
 
 <Section id="risk" num={3} title="Significant Risk Disclosure">
 
-**Options trading involves substantial risk of loss and is not suitable for all investors.** You can lose your entire investment, and in some cases, losses can exceed your initial investment. Short-dated options (0 to 7 DTE), which are the focus of this platform, are especially volatile and carry elevated risk of total loss.
+**Trading involves substantial risk of loss and is not suitable for everyone.** The account can lose money, and with options it can lose the entire premium paid. The model operates under an aggressive, growth-seeking mandate on a small account, which means a concentrated, high-variance book and a real chance of a deep drawdown or a near-total loss on a wrong high-conviction position. That variance is the point of the experiment, not a defect.
 
-Past performance displayed on this platform does not guarantee future results. Realized profit and loss for the three daily picks is sourced from actual broker fills on the operator's Schwab account. Any intraday option-price overlays, modeled premiums, or pre-fill estimates shown on the dashboard are illustrative and may not reflect actual executable prices due to bid-ask spreads, liquidity, and market microstructure.
+The hard caps described below limit any single order, but they do not prevent a slow bleed or a bad concentrated bet, and they are not a guarantee against loss. Past performance shown on this platform does not guarantee future results. Realized profit and loss is sourced from actual broker activity. Any modeled or pre-fill figures shown are illustrative and may not reflect executable prices because of bid-ask spreads, liquidity, and market microstructure.
 
-By using this platform, you acknowledge that you understand these risks and accept full responsibility for any trading decisions you make.
+By using this platform you acknowledge that you understand these risks and accept full responsibility for any decision you make.
 
 </Section>
 
-<Section id="auto-execution" num={4} title="Auto-Execution Pipeline">
+<Section id="how-it-trades" num={4} title="How the Portfolio Manager Trades">
 
-All three of each trading day's picks are automatically executed by the platform as **real live orders** against the operator's personal Schwab brokerage account using the Schwab Trader API. Real money, real fills, real positions. The operator (Jayce Bordelon) is the only party with capital at risk on these orders. Subscribers receive informational notifications about the trades but no order is ever placed on a subscriber's behalf, and subscribers cannot configure or disable the pipeline.
+The manager trades a **single personal brokerage account** belonging to the operator (Jayce Bordelon), who is the only party with capital at risk. Subscribers receive an informational daily recap but no order is ever placed on a subscriber's behalf, and subscribers cannot configure, trigger, or disable the manager.
 
-The platform retains a **paper-trade mode** as a fallback (configured server-side via an environment variable) used during testing windows or operator absence. When this mode is active the orders fill at the live Schwab option mark in a simulated environment with no real money or real positions. The dashboard always badges every fill as either LIVE or PAPER so the actual mode is never ambiguous; the badge state reflects the real mode the order was placed in, never inferred or extrapolated.
+**Multi-account access is in development.** A future release will let users link their own brokerage account so a model can manage it under caps the user sets. That feature is not live yet, no user account is connected today, and when it ships it will require its own separate authorization and terms before any order is placed on a user's behalf.
 
-The auto-execution pipeline operates with hard guardrails enforced in code at the order-tool layer, so a faulty prompt or model output cannot exceed them: (1) a per-share premium cap of $10/share; (2) a $1,000 total daily exposure budget enforced cumulatively across every order placed that day, so worst-case daily exposure is bounded at $1,000 regardless of how the picks land or how many contracts are bought; (3) at most one order per candidate and at most three orders per run, where the agent may buy duplicate contracts of a single pick by setting the order quantity but can never push the day past the $1,000 budget; (4) a per-order total-cost cap of $1,000, so no single order can exhaust the budget on a pricing error; (5) a symbol allowlist, so the agent can only buy the three tickers chosen that morning; and (6) a mandatory close at 3:55 PM ET (12:55 PM ET on half-trading days) regardless of P&L. Any opening LIMIT that has not filled by 9:35 AM ET is canceled and that pick is dead for the day.
+The manager trades **live with real money**. Every order is real and placed against the Schwab Trader API, and there is no paper or simulated mode. The operator has accepted that this account is exposed to real loss on every session.
+
+**The model's full toolset.** The execution tools are the security boundary between the model and real money: every hard cap is enforced in code at the tool layer, so a faulty prompt or model output cannot exceed them.
+
+Reading tools (read-only, they never move money):
+
+- **get_portfolio**: current positions, cost basis, cash, and total equity.
+- **get_stock_quotes**: live equity quotes.
+- **get_option_chain**: live option chains with greeks, open interest, and volume.
+- **get_price_history**: trend context: moving averages, the 52-week range, and recent volatility.
+- **get_fundamentals**: valuation, market cap, dividend, and the next earnings date.
+- **get_cap_headroom**: how much room is left under each risk cap right now.
+- **get_recent_decisions**: its own recent moves and daily stances, for continuity.
+- **get_order_status**: whether an order it placed is working, filled, or canceled.
+- **web_search**: news and catalysts.
+- **web_fetch**: open and read a specific article or finance page in full (sources like Reuters, CNBC, Bloomberg, Yahoo Finance, Finviz, and SEC EDGAR).
+
+Execution tools (these move money, each capped at the tool layer):
+
+- **buy_equity** / **sell_equity**: open, add to, trim, or close a long stock position.
+- **buy_option** / **sell_option**: open (BUY_TO_OPEN) or close (SELL_TO_CLOSE) a long single-leg call or put.
+- **cancel_order**: cancel a resting order so a stale exit can be re-priced to fill.
+- **hold**: log that a position carried from a prior session is being kept unchanged. Used only to continue an existing position, never for one opened that day.
+
+Documentation tool (writes to the record, no data and no money):
+
+- **write_summary**: record the day's official session summary in plain language. Called once at the end of each session and stored as the daily record.
+
+It does not short, trade on margin, or use multi-leg option strategies. The hard caps, all expressed as a percentage of live account equity and re-validated at the broker entry point, are: a maximum exposure per underlying, a separate ceiling on total option premium, a per-order ceiling, a limit on how much fresh cash it can deploy in a single session, a liquidity floor (minimum stock price, market cap, option open interest and volume, and maximum spread), a settled-cash rule, and a drawdown breaker that halts new buys once the account falls far enough from its high-water mark. Selling and de-risking are always allowed.
 
 </Section>
 
 <Section id="data" num={5} title="Data Sources & Accuracy">
 
-Trade suggestions are generated using data from third-party sources including StockTwits, Yahoo Finance, Finviz, SEC EDGAR, the Anthropic Claude API, and the Schwab Market Data API. While we strive for accuracy, we make no guarantees regarding the completeness, reliability, or timeliness of any data presented.
+The model's market data comes from the Schwab Market Data API (quotes, option chains, price history, and instrument fundamentals) and the Schwab Trader API (account, positions, and orders), plus web search for news. Decisions are produced by the Anthropic Claude API. We strive for accuracy but make no guarantees about the completeness, reliability, or timeliness of any data presented.
 
-Market data, option prices, and stock quotes may be delayed or inaccurate. Always verify prices with your broker before placing any trades.
+Market data, option prices, and quotes may be delayed or inaccurate. Always verify prices with your broker before placing any trade of your own.
 
 </Section>
 
@@ -48,7 +76,7 @@ Market data, option prices, and stock quotes may be delayed or inaccurate. Alway
 
 VibeTradez is provided without warranty of any kind, express or implied. The creator of this platform shall not be held liable for any financial losses, damages, or other consequences arising from your use of or reliance on the information provided.
 
-This platform may experience downtime, data inaccuracies, or system errors. Trade suggestions may be delayed, missing, or incorrect. Use the platform at your own risk.
+This platform may experience downtime, data inaccuracies, or system errors. The recap and dashboard may be delayed, missing, or incorrect. Use the platform at your own risk.
 
 </Section>
 

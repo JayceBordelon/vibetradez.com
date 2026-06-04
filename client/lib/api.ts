@@ -1,4 +1,5 @@
-import type { ApiResponse, DashboardResponse, MarketStatus, TranscriptResponse, WeekResponse } from "@/types/trade";
+import type { ClosedTradesResponse, EquityCurveResponse, HoldingsResponse, PortfolioResponse } from "@/types/portfolio";
+import type { ApiResponse, MarketStatus, TranscriptResponse } from "@/types/trade";
 
 export interface SessionUser {
   id: number;
@@ -101,9 +102,25 @@ async function authFetch<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  getTrades: (date?: string) => clientFetch<DashboardResponse>(date ? `/api/trades/today?date=${date}` : "/api/trades/today"),
+  /*
+  v2 portfolio manager. getPortfolio returns the live book (positions,
+  cash, equity) plus today's agent stance + moves for the single
+  brokerage account. getEquityCurve returns the daily equity-vs-SPY
+  series for the chart.
+  */
+  getPortfolio: (date?: string) => clientFetch<PortfolioResponse>(date ? `/api/portfolio?date=${date}` : "/api/portfolio"),
 
-  getWeekTrades: (start: string, end: string) => clientFetch<WeekResponse>(`/api/trades/week?start=${start}&end=${end}`),
+  getEquityCurve: (start?: string, end?: string) => {
+    const qs = new URLSearchParams();
+    if (start) qs.set("start", start);
+    if (end) qs.set("end", end);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return clientFetch<EquityCurveResponse>(`/api/portfolio/equity-curve${suffix}`);
+  },
+
+  // /holdings: every open position. /closed: every completed round trip.
+  getHoldings: () => clientFetch<HoldingsResponse>("/api/portfolio/holdings"),
+  getClosedTrades: () => clientFetch<ClosedTradesResponse>("/api/portfolio/closed"),
 
   /*
   Daily model-reasoning transcript. kind is "selection" (the 9:25
@@ -111,15 +128,11 @@ export const api = {
   available:false with empty events when nothing was captured for the
   date.
   */
-  getTranscript: (date: string, kind: "selection" | "execution") =>
+  getTranscript: (date: string, kind: "selection" | "execution" | "portfolio") =>
     clientFetch<TranscriptResponse>(`/api/transcript?date=${encodeURIComponent(date)}&kind=${kind}`),
 
-  /*
-  Live quotes are now an SSE stream at /api/quotes/stream, see
-  hooks/use-quote-stream.ts. /api/market/status is the cheap polled
-  endpoint that tells the dashboard whether to open the stream or
-  render the market-closed page.
-  */
+  // /api/market/status: the cheap polled endpoint that tells the dashboard
+  // whether the market is open (drives the auto-refresh cadence).
   getMarketStatus: () => clientFetch<MarketStatus>("/api/market/status"),
 
   me: () => clientFetch<MeResponse>("/api/me"),

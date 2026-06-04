@@ -4,15 +4,16 @@ import { TranscriptView } from "@/components/transcript/transcript-view";
 
 const OG_IMAGE = "/og/dashboard.png";
 
-type Kind = "selection" | "execution";
+type Kind = "selection" | "execution" | "portfolio";
 
 function isKind(v: string): v is Kind {
-  return v === "selection" || v === "execution";
+  return v === "selection" || v === "execution" || v === "portfolio";
 }
 
 const KIND_LABEL: Record<Kind, string> = {
   selection: "Selection reasoning",
   execution: "Execution reasoning",
+  portfolio: "Session reasoning",
 };
 
 interface PageProps {
@@ -26,10 +27,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
   const label = KIND_LABEL[kind];
   const title = `${label} · ${date}`;
-  const description =
-    kind === "selection"
-      ? `How Claudia picked the tickers on ${date}: the 9:25 ET selection conversation, tool calls, and reasoning.`
-      : `How Claudia chose contracts and placed orders on ${date}: the 9:30 ET at-open agent conversation, tool calls, and reasoning.`;
+  const DESCRIPTIONS: Record<Kind, string> = {
+    selection: `How Claudia picked the tickers on ${date}: the 9:25 ET selection conversation, tool calls, and reasoning.`,
+    execution: `How Claudia chose contracts and placed orders on ${date}: the 9:30 ET at-open agent conversation, tool calls, and reasoning.`,
+    portfolio: `Everything Claudia looked at and every move she made with the account on ${date}, tool call by tool call.`,
+  };
+  const description = DESCRIPTIONS[kind];
   return {
     title,
     description,

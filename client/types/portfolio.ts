@@ -1,0 +1,131 @@
+/*
+Types for the v2 portfolio-manager dashboard. This surface describes a
+SINGLE personal brokerage account (one book), not a multi-user product.
+Mirrors the server wire shapes in internal/server/portfolio.go.
+*/
+
+export interface PortfolioPosition {
+  symbol: string;
+  underlying: string;
+  asset_type: "EQUITY" | "OPTION";
+  contract_type?: string;
+  strike?: number;
+  expiration?: string;
+  dte?: number;
+  quantity: number;
+  market_value: number;
+  cost_basis: number;
+  unrealized_pnl: number;
+}
+
+export type PortfolioAction = "buy_equity" | "sell_equity" | "buy_option" | "sell_option" | "hold";
+
+export interface PortfolioDecision {
+  action: PortfolioAction;
+  asset_type?: "EQUITY" | "OPTION";
+  symbol?: string;
+  underlying?: string;
+  contract_type?: string;
+  strike?: number;
+  expiration?: string;
+  quantity?: number;
+  limit_price?: number;
+  notional?: number;
+  order_id?: string;
+  status?: string;
+  rationale: string;
+}
+
+/*
+PortfolioResponse is GET /api/portfolio. `enabled` is false when the
+broker isn't wired (trading disabled), so the dashboard renders an honest
+"not running yet" state instead of erroring.
+*/
+export interface PortfolioResponse {
+  enabled: boolean;
+  mode: "live" | "";
+  date: string;
+  equity: number;
+  settled_cash: number;
+  unsettled_cash: number;
+  high_water_mark: number;
+  spy_close: number;
+  drawdown_halted: boolean;
+  positions: PortfolioPosition[];
+  stance: string;
+  summary?: string;
+  action_items?: string;
+  decisions: PortfolioDecision[];
+}
+
+export interface EquityCurvePoint {
+  date: string;
+  account_equity: number;
+  settled_cash: number;
+  unsettled_cash: number;
+  high_water_mark: number;
+  spy_close: number;
+}
+
+export interface EquityCurveResponse {
+  points: EquityCurvePoint[];
+}
+
+/*
+Per-position surfaces behind /holdings and /closed. `kind` routes to the
+right detail renderer; `id` is the symbol with spaces stripped (so an OCC
+option symbol is URL-safe), and a closed trade's id appends its close date
+to stay unique across re-trades.
+*/
+export type TradeKind = "stock" | "option";
+
+export interface Holding {
+  id: string;
+  kind: TradeKind;
+  symbol: string;
+  underlying: string;
+  label: string;
+  contract_type?: string;
+  strike?: number;
+  expiration?: string;
+  dte?: number;
+  quantity: number;
+  market_value: number;
+  cost_basis: number;
+  unrealized_pnl: number;
+  opened_date?: string;
+  open_rationale?: string;
+}
+
+export interface HoldingsResponse {
+  holdings: Holding[];
+  positions_source?: "live" | "snapshot" | "";
+  positions_as_of?: string;
+}
+
+export interface ClosedTrade {
+  id: string;
+  kind: TradeKind;
+  symbol: string;
+  underlying: string;
+  label: string;
+  contract_type?: string;
+  strike?: number;
+  expiration?: string;
+  quantity: number;
+  opened_date: string;
+  closed_date: string;
+  entry_price: number;
+  exit_price: number;
+  cost_basis: number;
+  proceeds: number;
+  realized_pnl: number;
+  realized_pct: number;
+  hold_days: number;
+  open_rationale?: string;
+  close_rationale?: string;
+}
+
+export interface ClosedTradesResponse {
+  trades: ClosedTrade[];
+}

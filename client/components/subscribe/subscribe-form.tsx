@@ -24,7 +24,7 @@ export function SubscribeForm() {
   if (user) {
     return (
       <div className="space-y-2.5">
-        <p className="rounded-md bg-green-bg p-3 text-xs font-semibold text-green">You're subscribed as {user.email}. The next morning's picks will land in your inbox right at the open.</p>
+        <p className="rounded-md bg-green-bg p-3 text-xs font-semibold text-green">You're subscribed as {user.email}. The daily recap lands in your inbox after the close, with every move and the reasons behind it.</p>
         <button type="button" onClick={signOut} className="cursor-pointer text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
           Not you? Sign out
         </button>
@@ -38,7 +38,7 @@ export function SubscribeForm() {
         <GoogleIcon className="h-4 w-4" />
         Continue with Google
       </Button>
-      <p className="text-center text-[11px] text-muted-foreground">Signing in subscribes you to the daily picks email. You can unsubscribe anytime.</p>
+      <p className="text-center text-[11px] text-muted-foreground">Signing in subscribes you to the daily recap email. You can unsubscribe anytime.</p>
     </div>
   );
 }
@@ -58,7 +58,7 @@ export function UnsubscribeForm() {
   return (
     <div className="space-y-3 text-xs leading-relaxed text-muted-foreground">
       <p>
-        Every email we send (morning picks, EOD summary, weekly recap) has a one-click <strong className="font-semibold text-foreground">Unsubscribe</strong>{" "}link in the footer. Click that link in any
+        Every email we send (the daily recap, the weekly summary) has a one-click <strong className="font-semibold text-foreground">Unsubscribe</strong>{" "}link in the footer. Click that link in any
         vibetradez.com email and you&apos;re out instantly.
       </p>
       <p>Lost all the emails? Reply to any vibetradez.com address from your subscribed inbox and the operator will remove you manually.</p>

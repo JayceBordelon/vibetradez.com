@@ -1,0 +1,176 @@
+import { ArrowLeft, ArrowUpRight } from "lucide-react";
+import Link from "next/link";
+
+import { Stat, StatStrip } from "@/components/layout/stat-strip";
+import { ClaudeLogo } from "@/components/ui/brand-icons";
+import { fmtMoney, fmtPnlInt, fmtPrice } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import type { ClosedTrade, Holding } from "@/types/portfolio";
+import { KindChip } from "./trade-cards";
+
+/*
+Detail bodies for a single open holding or closed trade, echoing the v1
+trade-detail layout: a back link, a header with the instrument and its
+badges, a strip of the headline numbers, the position/contract specifics,
+and the model's reasoning with a link to the session transcript.
+*/
+
+function BackLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link href={href} className="mb-6 inline-flex min-h-9 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
+      <ArrowLeft className="h-4 w-4" />
+      {label}
+    </Link>
+  );
+}
+
+/*
+The model's reasoning, rendered in Claude's clay so it reads as Claude's
+own voice and stays distinct from the neutral fact cards beside it. When a
+session is linked, the whole card is the link and opens the transcript in a
+new tab; without one it's a plain panel.
+*/
+function Reasoning({ title, body, transcriptDate, transcriptLabel }: { title: string; body: string; transcriptDate?: string; transcriptLabel?: string }) {
+  const base = "relative block overflow-hidden rounded-xl border border-claude-border bg-claude-light p-5";
+  const inner = (
+    <>
+      <span aria-hidden className="pointer-events-none absolute -top-10 -right-8 h-28 w-28 rounded-full bg-claude/20 blur-2xl" />
+      <div className="relative flex items-center gap-2">
+        <ClaudeLogo className="h-4 w-4" />
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-claude">{title}</span>
+      </div>
+      <p className="relative mt-2 max-w-2xl text-sm leading-relaxed text-foreground/85">{body}</p>
+      {transcriptDate && transcriptLabel && (
+        <span className="relative mt-4 inline-flex items-center gap-2 text-sm font-semibold text-claude underline decoration-claude/30 underline-offset-4 transition-colors group-hover:decoration-claude">
+          <ClaudeLogo className="h-4 w-4" />
+          {transcriptLabel}
+          <ArrowUpRight className="h-3.5 w-3.5" />
+        </span>
+      )}
+    </>
+  );
+
+  if (transcriptDate) {
+    return (
+      <a href={`/transcripts/${transcriptDate}`} target="_blank" rel="noopener noreferrer" className={cn(base, "group transition-all hover:border-claude hover:shadow-md")}>
+        {inner}
+      </a>
+    );
+  }
+  return <div className={base}>{inner}</div>;
+}
+
+// Facts is a borderless, hairline-divided definition list so the trade
+// specifics flow with the page instead of sitting in a boxed card.
+function Facts({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{title}</h2>
+      <dl className="mt-1 divide-y divide-border/50 border-t border-border/50">{children}</dl>
+    </section>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2.5 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="truncate text-right font-medium tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+export function HoldingDetail({ h }: { h: Holding }) {
+  const pct = h.cost_basis > 0 ? (h.unrealized_pnl / h.cost_basis) * 100 : 0;
+  const tone = h.unrealized_pnl > 0 ? "positive" : h.unrealized_pnl < 0 ? "negative" : "neutral";
+  return (
+    <div className="mx-auto min-w-0 max-w-[1100px] px-4 py-6 sm:px-7">
+      <BackLink href="/holdings" label="Back to holdings" />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <KindChip kind={h.kind} contractType={h.contract_type} />
+        <span className="rounded-full bg-red px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">Open</span>
+      </div>
+      <h1 className="mt-2 text-3xl font-extrabold tracking-tight">{h.label}</h1>
+      {h.opened_date && <p className="mt-1 text-sm text-muted-foreground">Opened {h.opened_date}</p>}
+
+      <div className="mt-6">
+        <StatStrip cols={4}>
+          <Stat label="Market value" value={fmtMoney(h.market_value)} />
+          <Stat label="Cost basis" value={fmtMoney(h.cost_basis)} />
+          <Stat label="Unrealized P&L" value={fmtPnlInt(h.unrealized_pnl)} tone={tone} sub={`${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`} />
+          {h.kind === "option" ? <Stat label="Days to expiry" value={h.dte != null ? `${h.dte}d` : "-"} /> : <Stat label="Shares" value={`${h.quantity}`} />}
+        </StatStrip>
+      </div>
+
+      <div className="mt-8 grid items-start gap-x-10 gap-y-6 sm:grid-cols-2">
+        <Facts title="Position">
+          {h.kind === "option" ? (
+            <>
+              <Fact label="Contracts" value={`${h.quantity}`} />
+              <Fact label="Strike" value={h.strike ? fmtPrice(h.strike) : "-"} />
+              <Fact label="Contract" value={h.contract_type || "-"} />
+              <Fact label="Expiration" value={h.expiration || "-"} />
+              <Fact label="Avg premium" value={h.quantity > 0 ? fmtMoney(h.cost_basis / (h.quantity * 100)) : "-"} />
+            </>
+          ) : (
+            <>
+              <Fact label="Shares" value={`${h.quantity}`} />
+              <Fact label="Avg cost" value={h.quantity > 0 ? fmtMoney(h.cost_basis / h.quantity) : "-"} />
+              <Fact label="Cost basis" value={fmtMoney(h.cost_basis)} />
+              <Fact label="Market value" value={fmtMoney(h.market_value)} />
+            </>
+          )}
+          <Fact label="Underlying" value={h.underlying} />
+        </Facts>
+
+        {h.open_rationale && <Reasoning title="Why the model opened it" body={h.open_rationale} transcriptDate={h.opened_date} transcriptLabel="View the entry session" />}
+      </div>
+    </div>
+  );
+}
+
+export function ClosedDetail({ t }: { t: ClosedTrade }) {
+  const win = t.realized_pnl >= 0;
+  const tone = win ? "positive" : "negative";
+  return (
+    <div className="mx-auto min-w-0 max-w-[1100px] px-4 py-6 sm:px-7">
+      <BackLink href="/closed" label="Back to closed trades" />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <KindChip kind={t.kind} contractType={t.contract_type} />
+        <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider", win ? "bg-green-bg text-green" : "bg-red-bg text-red")}>{win ? "Win" : "Loss"}</span>
+      </div>
+      <h1 className="mt-2 text-3xl font-extrabold tracking-tight">{t.label}</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Held {t.opened_date} to {t.closed_date} ({t.hold_days} days)
+      </p>
+
+      <div className="mt-6">
+        <StatStrip cols={4}>
+          <Stat label="Realized P&L" value={fmtPnlInt(t.realized_pnl)} tone={tone} />
+          <Stat label="Return" value={`${win ? "+" : ""}${t.realized_pct.toFixed(1)}%`} tone={tone} />
+          <Stat label="Entry" value={fmtMoney(t.entry_price)} />
+          <Stat label="Exit" value={fmtMoney(t.exit_price)} />
+        </StatStrip>
+      </div>
+
+      <div className="mt-8 grid items-start gap-x-10 gap-y-6 sm:grid-cols-2">
+        <Facts title="Trade">
+          <Fact label={t.kind === "option" ? "Contracts" : "Shares"} value={`${t.quantity}`} />
+          {t.kind === "option" && <Fact label="Strike" value={t.strike ? fmtPrice(t.strike) : "-"} />}
+          {t.kind === "option" && <Fact label="Expiration" value={t.expiration || "-"} />}
+          <Fact label="Cost basis" value={fmtMoney(t.cost_basis)} />
+          <Fact label="Proceeds" value={fmtMoney(t.proceeds)} />
+          <Fact label="Hold time" value={`${t.hold_days} days`} />
+          <Fact label="Underlying" value={t.underlying} />
+        </Facts>
+
+        <div className="space-y-6">
+          {t.open_rationale && <Reasoning title="Why the model opened it" body={t.open_rationale} transcriptDate={t.opened_date} transcriptLabel="View the opening session" />}
+          {t.close_rationale && <Reasoning title="Why the model closed it" body={t.close_rationale} transcriptDate={t.closed_date} transcriptLabel="View the closing session" />}
+        </div>
+      </div>
+    </div>
+  );
+}

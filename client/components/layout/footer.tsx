@@ -4,11 +4,11 @@ import { Separator } from "@/components/ui/separator";
 
 export function Footer() {
   return (
-    <footer className="relative border-t border-foreground/5 bg-background/40 backdrop-blur-xl dark:border-white/5">
+    <footer className="relative">
       <div className="mx-auto flex max-w-[1200px] flex-col gap-4 px-4 py-6 sm:px-7">
         <p className="max-w-3xl text-xs leading-relaxed text-muted-foreground">
-          <strong className="text-foreground">Disclaimer:</strong>{" "}Not financial advice. Options trading involves substantial risk of loss. All P&amp;L figures are hypothetical and assume
-          single-contract positions at mark prices. Past performance does not guarantee future results.
+          <strong className="text-foreground">Disclaimer:</strong>{" "}Not financial advice. Trading involves substantial risk of loss. Every figure reflects one real brokerage account
+          trading live with real money. Past performance does not guarantee future results.
         </p>
         <div className="flex flex-col items-start justify-between gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:gap-3">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0">

@@ -36,7 +36,7 @@ const TESTIMONIALS: Testimonial[] = [
     initials: "MZ",
     rating: 5,
     quote: "VibeTradez taught me that money is just the metaverse for stocks. My wife took the kids and the chickens. 5/5, would lose everything again.",
-    avatarClass: "bg-gradient-to-br from-sky-400 to-indigo-500 text-white",
+    avatarClass: "bg-gradient-to-br from-sky-400 to-cyan-500 text-white",
   },
   {
     name: "Elon Musk",
@@ -44,7 +44,7 @@ const TESTIMONIALS: Testimonial[] = [
     initials: "EM",
     rating: 3,
     quote: "I bought 420 calls expiring 4/20 because Claudia told me to. Should've read the disclaimer. Would have been five stars but my Cybertruck ran out of options premium.",
-    avatarClass: "bg-gradient-to-br from-rose-400 to-fuchsia-500 text-white",
+    avatarClass: "bg-gradient-to-br from-rose-400 to-orange-500 text-white",
   },
   {
     name: "Warren Buffett",
@@ -60,7 +60,7 @@ const TESTIMONIALS: Testimonial[] = [
     initials: "SA",
     rating: 5,
     quote: "VibeTradez generated seven trillion dollars of imaginary alpha. Imaginary chips. Imaginary fab. Open my IPO already. Five out of five Worldcoins.",
-    avatarClass: "bg-gradient-to-br from-violet-400 to-purple-500 text-white",
+    avatarClass: "bg-gradient-to-br from-emerald-400 to-teal-500 text-white",
   },
   {
     name: "Bill Gates",
@@ -116,7 +116,7 @@ const TESTIMONIALS: Testimonial[] = [
     initials: "SN",
     rating: 4,
     quote: "Copilot tried to subscribe but the form refused to autofill from Edge. We have added 'autofill' to our Q4 OKRs. Bullish on synergies.",
-    avatarClass: "bg-gradient-to-br from-indigo-400 to-blue-500 text-white",
+    avatarClass: "bg-gradient-to-br from-cyan-400 to-blue-500 text-white",
   },
   {
     name: "Mr Beast",
@@ -132,7 +132,7 @@ const TESTIMONIALS: Testimonial[] = [
     initials: "SD",
     rating: 4.5,
     quote: "Claudia said sell. I told her to drop a chart. The chart was bullish. We are now business partners in a vape company.",
-    avatarClass: "bg-gradient-to-br from-purple-400 to-indigo-500 text-white",
+    avatarClass: "bg-gradient-to-br from-teal-400 to-emerald-500 text-white",
   },
   {
     name: "Marc Andreessen",
@@ -148,7 +148,7 @@ const TESTIMONIALS: Testimonial[] = [
     initials: "VB",
     rating: 5,
     quote: "Claudia proposed an EIP for option premiums on Layer 2. Vibrant intellectual energy. The merge will resolve all losing positions retroactively.",
-    avatarClass: "bg-gradient-to-br from-fuchsia-400 to-violet-500 text-white",
+    avatarClass: "bg-gradient-to-br from-lime-400 to-green-500 text-white",
   },
 ];
 

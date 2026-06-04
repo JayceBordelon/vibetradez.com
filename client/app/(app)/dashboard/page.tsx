@@ -1,68 +1,27 @@
 import type { Metadata } from "next";
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
-import { serverFetch } from "@/lib/api";
-import type { DashboardResponse } from "@/types/trade";
+
+import { PortfolioShell } from "@/components/portfolio/portfolio-shell";
 
 const OG_IMAGE = "/og/dashboard.png";
 
-export async function generateMetadata(): Promise<Metadata> {
-  try {
-    const data = await serverFetch<DashboardResponse>("/api/trades/today");
-    const count = data.trades?.length ?? 0;
-    const hasSummaries = data.trades?.some((t) => t.summary) ?? false;
+const DESCRIPTION = "The live book: holdings, cash, the equity curve against SPY, and every move the model makes with its reasoning. One account, managed by Claude.";
 
-    let description = "Live options trade dashboard powered by Claudia. Conviction-scored picks with rationales and real-time analytics.";
-
-    if (count > 0 && hasSummaries) {
-      const { computeTradePnl } = await import("@/lib/calculations");
-      let totalPnl = 0;
-      let winners = 0;
-      let losers = 0;
-      for (const dt of data.trades) {
-        const result = computeTradePnl(dt, data.executions ?? null);
-        if (!result.hasData) continue;
-        const pnl = result.pnl;
-        totalPnl += pnl;
-        if (pnl > 0.5) winners++;
-        else if (pnl < -0.5) losers++;
-      }
-      const sign = totalPnl > 0 ? "+" : "";
-      description = `Today: ${count} picks, ${winners}W/${losers}L, ${sign}$${Math.round(totalPnl)} P&L. Conviction-scored picks from Claudia with full rationales.`;
-    } else if (count > 0) {
-      const topSymbols = data.trades
-        .slice(0, 3)
-        .map((t) => t.trade.symbol)
-        .join(", ");
-      description = `Today's ${count} picks: ${topSymbols} and more. Conviction-scored picks from Claudia with full rationales.`;
-    }
-
-    return {
-      title: "Live Dashboard",
-      description,
-      openGraph: {
-        title: "VibeTradez | Live Options Dashboard",
-        description,
-        images: [{ url: OG_IMAGE, width: 1200, height: 630 }],
-      },
-      twitter: {
-        card: "summary_large_image",
-        title: "VibeTradez | Live Options Dashboard",
-        description,
-        images: [OG_IMAGE],
-      },
-    };
-  } catch {
-    return {
-      title: "Live Dashboard",
-      description: "Live options trade dashboard powered by Claudia. Conviction-scored picks with rationales and real-time analytics.",
-      openGraph: {
-        title: "VibeTradez | Live Options Dashboard",
-        images: [{ url: OG_IMAGE, width: 1200, height: 630 }],
-      },
-    };
-  }
-}
+export const metadata: Metadata = {
+  title: "Live Dashboard",
+  description: DESCRIPTION,
+  openGraph: {
+    title: "VibeTradez | Live Portfolio Dashboard",
+    description: DESCRIPTION,
+    images: [{ url: OG_IMAGE, width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "VibeTradez | Live Portfolio Dashboard",
+    description: DESCRIPTION,
+    images: [OG_IMAGE],
+  },
+};
 
 export default function DashboardPage() {
-  return <DashboardShell />;
+  return <PortfolioShell />;
 }
