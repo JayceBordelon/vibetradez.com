@@ -115,10 +115,10 @@ func (r *Recorder) AddToolUse(round int, name, id string, input json.RawMessage)
 }
 
 /*
-AddToolResult appends a tool-result event, redacting any sensitive
-value first (see RedactToolResult). The result is the exact string we
-threaded back into the conversation as the tool_result block, minus
-redactions. Nil-safe.
+AddToolResult appends a tool-result event. The result is stored verbatim,
+the exact string threaded back into the conversation as the tool_result
+block. This is a single real account that publishes its own book, so
+balances are shown openly, not redacted. Nil-safe.
 */
 func (r *Recorder) AddToolResult(round int, name, id, result string) {
 	if r == nil {
@@ -129,7 +129,7 @@ func (r *Recorder) AddToolResult(round int, name, id, result string) {
 		Type:       EventToolResult,
 		ToolName:   name,
 		ToolUseID:  id,
-		ToolResult: RedactToolResult(name, result),
+		ToolResult: result,
 	})
 }
 
@@ -140,38 +140,4 @@ func (r *Recorder) Transcript() Transcript {
 		return Transcript{}
 	}
 	return Transcript{Model: r.model, Events: r.events}
-}
-
-const redactedMarker = "[redacted]"
-
-/*
-RedactToolResult scrubs values that must never reach a public transcript.
-
-The execution agent's get_account_funds tool returns the account's
-available USD cash; the transcript is publicly viewable, so the dollar
-amount is replaced with a marker while the surrounding shape is kept so
-the UI can still show that the model checked funds. Every other tool's
-result passes through unchanged, as does a get_account_funds result
-that doesn't parse as the expected object (defensive: never emit a raw
-balance because the shape drifted).
-*/
-func RedactToolResult(toolName, result string) string {
-	if toolName != "get_account_funds" {
-		return result
-	}
-	var obj map[string]any
-	if err := json.Unmarshal([]byte(result), &obj); err != nil {
-		// Unparseable — could still contain the balance as free text.
-		// Drop it entirely rather than risk leaking the number.
-		return `{"available_usd":"` + redactedMarker + `"}`
-	}
-	if _, ok := obj["available_usd"]; ok {
-		obj["available_usd"] = redactedMarker
-	}
-	// Preserve an error payload verbatim (no balance to leak there).
-	out, err := json.Marshal(obj)
-	if err != nil {
-		return `{"available_usd":"` + redactedMarker + `"}`
-	}
-	return string(out)
 }

@@ -1,8 +1,9 @@
-import { ArrowRight, Clock, Eye, LogIn, Sparkles, Zap } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, Ban, Building2, ClipboardList, Clock, Eye, Gauge, Globe, Hand, History, Layers, LineChart, LogIn, type LucideIcon, NotebookPen, Search, Sparkles, TrendingUp, Wallet, Zap } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AmbientBackground } from "@/components/landing/ambient-background";
 import { LandingNavAccount } from "@/components/landing/nav-account";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Reveal } from "@/components/landing/reveal";
 import { SubscribeCTA } from "@/components/landing/subscribe-cta";
 import { Testimonials } from "@/components/landing/testimonials";
@@ -10,9 +11,9 @@ import { TrustedBy } from "@/components/landing/trusted-by";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 
 export const metadata: Metadata = {
-  title: "VibeTradez | AI-Powered Options Picks",
+  title: "VibeTradez | An AI Runs a Real Brokerage Account",
   description:
-    "An LLM picks 3 options contracts every weekday with live market data and a written rationale for each. All 3 auto-fire in my actual brokerage account at the open. Free to watch, expensive to run.",
+    "A language model runs one real brokerage account. Every weekday it decides what to do with the money, stocks or options, sizes within hard caps, and holds what it believes in across days. Free to watch, expensive to run.",
 };
 
 export default function LandingPage() {
@@ -20,14 +21,15 @@ export default function LandingPage() {
     <div className="relative min-h-dvh overflow-hidden bg-background text-foreground">
       <AmbientBackground position="absolute" />
 
-      {/* ── Floating glass nav (kept, it's a fixed surface, not a content card) ── */}
-      <nav className="fixed top-3 left-1/2 z-50 w-[calc(100%-1.5rem)] -translate-x-1/2 sm:top-4 sm:max-w-5xl">
-        <div className="lg-panel lg-edge-shine flex items-center justify-between px-4 py-2 sm:px-5 sm:py-2.5">
+      {/* ── Glass nav, rendered in place at the top (does not follow scroll) ── */}
+      <nav className="relative z-50 mx-auto mt-3 w-[calc(100%-1.5rem)] sm:mt-4 sm:max-w-5xl">
+        <div className="flex items-center justify-between px-1 py-2 sm:py-2.5">
           <Link href="/" className="inline-flex min-h-11 items-center text-xl font-extrabold tracking-tight sm:min-h-9">
             <span className="text-foreground">Vibe</span>
             <span className="text-gradient-brand">Tradez</span>
           </Link>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <SubscribeCTA className="hidden h-9 items-center rounded-full border border-foreground/10 bg-foreground/5 px-3.5 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/10 sm:inline-flex">
               Sign in
             </SubscribeCTA>
@@ -44,15 +46,15 @@ export default function LandingPage() {
       </nav>
 
       {/* ── Hero ── */}
-      <section className="relative px-5 pt-32 pb-28 sm:px-6 sm:pt-44 sm:pb-40">
+      <section className="relative px-5 pt-16 pb-28 sm:px-6 sm:pt-24 sm:pb-40">
         <div className="relative z-10 mx-auto max-w-4xl text-center">
           <Reveal effect="fall" duration={600}>
-            <span className="lg-pill inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-medium text-foreground/80 sm:text-[13px]">
+            <span className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground sm:text-[13px]">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
               </span>
-              Live now &middot; free daily picks at the open
+              Live now &middot; real money, questionable judgment
             </span>
           </Reveal>
 
@@ -66,7 +68,7 @@ export default function LandingPage() {
 
           <Reveal effect="rise" delay={280} duration={900}>
             <p className="mx-auto mt-7 max-w-[640px] text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Every weekday, a language model picks 3 options contracts before the bell and auto-fires all 3 in my real brokerage account at the open. By close, you see whether Claudia was right. She is sometimes.
+A language model runs my real brokerage account. Stocks, options, or a pile of cash it was too nervous to deploy. You watch it either beat the S&amp;P or find fresh new ways not to. No humans were consulted.
             </p>
           </Reveal>
 
@@ -87,7 +89,7 @@ export default function LandingPage() {
           </Reveal>
 
           <Reveal effect="rise" delay={580} duration={700}>
-            <div className="mt-14 flex items-center justify-center gap-2 text-[13px] text-muted-foreground">
+            <div className="mt-12 flex items-center justify-center gap-2 text-[13px] text-muted-foreground">
               <span className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground/70">Powered by</span>
               <ClaudeLogo className="h-4 w-4" />
               <span className="font-medium">Claudia</span>
@@ -102,9 +104,9 @@ export default function LandingPage() {
         <div className="relative z-10 mx-auto max-w-6xl">
           <Reveal effect="rise" duration={700}>
             <div className="mx-auto max-w-2xl text-center">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">The pipeline</span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">How it runs</span>
               <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
-                Real trades fire every weekday. <span className="text-gradient-brand">No clicks needed.</span>
+Zero <span className="text-gradient-brand">adult supervision.</span>
               </h2>
             </div>
           </Reveal>
@@ -156,6 +158,65 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── The toolset: exactly what Claude can see and do, plus the standing risk note ── */}
+      <section className="relative px-5 pb-28 sm:px-6 sm:pb-40">
+        <div className="relative z-10 mx-auto max-w-5xl">
+          <Reveal effect="rise" duration={700}>
+            <div className="mx-auto max-w-2xl text-center">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">The toolset</span>
+              <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
+                Everything Claude can <span className="text-gradient-brand">see and do.</span>
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-[15px]">
+A short, locked-down list. Every hard cap is enforced in code before an execution tool can reach the broker.
+              </p>
+            </div>
+          </Reveal>
+
+          {/* Reading tools */}
+          <Reveal effect="rise" delay={100} duration={600} className="mt-12">
+            <div className="flex items-center gap-3">
+              <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Reading tools</h3>
+              <span className="h-px flex-1 bg-foreground/10" />
+              <span className="text-[11px] font-semibold text-muted-foreground/60">{readTools.length} tools</span>
+            </div>
+            <div className="mt-2 grid grid-cols-1 gap-x-8 border-t border-border/40 sm:grid-cols-2">
+              {readTools.map((t) => (
+                <ToolRow key={t.name} Icon={t.Icon} name={t.name} desc={t.desc} iconClass="bg-foreground/[0.05] text-foreground/70 ring-1 ring-foreground/10" />
+              ))}
+            </div>
+          </Reveal>
+
+          {/* Execution tools — brand-accented to flag that these touch real money */}
+          <Reveal effect="rise" delay={200} duration={600} className="mt-12">
+            <div className="flex items-center gap-3">
+              <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground">Execution tools</h3>
+              <span className="h-px flex-1 bg-gradient-brand opacity-30" />
+              <span className="text-[11px] font-semibold text-gradient-brand">real money</span>
+            </div>
+            <div className="mt-2 border-t border-border/40">
+              {actTools.map((t) => (
+                <ToolRow key={t.name} Icon={t.Icon} name={t.name} desc={t.desc} iconClass="bg-gradient-brand text-primary-foreground" badge="capped" />
+              ))}
+            </div>
+          </Reveal>
+
+          {/* Documentation — clay-accented; writes to the record, no data and no money */}
+          <Reveal effect="rise" delay={300} duration={600} className="mt-12">
+            <div className="flex items-center gap-3">
+              <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-claude">Documentation</h3>
+              <span className="h-px flex-1 bg-claude/30" />
+              <span className="text-[11px] font-semibold text-claude">no money</span>
+            </div>
+            <div className="mt-2 border-t border-border/40">
+              {docTools.map((t) => (
+                <ToolRow key={t.name} Icon={t.Icon} name={t.name} desc={t.desc} iconClass="bg-card text-claude ring-1 ring-claude-border" />
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
       {/* ── Open source: flat two-column block (no panel/card), left pitch + right plain-text
               source tree, separated by a single hairline so it reads as page content, not a card.
               Sits right after the pipeline so the genuine "read the code" trust beat lands before
@@ -174,7 +235,7 @@ export default function LandingPage() {
                   No black box. <span className="text-gradient-brand">Read the code.</span>
                 </h2>
                 <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground sm:text-[15px]">
-                  Backend, frontend, broker wiring, and the exact prompt Claudia runs on, all public. See a smarter way to pick? Open a PR and I&apos;ll merge it in.
+                  All of it is public, down to the exact prompt the model runs on. Think you can do better? Prove it in a PR.
                 </p>
                 <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
                   <a
@@ -236,13 +297,13 @@ export default function LandingPage() {
             <div className="relative">
               <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Free, forever</span>
               <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
-                Start getting <span className="text-gradient-brand">picks</span>
+                Start getting the <span className="text-gradient-brand">recap</span>
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-                Free, no credit card, no premium tier. Unsubscribe any time. <span className="italic">(I will hate you.)</span>
+One email a day: what it did and whether it worked. Free, no catch, no upsell. Leave whenever. <span className="italic">(I will hate you.)</span>
               </p>
               <div className="mt-8 flex flex-col items-center gap-4">
-                <SubscribeCTA className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gradient-brand px-8 text-[15px] font-semibold text-white shadow-lg transition-opacity hover:opacity-90">
+                <SubscribeCTA className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-gradient-brand px-8 text-[15px] font-semibold text-primary-foreground shadow-sm transition-opacity hover:opacity-90">
                   <LogIn className="h-4 w-4" />
                   Sign in or sign up
                 </SubscribeCTA>
@@ -250,7 +311,7 @@ export default function LandingPage() {
                   href="/dashboard"
                   className="group inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  or just watch the picks live
+                  or just watch the book live
                   <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                 </Link>
               </div>
@@ -259,8 +320,50 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Coming soon: bring-your-own-brokerage, flat two-column hairline block (no panel/cards) ── */}
+      <section className="relative px-5 pb-28 sm:px-6 sm:pb-40">
+        <div className="relative z-10 mx-auto max-w-5xl">
+          <Reveal effect="rise" duration={700}>
+            <div className="grid gap-10 border-t border-border/50 pt-12 md:grid-cols-[1.05fr_0.95fr] md:items-start md:gap-14">
+              {/* Left: the pitch */}
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-gradient-brand">Coming soon</span>
+                <h2 className="mt-3 text-2xl font-extrabold tracking-tight sm:text-3xl">
+                  Bring your <span className="text-gradient-brand">own brokerage.</span>
+                </h2>
+                <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground sm:text-[15px]">
+                  Link your own account and let a model run it on your terms. The same hard caps, the same tool-by-tool transcript, the same daily recap. You stay in control, it does the legwork.
+                </p>
+                <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
+                  <SubscribeCTA className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-foreground/10 bg-foreground/[0.03] px-5 text-sm font-semibold text-foreground transition-colors hover:border-foreground/25 hover:bg-foreground/[0.06]">
+                    <LogIn className="h-4 w-4" />
+                    Get notified first
+                  </SubscribeCTA>
+                  <span className="text-sm text-muted-foreground">No waitlist games. Subscribers hear first.</span>
+                </div>
+              </div>
+
+              {/* Right: flat divided list, hairlines instead of cards */}
+              <div className="divide-y divide-border/50 border-t border-border/50 md:border-t-0 md:border-l md:border-foreground/10 md:pl-12">
+                {comingSoon.map((c) => (
+                  <div key={c.title} className="flex items-start gap-3.5 py-4 first:pt-0 md:first:pt-4">
+                    <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-foreground/[0.05] text-foreground/70 ring-1 ring-foreground/10">
+                      <c.Icon className="h-4 w-4" aria-hidden />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold tracking-tight text-foreground">{c.title}</div>
+                      <div className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">{c.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
       {/* ── Footer ── */}
-      <footer className="relative border-t border-foreground/5 bg-background/60 backdrop-blur-xl dark:border-white/5">
+      <footer className="relative border-t border-border">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-8 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-center gap-2">
             <span className="font-extrabold text-foreground">
@@ -269,8 +372,7 @@ export default function LandingPage() {
             <span>&copy; {new Date().getFullYear()}</span>
           </div>
           <p className="max-w-lg leading-relaxed">
-            Not financial advice. Options trading involves substantial risk. All P&amp;L figures are hypothetical except for auto-fired paper or live trades. Past performance does not guarantee future
-            results.
+            Not financial advice. Trading involves substantial risk. Every figure here reflects a single real brokerage account trading live with real money. Past performance does not guarantee future results.
           </p>
           <div className="flex flex-wrap gap-4">
             <Link href="/terms" className="inline-flex min-h-11 min-w-11 items-center justify-center underline underline-offset-2 hover:text-foreground sm:min-h-0 sm:min-w-0 sm:justify-start">
@@ -318,35 +420,78 @@ function GitHubMark({ className }: { className?: string }) {
 
 const stack = [
   { path: "server/", note: "Go · cron · daily lifecycle" },
-  { path: "execagent/", note: "at-open trader · hard caps" },
-  { path: "trades/prompt.go", note: "the exact picker prompt" },
+  { path: "portfolio/", note: "the daily manager · hard caps" },
+  { path: "portfolio/prompt.go", note: "the exact mandate prompt" },
   { path: "schwab/", note: "live quotes · order wiring" },
   { path: "client/", note: "Next.js 16 · React 19" },
 ];
 
+function ToolRow({ Icon, name, desc, iconClass, badge }: { Icon: LucideIcon; name: string; desc: string; iconClass: string; badge?: string }) {
+  return (
+    <div className="flex items-center gap-3 border-b border-border/40 py-3">
+      <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${iconClass}`}>
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <code className="block break-words font-mono text-[13px] font-semibold text-foreground">{name}</code>
+        <p className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground">{desc}</p>
+      </div>
+      {badge && <span className="shrink-0 rounded-full border border-foreground/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground/70">{badge}</span>}
+    </div>
+  );
+}
+
+const readTools = [
+  { name: "get_portfolio", desc: "Positions, cost basis, cash, equity", Icon: Wallet },
+  { name: "get_stock_quotes", desc: "Live equity quotes", Icon: LineChart },
+  { name: "get_option_chain", desc: "Live chains with greeks, OI, volume", Icon: Layers },
+  { name: "get_price_history", desc: "Trend, moving averages, 52-week range, vol", Icon: TrendingUp },
+  { name: "get_fundamentals", desc: "Valuation, market cap, dividend, earnings date", Icon: Building2 },
+  { name: "get_cap_headroom", desc: "Room left under each risk cap", Icon: Gauge },
+  { name: "get_recent_decisions", desc: "Its own recent moves and stance", Icon: History },
+  { name: "get_order_status", desc: "Whether an order is working, filled, or canceled", Icon: ClipboardList },
+  { name: "web_search", desc: "News and catalysts", Icon: Search },
+  { name: "web_fetch", desc: "Open and read a full article or finance page", Icon: Globe },
+];
+
+const actTools = [
+  { name: "buy_equity / sell_equity", desc: "Open, add, trim, or close long stock", Icon: ArrowLeftRight },
+  { name: "buy_option / sell_option", desc: "Open or close long calls and puts", Icon: Layers },
+  { name: "cancel_order", desc: "Cancel a resting order to re-price a fill", Icon: Ban },
+  { name: "hold", desc: "Keep carrying a position you already held, unchanged", Icon: Hand },
+];
+
+const docTools = [{ name: "write_summary", desc: "Record the day's session summary for the account's log", Icon: NotebookPen }];
+
+const comingSoon = [
+  { title: "Connect your broker", desc: "Securely link a supported brokerage in a couple of clicks.", Icon: Building2 },
+  { title: "Set your own caps", desc: "Dial in per-name, options, and drawdown limits before it trades a cent.", Icon: Gauge },
+  { title: "Your private recap", desc: "A daily email and full transcript for your account, just like this one.", Icon: NotebookPen },
+];
+
 const pipeline = [
   {
-    time: "9:25 AM ET",
-    title: "Picks 3 tickers",
-    detail: "Reads overnight news and live signals, then returns 3 tickers, each with a direction and a rationale.",
+    time: "Each session",
+    title: "Reads the room",
+    detail: "Checks what it owns, the news, and the tape. Mostly to confirm its own genius.",
     Icon: Sparkles,
   },
   {
-    time: "9:30:00 AM ET",
-    title: "Buys the contracts",
-    detail: "Reads the live chain and fires real orders, buying one contract of each pick whose setup still holds.",
+    time: "Makes its moves",
+    title: "Buys, trims, or chickens out",
+    detail: "Grabs a stock, a call, or a put. Cuts a loser, or hides in cash. Always within the caps.",
     Icon: Zap,
   },
   {
-    time: "Mid-day",
-    title: "Live dashboard",
-    detail: "Buy and current marks tick in real time. Every position is badged real, because it is.",
+    time: "Across days",
+    title: "Holds the line",
+    detail: "Keeps what it believes in instead of panic-selling at 3:55. Brave, or stubborn.",
     Icon: Eye,
   },
   {
-    time: "3:55 PM ET",
-    title: "Mandatory close",
-    detail: "Every position closes five minutes before the bell. No overnight risk.",
+    time: "Every evening",
+    title: "Files a report",
+    detail: "One email: what it did, why, and whether it is beating the S&P or coping.",
     Icon: Clock,
   },
 ];

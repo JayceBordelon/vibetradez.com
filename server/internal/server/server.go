@@ -11,7 +11,6 @@ import (
 	"log"
 	"net/http"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -21,11 +20,8 @@ import (
 	"vibetradez.com/internal/auth"
 	"vibetradez.com/internal/email"
 	"vibetradez.com/internal/exec"
-	"vibetradez.com/internal/quotes"
 	"vibetradez.com/internal/schwab"
-	"vibetradez.com/internal/sentiment"
 	"vibetradez.com/internal/store"
-	"vibetradez.com/internal/trades"
 	"vibetradez.com/internal/unsub"
 )
 
@@ -60,7 +56,6 @@ type Server struct {
 	db             *store.Store
 	schwab         *schwab.Client
 	auth           *auth.Service
-	scraper        *sentiment.Scraper
 	emailClient    *email.Client
 	emailFrom      string
 	anthropicKey   string
@@ -69,7 +64,7 @@ type Server struct {
 	sessionTTL     time.Duration
 	mux            *http.ServeMux
 	port           string
-	// Auto-execution (paper or live). nil = trading disabled at startup.
+	// Live auto-execution. nil = trading disabled at startup.
 	executor *exec.Service
 
 	// Unsubscribe HMAC key + previous keys for rotation + the public-
@@ -80,15 +75,7 @@ type Server struct {
 	unsubscribeKey     []byte
 	unsubscribePrevKey [][]byte
 	publicBaseURL      string
-
-	// Live-quotes hub. Set via SetHub after construction since the hub
-	// needs the DB (which lives in this server) at build time.
-	hub *quotes.Hub
 }
-
-// SetHub wires the live-quotes streaming hub. Must be called after New
-// and before Start. Idempotent.
-func (s *Server) SetHub(h *quotes.Hub) { s.hub = h }
 
 type subscribeRequest struct {
 	Email string `json:"email"`
@@ -105,12 +92,11 @@ type apiResponse struct {
 	Message string `json:"message"`
 }
 
-func New(db *store.Store, schwabClient *schwab.Client, authService *auth.Service, scraper *sentiment.Scraper, emailClient *email.Client, emailFrom, anthropicKey, anthropicModel, sessionCookie string, sessionTTL time.Duration, port string, executor *exec.Service, unsubscribeKey []byte, unsubscribePrevKey [][]byte, publicBaseURL string) *Server {
+func New(db *store.Store, schwabClient *schwab.Client, authService *auth.Service, emailClient *email.Client, emailFrom, anthropicKey, anthropicModel, sessionCookie string, sessionTTL time.Duration, port string, executor *exec.Service, unsubscribeKey []byte, unsubscribePrevKey [][]byte, publicBaseURL string) *Server {
 	s := &Server{
 		db:                 db,
 		schwab:             schwabClient,
 		auth:               authService,
-		scraper:            scraper,
 		emailClient:        emailClient,
 		emailFrom:          emailFrom,
 		anthropicKey:       anthropicKey,
@@ -164,19 +150,12 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/subscribe", requireInternal(subscribeLimit.middleware(s.handleSubscribe)))
 	s.mux.HandleFunc("/api/unsubscribe", requireInternal(subscribeLimit.middleware(s.handleUnsubscribe)))
 	s.mux.HandleFunc("/api/me", requireInternal(s.auth.AttachUser(s.sessionCookie, s.handleMe)))
-	s.mux.HandleFunc("/api/trades/today", requireInternal(s.handleTradesToday))
-	s.mux.HandleFunc("/api/trades/week", requireInternal(s.handleTradesWeek))
+	s.mux.HandleFunc("/api/portfolio", requireInternal(s.handlePortfolio))
+	s.mux.HandleFunc("/api/portfolio/equity-curve", requireInternal(s.handlePortfolioEquityCurve))
+	s.mux.HandleFunc("/api/portfolio/holdings", requireInternal(s.handlePortfolioHoldings))
+	s.mux.HandleFunc("/api/portfolio/closed", requireInternal(s.handlePortfolioClosed))
 	s.mux.HandleFunc("/api/transcript", requireInternal(s.handleTranscript))
 	s.mux.HandleFunc("/api/market/status", requireInternal(s.handleMarketStatus))
-	/*
-		SSE stream — intentionally NOT gated by requireInternal. The
-		browser EventSource API cannot set custom headers, so a route
-		behind X-VT-Source is unreachable from the dashboard. Cross-
-		origin abuse is naturally blocked by the absence of CORS
-		headers on the response: a malicious-origin EventSource fails
-		the handshake. Read-only public market quotes anyway.
-	*/
-	s.mux.HandleFunc("/api/quotes/stream", s.handleQuoteStream)
 }
 
 func (s *Server) Start() {
@@ -209,154 +188,6 @@ func requireInternal(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-type dashboardTrade struct {
-	Trade   trades.Trade         `json:"trade"`
-	Summary *trades.TradeSummary `json:"summary,omitempty"`
-}
-
-type dashboardResponse struct {
-	Date   string           `json:"date"`
-	Trades []dashboardTrade `json:"trades"`
-	/*
-		Executions surfaces every position taken (paper or live) on a
-		trade from this date. Empty when no qualifying pick converted to
-		an actual execution that day. The basket auto-executor fires up
-		to three contracts per day (one per rank 1..3), so the frontend
-		matches each entry to its trade card by symbol + contract_type +
-		strike to render badges and to source realized P&L from broker
-		truth instead of Claudia's modeled summary numbers.
-	*/
-	Executions []*store.ExecutionView `json:"executions,omitempty"`
-}
-
-type weekDay struct {
-	Date       string                 `json:"date"`
-	Trades     []dashboardTrade       `json:"trades"`
-	Executions []*store.ExecutionView `json:"executions,omitempty"`
-}
-
-type weekResponse struct {
-	Start string    `json:"start"`
-	End   string    `json:"end"`
-	Days  []weekDay `json:"days"`
-}
-
-func (s *Server) handleTradesToday(w http.ResponseWriter, r *http.Request) {
-	// Accept optional ?date= query param for historical browsing
-	requestDate := r.URL.Query().Get("date")
-
-	var date string
-	var err error
-	if requestDate != "" {
-		date = requestDate
-	} else {
-		date, err = s.db.GetLatestTradeDate()
-		if err != nil {
-			/*
-				No trade data yet (fresh DB, pre-cron). Return an empty
-				trades slice (NEVER nil) so the frontend can safely call
-				.filter / .map without a null guard and falls through to
-				the EmptyState branch.
-			*/
-			writeJSON(w, http.StatusOK, dashboardResponse{Trades: []dashboardTrade{}})
-			return
-		}
-	}
-
-	morningTrades, err := s.db.GetMorningTrades(date)
-	if err != nil {
-		writeJSON(w, http.StatusOK, dashboardResponse{Date: date, Trades: []dashboardTrade{}})
-		return
-	}
-
-	summaries, _ := s.db.GetEODSummaries(date)
-	summaryMap := make(map[string]*trades.TradeSummary)
-	for i := range summaries {
-		key := summaries[i].Symbol + "|" + summaries[i].ContractType + "|" + fmt.Sprintf("%.2f", summaries[i].StrikePrice)
-		summaryMap[key] = &summaries[i]
-	}
-
-	result := make([]dashboardTrade, len(morningTrades))
-	for i, t := range morningTrades {
-		var summary *trades.TradeSummary
-		if t.ContractResolved() {
-			key := t.Symbol + "|" + t.ContractType + "|" + fmt.Sprintf("%.2f", t.Strike())
-			summary = summaryMap[key]
-		}
-		result[i] = dashboardTrade{Trade: t, Summary: summary}
-	}
-
-	/*
-		Optional execution badges for transparency. Errors are non-fatal —
-		the dashboard still renders without badges if the lookup fails.
-	*/
-	execs, _ := s.db.GetExecutionsForDate(date)
-
-	w.Header().Set("Cache-Control", "public, max-age=30")
-	writeJSON(w, http.StatusOK, dashboardResponse{Date: date, Trades: result, Executions: execs})
-}
-
-func (s *Server) handleTradesWeek(w http.ResponseWriter, r *http.Request) {
-	start := r.URL.Query().Get("start")
-	end := r.URL.Query().Get("end")
-
-	if start == "" || end == "" {
-		writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Message: "start and end query params required"})
-		return
-	}
-
-	tradesMap, err := s.db.GetTradesForDateRange(start, end)
-	if err != nil {
-		/*
-			Always return an empty array for days (never nil) so the
-			frontend can safely call .map without a null guard.
-		*/
-		writeJSON(w, http.StatusOK, weekResponse{Start: start, End: end, Days: []weekDay{}})
-		return
-	}
-
-	summariesMap, _ := s.db.GetSummariesForDateRange(start, end)
-	executionsMap, _ := s.db.GetExecutionsForDateRange(start, end)
-
-	// Collect all dates that have trades
-	dateSet := make(map[string]bool)
-	for d := range tradesMap {
-		dateSet[d] = true
-	}
-	var dates []string
-	for d := range dateSet {
-		dates = append(dates, d)
-	}
-	sort.Strings(dates)
-
-	days := []weekDay{}
-	for _, date := range dates {
-		dayTrades := tradesMap[date]
-		daySummaries := summariesMap[date]
-
-		summaryMap := make(map[string]*trades.TradeSummary)
-		for i := range daySummaries {
-			key := daySummaries[i].Symbol + "|" + daySummaries[i].ContractType + "|" + fmt.Sprintf("%.2f", daySummaries[i].StrikePrice)
-			summaryMap[key] = &daySummaries[i]
-		}
-
-		result := make([]dashboardTrade, len(dayTrades))
-		for i, t := range dayTrades {
-			var summary *trades.TradeSummary
-			if t.ContractResolved() {
-				key := t.Symbol + "|" + t.ContractType + "|" + fmt.Sprintf("%.2f", t.Strike())
-				summary = summaryMap[key]
-			}
-			result[i] = dashboardTrade{Trade: t, Summary: summary}
-		}
-
-		days = append(days, weekDay{Date: date, Trades: result, Executions: executionsMap[date]})
-	}
-
-	w.Header().Set("Cache-Control", "public, max-age=30")
-	writeJSON(w, http.StatusOK, weekResponse{Start: start, End: end, Days: days})
-}
-
 /*
 transcriptResponse is the wire shape for GET /api/transcript. Available
 is false (with an empty Events array) when no transcript exists for the
@@ -376,18 +207,16 @@ type transcriptResponse struct {
 
 /*
 handleTranscript serves the captured model conversation for a given
-trading day and kind. kind is "selection" (the 9:25 picker) or
-"execution" (the 9:30 at-open agent); both are required query params.
-The get_account_funds balance is already redacted at capture time, so
-this is safe to serve on the same public (internal-header-gated) surface
-as the dashboard trades.
+trading day and kind (e.g. "portfolio" for the daily session). It is the
+same single public account the dashboard already shows, so the transcript
+is served verbatim on the internal-header-gated surface, balances included.
 */
 func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request) {
 	date := r.URL.Query().Get("date")
 	kind := r.URL.Query().Get("kind")
 
-	if kind != "selection" && kind != "execution" {
-		writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Message: "kind must be 'selection' or 'execution'"})
+	if kind != "selection" && kind != "execution" && kind != "portfolio" {
+		writeJSON(w, http.StatusBadRequest, apiResponse{OK: false, Message: "kind must be 'selection', 'execution', or 'portfolio'"})
 		return
 	}
 	if date == "" {
@@ -711,61 +540,13 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	/*
 		Schwab Accounts and Trading Production — verifies the OAuth token
 		has the Trading product scope by hitting the accountNumbers
-		endpoint. Severity is conditional on trading mode:
-		  - executor nil OR mode=paper: failure is `warn` (trading scope
-		    isn't load-bearing yet, just a heads-up that re-auth is needed
-		    before flipping to live).
-		  - mode=live: failure is `fail` and trips allOK so the deploy
-		    healthcheck blocks (because live orders WILL be attempted and
-		    they'll bounce without trading scope).
+		endpoint. Any token failure is `fail` and trips allOK so the deploy
+		healthcheck blocks: this account trades live, so live orders WILL be
+		attempted and they bounce without trading scope.
 	*/
 	tradingHealth := s.checkSchwabTrading(r.Context())
 	services["schwab_trading"] = tradingHealth
 	if tradingHealth.Status == "fail" {
-		allOK = false
-	}
-
-	// Market signal sources
-	signalCtx, signalCancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer signalCancel()
-	probeResults := s.scraper.ProbeAll(signalCtx)
-	okCount := 0
-	sourceNames := make([]string, 0, len(probeResults))
-	for _, src := range probeResults {
-		if src.OK {
-			okCount++
-		}
-		sourceNames = append(sourceNames, src.Name)
-	}
-	switch {
-	case okCount == len(probeResults):
-		services["market_signals"] = serviceHealth{
-			Status: "ok",
-			Detail: fmt.Sprintf("%d/%d sources healthy (%s)", okCount, len(probeResults), strings.Join(sourceNames, ", ")),
-		}
-	case okCount > 0:
-		var failed []string
-		for _, src := range probeResults {
-			if !src.OK {
-				failed = append(failed, src.Name)
-			}
-		}
-		services["market_signals"] = serviceHealth{
-			Status: "warn",
-			Detail: fmt.Sprintf("%d/%d sources healthy (down: %s)", okCount, len(probeResults), strings.Join(failed, ", ")),
-		}
-	default:
-		services["market_signals"] = serviceHealth{
-			Status: "fail",
-			Detail: "All market signal sources unreachable",
-		}
-		allOK = false
-	}
-
-	// Morning picks — surfaces single-model degraded runs (e.g. Claude
-	// timed out at 9:35 ET) that the cron logs but nothing else gates on.
-	services["morning_picks"] = s.checkMorningPicks()
-	if services["morning_picks"].Status == "fail" {
 		allOK = false
 	}
 
@@ -800,52 +581,6 @@ func isStubKey(k string) bool {
 	return false
 }
 
-/*
-checkMorningPicks reports whether today's 9:30 ET trade-picking cron
-ran cleanly. Reads today's saved trades and counts how many came from
-each picker. Severity:
-  - ok:   both pickers produced ≥1 pick today, OR the morning run is
-    not yet expected (weekend, or before ~9:45 ET on a weekday)
-  - warn: exactly one picker produced 0 picks (single-model run), or
-    no trades exist for today after the expected run time (also
-    covers market holidays — false-positive warns are tolerable
-    since warn doesn't trip allOK)
-
-Reserved as warn rather than fail so a stale morning issue can't block
-a fresh deploy from going out — a deploy is often the fix.
-*/
-func (s *Server) checkMorningPicks() serviceHealth {
-	loc, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		return serviceHealth{Status: "warn", Detail: "Could not load ET timezone: " + err.Error()}
-	}
-	now := time.Now().In(loc)
-	today := now.Format("2006-01-02")
-
-	// Weekend: cron doesn't fire, no trades expected.
-	if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
-		return serviceHealth{Status: "ok", Detail: "No morning run scheduled (weekend)"}
-	}
-
-	// Cron fires at 9:30 ET; pickers take 1–10 minutes. Give 15 min slack.
-	expectedBy := time.Date(now.Year(), now.Month(), now.Day(), 9, 45, 0, 0, loc)
-	morningRunExpected := !now.Before(expectedBy)
-
-	tradesToday, err := s.db.GetMorningTrades(today)
-	if err != nil {
-		return serviceHealth{Status: "warn", Detail: "Could not query today's trades: " + err.Error()}
-	}
-
-	if len(tradesToday) == 0 {
-		if !morningRunExpected {
-			return serviceHealth{Status: "ok", Detail: "Morning run not yet expected (cron at 9:30 ET)"}
-		}
-		return serviceHealth{Status: "warn", Detail: fmt.Sprintf("No trades saved for %s (cron failure or market holiday)", today)}
-	}
-
-	return serviceHealth{Status: "ok", Detail: fmt.Sprintf("Claude produced %d picks today", len(tradesToday))}
-}
-
 func (s *Server) checkAnthropic() serviceHealth {
 	if s.anthropicKey == "" {
 		return serviceHealth{Status: "fail", Detail: "API key not configured"}
@@ -878,11 +613,10 @@ Trading Production" Schwab product. Hits /trader/v1/accounts/
 accountNumbers, the lightest endpoint on the Trader API surface.
 
 Any token-related failure (not authorized, refresh rejected, 401/403
-on the scoped probe, non-200 from Schwab) returns `fail` regardless
-of trading mode. Paper vs live is irrelevant for the "is the token
-healthy" question, and a green-looking row when the token is dead
-hid today's outage from the deploy email. "Not configured" stays
-`warn` since that's an env state, not a token state.
+on the scoped probe, non-200 from Schwab) returns `fail`. A
+green-looking row when the token is dead hid today's outage from the
+deploy email. "Not configured" stays `warn` since that's an env state,
+not a token state.
 */
 func (s *Server) checkSchwabTrading(ctx context.Context) serviceHealth {
 	if s.schwab == nil {

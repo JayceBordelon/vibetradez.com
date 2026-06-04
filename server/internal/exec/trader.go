@@ -8,36 +8,33 @@ import (
 
 /*
 TraderClient abstracts the order-placement surface so the
-auto-execution pipeline can be unit-tested with a fake and so the
-paper / live mode switch is a single object swap at startup. Live
-implementations live in the schwab package; the paper implementation
-lives in this package next to the rest of the execution logic.
+auto-execution pipeline can be unit-tested with a fake. The live
+implementation lives in the schwab package and is the only production
+client; this account trades real money.
 */
 type TraderClient interface {
 	/*
 		AccountHash returns the Schwab-issued account hash (NOT the raw
-		account number). Almost all other endpoints take the hash. Live
-		implementations cache; paper returns a synthetic constant.
+		account number). Almost all other endpoints take the hash. The live
+		implementation caches it.
 	*/
 	AccountHash(ctx context.Context) (string, error)
 
 	/*
 		AvailableFunds returns the cash available to open a new position
-		without putting margin at risk. Live implementations call Schwab's
-		account-balance endpoint and prefer availableFundsNonMarginableTrade
-		(falls back to cashAvailableForTrading then availableFunds when the
-		account type doesn't surface the preferred field). Paper mode
-		returns a synthetic effectively-unlimited number so the basket cap
-		is the only constraint in paper.
+		without putting margin at risk. The live implementation calls
+		Schwab's account-balance endpoint and prefers
+		availableFundsNonMarginableTrade (falls back to
+		cashAvailableForTrading then availableFunds when the account type
+		doesn't surface the preferred field).
 	*/
 	AvailableFunds(ctx context.Context, accountHash string) (float64, error)
 
 	/*
-		PlaceOrder submits an order. Returns the order id from the broker
-		(or a synthetic "paper-<uuid>" id in paper mode). Errors from the
-		broker (validation, rejection, insufficient permissions) come back
-		as a non-nil error; the caller decides whether to retry, escalate,
-		or page the human.
+		PlaceOrder submits an order. Returns the order id from the broker.
+		Errors from the broker (validation, rejection, insufficient
+		permissions) come back as a non-nil error; the caller decides
+		whether to retry, escalate, or page the human.
 	*/
 	PlaceOrder(ctx context.Context, accountHash string, order Order) (orderID string, err error)
 
@@ -54,6 +51,40 @@ type TraderClient interface {
 		as best-effort.
 	*/
 	CancelOrder(ctx context.Context, accountHash, orderID string) error
+
+	/*
+		GetPositions returns every open position in the account (equity and
+		options). The v2 portfolio manager (internal/portfolio) reads this
+		at the start of each session to build its Snapshot — the broker is
+		the source of truth for what is held, not a local ledger. The
+		options-only v1 path never calls this. The live implementation hits
+		Schwab's account endpoint with fields=positions.
+	*/
+	GetPositions(ctx context.Context, accountHash string) ([]BrokerPosition, error)
+}
+
+/*
+BrokerPosition is one open holding as the broker reports it, normalized
+across equity and options. Quantity is net long (longQuantity minus
+shortQuantity). MarketValue is the current mark of the whole position;
+AverageCost is the per-unit cost basis (per share for equity, per share of
+premium for options — multiply by 100 × contracts for option dollar cost).
+Underlying is the equity ticker the position keys against for concentration
+accounting: equal to Symbol for equity, the option's underlying for
+options. Strike/Expiration/ContractType are populated for options only and
+may be left zero when the broker payload doesn't carry them (the caller can
+decode them from the OCC Symbol).
+*/
+type BrokerPosition struct {
+	Symbol       string  // equity ticker or OCC option symbol
+	AssetType    string  // "EQUITY" | "OPTION"
+	Underlying   string  // equity ticker the exposure keys against
+	Quantity     float64 // net long quantity (shares or contracts)
+	MarketValue  float64 // current market value of the whole position, USD
+	AverageCost  float64 // per-unit cost basis
+	ContractType string  // "CALL" | "PUT" (options only)
+	Strike       float64 // options only
+	Expiration   string  // YYYY-MM-DD (options only)
 }
 
 /*
@@ -73,14 +104,14 @@ type Order struct {
 }
 
 type OrderLeg struct {
-	Instruction string     `json:"instruction"` // "BUY_TO_OPEN" | "SELL_TO_CLOSE"
+	Instruction string     `json:"instruction"` // options: "BUY_TO_OPEN" | "SELL_TO_CLOSE"; equity: "BUY" | "SELL"
 	Quantity    int        `json:"quantity"`
 	Instrument  Instrument `json:"instrument"`
 }
 
 type Instrument struct {
-	Symbol    string `json:"symbol"`    // 21-char OCC OSI
-	AssetType string `json:"assetType"` // "OPTION"
+	Symbol    string `json:"symbol"`    // 21-char OCC OSI for options, plain ticker for equity
+	AssetType string `json:"assetType"` // "OPTION" | "EQUITY"
 }
 
 /*

@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"vibetradez.com/internal/sentiment"
 	"vibetradez.com/internal/store"
 	"vibetradez.com/internal/unsub"
 )
@@ -41,7 +40,7 @@ func setupTestServer(t *testing.T) *Server {
 
 	db.RemoveAllForTest()
 
-	return New(db, nil, nil, sentiment.NewScraper(), nil, "", "", "", "vt_session", 30*24*time.Hour, "0", nil, testUnsubKey, nil, "https://vibetradez.test")
+	return New(db, nil, nil, nil, "", "", "", "vt_session", 30*24*time.Hour, "0", nil, testUnsubKey, nil, "https://vibetradez.test")
 }
 
 /*

@@ -7,10 +7,10 @@ const OG_IMAGE = "/og/terms.png";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
-  description: "VibeTradez terms of service, risk disclosures, and legal disclaimers for AI-generated options trade suggestions.",
+  description: "VibeTradez terms of service: risk disclosures and legal disclaimers for an AI that runs a single personal brokerage account.",
   openGraph: {
     title: "VibeTradez | Terms of Service",
-    description: "VibeTradez terms of service, risk disclosures, and legal disclaimers for AI-generated options trade suggestions.",
+    description: "VibeTradez terms of service: risk disclosures and legal disclaimers for an AI that runs a single personal brokerage account.",
     images: [{ url: OG_IMAGE, width: 1200, height: 630 }],
   },
   twitter: {
@@ -25,7 +25,7 @@ const sections = [
   { id: "experimental", title: "Experimental Nature of This Service" },
   { id: "not-advice", title: "Not Financial Advice" },
   { id: "risk", title: "Significant Risk Disclosure" },
-  { id: "auto-execution", title: "Auto-Execution Pipeline" },
+  { id: "how-it-trades", title: "How the Portfolio Manager Trades" },
   { id: "data", title: "Data Sources & Accuracy" },
   { id: "warranty", title: "No Warranty & Limitation of Liability" },
   { id: "contact", title: "Contact" },
@@ -62,7 +62,7 @@ export default function TermsPage() {
         </aside>
 
         {/* Long-form content, authored in content/terms.mdx */}
-        <article className="lg-card prose-terms min-w-0 p-6 sm:p-8">
+        <article className="prose-terms min-w-0">
           <TermsContent />
           <div className="mt-12">
             <a href="#top" className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground sm:min-h-0">

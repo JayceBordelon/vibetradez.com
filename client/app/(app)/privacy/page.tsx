@@ -65,7 +65,7 @@ export default function PrivacyPage() {
         </aside>
 
         {/* Long-form content, authored in content/privacy.mdx */}
-        <article className="lg-card prose-terms min-w-0 p-6 sm:p-8">
+        <article className="prose-terms min-w-0">
           <PrivacyContent />
           <div className="mt-12">
             <a href="#top" className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground sm:min-h-0">

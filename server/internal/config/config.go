@@ -9,30 +9,16 @@ import (
 )
 
 type Config struct {
-	// CronScheduleOpen — picker fires (saves picks + emails subscribers).
-	// Default 9:25 ET so Claude has 5 minutes to complete the multi-round
-	// tool-use loop before market open. NO executor in this path.
-	CronScheduleOpen string
-	// CronScheduleExecute — basket fires at the open against fresh live
-	// Schwab quotes. Default 9:30:00 ET sharp. Each LIMIT order is
-	// fire-and-forget; the per-minute reconcile cron picks up fills.
-	CronScheduleExecute string
-	// CronScheduleCancelDangling — cancel any still-WORKING LIMITs that
-	// didn't fill in the first 5 minutes post-open, then send the single
-	// consolidated execution-summary email. Default 9:35 ET.
-	CronScheduleCancelDangling string
-	CronScheduleClose          string
-	CronScheduleWeekly         string
-	ResendAPIKey               string
-	AnthropicAPIKey            string
-	AnthropicModel             string
-	EmailRecipients            []string
-	EmailFrom                  string
-	DatabaseURL                string
-	ServerPort                 string
-	SchwabAppKey               string
-	SchwabSecret               string
-	SchwabCallbackURL          string
+	ResendAPIKey      string
+	AnthropicAPIKey   string
+	AnthropicModel    string
+	EmailRecipients   []string
+	EmailFrom         string
+	DatabaseURL       string
+	ServerPort        string
+	SchwabAppKey      string
+	SchwabSecret      string
+	SchwabCallbackURL string
 	/*
 		Token-at-rest encryption key for Schwab persisted access/refresh
 		tokens. Loaded from SCHWAB_TOKEN_ENCRYPTION_KEY (base64-encoded
@@ -85,16 +71,22 @@ type Config struct {
 	/*
 		Auto-execution feature. TradingEnabled is the master switch; when
 		false, the entire pipeline (selector, decision row, email, order)
-		is dead code and no rows are ever written. TradingMode chooses
-		between PaperTrader (synthetic fills, never touches Schwab Trader
-		API) and LiveTrader (real money). Default is paper, and "anything
-		not literally 'live'" resolves to paper, there is no fallback to
-		live on misconfiguration.
+		is dead code and no rows are ever written. When true, the manager
+		routes every order through the LiveTrader (real money) against the
+		Schwab Trader API. There is no paper mode: this account trades live.
 	*/
-	TradingEnabled     bool
-	TradingMode        string
-	ExecutionRecipient string
-	PublicBaseURL      string
+	TradingEnabled bool
+	PublicBaseURL  string
+	// OperatorEmail receives operational alerts (e.g. the Schwab
+	// refresh-token expiry nag), distinct from the subscriber list.
+	OperatorEmail string
+	/*
+		Portfolio-manager cron schedules. The manager runs live whenever
+		TradingEnabled is true.
+	*/
+	CronSchedulePortfolio   string
+	CronScheduleRisk        string
+	CronScheduleEODSnapshot string
 }
 
 /*
@@ -104,13 +96,6 @@ point at the latest production Claude model available in the SDK at the
 time of the edit. See CLAUDE.md "Model version refresh" for the policy.
 */
 const DefaultAnthropicModel = "claude-opus-4-8"
-
-/*
-CurrentModelLabel is the user-facing label for the picker model. Emails,
-logs, and the React app reference this constant instead of the versioned
-identifier so that bumping the default doesn't require a copy sweep.
-*/
-const CurrentModelLabel = "Claude Latest"
 
 func getEnvOrDefault(key, def string) string {
 	if v := os.Getenv(key); v != "" {
@@ -200,18 +185,13 @@ func Load() *Config {
 	}
 
 	return &Config{
-		CronScheduleOpen:           getEnvOrDefault("CRON_SCHEDULE_OPEN", "25 9 * * 1-5"),
-		CronScheduleExecute:        getEnvOrDefault("CRON_SCHEDULE_EXECUTE", "30 9 * * 1-5"),
-		CronScheduleCancelDangling: getEnvOrDefault("CRON_SCHEDULE_CANCEL_DANGLING", "35 9 * * 1-5"),
-		CronScheduleClose:          getEnvOrDefault("CRON_SCHEDULE_CLOSE", "0 16 * * 1-5"),
-		CronScheduleWeekly:         getEnvOrDefault("CRON_SCHEDULE_WEEKLY", "30 16 * * 5"),
-		ResendAPIKey:               resendKey,
-		AnthropicAPIKey:            anthropicKey,
-		AnthropicModel:             getEnvOrDefault("ANTHROPIC_MODEL", DefaultAnthropicModel),
-		EmailRecipients:            recipients,
-		EmailFrom:                  getEnvOrDefault("EMAIL_FROM", "Vibe Tradez <trades@vibetradez.com>"),
-		DatabaseURL:                databaseURL,
-		ServerPort:                 getEnvOrDefault("SERVER_PORT", "8080"),
+		ResendAPIKey:    resendKey,
+		AnthropicAPIKey: anthropicKey,
+		AnthropicModel:  getEnvOrDefault("ANTHROPIC_MODEL", DefaultAnthropicModel),
+		EmailRecipients: recipients,
+		EmailFrom:       getEnvOrDefault("EMAIL_FROM", "Vibe Tradez <trades@vibetradez.com>"),
+		DatabaseURL:     databaseURL,
+		ServerPort:      getEnvOrDefault("SERVER_PORT", "8080"),
 		/*
 			Schwab market data is optional, live quotes degrade gracefully when
 			keys are unset.
@@ -229,20 +209,14 @@ func Load() *Config {
 		SessionCookieName:       getEnvOrDefault("SESSION_COOKIE_NAME", "vt_session"),
 		SessionTTLDays:          sessionTTLDays,
 		TradingEnabled:          os.Getenv("TRADING_ENABLED") == "true",
-		TradingMode:             resolveTradingMode(os.Getenv("TRADING_MODE")),
-		ExecutionRecipient:      getEnvOrDefault("EXECUTION_RECIPIENT", "bordelonjayce@gmail.com"),
 		PublicBaseURL:           getEnvOrDefault("PUBLIC_BASE_URL", "https://vibetradez.com"),
+		OperatorEmail:           getEnvOrDefault("OPERATOR_EMAIL", "bordelonjayce@gmail.com"),
+		// Portfolio agent fires ~9:45 ET, after the opening-auction
+		// volatility settles. Risk cron sweeps every 15 minutes during
+		// market hours for the drawdown breaker + held-option expiry rule.
+		// EOD snapshot writes the equity curve at 16:00 ET.
+		CronSchedulePortfolio:   getEnvOrDefault("CRON_SCHEDULE_PORTFOLIO", "45 9 * * 1-5"),
+		CronScheduleRisk:        getEnvOrDefault("CRON_SCHEDULE_RISK", "*/15 10-15 * * 1-5"),
+		CronScheduleEODSnapshot: getEnvOrDefault("CRON_SCHEDULE_EOD_SNAPSHOT", "0 16 * * 1-5"),
 	}
-}
-
-/*
-resolveTradingMode collapses anything other than the literal string
-"live" to "paper". This is intentional, a typo or empty env var must
-never accidentally route to real-money execution.
-*/
-func resolveTradingMode(v string) string {
-	if v == "live" {
-		return "live"
-	}
-	return "paper"
 }

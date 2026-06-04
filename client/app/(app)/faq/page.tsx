@@ -8,10 +8,10 @@ const OG_IMAGE = "/og/faq.png";
 
 export const metadata: Metadata = {
   title: "FAQ",
-  description: "Frequently asked questions about VibeTradez, including how AI trade picks work, data sources, rankings, and performance tracking.",
+  description: "Frequently asked questions about VibeTradez, including how the AI portfolio manager works, the hard caps, data sources, and performance tracking.",
   openGraph: {
     title: "VibeTradez | FAQ",
-    description: "Frequently asked questions about VibeTradez, including how AI trade picks work, data sources, rankings, and performance tracking.",
+    description: "Frequently asked questions about VibeTradez, including how the AI portfolio manager works, the hard caps, data sources, and performance tracking.",
     images: [{ url: OG_IMAGE, width: 1200, height: 630 }],
   },
   twitter: {

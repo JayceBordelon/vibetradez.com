@@ -4,13 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { AccountMenu } from "@/components/layout/account-menu";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
 const tabs = [
   { href: "/dashboard", label: "Live Dashboard", short: "Live" },
-  { href: "/history", label: "Historical Analytics", short: "History" },
+  { href: "/holdings", label: "Holdings", short: "Holdings" },
+  { href: "/closed", label: "Closed", short: "Closed" },
 ] as const;
 
 interface NavBarProps {
@@ -22,10 +24,7 @@ export function NavBar({ onSubscribe }: NavBarProps) {
   const { user, loading } = useSession();
 
   return (
-    <header className="sticky top-0 z-30 border-b border-foreground/5 bg-background/55 backdrop-blur-2xl backdrop-saturate-150 dark:border-white/5">
-      {/* Specular top edge, same idea as .lg-edge-shine but inline so we
-          don't paint a pseudo-element across the full-width header. */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-b from-foreground/15 to-transparent dark:from-white/15" aria-hidden />
+    <header className="relative z-30">
       <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-7 sm:py-3">
         <Link href="/" className="inline-flex min-h-11 shrink-0 items-center py-2 text-[19px] font-extrabold tracking-tight sm:min-h-9 sm:py-0 sm:text-[21px]">
           <span className="text-foreground">Vibe</span>
@@ -34,7 +33,7 @@ export function NavBar({ onSubscribe }: NavBarProps) {
 
         <nav className="order-3 flex w-full items-center justify-center gap-1 sm:order-none sm:ml-3 sm:w-auto sm:justify-start">
           {tabs.map((tab) => {
-            const isActive = pathname === tab.href;
+            const isActive = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
             return (
               <Link
                 key={tab.href}
@@ -54,6 +53,7 @@ export function NavBar({ onSubscribe }: NavBarProps) {
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle />
           {loading ? (
             <div className="h-8 w-20 rounded-full bg-foreground/5 dark:bg-white/5" aria-hidden="true" />
           ) : user ? (

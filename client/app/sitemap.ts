@@ -13,11 +13,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.9,
     },
     {
-      url: "https://vibetradez.com/history",
-      changeFrequency: "daily",
-      priority: 0.8,
-    },
-    {
       url: "https://vibetradez.com/terms",
       changeFrequency: "monthly",
       priority: 0.3,

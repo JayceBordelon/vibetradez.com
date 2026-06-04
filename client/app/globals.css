@@ -4,51 +4,53 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.1452 0.0021 286.1313);
-  --card: oklch(0.9707 0.0027 286.3504);
-  --card-foreground: oklch(0.1452 0.0021 286.1313);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.1452 0.0021 286.1313);
-  --primary: oklch(0.5106 0.2301 276.9656);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.9163 0.042 285.5407);
-  --secondary-foreground: oklch(0.2573 0.0861 281.2883);
-  --muted: oklch(0.956 0.004 286.324);
-  --muted-foreground: oklch(0.5007 0.0047 286.2288);
-  --accent: oklch(0.5854 0.2041 277.1173);
-  --accent-foreground: oklch(1 0 0);
-  --destructive: oklch(0.6368 0.2078 25.3313);
-  --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.9225 0.0027 286.3471);
-  --input: oklch(0.9225 0.0027 286.3471);
-  --ring: oklch(0.5106 0.2301 276.9656);
-  --chart-1: oklch(0.5106 0.2301 276.9656);
-  --chart-2: oklch(0.6801 0.1583 276.9349);
-  --chart-3: oklch(0.8699 0.0622 274.0386);
-  --chart-4: oklch(0.3588 0.1354 278.6973);
-  --chart-5: oklch(0.7853 0.1041 274.7134);
-  --sidebar: oklch(0.98 0.004 286.3263);
-  --sidebar-foreground: oklch(0.2573 0.0861 281.2883);
-  --sidebar-primary: oklch(0.5106 0.2301 276.9656);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.9163 0.042 285.5407);
-  --sidebar-accent-foreground: oklch(0.5106 0.2301 276.9656);
-  --sidebar-border: oklch(0.9225 0.0027 286.3471);
-  --sidebar-ring: oklch(0.5106 0.2301 276.9656);
-  --font-sans: "Inter", sans-serif;
+  /* Theme: "designbyte" (tweakcn). Primary is a vivid mint green; purple
+     has been retired entirely. */
+  --background: oklch(0.9940 0 0);
+  --foreground: oklch(0 0 0);
+  --card: oklch(0.9940 0 0);
+  --card-foreground: oklch(0 0 0);
+  --popover: oklch(0.9911 0 0);
+  --popover-foreground: oklch(0 0 0);
+  --primary: oklch(0.8545 0.1675 159.6564);
+  --primary-foreground: oklch(0 0 0);
+  --secondary: oklch(0.9933 0.0011 197.1390);
+  --secondary-foreground: oklch(0.1344 0 0);
+  --muted: oklch(0.9702 0 0);
+  --muted-foreground: oklch(0.4386 0 0);
+  --accent: oklch(0.9947 0.0074 164.9465);
+  --accent-foreground: oklch(0.6184 0.1489 155.4444);
+  --destructive: oklch(0.6665 0.2111 2.8306);
+  --destructive-foreground: oklch(1.0000 0 0);
+  --border: oklch(0.9722 0.0034 247.8581);
+  --input: oklch(0.9401 0 0);
+  --ring: oklch(0.8545 0.1675 159.6564);
+  --chart-1: oklch(0.8545 0.1675 159.6564);
+  --chart-2: oklch(0.8979 0.1884 146.5522);
+  --chart-3: oklch(0.6658 0.2215 29.2981);
+  --chart-4: oklch(0.7507 0.1401 230.8266);
+  --chart-5: oklch(0.8257 0.1067 48.5116);
+  --sidebar: oklch(1.0000 0 0);
+  --sidebar-foreground: oklch(0 0 0);
+  --sidebar-primary: oklch(0 0 0);
+  --sidebar-primary-foreground: oklch(1.0000 0 0);
+  --sidebar-accent: oklch(0.9752 0.0307 168.3924);
+  --sidebar-accent-foreground: oklch(0 0 0);
+  --sidebar-border: oklch(0.9401 0 0);
+  --sidebar-ring: oklch(0 0 0);
+  --font-sans: "Plus Jakarta Sans", sans-serif;
   --font-serif: "Lora", serif;
-  --font-mono: "JetBrains Mono", monospace;
-  --radius: 0.75rem;
-  --shadow-2xs: 0px 4px 15px 0px hsl(0 0% 0% / 0.04);
-  --shadow-xs: 0px 4px 15px 0px hsl(0 0% 0% / 0.04);
-  --shadow-sm: 0px 4px 15px 0px hsl(0 0% 0% / 0.08), 0px 1px 2px -1px hsl(0 0% 0% / 0.08);
-  --shadow: 0px 4px 15px 0px hsl(0 0% 0% / 0.08), 0px 1px 2px -1px hsl(0 0% 0% / 0.08);
-  --shadow-md: 0px 4px 15px 0px hsl(0 0% 0% / 0.08), 0px 2px 4px -1px hsl(0 0% 0% / 0.08);
-  --shadow-lg: 0px 4px 15px 0px hsl(0 0% 0% / 0.08), 0px 4px 6px -1px hsl(0 0% 0% / 0.08);
-  --shadow-xl: 0px 4px 15px 0px hsl(0 0% 0% / 0.08), 0px 8px 10px -1px hsl(0 0% 0% / 0.08);
-  --shadow-2xl: 0px 4px 15px 0px hsl(0 0% 0% / 0.20);
-  --tracking-normal: 0.02em;
+  --font-mono: "IBM Plex Mono", monospace;
+  --radius: 1.4rem;
+  --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+  --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+  --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
+  --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
+  --shadow-md: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 2px 4px -1px hsl(0 0% 0% / 0.10);
+  --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 4px 6px -1px hsl(0 0% 0% / 0.10);
+  --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 8px 10px -1px hsl(0 0% 0% / 0.10);
+  --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+  --tracking-normal: 0em;
   --spacing: 0.25rem;
 
   /* Trading-specific colors. Hand-tuned for ≥4.5:1 contrast on the
@@ -86,13 +88,15 @@
      model attribution and rationale callouts. Both are slightly
      darkened from the marketing pure brand hex so headline text
      passes 4.5:1 on white in light mode. */
-  --brand-green: oklch(0.5106 0.2301 276.9656);
-  --brand-green-light: oklch(0.5106 0.2301 276.9656 / 0.1);
-  --brand-green-border: oklch(0.5106 0.2301 276.9656 / 0.25);
-  /* --brand-violet is the gradient/ambient companion to the indigo
-     --brand-green (wordmark gradient, glass orbs, mesh wash). */
-  --brand-violet: oklch(0.5413 0.2466 293.009);
-  --brand-violet-border: oklch(0.5413 0.2466 293.009 / 0.25);
+  /* --brand-green is now the actual brand green (the new primary mint);
+     --brand-violet is retained as the gradient companion but recolored to a
+     deeper emerald, so the wordmark gradient and glass orbs run green→green,
+     never purple. */
+  --brand-green: oklch(0.8545 0.1675 159.6564);
+  --brand-green-light: oklch(0.8545 0.1675 159.6564 / 0.12);
+  --brand-green-border: oklch(0.8545 0.1675 159.6564 / 0.3);
+  --brand-violet: oklch(0.6184 0.1489 155.4444);
+  --brand-violet-border: oklch(0.6184 0.1489 155.4444 / 0.3);
   /* --claude is Claudia's own signature clay accent, kept distinct from
      the indigo/violet brand so "Claudia's read" reads as her color. */
   --claude: #b04a30;
@@ -107,49 +111,49 @@
 
 .dark {
   --background: oklch(0 0 0);
-  --foreground: oklch(1 0 0);
-  --card: oklch(0.1457 0.0043 285.857);
-  --card-foreground: oklch(0.9626 0.0066 286.2742);
-  --popover: oklch(0 0 0);
-  --popover-foreground: oklch(0.9626 0.0066 286.2742);
-  --primary: oklch(0.5679 0.2113 276.7065);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.2542 0.0611 281.1423);
-  --secondary-foreground: oklch(0.9163 0.042 285.5407);
-  --muted: oklch(0.1743 0.0227 283.7998);
-  --muted-foreground: oklch(0.6822 0.0116 286.0877);
-  --accent: oklch(0.334 0.1038 279.1852);
-  --accent-foreground: oklch(0.7853 0.1041 274.7134);
-  --destructive: oklch(0.6633 0.2236 28.2919);
-  --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.2286 0.0096 285.6168);
-  --input: oklch(0.2286 0.0096 285.6168);
-  --ring: oklch(0.5679 0.2113 276.7065);
-  --chart-1: oklch(0.5679 0.2113 276.7065);
-  --chart-2: oklch(0.2573 0.0861 281.2883);
-  --chart-3: oklch(0.7853 0.1041 274.7134);
-  --chart-4: oklch(0.5413 0.2466 293.009);
-  --chart-5: oklch(0.3588 0.1354 278.6973);
-  --sidebar: oklch(0.0969 0 0);
-  --sidebar-foreground: oklch(0.9626 0.0066 286.2742);
-  --sidebar-primary: oklch(0.5679 0.2113 276.7065);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.2542 0.0611 281.1423);
-  --sidebar-accent-foreground: oklch(0.7853 0.1041 274.7134);
-  --sidebar-border: oklch(0.2286 0.0096 285.6168);
-  --sidebar-ring: oklch(0.5679 0.2113 276.7065);
-  --font-sans: "Inter", sans-serif;
+  --foreground: oklch(0.9551 0 0);
+  --card: oklch(0.1448 0 0);
+  --card-foreground: oklch(0.9551 0 0);
+  --popover: oklch(0.2210 0.0015 197.0452);
+  --popover-foreground: oklch(0.9551 0 0);
+  --primary: oklch(0.8545 0.1675 159.6564);
+  --primary-foreground: oklch(0 0 0);
+  --secondary: oklch(0.4700 0.0900 160.0079);
+  --secondary-foreground: oklch(0.9551 0 0);
+  --muted: oklch(0.2653 0.0037 286.1465);
+  --muted-foreground: oklch(0.6731 0 0);
+  --accent: oklch(0.3004 0.0609 159.8938);
+  --accent-foreground: oklch(0.9970 0 0);
+  --destructive: oklch(0.7425 0.1696 1.0847);
+  --destructive-foreground: oklch(1.0000 0 0);
+  --border: oklch(0.2138 0.0019 286.2347);
+  --input: oklch(0.3523 0 0);
+  --ring: oklch(0.8545 0.1675 159.6564);
+  --chart-1: oklch(0.8545 0.1675 159.6564);
+  --chart-2: oklch(0.9173 0.1562 144.8458);
+  --chart-3: oklch(0.8531 0.0883 357.4250);
+  --chart-4: oklch(0.8104 0.1216 228.4326);
+  --chart-5: oklch(0.8257 0.1067 48.5116);
+  --sidebar: oklch(0.1448 0 0);
+  --sidebar-foreground: oklch(0.9551 0 0);
+  --sidebar-primary: oklch(0.8545 0.1675 159.6564);
+  --sidebar-primary-foreground: oklch(1.0000 0 0);
+  --sidebar-accent: oklch(0.2824 0.0678 156.5634);
+  --sidebar-accent-foreground: oklch(0.8545 0.1675 159.6564);
+  --sidebar-border: oklch(0.3452 0.0098 241.9410);
+  --sidebar-ring: oklch(0.8545 0.1675 159.6564);
+  --font-sans: "Plus Jakarta Sans", sans-serif;
   --font-serif: "Lora", serif;
-  --font-mono: "JetBrains Mono", monospace;
-  --radius: 0.75rem;
-  --shadow-2xs: 0px 0px 30px -10px hsl(239.1781 82.0225% 65.098% / 0.1);
-  --shadow-xs: 0px 0px 30px -10px hsl(239.1781 82.0225% 65.098% / 0.1);
-  --shadow-sm: 0px 0px 30px -10px hsl(239.1781 82.0225% 65.098% / 0.2), 0px 1px 2px -11px hsl(239.1781 82.0225% 65.098% / 0.2);
-  --shadow: 0px 0px 30px -10px hsl(239.1781 82.0225% 65.098% / 0.2), 0px 1px 2px -11px hsl(239.1781 82.0225% 65.098% / 0.2);
-  --shadow-md: 0px 0px 30px -10px hsl(239.1781 82.0225% 65.098% / 0.2), 0px 2px 4px -11px hsl(239.1781 82.0225% 65.098% / 0.2);
-  --shadow-lg: 0px 0px 30px -10px hsl(239.1781 82.0225% 65.098% / 0.2), 0px 4px 6px -11px hsl(239.1781 82.0225% 65.098% / 0.2);
-  --shadow-xl: 0px 0px 30px -10px hsl(239.1781 82.0225% 65.098% / 0.2), 0px 8px 10px -11px hsl(239.1781 82.0225% 65.098% / 0.2);
-  --shadow-2xl: 0px 0px 30px -10px hsl(239.1781 82.0225% 65.098% / 0.5);
+  --font-mono: "IBM Plex Mono", monospace;
+  --radius: 1.4rem;
+  --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+  --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+  --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
+  --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
+  --shadow-md: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 2px 4px -1px hsl(0 0% 0% / 0.10);
+  --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 4px 6px -1px hsl(0 0% 0% / 0.10);
+  --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 8px 10px -1px hsl(0 0% 0% / 0.10);
+  --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
 
   /* Trading-specific dark mode */
   --green: #34d399;
@@ -176,12 +180,12 @@
      value that still keeps ≥4.5:1 against white text. */
   --tier-pill-top10: #52525b;
 
-  /* Brand accents (dark mode) — see light-mode comment for naming. */
-  --brand-green: oklch(0.5679 0.2113 276.7065);
-  --brand-green-light: oklch(0.5679 0.2113 276.7065 / 0.14);
-  --brand-green-border: oklch(0.5679 0.2113 276.7065 / 0.3);
-  --brand-violet: oklch(0.6 0.25 293.009);
-  --brand-violet-border: oklch(0.6 0.25 293.009 / 0.3);
+  /* Brand accents (dark mode) — green, see light-mode comment. */
+  --brand-green: oklch(0.8545 0.1675 159.6564);
+  --brand-green-light: oklch(0.8545 0.1675 159.6564 / 0.16);
+  --brand-green-border: oklch(0.8545 0.1675 159.6564 / 0.32);
+  --brand-violet: oklch(0.9173 0.1562 144.8458);
+  --brand-violet-border: oklch(0.9173 0.1562 144.8458 / 0.32);
   --claude: #f4a27a;
   --claude-light: rgba(244, 162, 122, 0.12);
   --claude-border: rgba(244, 162, 122, 0.3);
@@ -340,32 +344,17 @@ body {
                    tactile finish without the digital flatness pure
                    gradients fall into.
   */
+  /* Flat, in-page surfaces (the glassmorphism has been retired). Solid
+     card fill + a hairline border + a soft shadow, so panels read as clean
+     content rather than frosted glass. Light/dark come from the tokens. */
   .lg-panel {
-    background: color-mix(in srgb, var(--card) 70%, transparent);
-    backdrop-filter: saturate(160%) blur(28px);
-    -webkit-backdrop-filter: saturate(160%) blur(28px);
-    border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-    border-radius: 24px;
-    box-shadow:
-      0 1px 0 0 color-mix(in srgb, white 70%, transparent) inset,
-      0 -1px 0 0 color-mix(in srgb, var(--foreground) 4%, transparent) inset,
-      0 24px 60px -24px rgb(0 0 0 / 0.18),
-      0 8px 24px -12px rgb(0 0 0 / 0.10);
-  }
-  .dark .lg-panel {
-    background: color-mix(in srgb, white 4%, transparent);
-    border-color: color-mix(in srgb, white 10%, transparent);
-    box-shadow:
-      0 1px 0 0 color-mix(in srgb, white 12%, transparent) inset,
-      0 -1px 0 0 color-mix(in srgb, white 4%, transparent) inset,
-      0 24px 60px -24px rgb(0 0 0 / 0.55),
-      0 8px 24px -12px rgb(0 0 0 / 0.40);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
   }
   .lg-panel-strong {
-    background: color-mix(in srgb, var(--card) 86%, transparent);
-  }
-  .dark .lg-panel-strong {
-    background: color-mix(in srgb, white 7%, transparent);
+    background: var(--card);
   }
 
   /*
@@ -378,25 +367,10 @@ body {
             rounded-xl via cascade order in @layer utilities.
   */
   .lg-card {
-    background: color-mix(in srgb, var(--card) 93%, transparent);
-    backdrop-filter: saturate(160%) blur(24px);
-    -webkit-backdrop-filter: saturate(160%) blur(24px);
-    border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-    border-radius: 16px;
-    box-shadow:
-      0 1px 0 0 color-mix(in srgb, white 60%, transparent) inset,
-      0 -1px 0 0 color-mix(in srgb, var(--foreground) 3%, transparent) inset,
-      0 12px 32px -16px rgb(0 0 0 / 0.14),
-      0 4px 12px -8px rgb(0 0 0 / 0.08);
-  }
-  .dark .lg-card {
-    background: color-mix(in srgb, white 7%, transparent);
-    border-color: color-mix(in srgb, white 9%, transparent);
-    box-shadow:
-      0 1px 0 0 color-mix(in srgb, white 10%, transparent) inset,
-      0 -1px 0 0 color-mix(in srgb, white 3%, transparent) inset,
-      0 12px 32px -16px rgb(0 0 0 / 0.50),
-      0 4px 12px -8px rgb(0 0 0 / 0.30);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
   }
 
   /*
@@ -408,24 +382,9 @@ body {
   */
   .lg-modal {
     background: var(--card);
-    backdrop-filter: saturate(160%) blur(24px);
-    -webkit-backdrop-filter: saturate(160%) blur(24px);
-    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
-    border-radius: 16px;
-    box-shadow:
-      0 1px 0 0 color-mix(in srgb, white 60%, transparent) inset,
-      0 -1px 0 0 color-mix(in srgb, var(--foreground) 3%, transparent) inset,
-      0 24px 56px -20px rgb(0 0 0 / 0.30),
-      0 8px 20px -12px rgb(0 0 0 / 0.18);
-  }
-  .dark .lg-modal {
-    background: var(--card);
-    border-color: color-mix(in srgb, white 12%, transparent);
-    box-shadow:
-      0 1px 0 0 color-mix(in srgb, white 12%, transparent) inset,
-      0 -1px 0 0 color-mix(in srgb, white 4%, transparent) inset,
-      0 24px 56px -20px rgb(0 0 0 / 0.65),
-      0 8px 20px -12px rgb(0 0 0 / 0.40);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
   }
 
   /*
@@ -435,39 +394,16 @@ body {
                buttons.
   */
   .lg-control {
-    background: color-mix(in srgb, var(--card) 70%, transparent);
-    backdrop-filter: saturate(160%) blur(18px);
-    -webkit-backdrop-filter: saturate(160%) blur(18px);
-    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
-    border-radius: 10px;
-    box-shadow:
-      0 1px 0 0 color-mix(in srgb, white 50%, transparent) inset,
-      0 4px 12px -8px rgb(0 0 0 / 0.10);
-  }
-  .dark .lg-control {
-    background: color-mix(in srgb, white 5%, transparent);
-    border-color: color-mix(in srgb, white 11%, transparent);
-    box-shadow:
-      0 1px 0 0 color-mix(in srgb, white 10%, transparent) inset,
-      0 4px 12px -8px rgb(0 0 0 / 0.30);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
   }
 
   .lg-pill {
-    background: color-mix(in srgb, var(--card) 60%, transparent);
-    backdrop-filter: saturate(160%) blur(20px);
-    -webkit-backdrop-filter: saturate(160%) blur(20px);
-    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+    background: var(--card);
+    border: 1px solid var(--border);
     border-radius: 999px;
-    box-shadow:
-      0 1px 0 0 color-mix(in srgb, white 80%, transparent) inset,
-      0 6px 16px -6px rgb(0 0 0 / 0.10);
-  }
-  .dark .lg-pill {
-    background: color-mix(in srgb, white 4%, transparent);
-    border-color: color-mix(in srgb, white 12%, transparent);
-    box-shadow:
-      0 1px 0 0 color-mix(in srgb, white 14%, transparent) inset,
-      0 6px 16px -6px rgb(0 0 0 / 0.40);
+    box-shadow: var(--shadow-xs);
   }
 
   /*
@@ -481,12 +417,12 @@ body {
     border-radius: 9999px;
     pointer-events: none;
     will-change: transform;
-    filter: blur(96px);
-    opacity: 0.55;
+    filter: blur(110px);
+    opacity: 0.16;
   }
   .dark .lg-orb {
-    opacity: 0.45;
-    filter: blur(120px);
+    opacity: 0.2;
+    filter: blur(130px);
   }
   .lg-orb-claude {
     background: radial-gradient(circle at center, var(--brand-violet) 0%, transparent 70%);
@@ -515,18 +451,16 @@ body {
     pointer-events: none;
     will-change: transform;
     background:
-      radial-gradient(ellipse 90% 70% at 12% 8%, color-mix(in oklab, var(--primary) 22%, transparent) 0%, transparent 60%),
-      radial-gradient(ellipse 95% 75% at 92% 96%, color-mix(in oklab, var(--brand-violet) 18%, transparent) 0%, transparent 62%),
-      radial-gradient(ellipse 80% 90% at 60% 40%, color-mix(in oklab, var(--primary) 10%, transparent) 0%, transparent 70%);
-    filter: blur(40px) saturate(120%);
+      radial-gradient(ellipse 90% 70% at 12% 8%, color-mix(in oklab, var(--primary) 7%, transparent) 0%, transparent 60%),
+      radial-gradient(ellipse 80% 90% at 88% 96%, color-mix(in oklab, var(--primary) 5%, transparent) 0%, transparent 64%);
+    filter: blur(50px);
     animation: lg-mesh-breathe 48s ease-in-out infinite;
   }
   .dark .lg-mesh {
     background:
-      radial-gradient(ellipse 90% 70% at 12% 8%, color-mix(in oklab, var(--primary) 28%, transparent) 0%, transparent 62%),
-      radial-gradient(ellipse 95% 75% at 92% 96%, color-mix(in oklab, var(--brand-violet) 22%, transparent) 0%, transparent 64%),
-      radial-gradient(ellipse 80% 90% at 60% 40%, color-mix(in oklab, var(--primary) 14%, transparent) 0%, transparent 72%);
-    filter: blur(56px) saturate(110%);
+      radial-gradient(ellipse 90% 70% at 12% 8%, color-mix(in oklab, var(--primary) 10%, transparent) 0%, transparent 62%),
+      radial-gradient(ellipse 80% 90% at 88% 96%, color-mix(in oklab, var(--primary) 7%, transparent) 0%, transparent 66%);
+    filter: blur(64px);
   }
 
   /*

@@ -1,0 +1,358 @@
+package portfolio
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"math/rand"
+	"strings"
+	"time"
+
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/anthropics/anthropic-sdk-go/packages/param"
+
+	"vibetradez.com/internal/transcript"
+)
+
+/*
+Conversation-loop knobs. maxToolRounds is generous: the agent reviews
+existing holdings, researches new names, and may chain many quote / chain /
+web_search calls before committing moves. Mirrors the execagent shape this
+package supersedes.
+*/
+const (
+	maxToolRounds = 30
+	/*
+		Extended thinking is enabled, so max_tokens must cover BOTH the
+		thinking budget and the visible response. thinkingBudgetTokens is
+		reserved for Claude's internal reasoning (must be >=1024 and <
+		maxOutputTokens); the remainder is left for tool calls + the final
+		stance JSON.
+	*/
+	maxOutputTokens      int64 = 20000
+	thinkingBudgetTokens int64 = 10000
+	httpRequestTimeout         = 8 * time.Minute
+
+	maxAgentAttempts = 5
+	backoffBase      = 2 * time.Second
+	backoffCeil      = 30 * time.Second
+)
+
+/*
+Agent runs the daily portfolio-management loop against Anthropic Claude.
+One Agent per process is fine; Run is safe to call sequentially across
+sessions but NOT concurrently (the dispatcher's mutex serializes within a
+run, not across).
+*/
+type Agent struct {
+	client anthropic.Client
+	model  string
+	reader PortfolioReader
+	exec   PortfolioExecutor
+	caps   Caps
+}
+
+/*
+NewAgent wires the Anthropic client + read/write dependencies + the cap
+policy. apiKey + model are injected by the caller (cmd/scanner/main.go) so
+the portfolio agent uses the same model the rest of the system does. Pass
+DefaultCaps() unless an override is configured.
+*/
+func NewAgent(apiKey, model string, reader PortfolioReader, exec PortfolioExecutor, caps Caps) *Agent {
+	return &Agent{
+		client: anthropic.NewClient(
+			option.WithAPIKey(apiKey),
+			option.WithRequestTimeout(httpRequestTimeout),
+		),
+		model:  model,
+		reader: reader,
+		exec:   exec,
+		caps:   caps,
+	}
+}
+
+/*
+Run is the agent entry point. It reads the live account snapshot, invokes
+Claude with the portfolio tool surface, lets it commit moves (or hold)
+through the tool layer, then returns every committed decision plus the
+final stance note.
+
+The committed moves are the source of truth (they are already at the
+broker and persisted); the final JSON is consulted only for the stance
+note (mirrors execagent's buy-is-truth / JSON-is-narrative split). On
+Anthropic API failure or unparseable final JSON, Run returns the partial
+decisions collected from successful tool calls plus an error so the caller
+can log and send the error-path email.
+*/
+func (a *Agent) Run(ctx context.Context) (*Result, error) {
+	snap, err := a.reader.Snapshot(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("read portfolio snapshot: %w", err)
+	}
+
+	dispatcher := NewToolDispatcher(a.reader, a.exec, a.caps, snap)
+	priorSynopsis, priorActions, _, _ := a.reader.PriorSession()
+	prompt, err := buildPrompt(snap, a.caps, priorSynopsis, priorActions)
+	if err != nil {
+		return nil, fmt.Errorf("build prompt: %w", err)
+	}
+
+	rec := transcript.New()
+	stance, convErr := a.runConversation(ctx, prompt, dispatcher, rec)
+
+	tr := rec.Transcript()
+	result := &Result{
+		Decisions:   dispatcher.Decisions(),
+		Stance:      stance,
+		Summary:     dispatcher.Summary(),
+		ActionItems: dispatcher.ActionItems(),
+		Transcript:  &tr,
+	}
+	if convErr != nil {
+		return result, fmt.Errorf("agent conversation: %w", convErr)
+	}
+	return result, nil
+}
+
+/*
+runConversation drives the tool-use loop and returns the model's final
+stance string (parsed from its terminal JSON object). Mirrors
+execagent.runConversation: container threading, raw assistant echo, and the
+retry wrapper are duplicated rather than shared so this package can be
+tested and tuned independently.
+*/
+func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *ToolDispatcher, rec *transcript.Recorder) (string, error) {
+	tools := ToolDefinitions()
+	rec.SetModel(a.model)
+	messages := []anthropic.MessageParam{
+		anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
+	}
+	var containerID string
+
+	for round := 0; round < maxToolRounds; round++ {
+		params := anthropic.MessageNewParams{
+			Model:     anthropic.Model(a.model),
+			MaxTokens: maxOutputTokens,
+			Messages:  messages,
+			Tools:     tools,
+			// Extended thinking: lets the model reason before each move. The
+			// thinking blocks come back in msg.Content and are recorded into
+			// the transcript and threaded back (with signatures) via the raw
+			// assistant echo so multi-round tool use stays valid.
+			Thinking: anthropic.ThinkingConfigParamOfEnabled(thinkingBudgetTokens),
+		}
+		if containerID != "" {
+			params.Container = param.NewOpt(containerID)
+		}
+		msg, err := a.sendWithRetry(ctx, params)
+		if err != nil {
+			return "", fmt.Errorf("anthropic messages.new: %w", err)
+		}
+		if msg.Container.JSON.ID.Valid() {
+			containerID = msg.Container.ID
+		}
+
+		var toolResults []anthropic.ContentBlockParamUnion
+		var finalText strings.Builder
+		for _, block := range msg.Content {
+			switch b := block.AsAny().(type) {
+			case anthropic.ThinkingBlock:
+				rec.AddThinking(round, b.Thinking)
+			case anthropic.RedactedThinkingBlock:
+				rec.AddThinking(round, "[redacted thinking]")
+			case anthropic.TextBlock:
+				finalText.WriteString(b.Text)
+				rec.AddText(round, b.Text)
+			case anthropic.ToolUseBlock:
+				rec.AddToolUse(round, b.Name, b.ID, b.Input)
+				out := dispatcher.Dispatch(ctx, b.Name, b.Input)
+				log.Printf("portfolio: tool=%s -> %d bytes", b.Name, len(out))
+				rec.AddToolResult(round, b.Name, b.ID, out)
+				toolResults = append(toolResults, anthropic.NewToolResultBlock(b.ID, out, false))
+			}
+		}
+
+		if len(toolResults) > 0 {
+			messages = append(messages, assistantEchoFromRaw(msg))
+			messages = append(messages, anthropic.NewUserMessage(toolResults...))
+			continue
+		}
+
+		text := strings.TrimSpace(finalText.String())
+		if text == "" {
+			return "", errors.New("empty response from claude")
+		}
+		return parseStance(text), nil
+	}
+	return "", fmt.Errorf("exceeded max tool rounds (%d)", maxToolRounds)
+}
+
+func (a *Agent) sendWithRetry(ctx context.Context, params anthropic.MessageNewParams) (*anthropic.Message, error) {
+	var lastErr error
+	for i := 1; i <= maxAgentAttempts; i++ {
+		msg, err := a.client.Messages.New(ctx, params)
+		if err == nil {
+			return msg, nil
+		}
+		lastErr = err
+		if !isRetryableAPIError(err) || i == maxAgentAttempts {
+			return nil, err
+		}
+		delay := backoffDelay(i)
+		log.Printf("portfolio: Anthropic transient failure (attempt %d/%d, retry in %s): %v", i, maxAgentAttempts, delay, err)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(delay):
+		}
+	}
+	return nil, lastErr
+}
+
+func isRetryableAPIError(err error) bool {
+	var apiErr *anthropic.Error
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	switch apiErr.StatusCode {
+	case 429, 502, 503, 504, 529:
+		return true
+	}
+	return false
+}
+
+func backoffDelay(attempt int) time.Duration {
+	d := backoffBase << (attempt - 1)
+	if d > backoffCeil {
+		d = backoffCeil
+	}
+	jitter := time.Duration(rand.Int63n(int64(d) / 2))
+	return d - d/4 + jitter
+}
+
+/*
+assistantEchoFromRaw rebuilds an assistant MessageParam by round-tripping
+each content block's raw server JSON. Same workaround the picker + execagent
+use (the SDK drops the `type` field on some tool-result blocks going through
+ToParam, which the next round rejects with a 400).
+*/
+func assistantEchoFromRaw(msg *anthropic.Message) anthropic.MessageParam {
+	blocks := make([]anthropic.ContentBlockParamUnion, 0, len(msg.Content))
+	for _, b := range msg.Content {
+		raw := b.RawJSON()
+		if raw == "" {
+			continue
+		}
+		blocks = append(blocks, param.Override[anthropic.ContentBlockParamUnion](json.RawMessage(raw)))
+	}
+	return anthropic.NewAssistantMessage(blocks...)
+}
+
+/*
+parseStance extracts the "stance" field from the model's terminal JSON
+object. The moves are already recorded by the tool layer, so a missing or
+malformed stance is non-fatal: we fall back to the raw trimmed text rather
+than failing the session.
+*/
+func parseStance(raw string) string {
+	cleaned := extractJSONObject(raw)
+	if cleaned != "" {
+		var shape struct {
+			Stance string `json:"stance"`
+		}
+		if err := json.Unmarshal([]byte(cleaned), &shape); err == nil && strings.TrimSpace(shape.Stance) != "" {
+			return strings.TrimSpace(shape.Stance)
+		}
+	}
+	return strings.TrimSpace(raw)
+}
+
+func extractJSONObject(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.Index(s, "```"); i >= 0 {
+		rest := s[i+3:]
+		if nl := strings.Index(rest, "\n"); nl >= 0 {
+			rest = rest[nl+1:]
+		}
+		if end := strings.Index(rest, "```"); end >= 0 {
+			s = strings.TrimSpace(rest[:end])
+		}
+	}
+	start := strings.Index(s, "{")
+	if start < 0 {
+		return ""
+	}
+	depth := 0
+	inStr := false
+	escape := false
+	for i := start; i < len(s); i++ {
+		c := s[i]
+		if escape {
+			escape = false
+			continue
+		}
+		if inStr {
+			switch c {
+			case '\\':
+				escape = true
+			case '"':
+				inStr = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			inStr = true
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return s[start : i+1]
+			}
+		}
+	}
+	return s[start:]
+}
+
+/*
+buildPrompt renders the session snapshot as compact JSON and interpolates
+it plus the cap summary into the system prompt. The snapshot the model
+reads here is the same one the dispatcher enforces against, so the prompt
+never describes a portfolio that differs from the gated state.
+*/
+func buildPrompt(snap Snapshot, caps Caps, priorSynopsis, priorActions string) (string, error) {
+	view := map[string]any{
+		"equity":                 snap.Equity,
+		"settled_cash":           snap.SettledCash,
+		"unsettled_cash":         snap.UnsettledCash,
+		"high_water_mark":        snap.HighWaterMark,
+		"deployment_budget_left": snap.DeploymentBudget,
+		"new_buys_halted":        caps.DrawdownHalted(snap),
+		"positions":              snap.Positions,
+	}
+	snapJSON, err := json.MarshalIndent(view, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	now := time.Now().In(easternTime())
+	today := now.Format("2006-01-02")
+	weekday := now.Weekday().String()
+	prior := "No prior session on record yet. Treat today as a fresh start."
+	if strings.TrimSpace(priorSynopsis) != "" || strings.TrimSpace(priorActions) != "" {
+		prior = fmt.Sprintf("SYNOPSIS (your last session):\n%s\n\nACTION ITEMS you set for today:\n%s",
+			strings.TrimSpace(priorSynopsis), strings.TrimSpace(priorActions))
+	}
+	return fmt.Sprintf(SystemPrompt, today, weekday, string(snapJSON), prior, CapsSummary(caps)), nil
+}
+
+func easternTime() *time.Location {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		return time.UTC
+	}
+	return loc
+}

@@ -3,276 +3,73 @@ package templates
 import (
 	"bytes"
 	"embed"
-	"fmt"
 	"html/template"
-	"sort"
-	"time"
+	"strconv"
+	"strings"
 )
 
-//go:embed email.html summary.html test.html error.html weekly.html execute_receipt.html execute_open_failed.html execute_basket_summary.html execute_close_summary.html rollout_transcripts.html schwab_reauth.html
+//go:embed portfolio_update.html schwab_reauth.html announcement.html
 var templateFS embed.FS
 
-type Trade struct {
-	Symbol         string
-	ContractType   string
-	StrikePrice    float64 // zero until contract resolved at open
-	Expiration     string  // empty until contract resolved at open
-	DTE            int     // zero until contract resolved at open
-	EstimatedPrice float64 // zero until contract resolved at open
-	Thesis         string
-	CurrentPrice   float64
-	TargetPrice    float64
-	StopLoss       float64 // zero until contract resolved at open
-	RiskLevel      string
-	Catalyst       string
-	MentionCount   int
-	Rank           int
-	Score          int
-	Rationale      string
-	// Contract intent. Rendered in place of strike/expiration in the
-	// morning email when ContractResolved is false: e.g. "~1.5% OTM,
-	// expiring 3+ DTE".
-	TargetOTMPct     float64
-	MinDTE           int
-	ContractResolved bool
+// ── Daily portfolio-update email ──
+
+// PortfolioMove is one row in the daily portfolio-update email: a buy,
+// sell, or hold the model committed, with its rationale. IsBuy/IsSell/IsHold
+// drive the badge color (html/template can't switch on a string cleanly).
+type PortfolioMove struct {
+	Action    string // "Buy" | "Sell" | "Hold"
+	Label     string // "AAPL" or "MDT 79C 2026-04-17"; empty for a hold
+	Notional  float64
+	Rationale string
+	IsBuy     bool
+	IsSell    bool
+	IsHold    bool
+}
+
+// PortfolioHolding is one row in the email's current-holdings table.
+type PortfolioHolding struct {
+	Label         string
+	MarketValue   float64
+	UnrealizedPnL float64
 }
 
 /*
-YesterdayRecap is a tiny digest of the previous trading day's results
-surfaced at the top of the morning email so subscribers see how the
-last batch performed before reading today's picks.
+PortfolioUpdateData backs the daily subscriber portfolio-update email. It
+describes the single managed brokerage account: the day's stance, the moves
+the model made with their reasons, and the current book.
 */
-type YesterdayRecap struct {
-	Date        string
-	TotalPnL    float64
-	Winners     int
-	Losers      int
-	TotalTrades int
-	BestSymbol  string
-	BestPnL     float64
-	WorstSymbol string
-	WorstPnL    float64
+type PortfolioUpdateData struct {
+	Date     string // raw YYYY-MM-DD (links)
+	DateLong string // "June 4, 2026" (display)
+	Equity   float64
+	// DayChangePct is today's move vs the prior close; HasDayChange is false
+	// when there isn't a prior curve point to compare against.
+	DayChangePct  float64
+	HasDayChange  bool
+	SettledCash   float64
+	InvestedPct   float64
+	UnrealizedPnL float64 // total open unrealized across the book
+	// Summary is today's synopsis (write_summary); ActionItems is the plan for
+	// the next session, headed by ActionItemsLabel ("Tomorrow's…"/"Next week's…").
+	// Stance is the shorter positioning note backing the synopsis.
+	Summary          string
+	ActionItems      string
+	ActionItemsLabel string
+	Stance           string
+	DrawdownHalted   bool
+	Moves            []PortfolioMove
+	Holdings         []PortfolioHolding
+	TranscriptURL    string
+	DashboardURL     string
 }
 
-type EmailData struct {
-	Subject      string
-	Date         string
-	Trades       []Trade
-	ModelName    string
-	Yesterday    *YesterdayRecap
-	TopPick      *Trade
-	DashboardURL string
+// RenderPortfolioUpdate renders the daily subscriber portfolio-update email.
+func RenderPortfolioUpdate(d PortfolioUpdateData) (string, error) {
+	return renderOne("portfolio_update.html", d)
 }
 
-type SummaryTrade struct {
-	Symbol       string
-	ContractType string
-	StrikePrice  float64
-	Expiration   string
-	EntryPrice   float64
-	ClosingPrice float64
-	// PriceChange / PctChange are per-contract (per-share × 100 is the
-	// dollar move on one contract). Quantity is the number of contracts
-	// actually bought: 1 under the one-contract-per-pick policy, though
-	// rows predating that policy can carry more, so totals always honor
-	// the stored value rather than assuming 1. PnL is the realized dollar
-	// P&L INCLUDING quantity: PriceChange × 100 ×
-	// Quantity. Templates render PnL for dollar figures and PctChange for
-	// the per-contract percentage.
-	PriceChange    float64
-	PctChange      float64
-	Quantity       int
-	PnL            float64
-	StockOpen      float64
-	StockClose     float64
-	StockPctChange float64
-	Result         string
-	Notes          string
-	Rank           int
-	Score          int
-}
+// ── Schwab re-auth operator nag ──
 
-type SummaryEmailData struct {
-	Subject     string
-	Date        string
-	Trades      []SummaryTrade
-	TotalTrades int
-	Winners     int
-	Losers      int
-	TotalPnL    float64
-	Top3Pnl     float64
-	AvgScore    float64
-}
-
-type WeeklyDayData struct {
-	Date        string
-	DayName     string
-	TotalTrades int
-	Winners     int
-	Losers      int
-	DayPnL      float64
-	BestTrade   string
-	BestPnL     float64
-	WorstTrade  string
-	WorstPnL    float64
-	Trades      []SummaryTrade
-}
-
-type WeeklyEmailData struct {
-	Subject       string
-	WeekRange     string
-	Days          []WeeklyDayData
-	TotalTrades   int
-	TotalWinners  int
-	TotalLosers   int
-	TotalPnL      float64
-	WinRate       float64
-	TotalInvested float64
-	TotalReturn   float64
-	BestTrade     string
-	BestPnL       float64
-	WorstTrade    string
-	WorstPnL      float64
-	DashboardURL  string
-}
-
-var funcMap = template.FuncMap{
-	"mul": func(a, b float64) float64 { return a * b },
-	"div": func(a, b float64) float64 {
-		if b == 0 {
-			return 0
-		}
-		return a / b
-	},
-	"sub": func(a, b any) any {
-		switch av := a.(type) {
-		case int:
-			if bv, ok := b.(int); ok {
-				return av - bv
-			}
-		case float64:
-			if bv, ok := b.(float64); ok {
-				return av - bv
-			}
-		}
-		return 0
-	},
-	"add": func(a, b any) any {
-		switch av := a.(type) {
-		case int:
-			if bv, ok := b.(int); ok {
-				return av + bv
-			}
-		case float64:
-			if bv, ok := b.(float64); ok {
-				return av + bv
-			}
-		}
-		return 0
-	},
-	"abs": func(a float64) float64 {
-		if a < 0 {
-			return -a
-		}
-		return a
-	},
-	"gt": func(a, b any) bool {
-		switch av := a.(type) {
-		case float64:
-			if bv, ok := b.(float64); ok {
-				return av > bv
-			}
-		case int:
-			if bv, ok := b.(int); ok {
-				return av > bv
-			}
-		}
-		return false
-	},
-	"lt": func(a, b any) bool {
-		switch av := a.(type) {
-		case float64:
-			if bv, ok := b.(float64); ok {
-				return av < bv
-			}
-		case int:
-			if bv, ok := b.(int); ok {
-				return av < bv
-			}
-		}
-		return false
-	},
-}
-
-func RenderEmail(trades []Trade, modelName string, yesterday *YesterdayRecap) (string, error) {
-	tmpl, err := template.New("email.html").Funcs(funcMap).ParseFS(templateFS, "email.html")
-	if err != nil {
-		return "", err
-	}
-
-	var topPick *Trade
-	for i := range trades {
-		t := &trades[i]
-		if topPick == nil || t.Score > topPick.Score {
-			topPick = t
-		}
-	}
-
-	data := EmailData{
-		Subject:      "Today's Top Options Plays",
-		Date:         time.Now().Format("Monday, Jan 2, 2006"),
-		Trades:       trades,
-		ModelName:    modelName,
-		Yesterday:    yesterday,
-		TopPick:      topPick,
-		DashboardURL: "https://vibetradez.com/dashboard",
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", err
-	}
-
-	return buf.String(), nil
-}
-
-type HealthCheck struct {
-	Name    string
-	Status  string
-	Detail  string
-	Latency string
-}
-
-type StatusEmailData struct {
-	Subject      string
-	Date         string
-	Checks       []HealthCheck
-	AllPassed    bool
-	PassCount    int
-	WarnCount    int
-	FailCount    int
-	TotalChecks  int
-	Subscribers  int
-	CronOpen     string
-	CronClose    string
-	CronWeekly   string
-	ServerPort   string
-	DashboardURL string
-	Model        string
-}
-
-type ErrorEmailData struct {
-	Subject string
-	Date    string
-	Error   string
-}
-
-/*
-SchwabReauthData drives the operator-only re-auth nag email. Sent
-once-per-day starting when the refresh token is within 2 days of
-Schwab's hard 7-day cap (or already expired). Goes to the
-EXECUTION_RECIPIENT only, not the subscriber list.
-*/
 type SchwabReauthData struct {
 	Subject       string
 	Date          string
@@ -287,134 +84,79 @@ func RenderSchwabReauth(d SchwabReauthData) (string, error) {
 	return renderOne("schwab_reauth.html", d)
 }
 
-// ── Auto-execution emails ──
+// ── One-time launch announcement ──
 
-type ExecuteReceiptData struct {
-	Subject            string
-	Date               string
-	Mode               string
-	Symbol             string
-	ContractType       string
-	StrikePrice        float64
-	Expiration         string
-	OCCSymbol          string
-	FillPrice          float64
-	Quantity           int
-	OrderID            string
-	SchwabPositionsURL string
+// AnnouncementData backs the one-time "letting Claude drive" launch email
+// announcing the v2 autonomous portfolio manager to the subscriber list.
+// BaseURL is the public site root (no trailing slash); the template builds the
+// dashboard, holdings, and closed links from it. StartingBalance + BalanceAsOf
+// state the account's value at the most recent market close.
+type AnnouncementData struct {
+	BaseURL         string
+	StartingBalance float64
+	BalanceAsOf     string
 }
 
-/*
-ExecuteOpenFailedData drives the operator-only alert sent when the
-morning open order errors at submission, errors on status lookup, or
-returns terminal-but-not-filled (REJECTED / CANCELED / EXPIRED). Goes
-to EXECUTION_RECIPIENT only — never the subscriber list.
-*/
-type ExecuteOpenFailedData struct {
-	Subject            string
-	Date               string
-	Mode               string
-	Symbol             string
-	ContractType       string
-	StrikePrice        float64
-	Expiration         string
-	OCCSymbol          string
-	OrderID            string
-	ErrorMessage       string
-	SchwabPositionsURL string
+func RenderAnnouncement(d AnnouncementData) (string, error) {
+	return renderOne("announcement.html", d)
 }
 
-func RenderExecuteReceipt(d ExecuteReceiptData) (string, error) {
-	return renderOne("execute_receipt.html", d)
-}
-func RenderExecuteOpenFailed(d ExecuteOpenFailedData) (string, error) {
-	return renderOne("execute_open_failed.html", d)
-}
-
-/*
-BasketSummaryRow + BasketSummaryData feed the single consolidated
-post-open email sent by exec.Service.SendExecutionSummary at 9:35 ET.
-One row per open-side execution attempted that morning, with the
-final disposition (filled / canceled / failed / rejected / working).
-*/
-type BasketSummaryRow struct {
-	Rank         int
-	Symbol       string
-	ContractType string
-	StrikePrice  float64
-	Mode         string
-	Status       string
-	LimitPrice   float64
-	FillPrice    float64
-	Quantity     int
-	ErrorMessage string
-}
-
-type BasketSummaryData struct {
-	Date      string
-	Mode      string
-	Rows      []BasketSummaryRow
-	Filled    int
-	Total     int
-	TotalCost float64
+// emailFuncs gives templates locale-correct currency + percent helpers so
+// emails match the site (thousands separators, signed P&L).
+var emailFuncs = template.FuncMap{
+	"usd":  func(v float64) string { return "$" + groupThousands(strconv.FormatFloat(absf(v), 'f', 2, 64), v < 0) },
+	"usd0": func(v float64) string { return "$" + groupThousands(strconv.FormatFloat(absf(v), 'f', 0, 64), v < 0) },
+	"pnl": func(v float64) string {
+		body := "$" + groupThousands(strconv.FormatFloat(absf(v), 'f', 2, 64), false)
+		if v > 0 {
+			return "+" + body
+		}
+		if v < 0 {
+			return "-" + body
+		}
+		return body
+	},
+	"pct1": func(v float64) string {
+		s := strconv.FormatFloat(v, 'f', 1, 64)
+		if v > 0 {
+			return "+" + s + "%"
+		}
+		return s + "%"
+	},
+	"pct0": func(v float64) string { return strconv.FormatFloat(v, 'f', 0, 64) + "%" },
 }
 
-func RenderBasketSummary(d BasketSummaryData) (string, error) {
-	return renderOne("execute_basket_summary.html", d)
+func absf(v float64) float64 {
+	if v < 0 {
+		return -v
+	}
+	return v
 }
 
-/*
-CloseSummaryRow + CloseSummaryData feed the single consolidated 3:55
-ET close-side email sent by exec.Service.SendCloseSummary. One row per
-close-side execution attempted that day, with per-position realized
-P&L sourced from broker truth (open fill price stitched in via the
-store's CloseSummaryForDate query). Replaces the previous per-trade
-ExecuteCloseReceiptData / ExecuteCloseFailedData emails.
-*/
-type CloseSummaryRow struct {
-	Rank         int
-	Symbol       string
-	ContractType string
-	StrikePrice  float64
-	Mode         string
-	Status       string
-	OpenPrice    float64
-	ClosePrice   float64
-	RealizedPnL  float64
-	Quantity     int
-	ErrorMessage string
-}
-
-type CloseSummaryData struct {
-	Date               string
-	Mode               string
-	Rows               []CloseSummaryRow
-	Filled             int
-	Failed             int
-	Total              int
-	TotalRealizedPnL   float64
-	SchwabPositionsURL string
-}
-
-func RenderCloseSummary(d CloseSummaryData) (string, error) {
-	return renderOne("execute_close_summary.html", d)
-}
-
-/*
-RenderRolloutTranscripts renders the v11 rollout email announcing the
-daily model-reasoning transcripts: subscribers can now read the full
-9:25 selection conversation and 9:30 execution conversation (narration,
-tool calls, and decisions) on the dashboard for each trading day.
-Static content, no parameters beyond Subject.
-*/
-func RenderRolloutTranscripts() (string, error) {
-	return renderOne("rollout_transcripts.html", map[string]string{
-		"Subject": "You can now read the reasoning behind every trade",
-	})
+// groupThousands inserts comma separators into the integer part of a
+// already-formatted decimal string ("1480.42" -> "1,480.42").
+func groupThousands(s string, neg bool) string {
+	intPart, frac := s, ""
+	if i := strings.IndexByte(s, '.'); i >= 0 {
+		intPart, frac = s[:i], s[i:]
+	}
+	n := len(intPart)
+	var b strings.Builder
+	if neg {
+		b.WriteByte('-')
+	}
+	for i, c := range intPart {
+		if i > 0 && (n-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteRune(c)
+	}
+	b.WriteString(frac)
+	return b.String()
 }
 
 func renderOne(name string, data any) (string, error) {
-	tmpl, err := template.New(name).Funcs(funcMap).ParseFS(templateFS, name)
+	tmpl, err := template.New(name).Funcs(emailFuncs).ParseFS(templateFS, name)
 	if err != nil {
 		return "", err
 	}
@@ -422,231 +164,5 @@ func renderOne(name string, data any) (string, error) {
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return "", err
 	}
-	return buf.String(), nil
-}
-
-/*
-VerifyTemplates exercises all email templates with sample data to catch rendering errors.
-Returns a HealthCheck for template rendering.
-*/
-func VerifyTemplates() HealthCheck {
-	start := time.Now()
-
-	sampleTrades := []Trade{
-		{
-			Symbol: "SPY", ContractType: "CALL", StrikePrice: 500,
-			Expiration: "2026-04-01", DTE: 5, EstimatedPrice: 1.50,
-			Thesis:       "Startup verification",
-			CurrentPrice: 498, TargetPrice: 505, StopLoss: 0.75,
-			RiskLevel: "MEDIUM",
-			Catalyst:  "System test", MentionCount: 42,
-			Rank: 1, Score: 9,
-			Rationale: "Sample bullish rationale.",
-		},
-	}
-	sampleYesterday := &YesterdayRecap{
-		Date:        "Apr 24",
-		TotalPnL:    142.50,
-		Winners:     3,
-		Losers:      2,
-		TotalTrades: 5,
-		BestSymbol:  "SPY",
-		BestPnL:     85.00,
-		WorstSymbol: "QQQ",
-		WorstPnL:    -22.00,
-	}
-	if _, err := RenderEmail(sampleTrades, "Claude", sampleYesterday); err != nil {
-		return HealthCheck{Name: "Email Templates", Status: "fail", Detail: err.Error(), Latency: fmtLatency(start)}
-	}
-
-	sampleSummaries := []SummaryTrade{
-		{
-			Symbol: "SPY", ContractType: "CALL", StrikePrice: 500,
-			Expiration: "2026-04-01", EntryPrice: 1.50, ClosingPrice: 2.10,
-			Quantity: 3, PnL: 180, StockOpen: 498, StockClose: 503, Notes: "Startup verification",
-		},
-	}
-	if _, err := RenderSummaryEmail(sampleSummaries); err != nil {
-		return HealthCheck{Name: "Email Templates", Status: "fail", Detail: err.Error(), Latency: fmtLatency(start)}
-	}
-
-	sampleWeekly := WeeklyEmailData{
-		Subject: "Weekly Report", WeekRange: "Mar 25 to Mar 29, 2026",
-		Days: []WeeklyDayData{
-			{
-				Date: "2026-03-25", DayName: "Monday",
-				TotalTrades: 1, Winners: 1, DayPnL: 180.0,
-				BestTrade: "SPY", BestPnL: 180.0,
-				WorstTrade: "SPY", WorstPnL: 180.0,
-				Trades: sampleSummaries,
-			},
-		},
-		TotalTrades: 1, TotalWinners: 1, TotalPnL: 180.0,
-		WinRate: 100.0, TotalInvested: 450.0, TotalReturn: 630.0,
-		BestTrade: "SPY", BestPnL: 180.0, WorstTrade: "SPY", WorstPnL: 180.0,
-		DashboardURL: "https://vibetradez.com/dashboard",
-	}
-	if _, err := RenderWeeklyEmail(sampleWeekly); err != nil {
-		return HealthCheck{Name: "Email Templates", Status: "fail", Detail: err.Error(), Latency: fmtLatency(start)}
-	}
-
-	return HealthCheck{Name: "Email Templates", Status: "ok", Detail: "All 4 templates rendered", Latency: fmtLatency(start)}
-}
-
-/*
-topNPnl picks the N highest-scoring summaries by the given score
-selector and sums their per-contract P&L. Used by the EOD email to
-backtest "what if you had only followed the top picks today".
-*/
-func topNPnl(trades []SummaryTrade, n int, score func(SummaryTrade) float64) float64 {
-	if len(trades) == 0 {
-		return 0
-	}
-	sorted := make([]SummaryTrade, len(trades))
-	copy(sorted, trades)
-	sort.SliceStable(sorted, func(i, j int) bool {
-		return score(sorted[i]) > score(sorted[j])
-	})
-	if len(sorted) > n {
-		sorted = sorted[:n]
-	}
-	var total float64
-	for _, t := range sorted {
-		qty := t.Quantity
-		if qty < 1 {
-			qty = 1
-		}
-		total += (t.ClosingPrice - t.EntryPrice) * 100 * float64(qty)
-	}
-	return total
-}
-
-func fmtLatency(start time.Time) string {
-	d := time.Since(start)
-	if d < time.Millisecond {
-		return fmt.Sprintf("%dus", d.Microseconds())
-	}
-	return fmt.Sprintf("%dms", d.Milliseconds())
-}
-
-func RenderTestEmail(data StatusEmailData) (string, error) {
-	tmpl, err := template.New("test.html").Funcs(funcMap).ParseFS(templateFS, "test.html")
-	if err != nil {
-		return "", err
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", err
-	}
-
-	return buf.String(), nil
-}
-
-/*
-RenderErrorEmail renders an error notification email. Kept intentionally simple
-(no loops, no comparisons) to minimize the chance of this template itself failing.
-*/
-func RenderErrorEmail(errMsg string) (string, error) {
-	tmpl, err := template.New("error.html").Funcs(funcMap).ParseFS(templateFS, "error.html")
-	if err != nil {
-		return "", err
-	}
-
-	data := ErrorEmailData{
-		Subject: "System Alert",
-		Date:    time.Now().Format("Monday, Jan 2, 2006 3:04 PM"),
-		Error:   errMsg,
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", err
-	}
-
-	return buf.String(), nil
-}
-
-func RenderWeeklyEmail(data WeeklyEmailData) (string, error) {
-	tmpl, err := template.New("weekly.html").Funcs(funcMap).ParseFS(templateFS, "weekly.html")
-	if err != nil {
-		return "", err
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", err
-	}
-
-	return buf.String(), nil
-}
-
-func RenderSummaryEmail(summaryTrades []SummaryTrade) (string, error) {
-	tmpl, err := template.New("summary.html").Funcs(funcMap).ParseFS(templateFS, "summary.html")
-	if err != nil {
-		return "", err
-	}
-
-	winners, losers := 0, 0
-	totalPnL := 0.0
-	for i := range summaryTrades {
-		t := &summaryTrades[i]
-		// No execution row means a hypothetical one-contract illustration;
-		// a real fill carries the quantity the agent actually bought.
-		if t.Quantity < 1 {
-			t.Quantity = 1
-		}
-		t.PriceChange = t.ClosingPrice - t.EntryPrice
-		if t.EntryPrice > 0 {
-			t.PctChange = (t.PriceChange / t.EntryPrice) * 100
-		}
-		if t.StockOpen > 0 {
-			t.StockPctChange = ((t.StockClose - t.StockOpen) / t.StockOpen) * 100
-		}
-		t.PnL = t.PriceChange * 100 * float64(t.Quantity)
-		if t.PriceChange > 0 {
-			t.Result = "PROFIT"
-			winners++
-		} else if t.PriceChange < 0 {
-			t.Result = "LOSS"
-			losers++
-		} else {
-			t.Result = "FLAT"
-		}
-		totalPnL += t.PnL
-	}
-
-	top3Pnl := topNPnl(summaryTrades, 3, func(t SummaryTrade) float64 { return float64(t.Score) })
-
-	var scoreSum float64
-	var scoreCount int
-	for _, t := range summaryTrades {
-		if t.Score > 0 {
-			scoreSum += float64(t.Score)
-			scoreCount++
-		}
-	}
-	var avgScore float64
-	if scoreCount > 0 {
-		avgScore = scoreSum / float64(scoreCount)
-	}
-
-	data := SummaryEmailData{
-		Subject:     "End of Day Trade Summary",
-		Date:        time.Now().Format("Monday, Jan 2, 2006"),
-		Trades:      summaryTrades,
-		TotalTrades: len(summaryTrades),
-		Winners:     winners,
-		Losers:      losers,
-		TotalPnL:    totalPnL,
-		Top3Pnl:     top3Pnl,
-		AvgScore:    avgScore,
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", err
-	}
-
 	return buf.String(), nil
 }

@@ -54,31 +54,3 @@ func TestNilRecorderIsNoOp(t *testing.T) {
 		t.Fatalf("nil recorder Transcript() should be zero value, got %+v", tr)
 	}
 }
-
-func TestRedactToolResultAccountFunds(t *testing.T) {
-	got := RedactToolResult("get_account_funds", `{"available_usd":12345.67,"currency":"USD"}`)
-	var obj map[string]any
-	if err := json.Unmarshal([]byte(got), &obj); err != nil {
-		t.Fatalf("redacted result not valid JSON: %v (%s)", err, got)
-	}
-	if obj["available_usd"] != "[redacted]" {
-		t.Errorf("available_usd = %v, want [redacted]", obj["available_usd"])
-	}
-	if obj["currency"] != "USD" {
-		t.Errorf("currency = %v, want USD preserved", obj["currency"])
-	}
-}
-
-func TestRedactToolResultUnparseableFundsDropsNumber(t *testing.T) {
-	got := RedactToolResult("get_account_funds", `available cash: $12,345.67`)
-	if got != `{"available_usd":"[redacted]"}` {
-		t.Errorf("unparseable funds result = %q, want a redacted marker (never leak a raw balance)", got)
-	}
-}
-
-func TestRedactToolResultOtherToolsUntouched(t *testing.T) {
-	in := `{"calls":[{"strike":150,"ask":1.23}]}`
-	if got := RedactToolResult("get_option_chain", in); got != in {
-		t.Errorf("non-funds tool result was modified: got %q, want %q", got, in)
-	}
-}
