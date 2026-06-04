@@ -239,6 +239,17 @@ func migrate(db *sql.DB) error {
 			created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 		CREATE INDEX IF NOT EXISTS idx_portfolio_positions_date ON portfolio_positions(date);
+
+		/*
+		sent_emails: a one-row-per-key ledger of one-time emails (e.g. the v2
+		launch announcement) that have already gone out. The send path claims
+		a key here so a one-time blast fires exactly once and never re-sends on
+		a later boot, regardless of how long its trigger env flag stays set.
+		*/
+		CREATE TABLE IF NOT EXISTS sent_emails (
+			key      TEXT PRIMARY KEY,
+			sent_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
 	`)
 	return err
 }

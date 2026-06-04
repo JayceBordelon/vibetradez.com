@@ -290,13 +290,10 @@ func main() {
 		runPortfolioSession(db, portfolioAgent)
 	}
 
-	// One-time launch announcement. Guarded by an env flag so it only goes out
-	// when deliberately set; unset it again after the send so a restart can't
-	// re-blast the list.
-	if os.Getenv("SEND_ANNOUNCEMENT") == "true" {
-		log.Println("Sending one-time launch announcement to subscribers...")
-		sendLaunchAnnouncement(cfg, db, emailClient)
-	}
+	// One-time launch announcement. Self-gating via the sent_emails ledger:
+	// it fires exactly once (on the first boot with subscribers) and never
+	// again, so no trigger flag is needed.
+	sendLaunchAnnouncement(cfg, db, emailClient)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
