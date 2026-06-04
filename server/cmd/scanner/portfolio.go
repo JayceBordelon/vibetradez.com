@@ -125,9 +125,9 @@ const launchAnnouncementKey = "launch_announcement_v2"
 /*
 sendLaunchAnnouncement sends the one-time "letting Claude drive" email
 announcing the v2 autonomous portfolio manager to the whole subscriber list.
-It is fired by SEND_ANNOUNCEMENT=true on boot, but is idempotent: it records
-its key in the sent_emails ledger after a successful send, so it goes out
-exactly once and never re-blasts on a later boot even if the flag stays set.
+It runs on every boot but is self-gating: it records its key in the
+sent_emails ledger after a successful send, so it goes out exactly once (the
+first boot with subscribers) and never re-blasts on a later boot.
 Best-effort: a render or send failure is logged, never fatal.
 */
 func sendLaunchAnnouncement(cfg *config.Config, db *store.Store, emailClient *email.Client) {
@@ -165,9 +165,8 @@ func sendLaunchAnnouncement(cfg *config.Config, db *store.Store, emailClient *em
 	if res.Failed > 0 {
 		log.Printf("announcement: email failures: %s", res.FailureDetail())
 	}
-	// Record the send so it never goes out again, even if SEND_ANNOUNCEMENT
-	// stays set across restarts. Only claim the key once at least one
-	// recipient actually received it.
+	// Record the send so it never goes out again on a later boot. Only claim
+	// the key once at least one recipient actually received it.
 	if res.Succeeded > 0 {
 		if err := db.MarkEmailSent(launchAnnouncementKey); err != nil {
 			log.Printf("announcement: WARNING sent but failed to record in ledger (could re-send on next boot): %v", err)
