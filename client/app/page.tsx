@@ -5,6 +5,7 @@ import { AmbientBackground } from "@/components/landing/ambient-background";
 import { LandingNavAccount } from "@/components/landing/nav-account";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Reveal } from "@/components/landing/reveal";
+import { ScrollIndicator } from "@/components/landing/scroll-indicator";
 import { SubscribeCTA } from "@/components/landing/subscribe-cta";
 import { Testimonials } from "@/components/landing/testimonials";
 import { TrustedBy } from "@/components/landing/trusted-by";
@@ -21,8 +22,8 @@ export default function LandingPage() {
     <div className="relative min-h-dvh overflow-hidden bg-background text-foreground">
       <AmbientBackground position="absolute" />
 
-      {/* ── Glass nav, rendered in place at the top (does not follow scroll) ── */}
-      <nav className="relative z-50 mx-auto mt-3 w-[calc(100%-1.5rem)] sm:mt-4 sm:max-w-5xl">
+      {/* ── Glass nav, overlaid on the hero at the top (does not follow scroll) ── */}
+      <nav className="absolute inset-x-0 top-3 z-50 mx-auto w-[calc(100%-1.5rem)] sm:top-4 sm:max-w-5xl">
         <div className="flex items-center justify-between px-1 py-2 sm:py-2.5">
           <Link href="/" className="inline-flex min-h-11 items-center text-xl font-extrabold tracking-tight sm:min-h-9">
             <span className="text-foreground">Vibe</span>
@@ -45,9 +46,9 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* ── Hero ── */}
-      <section className="relative px-5 pt-16 pb-28 sm:px-6 sm:pt-24 sm:pb-40">
-        <div className="relative z-10 mx-auto max-w-4xl text-center">
+      {/* ── Hero: fills the viewport so nothing else shows until you scroll ── */}
+      <section className="relative flex min-h-svh flex-col items-center justify-center px-5 py-24 sm:px-6">
+        <div className="relative z-10 mx-auto w-full max-w-4xl text-center">
           <Reveal effect="fall" duration={600}>
             <span className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground sm:text-[13px]">
               <span className="relative flex h-2 w-2">
@@ -96,6 +97,8 @@ A language model runs my real brokerage account. Stocks, options, or a pile of c
             </div>
           </Reveal>
         </div>
+
+        <ScrollIndicator />
       </section>
 
       {/* ── Pipeline as a market-hours bar: one gradient track spanning the trading day with the
