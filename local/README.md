@@ -4,8 +4,8 @@ A self-contained Docker stack for testing VibeTradez locally with realistic seed
 
 ## What's included
 
-- **Postgres 16** — auto-seeded with ~1 year of Claude-picked trades + EOD summaries (the most recent day is left in "morning picks" mode without summaries so you can see both UI states)
-- **Go API server** — runs against the local Postgres, with stub env vars for Anthropic/Resend/Schwab so it never makes real API calls
+- **Postgres 16** — auto-seeded for the portfolio manager: ~1 year of daily equity-curve points (account vs SPY), the last few daily sessions with stance notes, the recent moves, a few subscribers, and one session transcript
+- **Go API server** — runs against the local Postgres in PAPER mode (`TRADING_ENABLED=true`, `TRADING_MODE=paper`), with stub env vars for Anthropic/Resend/Schwab so it never makes real API calls. The live paper book starts empty (a fresh $6,000 cash account); the seeded tables drive the dashboard's history
 - **Next.js frontend** — proxies `/api`, `/auth`, `/admin`, and `/health` to the Go server via `next.config.ts` rewrites
 
 ## Prerequisites
@@ -60,42 +60,46 @@ docker exec -it vt-local-postgres psql -U vibetradez
 Useful queries:
 
 ```sql
--- Count of trades and summaries per day
-SELECT date, COUNT(*) FROM trades GROUP BY date ORDER BY date DESC;
-SELECT date, COUNT(*) FROM summaries GROUP BY date ORDER BY date DESC;
+-- The equity curve (account vs SPY), most recent days
+SELECT date, account_equity, spy_close FROM portfolio_equity_curve
+ORDER BY date DESC LIMIT 10;
 
--- See the latest day's picks (should have NO summary entries — morning mode)
-SELECT symbol, contract_type, rank, estimated_price FROM trades
-WHERE date = (SELECT MAX(date) FROM trades) ORDER BY rank;
+-- The recent daily stances
+SELECT date, stance FROM portfolio_sessions ORDER BY date DESC;
 
--- See the previous day with EOD results
-SELECT t.symbol, t.rank, s.entry_price, s.closing_price,
-       ROUND(((s.closing_price - s.entry_price) * 100)::numeric, 0) AS pnl_per_contract
-FROM trades t
-JOIN summaries s ON t.date = s.date AND t.symbol = s.symbol
-WHERE t.date = (SELECT MAX(date) FROM summaries)
-ORDER BY t.rank;
+-- The recent moves
+SELECT date, action, symbol, notional, rationale
+FROM portfolio_decisions ORDER BY created_at DESC, id DESC;
 ```
 
 ## What you can test
 
-- **Dashboard at `/`** — most recent date is in "morning picks" mode (no summaries). The previous day will switch to "EOD results" mode with stats grid, P&L chart, and trade table.
-- **Date navigation** — prev/next arrows on the dashboard to walk through 10 days of seeded history
-- **Historical analytics at `/history`** — locked to all-time, full top-3 basket. Equity curve, weekly P&L bars, exposure vs returns, and capital efficiency split by Top 1 / Top 2 / Top 3 tier; daily breakdown with expandable per-trade rows
+- **Dashboard at `/dashboard`** — the portfolio view: equity/cash summary, the equity curve vs SPY, the (empty paper) holdings table, today's moves with rationale, and the stance. Refresh the seed (below) if "today's moves" is empty because the seed date has gone stale.
+- **Session transcript** — the "view the full session reasoning" link under today's moves opens `/transcript/<date>/portfolio`.
 - **Subscribe modal** — opens via the top bar button. Submitting writes to the local subscribers table.
-- **Terms & FAQ** — `/terms` and `/faq` pages
-- **API protection** — `curl http://localhost:8080/api/trades/today` returns 403 (missing `X-VT-Source`); the frontend includes the header automatically
+- **Terms & FAQ** — `/terms` and `/faq` pages.
+- **API protection** — `curl http://localhost:8080/api/portfolio` returns 403 (missing `X-VT-Source`); the frontend includes the header automatically.
+
+## Refreshing the seed
+
+The seed dates are relative to the day `generate-seed.py` was run, so "today's moves" and the end of the curve drift over time. Regenerate and reboot with a clean volume:
+
+```bash
+python3 generate-seed.py > seed.sql
+docker compose -f docker-compose.local.yml down -v
+docker compose -f docker-compose.local.yml up --build
+```
 
 ## Disabled in local mode
 
-- **Cron jobs** — pushed to Sunday so they never fire
-- **Anthropic / Schwab / Resend** — stub keys; the server starts but never makes real calls
-- **Live quotes (`/api/quotes/live`)** — returns `connected: false` since Schwab is unauthorized; the frontend gracefully degrades to "market closed" freshness
+- **Cron jobs** — the portfolio session/risk/EOD crons are pushed to Sunday so they never fire (no real broker or model to call).
+- **Anthropic / Schwab / Resend** — stub keys; the server starts but never makes real calls. Live trading stays off (`TRADING_MODE=paper`).
 
 ## Files in this directory
 
 | File | Purpose |
 |------|---------|
 | `docker-compose.local.yml` | Local stack definition |
-| `seed.sql` | Schema + ~100 seeded trades + ~90 EOD summaries + 3 subscribers |
+| `generate-seed.py` | Regenerates `seed.sql` (portfolio curve + sessions + moves + subscribers + transcript) |
+| `seed.sql` | Generated schema + seed data |
 | `README.md` | This file |

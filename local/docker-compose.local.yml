@@ -77,10 +77,19 @@ services:
       # valid against the production server (different key).
       UNSUBSCRIBE_HMAC_KEY: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
       RUN_ON_START: "false"
-      # Push cron jobs far out so they never fire during local dev.
-      CRON_SCHEDULE_OPEN: "0 9 * * 0"
-      CRON_SCHEDULE_CLOSE: "0 16 * * 0"
-      CRON_SCHEDULE_WEEKLY: "0 17 * * 0"
+      # This account trades live (the only mode), but live trading needs a
+      # configured Schwab client, which the local stack does not have. So the
+      # broker stays unwired here and the dashboard reads the seeded
+      # portfolio_* tables (moves, stance, equity-vs-SPY curve, last book).
+      # TRADING_ENABLED can stay true: with no Schwab client the manager
+      # simply does not arm, and the crons are parked on Sunday (below) too.
+      TRADING_ENABLED: "true"
+      OPERATOR_EMAIL: local@vibetradez.local
+      # Push the portfolio crons to Sunday so a session never fires during
+      # local dev (no real broker / model to call).
+      CRON_SCHEDULE_PORTFOLIO: "0 9 * * 0"
+      CRON_SCHEDULE_RISK: "0 10 * * 0"
+      CRON_SCHEDULE_EOD_SNAPSHOT: "0 16 * * 0"
       SESSION_COOKIE_NAME: vt_session
       SESSION_TTL_DAYS: "30"
     ports:

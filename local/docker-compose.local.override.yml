@@ -1,0 +1,10 @@
+# Local-only override. Remaps the trading-frontend host port off 3001 so it
+# doesn't collide with another local dev server (Excalidraw) on 3001/3002.
+# Apply by passing BOTH files:
+#   docker compose -f docker-compose.local.yml -f docker-compose.local.override.yml up -d
+# `!override` replaces the ports list instead of appending to it (an append
+# would re-bind 3001 and keep the collision).
+services:
+  trading-frontend:
+    ports: !override
+      - "3005:3001"
