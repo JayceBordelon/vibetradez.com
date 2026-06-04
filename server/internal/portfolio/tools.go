@@ -188,7 +188,7 @@ func ToolDefinitions() []anthropic.ToolUnionParam {
 		}},
 		{OfTool: &anthropic.ToolParam{
 			Name:        "get_recent_decisions",
-			Description: anthropic.String("Your own recent moves and daily stance notes across prior sessions, so you can keep a coherent thesis (what you bought and why, what you've been watching) instead of starting from scratch. Returns the latest moves and the last several stances."),
+			Description: anthropic.String("Your own recent moves and daily stance notes across prior sessions, plus the synopsis and action items you wrote at the end of your last session (your plan for today), so you can keep a coherent thesis instead of starting from scratch. Returns the latest moves, the last several stances, and prior_synopsis + prior_action_items."),
 			InputSchema: anthropic.ToolInputSchemaParam{
 				Properties: map[string]any{"limit": map[string]any{"type": "integer", "description": "Max moves to return (default 20)."}},
 				Required:   []string{},
@@ -489,8 +489,14 @@ func (d *ToolDispatcher) dispatchGetRecentDecisions(input json.RawMessage) strin
 	if err != nil {
 		return jsonError(fmt.Sprintf("get_recent_decisions: %v", err))
 	}
-	out, _ := json.Marshal(map[string]any{"decisions": decisions, "stances": stances})
-	return string(out)
+	out := map[string]any{"decisions": decisions, "stances": stances}
+	// The prior session's synopsis + action items: the plan you wrote for today.
+	if synopsis, actionItems, ok, perr := d.reader.PriorSession(); perr == nil && ok {
+		out["prior_synopsis"] = synopsis
+		out["prior_action_items"] = actionItems
+	}
+	b, _ := json.Marshal(out)
+	return string(b)
 }
 
 func (d *ToolDispatcher) dispatchGetOrderStatus(ctx context.Context, input json.RawMessage) string {

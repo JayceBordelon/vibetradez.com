@@ -94,11 +94,7 @@ func (a *Agent) Run(ctx context.Context) (*Result, error) {
 	}
 
 	dispatcher := NewToolDispatcher(a.reader, a.exec, a.caps, snap)
-	priorSynopsis, priorActions, _, _ := a.reader.PriorSession()
-	prompt, err := buildPrompt(snap, a.caps, priorSynopsis, priorActions)
-	if err != nil {
-		return nil, fmt.Errorf("build prompt: %w", err)
-	}
+	prompt := buildPrompt(a.caps)
 
 	rec := transcript.New()
 	stance, convErr := a.runConversation(ctx, prompt, dispatcher, rec)
@@ -343,34 +339,16 @@ func extractJSONObject(s string) string {
 }
 
 /*
-buildPrompt renders the session snapshot as compact JSON and interpolates
-it plus the cap summary into the system prompt. The snapshot the model
-reads here is the same one the dispatcher enforces against, so the prompt
-never describes a portfolio that differs from the gated state.
+buildPrompt interpolates today's date and the cap summary into the system
+prompt. The live book and the prior session are NOT embedded here: the model
+reads them itself through get_portfolio and get_recent_decisions, so the
+prompt stays free of duplicated, per-day state.
 */
-func buildPrompt(snap Snapshot, caps Caps, priorSynopsis, priorActions string) (string, error) {
-	view := map[string]any{
-		"equity":                 snap.Equity,
-		"settled_cash":           snap.SettledCash,
-		"unsettled_cash":         snap.UnsettledCash,
-		"high_water_mark":        snap.HighWaterMark,
-		"deployment_budget_left": snap.DeploymentBudget,
-		"new_buys_halted":        caps.DrawdownHalted(snap),
-		"positions":              snap.Positions,
-	}
-	snapJSON, err := json.MarshalIndent(view, "", "  ")
-	if err != nil {
-		return "", err
-	}
+func buildPrompt(caps Caps) string {
 	now := time.Now().In(easternTime())
 	today := now.Format("2006-01-02")
 	weekday := now.Weekday().String()
-	prior := "No prior session on record yet. Treat today as a fresh start."
-	if strings.TrimSpace(priorSynopsis) != "" || strings.TrimSpace(priorActions) != "" {
-		prior = fmt.Sprintf("SYNOPSIS (your last session):\n%s\n\nACTION ITEMS you set for today:\n%s",
-			strings.TrimSpace(priorSynopsis), strings.TrimSpace(priorActions))
-	}
-	return fmt.Sprintf(SystemPrompt, today, weekday, string(snapJSON), prior, CapsSummary(caps)), nil
+	return fmt.Sprintf(SystemPrompt, today, weekday, CapsSummary(caps))
 }
 
 func easternTime() *time.Location {
