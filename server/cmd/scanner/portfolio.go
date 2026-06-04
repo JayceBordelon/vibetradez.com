@@ -118,14 +118,27 @@ func sendDailyRecapEmail(cfg *config.Config, db *store.Store, emailClient *email
 	}
 }
 
+// launchAnnouncementKey is the sent_emails ledger key for the one-time v2
+// launch blast. Bump the suffix only if you ever intend a deliberate re-send.
+const launchAnnouncementKey = "launch_announcement_v2"
+
 /*
 sendLaunchAnnouncement sends the one-time "letting Claude drive" email
 announcing the v2 autonomous portfolio manager to the whole subscriber list.
-It is a manual, guarded action (fired by SEND_ANNOUNCEMENT=true on boot), not
-a cron, so it only goes out once and on purpose. Best-effort: a render or send
-failure is logged, never fatal.
+It is fired by SEND_ANNOUNCEMENT=true on boot, but is idempotent: it records
+its key in the sent_emails ledger after a successful send, so it goes out
+exactly once and never re-blasts on a later boot even if the flag stays set.
+Best-effort: a render or send failure is logged, never fatal.
 */
 func sendLaunchAnnouncement(cfg *config.Config, db *store.Store, emailClient *email.Client) {
+	if sent, err := db.EmailAlreadySent(launchAnnouncementKey); err != nil {
+		log.Printf("announcement: could not read send ledger, skipping to be safe: %v", err)
+		return
+	} else if sent {
+		log.Printf("announcement: already sent (key=%s), nothing to do", launchAnnouncementKey)
+		return
+	}
+
 	recipients := getRecipients(db)
 	if len(recipients) == 0 {
 		log.Printf("announcement: no subscribers, nothing to send")
@@ -151,6 +164,14 @@ func sendLaunchAnnouncement(cfg *config.Config, db *store.Store, emailClient *em
 	log.Printf("announcement: email sent to %d/%d subscribers", res.Succeeded, res.Total)
 	if res.Failed > 0 {
 		log.Printf("announcement: email failures: %s", res.FailureDetail())
+	}
+	// Record the send so it never goes out again, even if SEND_ANNOUNCEMENT
+	// stays set across restarts. Only claim the key once at least one
+	// recipient actually received it.
+	if res.Succeeded > 0 {
+		if err := db.MarkEmailSent(launchAnnouncementKey); err != nil {
+			log.Printf("announcement: WARNING sent but failed to record in ledger (could re-send on next boot): %v", err)
+		}
 	}
 }
 
