@@ -127,10 +127,24 @@ tested and tuned independently.
 func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *ToolDispatcher, rec *transcript.Recorder) (string, error) {
 	tools := ToolDefinitions()
 	rec.SetModel(a.model)
-	messages := []anthropic.MessageParam{
-		anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
+
+	// Prompt caching. Mark the static prefix so each turn re-reads it from
+	// cache (~0.1x input price) instead of paying full input price every
+	// round: the tool schemas (identical across sessions) and the system
+	// prompt (identical within a session). A rolling breakpoint on the newest
+	// tool results (set in the loop) caches the growing conversation too.
+	// Ephemeral, 5-minute TTL, which comfortably covers one multi-round
+	// session where turns are seconds apart.
+	if n := len(tools); n > 0 && tools[n-1].OfTool != nil {
+		tools[n-1].OfTool.CacheControl = anthropic.NewCacheControlEphemeralParam()
 	}
+	promptBlock := anthropic.NewTextBlock(prompt)
+	if promptBlock.OfText != nil {
+		promptBlock.OfText.CacheControl = anthropic.NewCacheControlEphemeralParam()
+	}
+	messages := []anthropic.MessageParam{anthropic.NewUserMessage(promptBlock)}
 	var containerID string
+	var prevCacheBlock *anthropic.ToolResultBlockParam // rolling conversation cache breakpoint
 
 	for round := 0; round < maxToolRounds; round++ {
 		params := anthropic.MessageNewParams{
@@ -176,6 +190,16 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 		}
 
 		if len(toolResults) > 0 {
+			// Roll the conversation cache breakpoint onto the newest tool
+			// results and clear the prior one, so we never exceed the 4
+			// cache_control blocks the API allows (tools + prompt + this one).
+			if last := toolResults[len(toolResults)-1].OfToolResult; last != nil {
+				if prevCacheBlock != nil {
+					prevCacheBlock.CacheControl = anthropic.CacheControlEphemeralParam{}
+				}
+				last.CacheControl = anthropic.NewCacheControlEphemeralParam()
+				prevCacheBlock = last
+			}
 			messages = append(messages, assistantEchoFromRaw(msg))
 			messages = append(messages, anthropic.NewUserMessage(toolResults...))
 			continue
