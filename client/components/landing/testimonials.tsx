@@ -172,7 +172,7 @@ const COLUMN_DURATIONS = ["68s", "54s", "78s"];
 
 export function Testimonials() {
   return (
-    <section className="relative px-5 pb-28 sm:px-6 sm:pb-40">
+    <section className="relative px-5 pb-12 sm:px-6 sm:pb-16">
       <div className="relative z-10 mx-auto max-w-6xl">
         <Reveal effect="blur" duration={1000} className="mx-auto mb-10 max-w-2xl text-center sm:mb-14">
           <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Five-star reviews</span>
@@ -222,7 +222,7 @@ function TestimonialCard({ t, hidden }: { t: Testimonial; hidden?: boolean }) {
   return (
     <article
       aria-hidden={hidden || undefined}
-      className="group flex w-full shrink-0 flex-col gap-4 rounded-2xl border border-foreground/[0.08] bg-foreground/[0.015] p-6 transition-all duration-300 hover:border-foreground/20 hover:bg-foreground/[0.04] dark:border-white/[0.06] dark:bg-white/[0.015] dark:hover:border-white/15 dark:hover:bg-white/[0.04]"
+      className="group flex w-full shrink-0 flex-col gap-4 rounded-2xl border border-foreground/[0.08] p-6 transition-all duration-300 hover:border-foreground/20 dark:border-white/[0.06] dark:hover:border-white/15"
     >
       <div className="flex items-center justify-between gap-3">
         <Stars rating={t.rating} />
