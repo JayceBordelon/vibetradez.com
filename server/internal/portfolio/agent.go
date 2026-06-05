@@ -26,15 +26,14 @@ package supersedes.
 const (
 	maxToolRounds = 30
 	/*
-		Extended thinking is enabled, so max_tokens must cover BOTH the
-		thinking budget and the visible response. thinkingBudgetTokens is
-		reserved for Claude's internal reasoning (must be >=1024 and <
-		maxOutputTokens); the remainder is left for tool calls + the final
-		stance JSON.
+		Adaptive extended thinking is enabled and its depth is driven by the
+		OutputConfig effort level, not a fixed token budget (opus-4.8+ reject
+		the legacy thinking.type=enabled + budget_tokens shape). max_tokens
+		still caps the whole response, so it must comfortably cover both the
+		thinking and the visible tool calls + final stance JSON.
 	*/
-	maxOutputTokens      int64 = 20000
-	thinkingBudgetTokens int64 = 10000
-	httpRequestTimeout         = 8 * time.Minute
+	maxOutputTokens    int64 = 32000
+	httpRequestTimeout       = 8 * time.Minute
 
 	maxAgentAttempts = 5
 	backoffBase      = 2 * time.Second
@@ -148,11 +147,13 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 			MaxTokens: maxOutputTokens,
 			Messages:  messages,
 			Tools:     tools,
-			// Extended thinking: lets the model reason before each move. The
-			// thinking blocks come back in msg.Content and are recorded into
-			// the transcript and threaded back (with signatures) via the raw
-			// assistant echo so multi-round tool use stays valid.
-			Thinking: anthropic.ThinkingConfigParamOfEnabled(thinkingBudgetTokens),
+			// Adaptive extended thinking: the model reasons before each move and
+			// picks its own thinking depth, dialed by the OutputConfig effort
+			// level. The thinking blocks come back in msg.Content and are
+			// recorded into the transcript and threaded back (with signatures)
+			// via the raw assistant echo so multi-round tool use stays valid.
+			Thinking:     anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{}},
+			OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffortHigh},
 		}
 		if containerID != "" {
 			params.Container = param.NewOpt(containerID)
