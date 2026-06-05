@@ -89,19 +89,20 @@ export function TranscriptView({ date, kind }: { date: string; kind: Kind }) {
       {state.kind === "error" && (
         <StatusBlock tone="error" title="Couldn't load the transcript" body={state.message} />
       )}
-      {state.kind === "ready" && !state.data.available && (
+      {state.kind === "ready" && (!state.data.available || (state.data.events ?? []).length === 0) && (
         <StatusBlock
           tone="muted"
-          title="No transcript for this day"
-          body={`The ${copy.stage} conversation wasn't captured for ${date}. This happens for days the system didn't run (weekends, holidays, or before this feature shipped).`}
+          title="No transcript recorded"
+          body={`No session activity was recorded for ${prettyDate(date)}. This happens on days the ${copy.stage} didn't run (weekends, holidays) or when a session ended without making any moves.`}
         />
       )}
-      {state.kind === "ready" && state.data.available && <TranscriptBody data={state.data} />}
+      {state.kind === "ready" && state.data.available && (state.data.events ?? []).length > 0 && <TranscriptBody data={state.data} />}
     </div>
   );
 }
 
 function TranscriptBody({ data }: { data: TranscriptResponse }) {
+  const events = data.events ?? [];
   return (
     <div className="mt-6">
       {data.model && (
@@ -110,7 +111,7 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
             Model <span className="font-mono text-foreground/80">{data.model}</span>
           </span>
           {data.created_at && <span>Captured {new Date(data.created_at).toLocaleString()}</span>}
-          <span>{data.events.length} events</span>
+          <span>{events.length} events</span>
         </div>
       )}
       <ol className="space-y-6">
@@ -120,7 +121,6 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
           // result is the tool_result that follows a tool_use (matched by
           // tool_use_id when both carry one, else by adjacency so seeded /
           // id-less transcripts still pair).
-          const events = data.events;
           const resultFor = new Map<number, string>();
           for (let i = 0; i < events.length; i++) {
             if (events[i].type !== "tool_use") continue;
