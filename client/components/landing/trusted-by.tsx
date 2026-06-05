@@ -31,7 +31,7 @@ const BRANDS: Brand[] = [
 
 export function TrustedBy() {
   return (
-    <section className="relative px-5 pb-24 sm:px-6 sm:pb-32" aria-label="Trusted by, allegedly">
+    <section className="relative px-5 sm:px-6" aria-label="Trusted by, allegedly">
       <div className="relative z-10 mx-auto max-w-6xl">
         <p className="mb-7 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:mb-9">
           Trusted by <span className="ml-1 normal-case italic tracking-normal text-muted-foreground/70">(allegedly)</span>
