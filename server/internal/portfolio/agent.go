@@ -34,6 +34,9 @@ const (
 	*/
 	maxOutputTokens    int64 = 32000
 	httpRequestTimeout       = 8 * time.Minute
+	// Cap the server-tool (web_search / web_fetch) result JSON stored in the
+	// transcript so a fetched page can't bloat the record.
+	serverResultCap = 8000
 
 	maxAgentAttempts = 5
 	backoffBase      = 2 * time.Second
@@ -183,6 +186,17 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 				log.Printf("portfolio: tool=%s -> %d bytes", b.Name, len(out))
 				rec.AddToolResult(round, b.Name, b.ID, out)
 				toolResults = append(toolResults, anthropic.NewToolResultBlock(b.ID, out, false))
+			case anthropic.ServerToolUseBlock:
+				// web_search / web_fetch run server-side at Anthropic, so there
+				// is no local result to feed back: we only record the call and
+				// (below) its result so the model's web research is captured in
+				// the transcript instead of vanishing.
+				input, _ := json.Marshal(b.Input)
+				rec.AddToolUse(round, string(b.Name), b.ID, input)
+			case anthropic.WebSearchToolResultBlock:
+				rec.AddToolResult(round, "web_search", b.ToolUseID, truncJSON(b.Content, serverResultCap))
+			case anthropic.WebFetchToolResultBlock:
+				rec.AddToolResult(round, "web_fetch", b.ToolUseID, truncJSON(b.Content, serverResultCap))
 			}
 		}
 
@@ -209,6 +223,20 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 		return parseStance(text), nil
 	}
 	return "", fmt.Errorf("exceeded max tool rounds (%d)", maxToolRounds)
+}
+
+// truncJSON marshals a server-tool result and caps its length so a large
+// fetched page can't bloat the stored transcript. A truncated (non-JSON)
+// string is rendered as-is by the transcript view.
+func truncJSON(v any, max int) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	if len(b) > max {
+		return string(b[:max]) + "…[truncated]"
+	}
+	return string(b)
 }
 
 func (a *Agent) sendWithRetry(ctx context.Context, params anthropic.MessageNewParams) (*anthropic.Message, error) {
