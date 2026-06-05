@@ -242,13 +242,21 @@ func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Cache-Control", "public, max-age=30")
+	// Never emit events:null. A session that errored before any move (or any
+	// nil-slice JSONB) is stored as null/empty; coerce to an empty array so the
+	// client always receives a list and renders the empty state instead of
+	// crashing on events.length.
+	events := tv.Events
+	if len(events) == 0 || strings.TrimSpace(string(events)) == "null" {
+		events = json.RawMessage("[]")
+	}
 	writeJSON(w, http.StatusOK, transcriptResponse{
 		Date:      tv.Date,
 		Kind:      tv.Kind,
 		Model:     tv.Model,
 		Available: true,
 		CreatedAt: tv.CreatedAt.UTC().Format(time.RFC3339),
-		Events:    tv.Events,
+		Events:    events,
 	})
 }
 

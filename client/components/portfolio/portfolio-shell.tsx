@@ -65,7 +65,10 @@ export function PortfolioShell() {
   }
 
   const investedPct = data.equity > 0 ? ((data.equity - data.settled_cash - data.unsettled_cash) / data.equity) * 100 : 0;
-  const totalUnrealized = data.positions.reduce((s, p) => s + p.unrealized_pnl, 0);
+  // positions can be a nil slice (JSON null) for an enabled but all-cash
+  // account, so default it before any reduce/length access.
+  const positions = data.positions ?? [];
+  const totalUnrealized = positions.reduce((s, p) => s + p.unrealized_pnl, 0);
   const dayChangePct = (() => {
     if (curve.length < 2) return null;
     const prev = curve[curve.length - 2].account_equity;
@@ -124,7 +127,7 @@ export function PortfolioShell() {
           <ExploreLink
             href="/holdings"
             title="Holdings"
-            blurb={`${data.positions.length} open position${data.positions.length === 1 ? "" : "s"} the account holds right now.`}
+            blurb={`${positions.length} open position${positions.length === 1 ? "" : "s"} the account holds right now.`}
           />
           <ExploreLink href="/closed" title="Closed trades" blurb="Every completed round trip, with realized P&L." />
         </div>
