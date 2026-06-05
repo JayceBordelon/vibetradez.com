@@ -27,9 +27,8 @@ type EventType string
 const (
 	// EventText is assistant narration emitted between tool calls.
 	EventText EventType = "text"
-	// EventThinking is an extended-thinking block. Not produced by the
-	// live runs today (thinking is off); reserved so it captures for
-	// free if ever enabled.
+	// EventThinking is an extended-thinking block. Adaptive extended
+	// thinking is enabled, so live runs do produce these.
 	EventThinking EventType = "thinking"
 	// EventToolUse is a tool call the model issued (name + input args).
 	EventToolUse EventType = "tool_use"
