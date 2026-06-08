@@ -9,7 +9,7 @@ import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import type { TranscriptEvent, TranscriptResponse } from "@/types/trade";
+import type { TranscriptEvent, TranscriptResponse, TranscriptUsage } from "@/types/trade";
 
 type Kind = "selection" | "execution" | "portfolio";
 
@@ -103,6 +103,8 @@ export function TranscriptView({ date, kind }: { date: string; kind: Kind }) {
 
 function TranscriptBody({ data }: { data: TranscriptResponse }) {
   const events = data.events ?? [];
+  const usage = data.usage;
+  const durationMs = data.duration_ms ?? 0;
   return (
     <div className="mt-6">
       {data.model && (
@@ -111,9 +113,12 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
             Model <span className="font-mono text-foreground/80">{data.model}</span>
           </span>
           {data.created_at && <span>Captured {new Date(data.created_at).toLocaleString()}</span>}
+          {durationMs > 0 && <span>Ran for {formatDuration(durationMs)}</span>}
           <span>{events.length} events</span>
+          {usage && usage.rounds > 0 && <span>{usage.rounds} rounds</span>}
         </div>
       )}
+      {usage && usage.rounds > 0 && <UsageBreakdown usage={usage} />}
       <ol className="space-y-6">
         {(() => {
           // Fold each tool_result into its matching tool_use so a call and
@@ -330,6 +335,56 @@ function TranscriptSkeleton() {
       <Skeleton className="h-24 w-full rounded-lg" />
     </div>
   );
+}
+
+/*
+UsageBreakdown shows the session's token spend per category plus the
+server-tool request counts. Output and the two cache figures are the ones
+that move cost; input is the fresh (uncached) input billed each round.
+*/
+function UsageBreakdown({ usage }: { usage: TranscriptUsage }) {
+  const stats: { label: string; value: string }[] = [
+    { label: "Output tokens", value: formatTokens(usage.output_tokens) },
+    { label: "Input (fresh)", value: formatTokens(usage.input_tokens) },
+    { label: "Cache read", value: formatTokens(usage.cache_read_tokens) },
+    { label: "Cache write", value: formatTokens(usage.cache_creation_tokens) },
+  ];
+  if (usage.web_search_requests > 0) stats.push({ label: "Web searches", value: String(usage.web_search_requests) });
+  if (usage.web_fetch_requests > 0) stats.push({ label: "Web fetches", value: String(usage.web_fetch_requests) });
+
+  return (
+    <div className="mb-6">
+      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Token usage</div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        {stats.map((s) => (
+          <div key={s.label} className="rounded-md border border-border/60 bg-muted/30 px-3 py-2">
+            <div className="font-mono text-sm font-medium text-foreground/90">{s.value}</div>
+            <div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">{s.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// formatDuration renders a millisecond span as "Xm Ys" (or "Ys" under a
+// minute, "Xh Ym" over an hour). Used for the session wall-clock.
+function formatDuration(ms: number): string {
+  const totalSec = Math.round(ms / 1000);
+  if (totalSec < 60) return `${totalSec}s`;
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  if (min < 60) return sec ? `${min}m ${sec}s` : `${min}m`;
+  const hr = Math.floor(min / 60);
+  const remMin = min % 60;
+  return remMin ? `${hr}h ${remMin}m` : `${hr}h`;
+}
+
+// formatTokens renders a token count compactly: 948, 12.3k, 1.4M.
+function formatTokens(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k`;
+  return `${(n / 1_000_000).toFixed(1)}M`;
 }
 
 // formatJSON pretty-prints a value (tool input). Falls back to String()

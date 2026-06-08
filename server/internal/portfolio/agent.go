@@ -99,7 +99,9 @@ func (a *Agent) Run(ctx context.Context) (*Result, error) {
 	prompt := buildPrompt(a.caps)
 
 	rec := transcript.New()
+	start := time.Now()
 	stance, convErr := a.runConversation(ctx, prompt, dispatcher, rec)
+	rec.SetDuration(time.Since(start).Milliseconds())
 
 	tr := rec.Transcript()
 	result := &Result{
@@ -175,6 +177,17 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 		if msg.Container.JSON.ID.Valid() {
 			containerID = msg.Container.ID
 		}
+
+		// Accumulate this round's token spend before any early return, so the
+		// session total reflects every API call (including a truncated one).
+		rec.AddUsage(transcript.Usage{
+			InputTokens:         msg.Usage.InputTokens,
+			OutputTokens:        msg.Usage.OutputTokens,
+			CacheReadTokens:     msg.Usage.CacheReadInputTokens,
+			CacheCreationTokens: msg.Usage.CacheCreationInputTokens,
+			WebSearchRequests:   msg.Usage.ServerToolUse.WebSearchRequests,
+			WebFetchRequests:    msg.Usage.ServerToolUse.WebFetchRequests,
+		})
 
 		// Guard the max_tokens stop: at effort=high the model can think
 		// extensively, and summarized thinking adds visible output, so a turn

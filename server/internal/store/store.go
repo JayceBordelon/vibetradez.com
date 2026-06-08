@@ -138,6 +138,8 @@ func migrate(db *sql.DB) error {
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_transcripts_date ON transcripts(date);
+		ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS usage JSONB NOT NULL DEFAULT '{}';
+		ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS duration_ms BIGINT NOT NULL DEFAULT 0;
 
 		/*
 		── Portfolio-manager tables ──
@@ -484,28 +486,37 @@ to the API layer verbatim — the store doesn't import the transcript
 package, it just persists and returns the bytes.
 */
 type TranscriptView struct {
-	Date      string
-	Kind      string
-	Model     string
-	Events    json.RawMessage
-	CreatedAt time.Time
+	Date       string
+	Kind       string
+	Model      string
+	Events     json.RawMessage
+	Usage      json.RawMessage
+	DurationMS int64
+	CreatedAt  time.Time
 }
 
 /*
 SaveTranscript upserts the captured conversation for a (date, kind).
 A re-run of a day's cron overwrites the prior transcript so the row
 always reflects the latest run. eventsJSON must be a JSON array (the
-ordered transcript events); model is the model id that produced it.
+ordered transcript events); usageJSON is the session token-usage object;
+durationMS is the session wall-clock; model is the model id that produced
+it.
 */
-func (s *Store) SaveTranscript(date, kind, model string, eventsJSON []byte) error {
+func (s *Store) SaveTranscript(date, kind, model string, eventsJSON, usageJSON []byte, durationMS int64) error {
+	if len(usageJSON) == 0 {
+		usageJSON = []byte("{}")
+	}
 	_, err := s.db.Exec(`
-		INSERT INTO transcripts (date, kind, model, events, created_at)
-		VALUES ($1, $2, $3, $4, NOW())
+		INSERT INTO transcripts (date, kind, model, events, usage, duration_ms, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, NOW())
 		ON CONFLICT (date, kind) DO UPDATE SET
 			model = EXCLUDED.model,
 			events = EXCLUDED.events,
+			usage = EXCLUDED.usage,
+			duration_ms = EXCLUDED.duration_ms,
 			created_at = NOW()
-	`, date, kind, model, eventsJSON)
+	`, date, kind, model, eventsJSON, usageJSON, durationMS)
 	if err != nil {
 		return fmt.Errorf("failed to save %s transcript for %s: %w", kind, date, err)
 	}
@@ -520,9 +531,9 @@ instead of treating a missing transcript as an error.
 func (s *Store) GetTranscript(date, kind string) (*TranscriptView, error) {
 	var tv TranscriptView
 	err := s.db.QueryRow(`
-		SELECT date, kind, model, events, created_at
+		SELECT date, kind, model, events, usage, duration_ms, created_at
 		FROM transcripts WHERE date = $1 AND kind = $2
-	`, date, kind).Scan(&tv.Date, &tv.Kind, &tv.Model, &tv.Events, &tv.CreatedAt)
+	`, date, kind).Scan(&tv.Date, &tv.Kind, &tv.Model, &tv.Events, &tv.Usage, &tv.DurationMS, &tv.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}

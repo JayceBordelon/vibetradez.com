@@ -171,7 +171,8 @@ func TestTranscriptEndpoint(t *testing.T) {
 	srv := setupTestServer(t)
 
 	events := json.RawMessage(`[{"round":0,"type":"text","text":"picking AAPL"},{"round":0,"type":"tool_use","tool_name":"get_option_chain","tool_input":{"symbol":"AAPL"}}]`)
-	if err := srv.db.SaveTranscript("2026-06-03", "selection", "claude-opus-4-8", events); err != nil {
+	usage := json.RawMessage(`{"input_tokens":120,"output_tokens":45,"rounds":2}`)
+	if err := srv.db.SaveTranscript("2026-06-03", "selection", "claude-opus-4-8", events, usage, 8500); err != nil {
 		t.Fatalf("seed SaveTranscript: %v", err)
 	}
 
@@ -191,6 +192,19 @@ func TestTranscriptEndpoint(t *testing.T) {
 	}
 	if !jsonArrayLen(t, resp.Events, 2) {
 		t.Fatalf("expected 2 events, got %s", resp.Events)
+	}
+	if resp.DurationMS != 8500 {
+		t.Fatalf("expected duration_ms 8500, got %d", resp.DurationMS)
+	}
+	var gotUsage struct {
+		OutputTokens int64 `json:"output_tokens"`
+		Rounds       int   `json:"rounds"`
+	}
+	if err := json.Unmarshal(resp.Usage, &gotUsage); err != nil {
+		t.Fatalf("decode usage: %v (raw %s)", err, resp.Usage)
+	}
+	if gotUsage.OutputTokens != 45 || gotUsage.Rounds != 2 {
+		t.Fatalf("unexpected usage round-trip: %+v", gotUsage)
 	}
 
 	// Missing transcript → available=false, empty events, still 200.
