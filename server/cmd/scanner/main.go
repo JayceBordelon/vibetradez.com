@@ -290,11 +290,6 @@ func main() {
 		runPortfolioSession(db, portfolioAgent)
 	}
 
-	// One-time launch announcement. Self-gating via the sent_emails ledger:
-	// it fires exactly once (on the first boot with subscribers) and never
-	// again, so no trigger flag is needed.
-	sendLaunchAnnouncement(cfg, db, emailClient)
-
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
