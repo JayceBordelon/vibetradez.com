@@ -132,62 +132,6 @@ func sendDailyRecapEmail(cfg *config.Config, db *store.Store, emailClient *email
 	}
 }
 
-// launchAnnouncementKey is the sent_emails ledger key for the one-time v2
-// launch blast. Bump the suffix only if you ever intend a deliberate re-send.
-const launchAnnouncementKey = "launch_announcement_v2"
-
-/*
-sendLaunchAnnouncement sends the one-time "letting Claude drive" email
-announcing the v2 autonomous portfolio manager to the whole subscriber list.
-It runs on every boot but is self-gating: it records its key in the
-sent_emails ledger after a successful send, so it goes out exactly once (the
-first boot with subscribers) and never re-blasts on a later boot.
-Best-effort: a render or send failure is logged, never fatal.
-*/
-func sendLaunchAnnouncement(cfg *config.Config, db *store.Store, emailClient *email.Client) {
-	if sent, err := db.EmailAlreadySent(launchAnnouncementKey); err != nil {
-		log.Printf("announcement: could not read send ledger, skipping to be safe: %v", err)
-		return
-	} else if sent {
-		log.Printf("announcement: already sent (key=%s), nothing to do", launchAnnouncementKey)
-		return
-	}
-
-	recipients := getRecipients(db)
-	if len(recipients) == 0 {
-		log.Printf("announcement: no subscribers, nothing to send")
-		return
-	}
-
-	base := strings.TrimRight(cfg.PublicBaseURL, "/")
-	data := templates.AnnouncementData{BaseURL: base}
-	// State the account's value as of the most recent market close (the latest
-	// equity-curve point the EOD snapshot recorded).
-	if pts, perr := db.GetEquityCurve("0000-01-01", "9999-12-31"); perr == nil && len(pts) > 0 {
-		last := pts[len(pts)-1]
-		data.StartingBalance = last.AccountEquity
-		data.BalanceAsOf = longDate(last.Date)
-	}
-	html, err := templates.RenderAnnouncement(data)
-	if err != nil {
-		log.Printf("announcement: render email: %v", err)
-		return
-	}
-	subject := "Fuck it. I'm letting Claude drive."
-	res := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, html, unsubURLBuilder(cfg))
-	log.Printf("announcement: email sent to %d/%d subscribers", res.Succeeded, res.Total)
-	if res.Failed > 0 {
-		log.Printf("announcement: email failures: %s", res.FailureDetail())
-	}
-	// Record the send so it never goes out again on a later boot. Only claim
-	// the key once at least one recipient actually received it.
-	if res.Succeeded > 0 {
-		if err := db.MarkEmailSent(launchAnnouncementKey); err != nil {
-			log.Printf("announcement: WARNING sent but failed to record in ledger (could re-send on next boot): %v", err)
-		}
-	}
-}
-
 // longDate turns a YYYY-MM-DD date into "June 4, 2026" for the email; falls
 // back to the raw string if it doesn't parse.
 func longDate(date string) string {

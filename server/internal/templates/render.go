@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed portfolio_update.html schwab_reauth.html announcement.html
+//go:embed portfolio_update.html schwab_reauth.html
 var templateFS embed.FS
 
 // ── Daily portfolio-update email ──
@@ -82,23 +82,6 @@ type SchwabReauthData struct {
 
 func RenderSchwabReauth(d SchwabReauthData) (string, error) {
 	return renderOne("schwab_reauth.html", d)
-}
-
-// ── One-time launch announcement ──
-
-// AnnouncementData backs the one-time "letting Claude drive" launch email
-// announcing the v2 autonomous portfolio manager to the subscriber list.
-// BaseURL is the public site root (no trailing slash); the template builds the
-// dashboard, holdings, and closed links from it. StartingBalance + BalanceAsOf
-// state the account's value at the most recent market close.
-type AnnouncementData struct {
-	BaseURL         string
-	StartingBalance float64
-	BalanceAsOf     string
-}
-
-func RenderAnnouncement(d AnnouncementData) (string, error) {
-	return renderOne("announcement.html", d)
 }
 
 // emailFuncs gives templates locale-correct currency + percent helpers so
