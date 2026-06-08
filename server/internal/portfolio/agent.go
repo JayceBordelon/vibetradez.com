@@ -155,7 +155,14 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 			// level. The thinking blocks come back in msg.Content and are
 			// recorded into the transcript and threaded back (with signatures)
 			// via the raw assistant echo so multi-round tool use stays valid.
-			Thinking:     anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{}},
+			//
+			// Display MUST be set explicitly: on opus-4.8/4.7 the server-side
+			// default is "omitted", which returns thinking blocks with an empty
+			// Thinking field (signature only), so the transcript would capture no
+			// reasoning at all. "summarized" returns the readable summary we show.
+			Thinking: anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{
+				Display: anthropic.ThinkingConfigAdaptiveDisplaySummarized,
+			}},
 			OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffortHigh},
 		}
 		if containerID != "" {
@@ -167,6 +174,17 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 		}
 		if msg.Container.JSON.ID.Valid() {
 			containerID = msg.Container.ID
+		}
+
+		// Guard the max_tokens stop: at effort=high the model can think
+		// extensively, and summarized thinking adds visible output, so a turn
+		// can hit the maxOutputTokens ceiling. A truncated turn may carry an
+		// unterminated tool_use block; echoing it back to continue the loop
+		// would 400 (or commit a half-formed move). Fail cleanly instead so the
+		// session's fail-safe records a no-action day rather than corrupting the
+		// conversation.
+		if msg.StopReason == anthropic.StopReasonMaxTokens {
+			return "", fmt.Errorf("response truncated at max_tokens (%d) in round %d; raise maxOutputTokens or lower effort", maxOutputTokens, round)
 		}
 
 		var toolResults []anthropic.ContentBlockParamUnion
