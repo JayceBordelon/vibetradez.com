@@ -118,7 +118,7 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
           {usage && usage.rounds > 0 && <span>{usage.rounds} rounds</span>}
         </div>
       )}
-      {usage && usage.rounds > 0 && <UsageBreakdown usage={usage} />}
+      {usage && usage.rounds > 0 && <UsageBreakdown usage={usage} model={data.model} />}
       <ol className="space-y-6">
         {(() => {
           // Fold each tool_result into its matching tool_use so a call and
@@ -373,17 +373,57 @@ function TranscriptSkeleton() {
 }
 
 /*
-UsageBreakdown shows the session's token spend per category plus the
-server-tool request counts. Output and the two cache figures are the ones
-that move cost; input is the fresh (uncached) input billed each round.
+Published Claude list prices per million tokens, by model id, used ONLY to
+estimate a session's cost from its captured token usage. The Messages API
+does not return a dollar cost per request, so this is computed, not actual.
+Keep in sync with https://platform.claude.com/docs/en/about-claude/pricing.
+The agent caches with the 5-minute TTL, so cacheWrite uses the 5m rate.
 */
-function UsageBreakdown({ usage }: { usage: TranscriptUsage }) {
-  const stats: { label: string; value: string }[] = [
+const MODEL_RATES: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
+  "claude-opus-4-8": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  "claude-opus-4-7": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  "claude-opus-4-6": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  "claude-sonnet-4-6": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+  "claude-haiku-4-5": { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
+};
+// Web search bills $10 / 1,000 searches; web fetch and (with the web tools)
+// code execution are free, so they add nothing to the estimate.
+const WEB_SEARCH_USD = 0.01;
+
+// estimateCostUsd derives a session cost from token usage at list prices.
+// Returns null for an unknown model so the UI can omit the figure rather
+// than show a wrong one.
+function estimateCostUsd(model: string, u: TranscriptUsage): number | null {
+  const r = MODEL_RATES[model];
+  if (!r) return null;
+  const tokenUsd = (u.input_tokens * r.input + u.output_tokens * r.output + u.cache_read_tokens * r.cacheRead + u.cache_creation_tokens * r.cacheWrite) / 1_000_000;
+  return tokenUsd + (u.web_search_requests || 0) * WEB_SEARCH_USD;
+}
+
+// formatUsd shows more precision for sub-dollar sessions so a $0.0042 run
+// doesn't collapse to $0.00.
+function formatUsd(n: number): string {
+  if (n < 0.01) return `$${n.toFixed(4)}`;
+  if (n < 1) return `$${n.toFixed(3)}`;
+  return `$${n.toFixed(2)}`;
+}
+
+/*
+UsageBreakdown shows the session's token spend per category plus the
+server-tool request counts, and an estimated dollar cost. Output and the two
+cache figures are the ones that move cost; input is the fresh (uncached)
+input billed each round.
+*/
+function UsageBreakdown({ usage, model }: { usage: TranscriptUsage; model: string }) {
+  const cost = estimateCostUsd(model, usage);
+  const stats: { label: string; value: string; accent?: boolean }[] = [];
+  if (cost !== null) stats.push({ label: "Est. cost", value: formatUsd(cost), accent: true });
+  stats.push(
     { label: "Output tokens", value: formatTokens(usage.output_tokens) },
     { label: "Input (fresh)", value: formatTokens(usage.input_tokens) },
     { label: "Cache read", value: formatTokens(usage.cache_read_tokens) },
     { label: "Cache write", value: formatTokens(usage.cache_creation_tokens) },
-  ];
+  );
   if (usage.web_search_requests > 0) stats.push({ label: "Web searches", value: String(usage.web_search_requests) });
   if (usage.web_fetch_requests > 0) stats.push({ label: "Web fetches", value: String(usage.web_fetch_requests) });
 
@@ -392,12 +432,17 @@ function UsageBreakdown({ usage }: { usage: TranscriptUsage }) {
       <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Token usage</div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {stats.map((s) => (
-          <div key={s.label} className="rounded-md border border-border/60 bg-muted/30 px-3 py-2">
-            <div className="font-mono text-sm font-medium text-foreground/90">{s.value}</div>
+          <div key={s.label} className={cn("rounded-md border px-3 py-2", s.accent ? "border-claude/40 bg-claude/5" : "border-border/60 bg-muted/30")}>
+            <div className={cn("font-mono text-sm font-medium", s.accent ? "text-claude" : "text-foreground/90")}>{s.value}</div>
             <div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">{s.label}</div>
           </div>
         ))}
       </div>
+      {cost !== null && (
+        <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground/70">
+          Estimated from token usage at list prices, not a billed amount. The API does not return a per-session cost.
+        </p>
+      )}
     </div>
   );
 }
