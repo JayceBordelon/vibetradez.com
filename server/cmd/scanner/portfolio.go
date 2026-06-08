@@ -132,6 +132,66 @@ func sendDailyRecapEmail(cfg *config.Config, db *store.Store, emailClient *email
 	}
 }
 
+// analysisWindowKey is the sent_emails ledger key for the one-time product
+// update announcing the longer session window. It is deliberately distinct
+// from the retired launch_announcement_v2 key so the lingering launch row
+// (left behind, never dropped) cannot gate this send. Bump the suffix only
+// for a deliberate re-send.
+const analysisWindowKey = "analysis_window_update_v1"
+
+/*
+sendAnalysisWindowUpdate sends the one-time product-update email announcing
+the longer daily session window (one hour, up from nine minutes), the
+fail-safe no-action stance, and the richer transcripts. It links the current
+day's transcript, whose session hit the old limit and ended early.
+
+It runs on every boot but is self-gating via the sent_emails ledger: it
+records its key after a successful send, so it goes out exactly once (the
+first boot with subscribers) and never re-blasts on a later boot. Best-effort:
+a render or send failure is logged, never fatal.
+*/
+func sendAnalysisWindowUpdate(cfg *config.Config, db *store.Store, emailClient *email.Client) {
+	if sent, err := db.EmailAlreadySent(analysisWindowKey); err != nil {
+		log.Printf("analysis-window update: could not read send ledger, skipping to be safe: %v", err)
+		return
+	} else if sent {
+		log.Printf("analysis-window update: already sent (key=%s), nothing to do", analysisWindowKey)
+		return
+	}
+
+	recipients := getRecipients(db)
+	if len(recipients) == 0 {
+		log.Printf("analysis-window update: no subscribers, nothing to send")
+		return
+	}
+
+	base := strings.TrimRight(cfg.PublicBaseURL, "/")
+	date := todayDate()
+	data := templates.AnalysisWindowData{
+		BaseURL:            base,
+		TranscriptURL:      base + "/transcripts/" + date,
+		TranscriptDateLong: longDate(date),
+	}
+	html, err := templates.RenderAnalysisWindow(data)
+	if err != nil {
+		log.Printf("analysis-window update: render email: %v", err)
+		return
+	}
+	subject := "VibeTradez update: a longer analysis window"
+	res := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, html, unsubURLBuilder(cfg))
+	log.Printf("analysis-window update: email sent to %d/%d subscribers", res.Succeeded, res.Total)
+	if res.Failed > 0 {
+		log.Printf("analysis-window update: email failures: %s", res.FailureDetail())
+	}
+	// Record the send so it never goes out again on a later boot. Only claim
+	// the key once at least one recipient actually received it.
+	if res.Succeeded > 0 {
+		if err := db.MarkEmailSent(analysisWindowKey); err != nil {
+			log.Printf("analysis-window update: WARNING sent but failed to record in ledger (could re-send on next boot): %v", err)
+		}
+	}
+}
+
 // longDate turns a YYYY-MM-DD date into "June 4, 2026" for the email; falls
 // back to the raw string if it doesn't parse.
 func longDate(date string) string {
