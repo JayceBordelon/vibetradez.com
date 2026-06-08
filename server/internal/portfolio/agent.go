@@ -187,16 +187,24 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 				rec.AddToolResult(round, b.Name, b.ID, out)
 				toolResults = append(toolResults, anthropic.NewToolResultBlock(b.ID, out, false))
 			case anthropic.ServerToolUseBlock:
-				// web_search / web_fetch run server-side at Anthropic, so there
-				// is no local result to feed back: we only record the call and
-				// (below) its result so the model's web research is captured in
-				// the transcript instead of vanishing.
+				// web_search / web_fetch / code_execution run server-side at
+				// Anthropic, so there is no local result to feed back: we only
+				// record the call and (below) its result so the model's web
+				// research and computations are captured in the transcript
+				// instead of vanishing.
 				input, _ := json.Marshal(b.Input)
 				rec.AddToolUse(round, string(b.Name), b.ID, input)
 			case anthropic.WebSearchToolResultBlock:
 				rec.AddToolResult(round, "web_search", b.ToolUseID, truncJSON(b.Content, serverResultCap))
 			case anthropic.WebFetchToolResultBlock:
 				rec.AddToolResult(round, "web_fetch", b.ToolUseID, truncJSON(b.Content, serverResultCap))
+			case anthropic.CodeExecutionToolResultBlock:
+				// Python code_execution result (stdout/stderr/return_code, or an
+				// error). Without this case the call recorded above would show in
+				// the transcript with no output at all.
+				rec.AddToolResult(round, "code_execution", b.ToolUseID, truncJSON(b.Content, serverResultCap))
+			case anthropic.BashCodeExecutionToolResultBlock:
+				rec.AddToolResult(round, "bash_code_execution", b.ToolUseID, truncJSON(b.Content, serverResultCap))
 			}
 		}
 

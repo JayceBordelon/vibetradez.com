@@ -129,7 +129,7 @@ Every cap is a percentage of live account equity read at the start of the sessio
 | Max per underlying | 40% of equity | Allows real conviction, blocks all-in on one name (equity and options on the same name count together) |
 | Options premium sleeve | 50% of equity | Options are the leverage sleeve, capped so a vol crush cannot wipe the account |
 | Per-order notional | 30% of equity | One order cannot deploy the whole book |
-| Daily new deployment | 50% of settled cash per session | Forces building over days, not one all-in morning |
+| Daily new deployment | 75% of settled cash per session | Paces buying across days without forcing an all-in morning |
 | Drawdown breaker | new buys halt at -35% from the high-water mark | Stops averaging down into a crater (de-risking stays allowed) |
 | Liquidity floor | stock >= $5, market cap >= $2B, option OI >= 500 and volume >= 100, spread <= ~10% | No penny stocks, no dead chains |
 | Settled-cash rule | new buys spend settled cash only | Avoids good-faith and free-ride violations on T+1 |

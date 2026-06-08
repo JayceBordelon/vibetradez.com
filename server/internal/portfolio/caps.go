@@ -63,7 +63,7 @@ percentages of equity so it holds at any account size:
     volume >= 100, spread <= 10%
   - force close/roll held options under 7 DTE
 
-The daily-deployment cap (50% of settled cash per session) is applied when
+The daily-deployment cap (75% of settled cash per session) is applied when
 building the Snapshot's DeploymentBudget, not stored here, because it keys
 off session-start cash rather than equity.
 */
@@ -85,7 +85,7 @@ func DefaultCaps() Caps {
 // DefaultDailyDeploymentPct is the fraction of session-start settled cash
 // the agent may commit to NEW buys in one session. Kept separate from Caps
 // because it keys off cash, not equity. Used when constructing a Snapshot.
-const DefaultDailyDeploymentPct = 0.50
+const DefaultDailyDeploymentPct = 0.75
 
 // floatTol absorbs floating-point noise so a move sized exactly to a cap
 // (e.g. notional == budget) is allowed rather than rejected by a rounding

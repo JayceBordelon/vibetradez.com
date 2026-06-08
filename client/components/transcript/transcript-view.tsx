@@ -145,8 +145,8 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
         })()}
       </ol>
       <p className="mt-8 text-[11px] leading-relaxed text-muted-foreground">
-        This is the model's own narration and tool activity, captured verbatim from the run. Account balances are
-        redacted. Not financial advice.
+        This is the model's own narration and tool activity, captured verbatim from the run. This is a single public
+        account, so balances are shown openly rather than hidden. Not financial advice.
       </p>
     </div>
   );

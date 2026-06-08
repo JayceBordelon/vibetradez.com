@@ -316,7 +316,7 @@ const caps = [
   { label: "Per name, max position", num: 40 },
   { label: "Options sleeve, total", num: 50 },
   { label: "Per order, max size", num: 30 },
-  { label: "Deployed per session", num: 50 },
+  { label: "Deployed per session", num: 75 },
   { label: "Drawdown breaker", num: -35 },
 ];
 
