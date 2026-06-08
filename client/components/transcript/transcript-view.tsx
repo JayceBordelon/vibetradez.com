@@ -390,55 +390,77 @@ const MODEL_RATES: Record<string, { input: number; output: number; cacheRead: nu
 // code execution are free, so they add nothing to the estimate.
 const WEB_SEARCH_USD = 0.01;
 
-// estimateCostUsd derives a session cost from token usage at list prices.
-// Returns null for an unknown model so the UI can omit the figure rather
-// than show a wrong one.
-function estimateCostUsd(model: string, u: TranscriptUsage): number | null {
-  const r = MODEL_RATES[model];
-  if (!r) return null;
-  const tokenUsd = (u.input_tokens * r.input + u.output_tokens * r.output + u.cache_read_tokens * r.cacheRead + u.cache_creation_tokens * r.cacheWrite) / 1_000_000;
-  return tokenUsd + (u.web_search_requests || 0) * WEB_SEARCH_USD;
-}
-
 // formatUsd shows more precision for sub-dollar sessions so a $0.0042 run
 // doesn't collapse to $0.00.
 function formatUsd(n: number): string {
+  if (n === 0) return "$0.00";
   if (n < 0.01) return `$${n.toFixed(4)}`;
   if (n < 1) return `$${n.toFixed(3)}`;
   return `$${n.toFixed(2)}`;
 }
 
 /*
-UsageBreakdown shows the session's token spend per category plus the
-server-tool request counts, and an estimated dollar cost. Output and the two
-cache figures are the ones that move cost; input is the fresh (uncached)
-input billed each round.
+UsageBreakdown renders the session's token spend as a line-item cost table:
+each category with its quantity, unit rate, and estimated dollar cost, plus a
+total. Token rows price per million tokens; the web rows price per request
+(web fetch is free). When the model's list prices are unknown the money
+columns are dropped and only the quantities are shown.
 */
 function UsageBreakdown({ usage, model }: { usage: TranscriptUsage; model: string }) {
-  const cost = estimateCostUsd(model, usage);
-  const stats: { label: string; value: string; accent?: boolean }[] = [];
-  if (cost !== null) stats.push({ label: "Est. cost", value: formatUsd(cost), accent: true });
-  stats.push(
-    { label: "Output tokens", value: formatTokens(usage.output_tokens) },
-    { label: "Input (fresh)", value: formatTokens(usage.input_tokens) },
-    { label: "Cache read", value: formatTokens(usage.cache_read_tokens) },
-    { label: "Cache write", value: formatTokens(usage.cache_creation_tokens) },
-  );
-  if (usage.web_search_requests > 0) stats.push({ label: "Web searches", value: String(usage.web_search_requests) });
-  if (usage.web_fetch_requests > 0) stats.push({ label: "Web fetches", value: String(usage.web_fetch_requests) });
+  const r = MODEL_RATES[model];
+  const showCost = r !== undefined;
+
+  type Row = { label: string; qty: string; rate: string; cost: number };
+  const rows: Row[] = [
+    { label: "Output", qty: formatTokens(usage.output_tokens), rate: r ? `$${r.output}/M` : "—", cost: r ? (usage.output_tokens * r.output) / 1_000_000 : 0 },
+    { label: "Input (fresh)", qty: formatTokens(usage.input_tokens), rate: r ? `$${r.input}/M` : "—", cost: r ? (usage.input_tokens * r.input) / 1_000_000 : 0 },
+    { label: "Cache read", qty: formatTokens(usage.cache_read_tokens), rate: r ? `$${r.cacheRead}/M` : "—", cost: r ? (usage.cache_read_tokens * r.cacheRead) / 1_000_000 : 0 },
+    { label: "Cache write (5m)", qty: formatTokens(usage.cache_creation_tokens), rate: r ? `$${r.cacheWrite}/M` : "—", cost: r ? (usage.cache_creation_tokens * r.cacheWrite) / 1_000_000 : 0 },
+  ];
+  if (usage.web_search_requests > 0) {
+    rows.push({ label: "Web searches", qty: String(usage.web_search_requests), rate: `$${WEB_SEARCH_USD.toFixed(2)}/ea`, cost: usage.web_search_requests * WEB_SEARCH_USD });
+  }
+  if (usage.web_fetch_requests > 0) {
+    rows.push({ label: "Web fetches", qty: String(usage.web_fetch_requests), rate: "free", cost: 0 });
+  }
+  const total = rows.reduce((s, row) => s + row.cost, 0);
 
   return (
     <div className="mb-6">
-      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Token usage</div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        {stats.map((s) => (
-          <div key={s.label} className={cn("rounded-md border px-3 py-2", s.accent ? "border-claude/40 bg-claude/5" : "border-border/60 bg-muted/30")}>
-            <div className={cn("font-mono text-sm font-medium", s.accent ? "text-claude" : "text-foreground/90")}>{s.value}</div>
-            <div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">{s.label}</div>
-          </div>
-        ))}
+      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{showCost ? "Session cost breakdown" : "Token usage"}</div>
+      <div className="overflow-x-auto rounded-md border border-border/60">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-border/60 bg-muted/30 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <th className="px-3 py-2 text-left font-semibold">Line item</th>
+              <th className="px-3 py-2 text-right font-semibold">Quantity</th>
+              {showCost && <th className="px-3 py-2 text-right font-semibold">Rate</th>}
+              {showCost && <th className="px-3 py-2 text-right font-semibold">Est. cost</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.label} className="border-b border-border/40 last:border-0">
+                <td className="px-3 py-2 text-foreground/80">{row.label}</td>
+                <td className="px-3 py-2 text-right font-mono text-foreground/70">{row.qty}</td>
+                {showCost && <td className="px-3 py-2 text-right font-mono text-muted-foreground">{row.rate}</td>}
+                {showCost && <td className="px-3 py-2 text-right font-mono text-foreground/80">{formatUsd(row.cost)}</td>}
+              </tr>
+            ))}
+          </tbody>
+          {showCost && (
+            <tfoot>
+              <tr className="border-t border-border/60 bg-claude/5">
+                <td className="px-3 py-2 font-semibold text-foreground/90" colSpan={3}>
+                  Total (estimated)
+                </td>
+                <td className="px-3 py-2 text-right font-mono font-semibold text-claude">{formatUsd(total)}</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
       </div>
-      {cost !== null && (
+      {showCost && (
         <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground/70">
           Estimated from token usage at list prices, not a billed amount. The API does not return a per-session cost.
         </p>
