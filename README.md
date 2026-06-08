@@ -204,6 +204,29 @@ All `/api/*` routes on the trading server require the `X-VT-Source` header. With
 
 Production deploys are handled by the operator's deploy pipeline (separate from this repo).
 
+## UX/UI audits
+
+Every PR that changes the frontend ships with a full **UX/UI audit**: a
+full-page screenshot of each page at desktop (1440×900) and mobile (390×844), in
+light and dark, with a written per-page analysis and any rendering bug it
+surfaces fixed in the same PR. Audits are committed under
+[`docs/ui-audits/`](docs/ui-audits/) (one dated folder per run) and embedded in
+the PR description.
+
+- **Latest audit:** [`docs/ui-audits/2026-06-08/audit.md`](docs/ui-audits/2026-06-08/audit.md)
+- **Index + convention:** [`docs/ui-audits/README.md`](docs/ui-audits/README.md)
+- **Capture pipeline:** [`scripts/ui-audit/`](scripts/ui-audit/) (Playwright)
+
+Generate one against the local stack:
+
+```bash
+cd local
+python3 generate-seed.py > seed.sql
+docker compose -f docker-compose.local.yml -f docker-compose.local.override.yml down -v
+docker compose -f docker-compose.local.yml -f docker-compose.local.override.yml up --build -d
+cd ../scripts/ui-audit && npm install && ./run.sh
+```
+
 ## Where the load-bearing logic lives
 
 | Concern | Path |
