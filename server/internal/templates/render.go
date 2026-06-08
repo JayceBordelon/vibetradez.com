@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed portfolio_update.html schwab_reauth.html
+//go:embed portfolio_update.html schwab_reauth.html analysis_window.html
 var templateFS embed.FS
 
 // ── Daily portfolio-update email ──
@@ -82,6 +82,23 @@ type SchwabReauthData struct {
 
 func RenderSchwabReauth(d SchwabReauthData) (string, error) {
 	return renderOne("schwab_reauth.html", d)
+}
+
+// ── One-time analysis-window product update ──
+
+// AnalysisWindowData backs the one-time product-update email announcing the
+// longer daily session window (one hour, up from nine minutes), the
+// fail-safe no-action stance, and the richer transcripts. BaseURL is the
+// public site root (no trailing slash). TranscriptURL and TranscriptDateLong
+// point at the day whose session hit the old limit and ended early.
+type AnalysisWindowData struct {
+	BaseURL            string
+	TranscriptURL      string
+	TranscriptDateLong string
+}
+
+func RenderAnalysisWindow(d AnalysisWindowData) (string, error) {
+	return renderOne("analysis_window.html", d)
 }
 
 // emailFuncs gives templates locale-correct currency + percent helpers so

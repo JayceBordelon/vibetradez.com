@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>VibeTradez update: a longer analysis window</title>
+<style>
+  :root { color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) {
+    .vt-page { background:#0a0a0a !important; }
+    .vt-card { background:#141414 !important; border-color:#272727 !important; }
+    .vt-h1 { color:#f5f5f5 !important; }
+    .vt-strong { color:#fafafa !important; }
+    .vt-text { color:#cfcfcf !important; }
+    .vt-muted { color:#9a9a9a !important; }
+    .vt-rule { border-color:#262626 !important; }
+    .vt-note { background:#161616 !important; border-color:#2a2a2a !important; }
+    .vt-tradez { color:#51F0A8 !important; }
+    .vt-eyebrow { color:#51F0A8 !important; }
+    .vt-srcbtn { color:#51F0A8 !important; border-color:#2f5e45 !important; }
+  }
+</style>
+</head>
+<body class="vt-page" style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">The daily session now runs under a one hour window instead of nine minutes, so a research heavy session can finish instead of ending early.</div>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="vt-page" style="background:#f1f5f9;padding:24px 0;">
+<tr><td align="center">
+<table role="presentation" width="640" cellspacing="0" cellpadding="0" class="vt-card" style="background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;">
+
+<tr><td style="padding:26px 28px 0 28px;">
+<p style="margin:0;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;">
+<span style="color:#0f172a;" class="vt-strong">Vibe</span><span class="vt-tradez" style="color:#0D9F5D;">Tradez</span>
+<span class="vt-muted" style="color:#94a3b8;font-weight:600;">&middot; product update</span>
+</p>
+<h1 class="vt-h1" style="margin:10px 0 0 0;font-size:24px;line-height:1.25;color:#0f172a;">A longer analysis window</h1>
+</td></tr>
+
+<tr><td style="padding:16px 28px 0 28px;">
+<p class="vt-text" style="margin:0;color:#334155;font-size:15px;line-height:1.7;">
+A change shipped this morning that affects how the portfolio manager runs each day. Until now, the daily session ran under a nine minute limit. A session that starts from cash and does heavy research, such as web searches, price history across several names, and the occasional code run, could reach that limit before it finished and end with no decisions recorded for the day.
+</p>
+<p class="vt-text" style="margin:14px 0 0 0;color:#334155;font-size:15px;line-height:1.7;">
+The session window is now one hour. That is enough headroom for the model to complete its research and place its trades on a slow day without being cut off partway through.
+</p>
+</td></tr>
+
+<tr><td style="padding:20px 28px 0 28px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="vt-note" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
+<tr><td style="padding:16px 18px;">
+<p class="vt-muted" style="margin:0;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;color:#0D9F5D;">See it for yourself</p>
+<p class="vt-text" style="margin:6px 0 0 0;color:#334155;font-size:14px;line-height:1.65;">
+Today's session ({{ .TranscriptDateLong }}) hit the old limit and ended early, which is what prompted this change. You can read the run and see exactly where it stopped.
+</p>
+<p style="margin:12px 0 0 0;">
+<a href="{{ .TranscriptURL }}" class="vt-tradez" style="color:#0D9F5D;text-decoration:underline;font-size:14px;font-weight:700;">Read today's transcript</a>
+</p>
+</td></tr>
+</table>
+</td></tr>
+
+<tr><td style="padding:24px 28px 0 28px;">
+<p class="vt-eyebrow" style="margin:0;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;color:#0D9F5D;">Failed runs are no longer silent</p>
+<p class="vt-text" style="margin:8px 0 0 0;color:#334155;font-size:15px;line-height:1.7;">
+The manager now fails safe. If a session ends before it commits anything, it records a clear no action stance instead of leaving a blank day. A failed run shows on the dashboard and in the daily recap rather than passing unnoticed. Any orders that already reached the broker are kept, and a real stance the model produced is never overwritten.
+</p>
+</td></tr>
+
+<tr><td style="padding:22px 28px 0 28px;">
+<p class="vt-eyebrow" style="margin:0;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;color:#0D9F5D;">More detail in the transcripts</p>
+<p class="vt-text" style="margin:8px 0 0 0;color:#334155;font-size:14px;line-height:1.6;">
+The session transcripts now report more about each run:
+</p>
+<p class="vt-text" style="margin:10px 0 0 0;color:#334155;font-size:14px;line-height:1.6;">
+<span class="vt-strong" style="color:#0f172a;font-weight:700;">Duration and cost.</span> Each session shows how long it ran, the tokens it used, and an estimated cost, broken out as a line item table.
+</p>
+<p class="vt-text" style="margin:10px 0 0 0;color:#334155;font-size:14px;line-height:1.6;">
+<span class="vt-strong" style="color:#0f172a;font-weight:700;">Reasoning.</span> The model's summarized reasoning between tool calls is now shown, so the steps it took are easier to follow.
+</p>
+<p class="vt-text" style="margin:10px 0 0 0;color:#334155;font-size:14px;line-height:1.6;">
+<span class="vt-strong" style="color:#0f172a;font-weight:700;">Code output.</span> When the model runs code during research, the output it produced is captured in the transcript alongside the rest of the run.
+</p>
+</td></tr>
+
+<tr><td style="padding:24px 24px 4px 24px;" align="center">
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto;"><tr>
+<td style="padding:5px;">
+<a href="{{ .TranscriptURL }}" style="display:inline-block;background:#51F0A8;color:#0a0a0a;text-decoration:none;font-size:15px;font-weight:700;padding:12px 22px;border-radius:9999px;white-space:nowrap;">Read today's transcript</a>
+</td>
+<td style="padding:5px;">
+<a href="{{ .BaseURL }}/dashboard" class="vt-srcbtn" style="display:inline-block;background:transparent;border:1px solid #0D9F5D;color:#0D9F5D;text-decoration:none;font-size:15px;font-weight:700;padding:11px 21px;border-radius:9999px;white-space:nowrap;">Open the dashboard</a>
+</td>
+</tr></table>
+</td></tr>
+
+<tr><td style="padding:18px 28px 24px 28px;">
+<div class="vt-rule" style="border-top:1px solid #eef2f7;padding-top:16px;">
+<p class="vt-muted" style="margin:0;color:#94a3b8;font-size:12px;line-height:1.6;">
+This is one real account run by an AI, and none of it is advice. The daily recap email is unchanged and still arrives after the close.
+</p>
+<p class="vt-muted" style="margin:10px 0 0 0;color:#94a3b8;font-size:11px;">
+<a href="@@VT_UNSUBSCRIBE_URL@@" class="vt-muted" style="color:#94a3b8;text-decoration:underline;">Unsubscribe</a>
+</p>
+</div>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>
