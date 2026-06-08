@@ -51,6 +51,42 @@ The trading server runs against a live broker. A broken cron in production can m
 3. Client `next build` green
 4. Manual smoke: hit the local `/health` and the local portfolio dashboard
 
+## UX/UI audit on every client PR
+
+Any PR that touches `client/` (anything a user can see) ships with a **UX/UI
+audit**: a full-page screenshot of every page at desktop (1440×900) and mobile
+(390×844), in both light and dark themes, plus a written per-page analysis from
+a user's perspective. Any rendering messiness, overflow, broken responsive
+layout, or theme glitch the audit surfaces gets fixed in the same PR.
+
+The pipeline is committed at `scripts/ui-audit/` (Playwright / headless
+Chromium). To produce an audit:
+
+```bash
+# fresh seeded local stack
+cd local
+python3 generate-seed.py > seed.sql
+docker compose -f docker-compose.local.yml -f docker-compose.local.override.yml down -v
+docker compose -f docker-compose.local.yml -f docker-compose.local.override.yml up --build -d
+# capture (writes docs/ui-audits/<today>/<page>__<viewport>__<theme>.jpg)
+cd ../scripts/ui-audit && npm install && ./run.sh
+```
+
+Then write `docs/ui-audits/<date>/audit.md` (follow the prior audit's
+structure, embed every screenshot), add a row to the index in
+`docs/ui-audits/README.md`, and **embed the audit in the PR description** so
+reviewers see every page without leaving the PR. The
+[PR template](.github/pull_request_template.md) carries this checklist; the full
+convention lives in [`docs/ui-audits/README.md`](docs/ui-audits/README.md).
+
+- Captures are full-page JPEGs at 1× so each audit stays ~10 MB (committed per
+  PR). The runner resolves dynamic routes (latest transcript date/kind) from the
+  seeded Postgres, and themes are forced via `localStorage["theme"]` so there is
+  no light→dark flash.
+- The pipeline auto-scrolls each page before capturing so scroll-reveal sections
+  (the landing chapters use `whileInView`) are not caught at `opacity:0`. If you
+  add a new page, add it to `scripts/ui-audit/routes.mjs`.
+
 ## Schema migrations live inline
 
 `internal/store/store.go`'s `migrate()` function runs on server boot with `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE ... IF NOT EXISTS` for additive columns. Schema changes go there; no separate migration directory.

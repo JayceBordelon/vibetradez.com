@@ -1,0 +1,14 @@
+{
+  "name": "vibetradez-ui-audit",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Playwright screenshot pipeline for VibeTradez UX/UI audits.",
+  "scripts": {
+    "capture": "node capture.mjs",
+    "postinstall": "playwright install chromium"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}
