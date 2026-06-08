@@ -236,6 +236,10 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 				rec.AddToolResult(round, "code_execution", b.ToolUseID, truncJSON(b.Content, serverResultCap))
 			case anthropic.BashCodeExecutionToolResultBlock:
 				rec.AddToolResult(round, "bash_code_execution", b.ToolUseID, truncJSON(b.Content, serverResultCap))
+			case anthropic.TextEditorCodeExecutionToolResultBlock:
+				// File create/view/edit run by the auto-enabled code-execution
+				// sandbox (its third sub-tool, alongside python + bash).
+				rec.AddToolResult(round, "text_editor_code_execution", b.ToolUseID, truncJSON(b.Content, serverResultCap))
 			}
 		}
 

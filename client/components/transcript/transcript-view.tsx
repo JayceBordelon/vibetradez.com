@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, BookOpen, Brain, CheckCircle2, ChevronRight, CircleDollarSign, NotebookPen, XCircle } from "lucide-react";
+import { ArrowLeft, BookOpen, Brain, CheckCircle2, ChevronRight, CircleDollarSign, Globe, NotebookPen, SquareTerminal, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -163,21 +163,51 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
 // reading tool.
 const EXECUTION_TOOLS = new Set(["buy_equity", "sell_equity", "buy_option", "sell_option", "cancel_order", "hold"]);
 const DOCUMENTATION_TOOLS = new Set(["write_summary"]);
+// Server-side tools Anthropic runs for us, not our own get_* readers. The web
+// tools are declared directly; the code-execution sub-tools (python, bash,
+// file editor) are auto-enabled by the web tools and run in Anthropic's
+// sandbox to filter web results before they reach context.
+const WEB_TOOLS = new Set(["web_search", "web_fetch"]);
+const CODE_TOOLS = new Set(["code_execution", "bash_code_execution", "text_editor_code_execution"]);
 
-type ToolGroup = "execution" | "documentation" | "reading";
+type ToolGroup = "execution" | "documentation" | "web" | "code" | "reading";
 
 function toolGroup(name?: string): ToolGroup {
   if (name && EXECUTION_TOOLS.has(name)) return "execution";
   if (name && DOCUMENTATION_TOOLS.has(name)) return "documentation";
+  if (name && WEB_TOOLS.has(name)) return "web";
+  if (name && CODE_TOOLS.has(name)) return "code";
   return "reading";
 }
 
 function toolIcon(group: ToolGroup) {
-  return group === "execution" ? CircleDollarSign : group === "documentation" ? NotebookPen : BookOpen;
+  switch (group) {
+    case "execution":
+      return CircleDollarSign;
+    case "documentation":
+      return NotebookPen;
+    case "web":
+      return Globe;
+    case "code":
+      return SquareTerminal;
+    default:
+      return BookOpen;
+  }
 }
 
 function toolEyebrow(group: ToolGroup): string {
-  return group === "execution" ? "Execution tool called" : group === "documentation" ? "Documentation tool called" : "Reading tool called";
+  switch (group) {
+    case "execution":
+      return "Execution tool called";
+    case "documentation":
+      return "Documentation tool called";
+    case "web":
+      return "Web tool (Anthropic-run)";
+    case "code":
+      return "Sandbox tool (Anthropic-run)";
+    default:
+      return "Reading tool called";
+  }
 }
 
 // resultStatus reads a tool result and classifies it: an {"error": ...}
@@ -190,7 +220,12 @@ function resultStatus(raw?: string): "success" | "error" | undefined {
   try {
     const o = JSON.parse(trimmed);
     if (o && typeof o === "object" && !Array.isArray(o)) {
-      if ("error" in o) return "error";
+      // Our tools signal failure with {"error": ...}; the server-run web /
+      // code tools use {"error_code": ...} or a nonzero shell return_code.
+      if ("error" in o || "error_code" in o) return "error";
+      if (typeof (o as { return_code?: unknown }).return_code === "number" && (o as { return_code: number }).return_code !== 0) {
+        return "error";
+      }
     }
   } catch {
     // non-JSON result (e.g. web prose) means the tool returned something.
