@@ -7,7 +7,6 @@ import { ChapterProgress } from "@/components/landing/chapter-progress";
 import { CapList, StatBlock, StepTimeline, ToolManifest, TranscriptCard } from "@/components/landing/chapter-visuals";
 import type { TranscriptLine } from "@/components/landing/chapter-visuals";
 import { CountUp } from "@/components/landing/count-up";
-import { ReplayTranscriptButton, TranscriptReplayProvider } from "@/components/landing/live-transcript";
 import { LandingNavAccount } from "@/components/landing/nav-account";
 import { Reveal } from "@/components/landing/reveal";
 import { ScrollIndicator } from "@/components/landing/scroll-indicator";
@@ -198,7 +197,6 @@ export default function LandingPage() {
 
       {/* ══ 05 · THE RECEIPTS ══ transcripts. Flipped: open transcript readout
            left, text right. Text-weighted close to the story. No card, no band. ══ */}
-      <TranscriptReplayProvider>
       <Chapter
         id="receipts"
         index="05"
@@ -214,14 +212,9 @@ export default function LandingPage() {
         aside={<TranscriptCard lines={transcript} />}
       >
         <p>
-          Every move is logged, tool by tool. Open any session and watch it overthink a quote, buy something anyway, and file a very confident note about why. It cannot hide a bad call from you, and it has a real talent for them.
+          Every move is logged, tool by tool. The example beside this streams on its own as you reach it: watch the session overthink a quote, buy something anyway, and file a very confident note about why. It cannot hide a bad call from you, and it has a real talent for them.
         </p>
-        <ReplayTranscriptButton className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-full border border-green/40 bg-green/10 px-5 text-sm font-semibold text-foreground shadow-sm transition-all hover:-translate-y-0.5 hover:border-green/60 hover:bg-green/15 hover:shadow-md active:translate-y-0 active:scale-[0.98]">
-          <ClaudeLogo className="h-4 w-4" />
-          See an example transcript
-        </ReplayTranscriptButton>
       </Chapter>
-      </TranscriptReplayProvider>
 
       {/* ══ Light parody social proof, a breather between the story and the ask. ══ */}
       <div className="relative py-20 sm:py-28 lg:py-32">
@@ -316,7 +309,7 @@ const caps = [
   { label: "Per name, max position", num: 40 },
   { label: "Options sleeve, total", num: 50 },
   { label: "Per order, max size", num: 30 },
-  { label: "Deployed per session", num: 50 },
+  { label: "Deployed per session", num: 75 },
   { label: "Drawdown breaker", num: -35 },
 ];
 

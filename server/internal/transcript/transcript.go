@@ -1,18 +1,15 @@
 /*
-Package transcript captures the model's conversation during a tool-use
-run (the 9:25 picker and the 9:30 at-open agent) so the reasoning,
-tool calls, and tool results can be persisted and surfaced on the
-dashboard.
+Package transcript captures the portfolio agent's daily session so the
+reasoning, tool calls, tool results, token usage, and session duration can
+be persisted and surfaced on the dashboard.
 
-The Recorder is appended to from inside each conversation loop and is
+The Recorder is appended to from inside the conversation loop and is
 nil-safe: a nil *Recorder swallows every Add call, so the paths that
 don't want capture (EOD analysis, tests) can pass nil without guarding.
 
-Capture is narration-only by design: the live trading runs do NOT use
-extended thinking, so the "reasoning" surfaced is the assistant text
-emitted between tool calls plus the tool calls and results themselves.
-The thinking EventType exists so genuine thinking blocks are captured
-for free if extended thinking is ever enabled on those runs.
+What's captured: the model's summarized extended-thinking blocks, the
+assistant narration emitted between tool calls, the tool calls and their
+results, and the accumulated token Usage plus the wall-clock duration.
 */
 package transcript
 
@@ -53,11 +50,31 @@ type Event struct {
 	ToolResult string          `json:"tool_result,omitempty"`
 }
 
+/*
+Usage is the accumulated token spend for a whole session, summed across
+every API round. Kept as plain int64 fields (no SDK import) so the agent
+maps the SDK's per-call usage into it. InputTokens here is the sum of the
+fresh (uncached) input tokens billed each round; CacheReadTokens is what
+was served from the prompt cache instead.
+*/
+type Usage struct {
+	InputTokens         int64 `json:"input_tokens"`
+	OutputTokens        int64 `json:"output_tokens"`
+	CacheReadTokens     int64 `json:"cache_read_tokens"`
+	CacheCreationTokens int64 `json:"cache_creation_tokens"`
+	WebSearchRequests   int64 `json:"web_search_requests"`
+	WebFetchRequests    int64 `json:"web_fetch_requests"`
+	Rounds              int   `json:"rounds"`
+}
+
 // Transcript is the full captured conversation: the model that produced
-// it plus the ordered event stream.
+// it, the ordered event stream, the session token usage, and how long the
+// session took in milliseconds.
 type Transcript struct {
-	Model  string  `json:"model"`
-	Events []Event `json:"events"`
+	Model      string  `json:"model"`
+	Events     []Event `json:"events"`
+	Usage      Usage   `json:"usage"`
+	DurationMS int64   `json:"duration_ms"`
 }
 
 /*
@@ -66,8 +83,10 @@ with New; pass nil to disable capture. Not safe for concurrent use —
 the conversation loops append from a single goroutine.
 */
 type Recorder struct {
-	model  string
-	events []Event
+	model      string
+	events     []Event
+	usage      Usage
+	durationMS int64
 }
 
 // New returns an empty Recorder ready to be appended to.
@@ -132,11 +151,37 @@ func (r *Recorder) AddToolResult(round int, name, id, result string) {
 	})
 }
 
+/*
+AddUsage adds one API round's token spend to the session total and bumps
+the round count. Nil-safe. The caller maps the SDK's per-call usage into
+the plain Usage struct.
+*/
+func (r *Recorder) AddUsage(u Usage) {
+	if r == nil {
+		return
+	}
+	r.usage.InputTokens += u.InputTokens
+	r.usage.OutputTokens += u.OutputTokens
+	r.usage.CacheReadTokens += u.CacheReadTokens
+	r.usage.CacheCreationTokens += u.CacheCreationTokens
+	r.usage.WebSearchRequests += u.WebSearchRequests
+	r.usage.WebFetchRequests += u.WebFetchRequests
+	r.usage.Rounds++
+}
+
+// SetDuration records the session wall-clock in milliseconds. Nil-safe.
+func (r *Recorder) SetDuration(ms int64) {
+	if r == nil {
+		return
+	}
+	r.durationMS = ms
+}
+
 // Transcript returns the accumulated transcript. Safe to call on nil
 // (returns the zero value).
 func (r *Recorder) Transcript() Transcript {
 	if r == nil {
 		return Transcript{}
 	}
-	return Transcript{Model: r.model, Events: r.events}
+	return Transcript{Model: r.model, Events: r.events, Usage: r.usage, DurationMS: r.durationMS}
 }

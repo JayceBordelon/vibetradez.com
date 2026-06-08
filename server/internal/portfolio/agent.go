@@ -99,7 +99,9 @@ func (a *Agent) Run(ctx context.Context) (*Result, error) {
 	prompt := buildPrompt(a.caps)
 
 	rec := transcript.New()
+	start := time.Now()
 	stance, convErr := a.runConversation(ctx, prompt, dispatcher, rec)
+	rec.SetDuration(time.Since(start).Milliseconds())
 
 	tr := rec.Transcript()
 	result := &Result{
@@ -155,7 +157,14 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 			// level. The thinking blocks come back in msg.Content and are
 			// recorded into the transcript and threaded back (with signatures)
 			// via the raw assistant echo so multi-round tool use stays valid.
-			Thinking:     anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{}},
+			//
+			// Display MUST be set explicitly: on opus-4.8/4.7 the server-side
+			// default is "omitted", which returns thinking blocks with an empty
+			// Thinking field (signature only), so the transcript would capture no
+			// reasoning at all. "summarized" returns the readable summary we show.
+			Thinking: anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{
+				Display: anthropic.ThinkingConfigAdaptiveDisplaySummarized,
+			}},
 			OutputConfig: anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffortHigh},
 		}
 		if containerID != "" {
@@ -167,6 +176,28 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 		}
 		if msg.Container.JSON.ID.Valid() {
 			containerID = msg.Container.ID
+		}
+
+		// Accumulate this round's token spend before any early return, so the
+		// session total reflects every API call (including a truncated one).
+		rec.AddUsage(transcript.Usage{
+			InputTokens:         msg.Usage.InputTokens,
+			OutputTokens:        msg.Usage.OutputTokens,
+			CacheReadTokens:     msg.Usage.CacheReadInputTokens,
+			CacheCreationTokens: msg.Usage.CacheCreationInputTokens,
+			WebSearchRequests:   msg.Usage.ServerToolUse.WebSearchRequests,
+			WebFetchRequests:    msg.Usage.ServerToolUse.WebFetchRequests,
+		})
+
+		// Guard the max_tokens stop: at effort=high the model can think
+		// extensively, and summarized thinking adds visible output, so a turn
+		// can hit the maxOutputTokens ceiling. A truncated turn may carry an
+		// unterminated tool_use block; echoing it back to continue the loop
+		// would 400 (or commit a half-formed move). Fail cleanly instead so the
+		// session's fail-safe records a no-action day rather than corrupting the
+		// conversation.
+		if msg.StopReason == anthropic.StopReasonMaxTokens {
+			return "", fmt.Errorf("response truncated at max_tokens (%d) in round %d; raise maxOutputTokens or lower effort", maxOutputTokens, round)
 		}
 
 		var toolResults []anthropic.ContentBlockParamUnion
@@ -187,16 +218,28 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 				rec.AddToolResult(round, b.Name, b.ID, out)
 				toolResults = append(toolResults, anthropic.NewToolResultBlock(b.ID, out, false))
 			case anthropic.ServerToolUseBlock:
-				// web_search / web_fetch run server-side at Anthropic, so there
-				// is no local result to feed back: we only record the call and
-				// (below) its result so the model's web research is captured in
-				// the transcript instead of vanishing.
+				// web_search / web_fetch / code_execution run server-side at
+				// Anthropic, so there is no local result to feed back: we only
+				// record the call and (below) its result so the model's web
+				// research and computations are captured in the transcript
+				// instead of vanishing.
 				input, _ := json.Marshal(b.Input)
 				rec.AddToolUse(round, string(b.Name), b.ID, input)
 			case anthropic.WebSearchToolResultBlock:
 				rec.AddToolResult(round, "web_search", b.ToolUseID, truncJSON(b.Content, serverResultCap))
 			case anthropic.WebFetchToolResultBlock:
 				rec.AddToolResult(round, "web_fetch", b.ToolUseID, truncJSON(b.Content, serverResultCap))
+			case anthropic.CodeExecutionToolResultBlock:
+				// Python code_execution result (stdout/stderr/return_code, or an
+				// error). Without this case the call recorded above would show in
+				// the transcript with no output at all.
+				rec.AddToolResult(round, "code_execution", b.ToolUseID, truncJSON(b.Content, serverResultCap))
+			case anthropic.BashCodeExecutionToolResultBlock:
+				rec.AddToolResult(round, "bash_code_execution", b.ToolUseID, truncJSON(b.Content, serverResultCap))
+			case anthropic.TextEditorCodeExecutionToolResultBlock:
+				// File create/view/edit run by the auto-enabled code-execution
+				// sandbox (its third sub-tool, alongside python + bash).
+				rec.AddToolResult(round, "text_editor_code_execution", b.ToolUseID, truncJSON(b.Content, serverResultCap))
 			}
 		}
 

@@ -446,7 +446,7 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
     use("get_portfolio", {})
     res("get_portfolio", {
         "equity": round(invested + cash, 2), "settled_cash": cash, "unsettled_cash": 0.0,
-        "deployment_budget_left": round(cash * 0.5, 2),
+        "deployment_budget_left": round(cash * 0.75, 2),
         "positions": [{"symbol": p["symbol"], "underlying": p["underlying"], "asset_type": p["asset_type"],
                        "quantity": p["quantity"], "market_value": p["market_value"],
                        "unrealized_pnl": round(p["market_value"] - p["cost_basis"], 2)} for p in positions],
@@ -485,11 +485,11 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
     buys = [d for d in decisions if d["action"] in ("buy_equity", "buy_option")]
     sells = [d for d in decisions if d["action"] in ("sell_equity", "sell_option")]
     holds = [d for d in decisions if d["action"] == "hold"]
-    did_news, did_caps = False, False
+    did_news, did_caps, did_code = False, False, False
 
     for dec in buys:
         und = dec["underlying"]
-        px = PRICES.get(und, round(dec["limit_price"], 2))
+        px = PRICES.get(und) or round(dec["limit_price"], 2)
         say(und + " pulled back to its rising 50-day on no bad news, so I am checking the quote, the trend, the fundamentals, and the headlines before sizing anything.")
         use("get_stock_quotes", {"symbols": und})
         res("get_stock_quotes", {und: {"last": px, "bid": round(px - 0.05, 2), "ask": round(px + 0.05, 2), "mark": px, "totalVolume": 18_500_000}})
@@ -507,8 +507,25 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
         think("Trend is intact and above the 50- and 200-day, earnings are not until late July so there is no print risk this week, and the spread is a penny. A starter fits cleanly inside the caps.")
         if not did_caps:
             use("get_cap_headroom", {})
-            res("get_cap_headroom", {"per_order_cap": 1870.0, "per_name_cap": 2493.0, "options_sleeve_remaining": 1240.0, "deployment_budget_left": round(cash * 0.5, 2)})
+            res("get_cap_headroom", {"per_order_cap": 1870.0, "per_name_cap": 2493.0, "options_sleeve_remaining": 1240.0, "deployment_budget_left": round(cash * 0.75, 2)})
             did_caps = True
+        if not did_code:
+            # The code-execution sandbox is auto-enabled by the web tools; here
+            # the model uses it to size the order precisely against the caps
+            # instead of eyeballing it.
+            think("Rather than eyeball the size, I will compute the largest whole-share order that fits under both the per-order cap and today's deployment budget, then round down for headroom.")
+            budget = min(1870.0, round(cash * 0.75, 2))
+            shares = int(budget // px)
+            use("code_execution", {"code": (
+                f"price = {px}\n"
+                "per_order_cap = 1870.0\n"
+                f"deployment_budget = {round(cash * 0.75, 2)}\n"
+                "budget = min(per_order_cap, deployment_budget)\n"
+                "shares = int(budget // price)\n"
+                "print(f'shares={shares} notional={shares * price:.2f} headroom={budget - shares * price:.2f}')"
+            )})
+            res("code_execution", {"return_code": 0, "stdout": f"shares={shares} notional={shares * px:.2f} headroom={budget - shares * px:.2f}\n"})
+            did_code = True
         say(dec["rationale"])
         if dec["action"] == "buy_equity":
             use("buy_equity", {"symbol": dec["symbol"], "quantity": dec["quantity"], "limit_price": dec["limit_price"], "rationale": dec["rationale"]})
@@ -516,7 +533,7 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
             use("buy_option", {"occ_symbol": dec["symbol"], "underlying": und, "contract_type": dec.get("contract_type", "CALL"),
                                "strike": dec["strike"], "expiration": dec["expiration"], "contracts": dec["quantity"], "limit_price": dec["limit_price"], "rationale": dec["rationale"]})
         res(dec["action"], {"ok": True, "action": dec["action"], "symbol": dec["symbol"], "quantity": dec["quantity"],
-                            "limit_price": dec["limit_price"], "order_id": next_oid(), "deployment_budget_left": round(cash * 0.5 - dec["notional"], 2)})
+                            "limit_price": dec["limit_price"], "order_id": next_oid(), "deployment_budget_left": round(cash * 0.75 - dec["notional"], 2)})
         step()
 
     # ── Place each sell, priced to fill ──
@@ -734,11 +751,37 @@ def main():
     p("")
 
     p("-- ── Session transcripts (one per decision day, viewable at /transcripts/<date>) ──")
-    p("INSERT INTO transcripts (date, kind, model, events) VALUES")
-    tvals = [
-        f"  ({sql_str(ds)}, 'portfolio', 'claude-opus-4-8', {sql_str(json.dumps(transcripts[ds]))}::jsonb)"
-        for ds in sorted(transcripts)
-    ]
+    p("INSERT INTO transcripts (date, kind, model, events, usage, duration_ms) VALUES")
+
+    def usage_and_duration(events):
+        """Believable per-session token spend + wall-clock derived from the
+        event stream. Input is the fresh (uncached) input billed each round;
+        cache_read dominates because the conversation is replayed every round
+        and served from the prompt cache. Scales with rounds + tool calls so
+        a busy session reads heavier than a quiet one."""
+        rounds = max((e["round"] for e in events), default=0) + 1
+        tool_uses = sum(1 for e in events if e["type"] == "tool_use")
+        ws = sum(1 for e in events if e["type"] == "tool_use" and e["tool_name"] == "web_search")
+        wf = sum(1 for e in events if e["type"] == "tool_use" and e["tool_name"] == "web_fetch")
+        usage = {
+            "input_tokens": 540 + 110 * tool_uses,
+            "output_tokens": 1400 + 880 * tool_uses + 1100 * rounds,
+            "cache_read_tokens": 12000 + 8600 * rounds,
+            "cache_creation_tokens": 2400 + 480 * rounds,
+            "web_search_requests": ws,
+            "web_fetch_requests": wf,
+            "rounds": rounds,
+        }
+        duration_ms = 42000 + 17000 * rounds + 3500 * tool_uses
+        return usage, duration_ms
+
+    tvals = []
+    for ds in sorted(transcripts):
+        usage, duration_ms = usage_and_duration(transcripts[ds])
+        tvals.append(
+            f"  ({sql_str(ds)}, 'portfolio', 'claude-opus-4-8', {sql_str(json.dumps(transcripts[ds]))}::jsonb, "
+            f"{sql_str(json.dumps(usage))}::jsonb, {duration_ms})"
+        )
     p(",\n".join(tvals) + ";")
     p("")
 
@@ -761,6 +804,8 @@ CREATE TABLE IF NOT EXISTS transcripts (
     kind TEXT NOT NULL,
     model TEXT NOT NULL DEFAULT '',
     events JSONB NOT NULL,
+    usage JSONB NOT NULL DEFAULT '{}',
+    duration_ms BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (date, kind)
 );

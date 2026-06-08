@@ -25,7 +25,7 @@ not in the executor adapter, because the dispatcher's recorded decisions
 carry the rationale the executor never sees.
 */
 func runPortfolioSession(db *store.Store, agent *portfolio.Agent) {
-	ctx, cancel := context.WithTimeout(context.Background(), 9*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 	defer cancel()
 
 	date := todayDate()
@@ -37,6 +37,20 @@ func runPortfolioSession(db *store.Store, agent *portfolio.Agent) {
 	}
 	if result == nil {
 		return
+	}
+
+	// Fail safe. A session that errors out (deadline, API failure, malformed
+	// response) before the agent commits anything would otherwise persist a
+	// blank day: empty stance, no decisions, nothing on the dashboard or in
+	// the recap. Record a clear no-action result instead, so the failure is
+	// visible rather than silent. Any moves that already reached the broker
+	// are kept (the guard requires zero decisions), and a real stance the
+	// agent did produce is never overwritten.
+	if err != nil && result.Stance == "" && len(result.Decisions) == 0 {
+		result.Stance = "Session did not complete. No trades were placed."
+		if result.Summary == "" {
+			result.Summary = "The daily session ended before a decision was reached, so the book is unchanged and no orders were submitted today."
+		}
 	}
 
 	if serr := db.SavePortfolioSession(date, "live", result.Stance, result.Summary, result.ActionItems); serr != nil {

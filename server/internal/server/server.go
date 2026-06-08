@@ -197,12 +197,14 @@ trades endpoints use for empty days. Events is the raw stored JSONB
 event array (ordered), passed through verbatim.
 */
 type transcriptResponse struct {
-	Date      string          `json:"date"`
-	Kind      string          `json:"kind"`
-	Model     string          `json:"model"`
-	Available bool            `json:"available"`
-	CreatedAt string          `json:"created_at,omitempty"`
-	Events    json.RawMessage `json:"events"`
+	Date       string          `json:"date"`
+	Kind       string          `json:"kind"`
+	Model      string          `json:"model"`
+	Available  bool            `json:"available"`
+	CreatedAt  string          `json:"created_at,omitempty"`
+	Events     json.RawMessage `json:"events"`
+	Usage      json.RawMessage `json:"usage"`
+	DurationMS int64           `json:"duration_ms"`
 }
 
 /*
@@ -237,6 +239,7 @@ func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request) {
 			Kind:      kind,
 			Available: false,
 			Events:    json.RawMessage("[]"),
+			Usage:     json.RawMessage("{}"),
 		})
 		return
 	}
@@ -250,13 +253,19 @@ func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request) {
 	if len(events) == 0 || strings.TrimSpace(string(events)) == "null" {
 		events = json.RawMessage("[]")
 	}
+	usage := tv.Usage
+	if len(usage) == 0 || strings.TrimSpace(string(usage)) == "null" {
+		usage = json.RawMessage("{}")
+	}
 	writeJSON(w, http.StatusOK, transcriptResponse{
-		Date:      tv.Date,
-		Kind:      tv.Kind,
-		Model:     tv.Model,
-		Available: true,
-		CreatedAt: tv.CreatedAt.UTC().Format(time.RFC3339),
-		Events:    events,
+		Date:       tv.Date,
+		Kind:       tv.Kind,
+		Model:      tv.Model,
+		Available:  true,
+		CreatedAt:  tv.CreatedAt.UTC().Format(time.RFC3339),
+		Events:     events,
+		Usage:      usage,
+		DurationMS: tv.DurationMS,
 	})
 }
 

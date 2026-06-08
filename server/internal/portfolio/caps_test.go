@@ -14,15 +14,17 @@ func goodLiquidity() LiquidityCtx {
 	}
 }
 
-// baseSnapshot is a healthy $6,000 all-cash account with no positions and
-// the full daily deployment budget available.
+// baseSnapshot is a healthy $6,000 all-cash account with no positions. The
+// deployment budget is pinned to a fixed $3,000 (not derived from
+// DefaultDailyDeploymentPct) so the cap-mechanism tests below stay stable
+// when the policy default changes.
 func baseSnapshot() Snapshot {
 	return Snapshot{
 		Equity:              6_000,
 		SettledCash:         6_000,
 		UnsettledCash:       0,
 		HighWaterMark:       6_000,
-		DeploymentBudget:    6_000 * DefaultDailyDeploymentPct, // $3,000
+		DeploymentBudget:    3_000,
 		DeployedThisSession: 0,
 		Positions:           nil,
 	}

@@ -413,9 +413,14 @@ func saveTranscript(db *store.Store, date, kind string, tr *transcript.Transcrip
 		log.Printf("transcript: marshal %s for %s failed: %v", kind, date, err)
 		return
 	}
-	if err := db.SaveTranscript(date, kind, tr.Model, eventsJSON); err != nil {
+	usageJSON, err := json.Marshal(tr.Usage)
+	if err != nil {
+		log.Printf("transcript: marshal %s usage for %s failed: %v", kind, date, err)
+		usageJSON = []byte("{}")
+	}
+	if err := db.SaveTranscript(date, kind, tr.Model, eventsJSON, usageJSON, tr.DurationMS); err != nil {
 		log.Printf("transcript: save %s for %s failed: %v", kind, date, err)
 		return
 	}
-	log.Printf("transcript: saved %s for %s (%d events)", kind, date, len(tr.Events))
+	log.Printf("transcript: saved %s for %s (%d events, %d output tokens, %dms)", kind, date, len(tr.Events), tr.Usage.OutputTokens, tr.DurationMS)
 }

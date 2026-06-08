@@ -1,7 +1,7 @@
 "use client";
 
-import { BookOpen, Brain, CheckCircle2, ChevronRight, CircleDollarSign, NotebookPen, Play } from "lucide-react";
-import { type ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { BookOpen, Brain, CheckCircle2, ChevronRight, CircleDollarSign, NotebookPen } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,8 @@ import type { TranscriptLine } from "./chapter-visuals";
 A faux-live transcript: it streams its messages in one at a time, with a
 Claude-Code-style working status line ("· Canoodling… (12m 24s · ↑ 54.1k
 tokens)") that follows the latest item as the session "runs", then resolves
-into an explicit truncated marker. Decorative, all client side.
+into an explicit truncated marker. It starts itself the first time it
+scrolls into view, no manual trigger. Decorative, all client side.
 */
 
 const EXECUTION = new Set(["buy_equity", "sell_equity", "buy_option", "sell_option", "cancel_order", "hold"]);
@@ -46,34 +47,6 @@ function fmtTokens(t: number): string {
   return `${(t / 1000).toFixed(1)}k tokens`;
 }
 
-/*
-A tiny replay bus: the "See an example transcript" button and the transcript
-itself live in opposite columns of the chapter, so they share a context. The
-button bumps `playKey`; the transcript watches it and re-streams from the top.
-*/
-type ReplayCtx = { playKey: number; replay: () => void };
-const TranscriptReplayContext = createContext<ReplayCtx | null>(null);
-
-export function TranscriptReplayProvider({ children }: { children: ReactNode }) {
-  const [playKey, setPlayKey] = useState(0);
-  const replay = useCallback(() => setPlayKey((k) => k + 1), []);
-  return <TranscriptReplayContext.Provider value={{ playKey, replay }}>{children}</TranscriptReplayContext.Provider>;
-}
-
-export function ReplayTranscriptButton({ className, children }: { className?: string; children: ReactNode }) {
-  const ctx = useContext(TranscriptReplayContext);
-  // Once the transcript has been revealed, retire the button and leave the
-  // rendered transcript in place.
-  if (ctx && ctx.playKey > 0) return null;
-  return (
-    <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
-      <button type="button" onClick={() => ctx?.replay()} className={className}>
-        {children}
-      </button>
-    </div>
-  );
-}
-
 export function LiveTranscript({ lines }: { lines: TranscriptLine[] }) {
   const shown = lines.slice(0, VISIBLE);
   const [step, setStep] = useState(0); // how many items are revealed
@@ -81,8 +54,8 @@ export function LiveTranscript({ lines }: { lines: TranscriptLine[] }) {
   const [secs, setSecs] = useState(740);
   const [tokens, setTokens] = useState(12300);
 
-  const ctx = useContext(TranscriptReplayContext);
-  const playKey = ctx?.playKey ?? 0;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const started = useRef(false);
 
   // Reset the meters and stream from the first item.
   const start = useCallback(() => {
@@ -92,17 +65,32 @@ export function LiveTranscript({ lines }: { lines: TranscriptLine[] }) {
     setStep(1);
   }, []);
 
-  // Render ONLY when the button fires. The initial mount value (playKey 0) is
-  // skipped, so nothing plays on scroll: the transcript stays idle until an
-  // explicit press.
-  const firstPlay = useRef(true);
+  // Start once the transcript first scrolls into view. No manual trigger: the
+  // session begins streaming on its own when the reader reaches it. Falls back
+  // to starting immediately where IntersectionObserver isn't available.
   useEffect(() => {
-    if (firstPlay.current) {
-      firstPlay.current = false;
+    const el = rootRef.current;
+    if (!el || started.current) return;
+    if (typeof IntersectionObserver === "undefined") {
+      started.current = true;
+      start();
       return;
     }
-    start();
-  }, [playKey, start]);
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting && !started.current) {
+            started.current = true;
+            start();
+            obs.disconnect();
+          }
+        }
+      },
+      { threshold: 0.35 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [start]);
 
   // Reveal the next item on a timer.
   useEffect(() => {
@@ -127,7 +115,7 @@ export function LiveTranscript({ lines }: { lines: TranscriptLine[] }) {
   const hiddenCount = lines.length - shown.length;
 
   return (
-    <div className="min-w-0">
+    <div ref={rootRef} className="min-w-0">
       <div className="flex items-center gap-2 border-b border-claude/20 pb-3 font-mono text-[11px] text-muted-foreground">
         <ClaudeLogo className="h-3.5 w-3.5" />
         <span className="font-semibold text-claude">Claudia</span>
@@ -144,11 +132,9 @@ export function LiveTranscript({ lines }: { lines: TranscriptLine[] }) {
       </div>
 
       {step === 0 ? (
-        <div className="mt-5 flex flex-col items-center gap-3 py-16 text-center text-sm text-muted-foreground/80">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full border border-border/60 text-muted-foreground/50">
-            <Play className="h-5 w-5" />
-          </span>
-          Press &ldquo;See an example transcript&rdquo; to play a session.
+        <div className="mt-5 flex items-center justify-center gap-2 py-16 text-center font-mono text-[12px] text-muted-foreground/60" aria-hidden>
+          <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-muted-foreground/40" />
+          Loading session&hellip;
         </div>
       ) : (
         <>

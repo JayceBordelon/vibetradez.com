@@ -66,7 +66,8 @@ func TestTranscriptRoundTripAndUpsert(t *testing.T) {
 	}
 
 	events := []byte(`[{"round":0,"type":"text","text":"hello"}]`)
-	if err := s.SaveTranscript("2026-06-03", "selection", "claude-opus-4-8", events); err != nil {
+	usage := []byte(`{"input_tokens":120,"output_tokens":45,"rounds":2}`)
+	if err := s.SaveTranscript("2026-06-03", "selection", "claude-opus-4-8", events, usage, 8500); err != nil {
 		t.Fatalf("SaveTranscript failed: %v", err)
 	}
 
@@ -85,19 +86,29 @@ func TestTranscriptRoundTripAndUpsert(t *testing.T) {
 	if !jsonEqual(t, tv.Events, events) {
 		t.Fatalf("events round-trip mismatch: got %s want %s", tv.Events, events)
 	}
+	if !jsonEqual(t, tv.Usage, usage) {
+		t.Fatalf("usage round-trip mismatch: got %s want %s", tv.Usage, usage)
+	}
+	if tv.DurationMS != 8500 {
+		t.Fatalf("duration round-trip mismatch: got %d want 8500", tv.DurationMS)
+	}
 
 	// Upsert on (date, kind) overwrites.
 	newEvents := []byte(`[{"round":0,"type":"text","text":"updated"}]`)
-	if err := s.SaveTranscript("2026-06-03", "selection", "claude-sonnet-4-6", newEvents); err != nil {
+	newUsage := []byte(`{"input_tokens":200,"output_tokens":80,"rounds":3}`)
+	if err := s.SaveTranscript("2026-06-03", "selection", "claude-sonnet-4-6", newEvents, newUsage, 12000); err != nil {
 		t.Fatalf("SaveTranscript (upsert) failed: %v", err)
 	}
 	tv, _ = s.GetTranscript("2026-06-03", "selection")
 	if tv.Model != "claude-sonnet-4-6" || !jsonEqual(t, tv.Events, newEvents) {
 		t.Fatalf("upsert did not overwrite: %+v", tv)
 	}
+	if !jsonEqual(t, tv.Usage, newUsage) || tv.DurationMS != 12000 {
+		t.Fatalf("upsert did not overwrite usage/duration: %s, %d", tv.Usage, tv.DurationMS)
+	}
 
 	// Different kind is an independent row.
-	if err := s.SaveTranscript("2026-06-03", "execution", "claude-opus-4-8", events); err != nil {
+	if err := s.SaveTranscript("2026-06-03", "execution", "claude-opus-4-8", events, usage, 1000); err != nil {
 		t.Fatalf("SaveTranscript(execution) failed: %v", err)
 	}
 	exec, _ := s.GetTranscript("2026-06-03", "execution")

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, BookOpen, Brain, CheckCircle2, ChevronRight, CircleDollarSign, NotebookPen, XCircle } from "lucide-react";
+import { ArrowLeft, BookOpen, Brain, CheckCircle2, ChevronRight, CircleDollarSign, Globe, NotebookPen, SquareTerminal, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -9,7 +9,7 @@ import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import type { TranscriptEvent, TranscriptResponse } from "@/types/trade";
+import type { TranscriptEvent, TranscriptResponse, TranscriptUsage } from "@/types/trade";
 
 type Kind = "selection" | "execution" | "portfolio";
 
@@ -103,6 +103,8 @@ export function TranscriptView({ date, kind }: { date: string; kind: Kind }) {
 
 function TranscriptBody({ data }: { data: TranscriptResponse }) {
   const events = data.events ?? [];
+  const usage = data.usage;
+  const durationMs = data.duration_ms ?? 0;
   return (
     <div className="mt-6">
       {data.model && (
@@ -111,9 +113,12 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
             Model <span className="font-mono text-foreground/80">{data.model}</span>
           </span>
           {data.created_at && <span>Captured {new Date(data.created_at).toLocaleString()}</span>}
+          {durationMs > 0 && <span>Ran for {formatDuration(durationMs)}</span>}
           <span>{events.length} events</span>
+          {usage && usage.rounds > 0 && <span>{usage.rounds} rounds</span>}
         </div>
       )}
+      {usage && usage.rounds > 0 && <UsageBreakdown usage={usage} model={data.model} />}
       <ol className="space-y-6">
         {(() => {
           // Fold each tool_result into its matching tool_use so a call and
@@ -145,8 +150,8 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
         })()}
       </ol>
       <p className="mt-8 text-[11px] leading-relaxed text-muted-foreground">
-        This is the model's own narration and tool activity, captured verbatim from the run. Account balances are
-        redacted. Not financial advice.
+        This is the model's own narration and tool activity, captured verbatim from the run. This is a single public
+        account, so balances are shown openly rather than hidden. Not financial advice.
       </p>
     </div>
   );
@@ -158,21 +163,51 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
 // reading tool.
 const EXECUTION_TOOLS = new Set(["buy_equity", "sell_equity", "buy_option", "sell_option", "cancel_order", "hold"]);
 const DOCUMENTATION_TOOLS = new Set(["write_summary"]);
+// Server-side tools Anthropic runs for us, not our own get_* readers. The web
+// tools are declared directly; the code-execution sub-tools (python, bash,
+// file editor) are auto-enabled by the web tools and run in Anthropic's
+// sandbox to filter web results before they reach context.
+const WEB_TOOLS = new Set(["web_search", "web_fetch"]);
+const CODE_TOOLS = new Set(["code_execution", "bash_code_execution", "text_editor_code_execution"]);
 
-type ToolGroup = "execution" | "documentation" | "reading";
+type ToolGroup = "execution" | "documentation" | "web" | "code" | "reading";
 
 function toolGroup(name?: string): ToolGroup {
   if (name && EXECUTION_TOOLS.has(name)) return "execution";
   if (name && DOCUMENTATION_TOOLS.has(name)) return "documentation";
+  if (name && WEB_TOOLS.has(name)) return "web";
+  if (name && CODE_TOOLS.has(name)) return "code";
   return "reading";
 }
 
 function toolIcon(group: ToolGroup) {
-  return group === "execution" ? CircleDollarSign : group === "documentation" ? NotebookPen : BookOpen;
+  switch (group) {
+    case "execution":
+      return CircleDollarSign;
+    case "documentation":
+      return NotebookPen;
+    case "web":
+      return Globe;
+    case "code":
+      return SquareTerminal;
+    default:
+      return BookOpen;
+  }
 }
 
 function toolEyebrow(group: ToolGroup): string {
-  return group === "execution" ? "Execution tool called" : group === "documentation" ? "Documentation tool called" : "Reading tool called";
+  switch (group) {
+    case "execution":
+      return "Execution tool called";
+    case "documentation":
+      return "Documentation tool called";
+    case "web":
+      return "Web tool (Anthropic-run)";
+    case "code":
+      return "Sandbox tool (Anthropic-run)";
+    default:
+      return "Reading tool called";
+  }
 }
 
 // resultStatus reads a tool result and classifies it: an {"error": ...}
@@ -185,7 +220,12 @@ function resultStatus(raw?: string): "success" | "error" | undefined {
   try {
     const o = JSON.parse(trimmed);
     if (o && typeof o === "object" && !Array.isArray(o)) {
-      if ("error" in o) return "error";
+      // Our tools signal failure with {"error": ...}; the server-run web /
+      // code tools use {"error_code": ...} or a nonzero shell return_code.
+      if ("error" in o || "error_code" in o) return "error";
+      if (typeof (o as { return_code?: unknown }).return_code === "number" && (o as { return_code: number }).return_code !== 0) {
+        return "error";
+      }
     }
   } catch {
     // non-JSON result (e.g. web prose) means the tool returned something.
@@ -330,6 +370,123 @@ function TranscriptSkeleton() {
       <Skeleton className="h-24 w-full rounded-lg" />
     </div>
   );
+}
+
+/*
+Published Claude list prices per million tokens, by model id, used ONLY to
+estimate a session's cost from its captured token usage. The Messages API
+does not return a dollar cost per request, so this is computed, not actual.
+Keep in sync with https://platform.claude.com/docs/en/about-claude/pricing.
+The agent caches with the 5-minute TTL, so cacheWrite uses the 5m rate.
+*/
+const MODEL_RATES: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
+  "claude-opus-4-8": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  "claude-opus-4-7": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  "claude-opus-4-6": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  "claude-sonnet-4-6": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+  "claude-haiku-4-5": { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
+};
+// Web search bills $10 / 1,000 searches; web fetch and (with the web tools)
+// code execution are free, so they add nothing to the estimate.
+const WEB_SEARCH_USD = 0.01;
+
+// formatUsd shows more precision for sub-dollar sessions so a $0.0042 run
+// doesn't collapse to $0.00.
+function formatUsd(n: number): string {
+  if (n === 0) return "$0.00";
+  if (n < 0.01) return `$${n.toFixed(4)}`;
+  if (n < 1) return `$${n.toFixed(3)}`;
+  return `$${n.toFixed(2)}`;
+}
+
+/*
+UsageBreakdown renders the session's token spend as a line-item cost table:
+each category with its quantity, unit rate, and estimated dollar cost, plus a
+total. Token rows price per million tokens; the web rows price per request
+(web fetch is free). When the model's list prices are unknown the money
+columns are dropped and only the quantities are shown.
+*/
+function UsageBreakdown({ usage, model }: { usage: TranscriptUsage; model: string }) {
+  const r = MODEL_RATES[model];
+  const showCost = r !== undefined;
+
+  type Row = { label: string; qty: string; rate: string; cost: number };
+  const rows: Row[] = [
+    { label: "Output", qty: formatTokens(usage.output_tokens), rate: r ? `$${r.output}/M` : "—", cost: r ? (usage.output_tokens * r.output) / 1_000_000 : 0 },
+    { label: "Input (fresh)", qty: formatTokens(usage.input_tokens), rate: r ? `$${r.input}/M` : "—", cost: r ? (usage.input_tokens * r.input) / 1_000_000 : 0 },
+    { label: "Cache read", qty: formatTokens(usage.cache_read_tokens), rate: r ? `$${r.cacheRead}/M` : "—", cost: r ? (usage.cache_read_tokens * r.cacheRead) / 1_000_000 : 0 },
+    { label: "Cache write (5m)", qty: formatTokens(usage.cache_creation_tokens), rate: r ? `$${r.cacheWrite}/M` : "—", cost: r ? (usage.cache_creation_tokens * r.cacheWrite) / 1_000_000 : 0 },
+  ];
+  if (usage.web_search_requests > 0) {
+    rows.push({ label: "Web searches", qty: String(usage.web_search_requests), rate: `$${WEB_SEARCH_USD.toFixed(2)}/ea`, cost: usage.web_search_requests * WEB_SEARCH_USD });
+  }
+  if (usage.web_fetch_requests > 0) {
+    rows.push({ label: "Web fetches", qty: String(usage.web_fetch_requests), rate: "free", cost: 0 });
+  }
+  const total = rows.reduce((s, row) => s + row.cost, 0);
+
+  return (
+    <div className="mb-6">
+      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{showCost ? "Session cost breakdown" : "Token usage"}</div>
+      <div className="overflow-x-auto rounded-md border border-border/60">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-border/60 bg-muted/30 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <th className="px-3 py-2 text-left font-semibold">Line item</th>
+              <th className="px-3 py-2 text-right font-semibold">Quantity</th>
+              {showCost && <th className="px-3 py-2 text-right font-semibold">Rate</th>}
+              {showCost && <th className="px-3 py-2 text-right font-semibold">Est. cost</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.label} className="border-b border-border/40 last:border-0">
+                <td className="px-3 py-2 text-foreground/80">{row.label}</td>
+                <td className="px-3 py-2 text-right font-mono text-foreground/70">{row.qty}</td>
+                {showCost && <td className="px-3 py-2 text-right font-mono text-muted-foreground">{row.rate}</td>}
+                {showCost && <td className="px-3 py-2 text-right font-mono text-foreground/80">{formatUsd(row.cost)}</td>}
+              </tr>
+            ))}
+          </tbody>
+          {showCost && (
+            <tfoot>
+              <tr className="border-t border-border/60 bg-claude/5">
+                <td className="px-3 py-2 font-semibold text-foreground/90" colSpan={3}>
+                  Total (estimated)
+                </td>
+                <td className="px-3 py-2 text-right font-mono font-semibold text-claude">{formatUsd(total)}</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+      {showCost && (
+        <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground/70">
+          Estimated from token usage at list prices, not a billed amount. The API does not return a per-session cost.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// formatDuration renders a millisecond span as "Xm Ys" (or "Ys" under a
+// minute, "Xh Ym" over an hour). Used for the session wall-clock.
+function formatDuration(ms: number): string {
+  const totalSec = Math.round(ms / 1000);
+  if (totalSec < 60) return `${totalSec}s`;
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  if (min < 60) return sec ? `${min}m ${sec}s` : `${min}m`;
+  const hr = Math.floor(min / 60);
+  const remMin = min % 60;
+  return remMin ? `${hr}h ${remMin}m` : `${hr}h`;
+}
+
+// formatTokens renders a token count compactly: 948, 12.3k, 1.4M.
+function formatTokens(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k`;
+  return `${(n / 1_000_000).toFixed(1)}M`;
 }
 
 // formatJSON pretty-prints a value (tool input). Falls back to String()
