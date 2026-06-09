@@ -74,9 +74,10 @@ PortfolioExecutor is the write-side dependency: the broker entry points
 the tool layer commits decisions through. The production implementation
 wraps exec.Service (task 2 adds the equity/sell entry points). Each method
 mirrors the boundary exec already uses for options: it persists an order
-row and returns the broker order id plus the internal execution id, and it
-re-validates the hard caps on the broker side so a buggy tool-layer change
-cannot widen them.
+row and returns the broker order id plus the internal execution id. The
+broker side re-checks only a flat absolute order-cost ceiling
+(exec.MaxPortfolioOrderCostCeiling), NOT the percentage cap sheet, so the
+tool-layer Check* calls are the sole enforcement point for the percentages.
 */
 type PortfolioExecutor interface {
 	BuyEquity(ctx context.Context, symbol string, quantity float64, limitPrice float64) (orderID string, execID int, err error)
@@ -657,6 +658,13 @@ func (d *ToolDispatcher) dispatchBuyEquity(ctx context.Context, input json.RawMe
 	if args.Symbol == "" || args.Quantity <= 0 || args.LimitPrice <= 0 {
 		return jsonError("buy_equity: symbol, positive quantity, and positive limit_price are required")
 	}
+	// Whole shares only: the broker order quantity is an int (wire.go), so a
+	// fractional quantity would be truncated there while the cap checks and the
+	// working snapshot below were computed on the fractional value, desyncing
+	// authorized-vs-sent. Reject it so the model re-issues a whole-share order.
+	if args.Quantity != math.Trunc(args.Quantity) {
+		return jsonError("buy_equity: quantity must be a whole number of shares (fractional shares are not supported)")
+	}
 	m := Move{
 		Action:     ActionBuyEquity,
 		AssetType:  AssetEquity,
@@ -716,6 +724,13 @@ func (d *ToolDispatcher) dispatchSellEquity(ctx context.Context, input json.RawM
 	args.Symbol = strings.ToUpper(strings.TrimSpace(args.Symbol))
 	if args.Symbol == "" || args.Quantity <= 0 || args.LimitPrice <= 0 {
 		return jsonError("sell_equity: symbol, positive quantity, and positive limit_price are required")
+	}
+	// Whole shares only: the broker order quantity is an int (wire.go), so a
+	// fractional quantity would be truncated there, leaving a residual position
+	// the agent believes it has flattened. Reject it so the model re-issues a
+	// whole-share order.
+	if args.Quantity != math.Trunc(args.Quantity) {
+		return jsonError("sell_equity: quantity must be a whole number of shares (fractional shares are not supported)")
 	}
 	m := Move{Action: ActionSellEquity, AssetType: AssetEquity, Symbol: args.Symbol, Underlying: args.Symbol, Quantity: args.Quantity}
 	return d.commitSell(ctx, m, args.LimitPrice, args.Rationale, func() (string, int, error) {

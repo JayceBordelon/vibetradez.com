@@ -243,6 +243,23 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 			}
 		}
 
+		// A long-running server tool (web_search / web_fetch) can exceed the
+		// per-turn limit and return stop_reason=pause_turn with a partial
+		// assistant message and no local tool_result to feed back. Echo the
+		// partial message unchanged and re-request so the model continues the
+		// same turn, instead of falling through to the stance parse below with
+		// partial or empty text (which surfaced as a spurious "empty response").
+		if msg.StopReason == anthropic.StopReasonPauseTurn {
+			messages = append(messages, assistantEchoFromRaw(msg))
+			continue
+		}
+
+		// The model declined to answer. Surface it as a distinct, diagnosable
+		// error instead of the generic "empty response from claude" below.
+		if msg.StopReason == anthropic.StopReasonRefusal {
+			return "", errors.New("claude refused to respond (stop_reason=refusal)")
+		}
+
 		if len(toolResults) > 0 {
 			// Roll the conversation cache breakpoint onto the newest tool
 			// results and clear the prior one, so we never exceed the 4

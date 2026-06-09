@@ -183,7 +183,7 @@ func (c *Client) getQuotes(symbols []string, useCache bool) (map[string]StockQuo
 /*
 OptionAsk returns the live ask price for a single option contract. Used
 by the auto-execution morning open path to size the LIMIT price (Schwab
-rejects MARKET option orders pre-market). Wraps GetOptionChain (15s
+rejects MARKET option orders pre-market). Wraps GetOptionChain (45s
 cache) and scans for the matching strike. Returns 0 with an error if
 the chain is fetchable but no ask is populated for the contract — the
 caller is expected to fall back to a modeled estimate rather than

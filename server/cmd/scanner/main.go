@@ -33,18 +33,48 @@ import (
 // handlers consume the same source. Update the lists there yearly each
 // Q4 from NYSE's published schedule.
 
-func isMarketOpen() (bool, string) {
-	now := time.Now().In(calendar.ETLocation)
-	today := now.Format("2006-01-02")
+/*
+isMarketOpen reports whether the market is in its live session RIGHT NOW
+(9:30 ET to the day's close, where the close is 13:00 on half-days and
+16:00 otherwise). It is time-of-day and half-day aware via
+calendar.CurrentStatus, so the session and risk-sweep crons don't fire
+against a closed market (e.g. a risk sweep at 13:15-15:45 on a half-day
+that closed at 13:00). The second return is a short reason for the skip log.
 
+Do NOT gate the EOD snapshot on this: that cron fires at 16:00, at or after
+the close, so it must use isTradingDay instead.
+*/
+func isMarketOpen() (bool, string) {
+	now := time.Now()
+	if calendar.CurrentStatus(now).Open {
+		return true, ""
+	}
+	today := now.In(calendar.ETLocation).Format("2006-01-02")
 	if holiday := calendar.IsHoliday(today); holiday != "" {
 		return false, holiday
 	}
-
-	if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+	if !calendar.IsTradingDay(today) {
 		return false, "Weekend"
 	}
+	if hd := calendar.IsHalfDay(today); hd != "" {
+		return false, "Outside half-day session (1:00 PM ET close, " + hd + ")"
+	}
+	return false, "Outside session (9:30 AM-4:00 PM ET)"
+}
 
+/*
+isTradingDay reports whether today is a NYSE trading day in ET (weekday and
+not a full-closure holiday), ignoring time of day. Used by the EOD snapshot
+cron, which fires at 16:00 (after the close) and so cannot use isMarketOpen.
+*/
+func isTradingDay() (bool, string) {
+	today := time.Now().In(calendar.ETLocation).Format("2006-01-02")
+	if holiday := calendar.IsHoliday(today); holiday != "" {
+		return false, holiday
+	}
+	if !calendar.IsTradingDay(today) {
+		return false, "Weekend"
+	}
 	return true, ""
 }
 
@@ -91,7 +121,7 @@ func checkClockSkew() {
 		skew = -skew
 	}
 	if skew > maxAcceptableSkew {
-		log.Printf("clock-skew WARNING: local clock differs from cloudflare by %s (threshold %s); the 9:25 picker, 9:30 executor, 9:35 dangling-LIMIT-cancel, and 3:55 close crons WILL fire at the wrong wall-clock time", skew.Truncate(time.Second), maxAcceptableSkew)
+		log.Printf("clock-skew WARNING: local clock differs from cloudflare by %s (threshold %s). The portfolio crons (the 9:45 ET session, the every-15-min risk sweep, and the 16:00 ET EOD snapshot) WILL fire at the wrong wall-clock time", skew.Truncate(time.Second), maxAcceptableSkew)
 	} else {
 		log.Printf("clock-skew probe: local clock within %s of cloudflare (rtt=%s)", skew.Truncate(time.Millisecond), rtt.Truncate(time.Millisecond))
 	}
@@ -243,8 +273,12 @@ func main() {
 			runPortfolioRisk(portfolioReader, portfolioCaps)
 		}
 		eodSnapshotJob := func() {
-			if open, reason := isMarketOpen(); !open {
-				log.Printf("Skipping portfolio EOD snapshot: Market closed (%s)", reason)
+			// Gated on the trading DAY, not the live session: this cron fires
+			// at 16:00, at or after the close, so isMarketOpen would always
+			// skip it. We still want the snapshot on every trading day
+			// (including half-days, where the close was 13:00).
+			if ok, reason := isTradingDay(); !ok {
+				log.Printf("Skipping portfolio EOD snapshot: not a trading day (%s)", reason)
 				return
 			}
 			runPortfolioEODSnapshot(cfg, db, emailClient, portfolioReader)
