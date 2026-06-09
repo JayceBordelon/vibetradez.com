@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { Pagination } from "@/components/layout/pagination";
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
-import { ClosedRow } from "@/components/portfolio/trade-cards";
+import { ClosedTable } from "@/components/portfolio/book-tables";
 import { ClosedDetail } from "@/components/portfolio/trade-detail";
 import { fmtPnlInt } from "@/lib/format";
 import { fetchClosedTrades, findClosedTrade } from "@/lib/portfolio-data";
@@ -87,11 +87,7 @@ export default async function ClosedTradesPage({ searchParams }: PageProps) {
           <h2 className="mt-6 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Round trips ({trades.length})
           </h2>
-          <div className="mt-2 divide-y divide-border/50 border-t border-border/50">
-            {pageTrades.map((t) => (
-              <ClosedRow key={t.id} t={t} />
-            ))}
-          </div>
+          <ClosedTable items={pageTrades} />
           <Pagination basePath="/closed" page={page} pageSize={PAGE_SIZE} totalItems={trades.length} />
         </>
       )}

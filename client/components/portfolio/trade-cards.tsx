@@ -1,17 +1,10 @@
-import { ChevronRight } from "lucide-react";
-import Link from "next/link";
 
-import { AnimatedNumber } from "@/components/ui/animated-number";
-import { fmtMoney, fmtPrice, plural, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { ClosedTrade, Holding, TradeKind } from "@/types/portfolio";
+import type { TradeKind } from "@/types/portfolio";
 
 /*
-Flowing list rows for the /holdings and /closed pages. Rather than a stack of
-bordered cards, each position is a hairline-divided row so the lists read as
-one continuous surface on the page. Options and equities keep their own
-emphasis (a CALL/PUT side badge, strike/expiry/DTE for options; shares and
-cost for equities). Each row is a navigation surface to its detail page.
+Shared atoms for the book surfaces: the instrument chip and the detail-route
+helper. The list rows themselves are the ledger tables in book-tables.tsx.
 */
 
 type Section = "holdings" | "closed";
@@ -37,86 +30,3 @@ export function KindChip({ kind, contractType }: { kind: TradeKind; contractType
   return <span className="rounded bg-foreground/[0.06] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{kind === "option" ? "Option" : "Stock"}</span>;
 }
 
-function Row({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link href={href} className="group -mx-3 flex items-center justify-between gap-4 rounded-lg px-3 py-3.5 transition-colors hover:bg-foreground/[0.03]">
-      {children}
-    </Link>
-  );
-}
-
-// SubLine renders the metadata segments with each segment non-breaking, so a
-// mobile wrap lands between fields ("exp 2026-07-28 · 49d left") instead of
-// splitting a date mid-token ("exp 2026-07- / 28").
-function SubLine({ parts }: { parts: (string | null)[] }) {
-  const present = parts.filter((p): p is string => Boolean(p));
-  return (
-    <div className="mt-1 text-xs text-muted-foreground sm:truncate">
-      {present.map((p, i) => (
-        <span key={p} className="whitespace-nowrap">
-          {p}
-          {i < present.length - 1 ? " · " : ""}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-export function HoldingRow({ h }: { h: Holding }) {
-  const pct = h.cost_basis > 0 ? (h.unrealized_pnl / h.cost_basis) * 100 : 0;
-  const up = h.unrealized_pnl >= 0;
-  const sub: (string | null)[] =
-    h.kind === "option"
-      ? [`${h.quantity} ${plural(h.quantity, "contract")}`, h.strike ? `${fmtPrice(h.strike)} strike` : null, h.expiration ? `exp ${h.expiration}` : null, h.dte != null ? `${h.dte}d left` : null]
-      : [`${h.quantity} ${plural(h.quantity, "share")}`, h.quantity > 0 ? `avg ${fmtMoney(h.cost_basis / h.quantity)}` : null, h.opened_date ? `opened ${h.opened_date}` : null];
-  return (
-    <Row href={tradeHref("holdings", h.id)}>
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate text-base font-semibold">{h.label}</span>
-          <KindChip kind={h.kind} contractType={h.contract_type} />
-        </div>
-        <SubLine parts={sub} />
-      </div>
-      <div className="flex shrink-0 items-center gap-3">
-        <div className="text-right">
-          <div className="font-semibold tabular-nums">
-            <AnimatedNumber value={h.market_value} kind="money" />
-          </div>
-          <div className={cn("text-sm font-medium tabular-nums", pnlColor(h.unrealized_pnl))}>
-            <AnimatedNumber value={h.unrealized_pnl} kind="pnlInt" /> (<AnimatedNumber value={pct} kind="pctSigned1" />)
-          </div>
-        </div>
-        <ChevronRight className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
-      </div>
-    </Row>
-  );
-}
-
-export function ClosedRow({ t }: { t: ClosedTrade }) {
-  const win = t.realized_pnl >= 0;
-  const sub: (string | null)[] = [`${t.opened_date} to ${t.closed_date}`, `${t.hold_days}d held`, `entry ${fmtMoney(t.entry_price)}`, `exit ${fmtMoney(t.exit_price)}`];
-  return (
-    <Row href={tradeHref("closed", t.id)}>
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate text-base font-semibold">{t.label}</span>
-          <KindChip kind={t.kind} contractType={t.contract_type} />
-          <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider", win ? "border-green-border bg-green-bg text-green" : "border-red-border bg-red-bg text-red")}>{win ? "Win" : "Loss"}</span>
-        </div>
-        <SubLine parts={sub} />
-      </div>
-      <div className="flex shrink-0 items-center gap-3">
-        <div className="text-right">
-          <div className={cn("font-bold tabular-nums", pnlColor(t.realized_pnl))}>
-            <AnimatedNumber value={t.realized_pnl} kind="pnlInt" />
-          </div>
-          <div className={cn("text-sm font-semibold tabular-nums", pnlColor(t.realized_pnl))}>
-            <AnimatedNumber value={t.realized_pct} kind="pctSigned1" />
-          </div>
-        </div>
-        <ChevronRight className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
-      </div>
-    </Row>
-  );
-}

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
-import { HoldingRow } from "@/components/portfolio/trade-cards";
+import { OptionsTable, StocksTable } from "@/components/portfolio/book-tables";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { useLiveQuotes } from "@/hooks/use-live-quotes";
 import { useVisiblePoll } from "@/hooks/use-visible-poll";
@@ -21,22 +21,6 @@ of flickering.
 */
 
 const REFRESH_SECONDS = 60;
-
-function Group({ title, items }: { title: string; items: Holding[] }) {
-  if (items.length === 0) return null;
-  return (
-    <section className="mt-8 first:mt-4">
-      <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-        {title} ({items.length})
-      </h2>
-      <div className="mt-1 divide-y divide-border/50 border-t border-border/50">
-        {items.map((h) => (
-          <HoldingRow key={h.id} h={h} />
-        ))}
-      </div>
-    </section>
-  );
-}
 
 export function LiveHoldings({ initial }: { initial: Holding[] }) {
   const [holdings, setHoldings] = useState<Holding[]>(initial);
@@ -72,8 +56,8 @@ export function LiveHoldings({ initial }: { initial: Holding[] }) {
         <Stat label="Unrealized P&L" value={<AnimatedNumber value={totalPnl} kind="pnlInt" />} tone={totalPnl > 0 ? "positive" : totalPnl < 0 ? "negative" : "neutral"} />
         <Stat label="Positions" value={`${live.length}`} />
       </StatStrip>
-      <Group title="Options" items={options} />
-      <Group title="Stocks" items={equities} />
+      <OptionsTable items={options} />
+      <StocksTable items={equities} />
     </>
   );
 }
