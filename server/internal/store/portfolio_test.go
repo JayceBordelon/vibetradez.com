@@ -148,3 +148,69 @@ func TestEquityCurveAndHighWaterMark(t *testing.T) {
 		t.Fatalf("expected high-water 6800, got %f", hwm)
 	}
 }
+
+func TestOrderStatusReconciliation(t *testing.T) {
+	s := setupTestDB(t)
+	cleanPortfolio(s)
+
+	working := PortfolioDecisionRow{
+		Date: "2026-06-09", Source: "agent", Action: "buy_equity", AssetType: "EQUITY",
+		Symbol: "GOOGL", Underlying: "GOOGL", Quantity: 5, LimitPrice: 371, Notional: 1855,
+		Mode: "live", SchwabOrderID: "ord-1", Status: "WORKING", Rationale: "core",
+	}
+	submitted := PortfolioDecisionRow{
+		Date: "2026-06-09", Source: "agent", Action: "buy_option", AssetType: "OPTION",
+		Symbol: "NVDA  260918C00215000", Underlying: "NVDA", Quantity: 1, LimitPrice: 18.30, Notional: 1830,
+		Mode: "live", SchwabOrderID: "ord-2", Status: "submitted", Rationale: "sleeve",
+	}
+	alreadyFilled := PortfolioDecisionRow{
+		Date: "2026-06-09", Source: "agent", Action: "sell_equity", AssetType: "EQUITY",
+		Symbol: "AVGO", Underlying: "AVGO", Quantity: 4, LimitPrice: 186.46, Notional: 745.84,
+		Mode: "live", SchwabOrderID: "ord-3", Status: "FILLED", FillPrice: ptrF(186.40), Rationale: "trim",
+	}
+	noOrder := PortfolioDecisionRow{
+		Date: "2026-06-09", Source: "agent", Action: "hold", Rationale: "as-is",
+	}
+	for _, d := range []PortfolioDecisionRow{working, submitted, alreadyFilled, noOrder} {
+		if _, err := s.SavePortfolioDecision(d); err != nil {
+			t.Fatalf("save %s: %v", d.Action, err)
+		}
+	}
+
+	// Only the non-terminal, order-carrying decisions are reconciliation
+	// candidates: FILLED is terminal and the hold has no order id.
+	ids, err := s.OpenOrderIDs()
+	if err != nil {
+		t.Fatalf("open order ids: %v", err)
+	}
+	want := map[string]bool{"ord-1": true, "ord-2": true}
+	if len(ids) != 2 || !want[ids[0]] || !want[ids[1]] {
+		t.Fatalf("open order ids = %v, want ord-1 and ord-2", ids)
+	}
+
+	// A fill updates status + fill price; a status-only change keeps the
+	// existing fill price untouched.
+	if err := s.UpdateDecisionOrderStatus("ord-1", "FILLED", 370.85); err != nil {
+		t.Fatalf("update ord-1: %v", err)
+	}
+	if err := s.UpdateDecisionOrderStatus("ord-2", "CANCELED", 0); err != nil {
+		t.Fatalf("update ord-2: %v", err)
+	}
+	rows, err := s.GetPortfolioDecisions("2026-06-09")
+	if err != nil {
+		t.Fatalf("get decisions: %v", err)
+	}
+	byOrder := map[string]PortfolioDecisionRow{}
+	for _, r := range rows {
+		byOrder[r.SchwabOrderID] = r
+	}
+	if g := byOrder["ord-1"]; g.Status != "FILLED" || g.FillPrice == nil || *g.FillPrice != 370.85 {
+		t.Errorf("ord-1 after fill: status=%q fill=%v, want FILLED 370.85", g.Status, g.FillPrice)
+	}
+	if c := byOrder["ord-2"]; c.Status != "CANCELED" || c.FillPrice != nil {
+		t.Errorf("ord-2 after cancel: status=%q fill=%v, want CANCELED with no fill", c.Status, c.FillPrice)
+	}
+	if ids, _ = s.OpenOrderIDs(); len(ids) != 0 {
+		t.Errorf("open order ids after reconciliation = %v, want empty", ids)
+	}
+}

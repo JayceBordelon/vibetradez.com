@@ -52,6 +52,12 @@ type portfolioDecisionView struct {
 	OrderID      string   `json:"order_id,omitempty"`
 	Status       string   `json:"status,omitempty"`
 	Rationale    string   `json:"rationale"`
+	// Navigation link for the executions tape: the trade page this move
+	// belongs to. A move on a still-held symbol points at the holding
+	// (trade_kind "holding", trade_id = the opening decision's uuid); the
+	// sell that completed a round trip points at the closed trade.
+	TradeID   string `json:"trade_id,omitempty"`
+	TradeKind string `json:"trade_kind,omitempty"`
 }
 
 type portfolioResponse struct {
@@ -219,6 +225,18 @@ func (s *Server) handlePortfolio(w http.ResponseWriter, r *http.Request) {
 	caps := portfolio.DefaultCaps()
 	resp.DrawdownHalted = caps.DrawdownHalted(portfolio.Snapshot{Equity: resp.Equity, HighWaterMark: resp.HighWaterMark})
 
+	// Link each of today's moves to its trade page, AFTER the book has
+	// resolved: a "holding" link is only valid for a symbol actually in
+	// the current positions (an unfilled or rejected buy has an opening
+	// decision but no holding to open).
+	if len(resp.Decisions) > 0 {
+		held := make(map[string]bool, len(resp.Positions))
+		for _, p := range resp.Positions {
+			held[p.Symbol] = true
+		}
+		linkDecisionTrades(resp.Decisions, date, held, openingMoves(s.db), s.closedTrades())
+	}
+
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -381,6 +399,43 @@ func (s *Server) handlePriceHistory(w http.ResponseWriter, r *http.Request) {
 		resp.Points = append(resp.Points, pricePointView{Date: date, Close: c.Close})
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// closedTrades derives the round-trip log once; degrades to nil on a store
+// hiccup so a link miss never blanks the response.
+func (s *Server) closedTrades() []closedTradeView {
+	all, err := s.db.AllPortfolioDecisions()
+	if err != nil {
+		return nil
+	}
+	return deriveClosedTrades(all)
+}
+
+/*
+linkDecisionTrades points each of today's moves at its trade page so the
+executions tape can navigate. A sell whose symbol + date matches a round
+trip's close links to the closed trade; any other move on a CURRENTLY HELD
+symbol with a logged opening buy links to the holding (whose id IS that
+opening decision's uuid). Everything else stays unlinked: an unfilled or
+rejected buy has an opening decision but no holding page to open.
+*/
+func linkDecisionTrades(decisions []portfolioDecisionView, date string, held map[string]bool, opens map[string]openMove, closed []closedTradeView) {
+	closedByKey := make(map[string]string, len(closed))
+	for _, c := range closed {
+		closedByKey[c.Symbol+"|"+c.ClosedDate] = c.ID
+	}
+	for i := range decisions {
+		d := &decisions[i]
+		if strings.HasPrefix(d.Action, "sell") {
+			if id, ok := closedByKey[d.Symbol+"|"+date]; ok && id != "" {
+				d.TradeID, d.TradeKind = id, "closed"
+				continue
+			}
+		}
+		if oi, ok := opens[d.Symbol]; ok && oi.uuid != "" && held[d.Symbol] {
+			d.TradeID, d.TradeKind = oi.uuid, "holding"
+		}
+	}
 }
 
 func decisionView(d store.PortfolioDecisionRow) portfolioDecisionView {

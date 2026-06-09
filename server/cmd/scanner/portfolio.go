@@ -290,9 +290,14 @@ Scaffold scope: this DETECTS and logs. Wiring the actual de-risking sells
 follow-up so the auto-sell path gets its own review before it can move real
 positions. The detection here is the safe half.
 */
-func runPortfolioRisk(reader *portfoliowire.Reader, caps portfolio.Caps) {
+func runPortfolioRisk(db *store.Store, executor *exec.Service, reader *portfoliowire.Reader, caps portfolio.Caps) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
+
+	// Keep the decision log honest first: the log is insert-only at
+	// placement time, so without this sweep a filled order reads
+	// "working" on the dashboard until the end of time.
+	reconcileOrderStatuses(ctx, db, executor)
 
 	snap, err := reader.Snapshot(ctx)
 	if err != nil {
@@ -310,10 +315,48 @@ func runPortfolioRisk(reader *portfoliowire.Reader, caps portfolio.Caps) {
 }
 
 /*
+reconcileOrderStatuses asks the broker for the current state of every
+order the decision log still considers open and writes the answer back
+(status, and the average fill price once filled). Runs on the 15-minute
+risk cadence and once more at EOD, so the dashboard's executions tape
+shows FILLED within minutes of the broker filling instead of "working"
+forever. Best-effort per order: one unreachable order must not stall the
+rest.
+*/
+func reconcileOrderStatuses(ctx context.Context, db *store.Store, executor *exec.Service) {
+	if db == nil || executor == nil {
+		return
+	}
+	ids, err := db.OpenOrderIDs()
+	if err != nil {
+		log.Printf("order reconcile: open ids: %v", err)
+		return
+	}
+	for _, id := range ids {
+		st, err := executor.OrderStatusAgent(ctx, id)
+		if err != nil {
+			log.Printf("order reconcile: status %s: %v", id, err)
+			continue
+		}
+		if st.RawStatus == "" {
+			continue
+		}
+		if err := db.UpdateDecisionOrderStatus(id, st.RawStatus, st.FillPrice); err != nil {
+			log.Printf("order reconcile: update %s: %v", id, err)
+			continue
+		}
+		if st.Filled {
+			log.Printf("order reconcile: %s FILLED @ %.2f", id, st.FillPrice)
+		}
+	}
+}
+
+/*
 runPortfolioEODSnapshot is the 16:00 ET cron body. It records one
 equity-curve point for the day: account equity, cash, the running
 high-water mark, and the SPY close for the benchmark. Upserted by date, so
-a re-run overwrites cleanly.
+a re-run overwrites cleanly. The day's last order-status reconcile runs
+here too, so overnight readers see the settled truth.
 */
 func runPortfolioEODSnapshot(cfg *config.Config, db *store.Store, emailClient *email.Client, reader *portfoliowire.Reader) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
