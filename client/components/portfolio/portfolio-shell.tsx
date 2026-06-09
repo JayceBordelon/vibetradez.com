@@ -112,7 +112,7 @@ export function PortfolioShell() {
       {/* No border-t here: the summary strip above already draws its own
           bottom rule, and the doubled hairline read as a ghost band in dark. */}
       <Section title="P&L vs SPY" subtitle="Realized is booked round trips, unrealized is the open book's mark, and the dashed line is what buy-and-hold SPY would have earned on the same starting equity." className="mt-8">
-        <EquityCurveChart points={curve} />
+        <EquityCurveChart points={curve} today={data.date} liveUnrealized={totalUnrealized} liveSpyMark={quotes.get("SPY")?.mark ?? null} />
       </Section>
 
       <Section

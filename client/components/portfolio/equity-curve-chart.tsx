@@ -10,6 +10,15 @@ import type { EquityCurvePoint } from "@/types/portfolio";
 
 interface EquityCurveChartProps {
   points: EquityCurvePoint[];
+  /**
+  Live tick overrides for the curve's TODAY point (the server's synthetic
+  live point refreshes per poll; these keep it current per streamed tick
+  between polls). Only applied when the last point's date equals `today`,
+  so a stale curve never gets yesterday's history falsified.
+  */
+  today?: string;
+  liveUnrealized?: number | null;
+  liveSpyMark?: number | null;
 }
 
 /*
@@ -108,8 +117,20 @@ function HeadlineStat({ label, value, pctOfStart, colorVar, dashed }: { label: s
   );
 }
 
-export function EquityCurveChart({ points }: EquityCurveChartProps) {
-  const data = useMemo(() => buildSeries(points), [points]);
+export function EquityCurveChart({ points, today, liveUnrealized = null, liveSpyMark = null }: EquityCurveChartProps) {
+  // Overlay the live tick values onto today's point before building the
+  // series, so the headline stats AND the last chart segment move in real
+  // time with the strip above them.
+  const livePoints = useMemo(() => {
+    if (points.length === 0) return points;
+    const last = points[points.length - 1];
+    if (!today || last.date !== today) return points;
+    const next = { ...last };
+    if (liveUnrealized !== null) next.unrealized = liveUnrealized;
+    if (liveSpyMark !== null && liveSpyMark > 0) next.spy_close = liveSpyMark;
+    return [...points.slice(0, -1), next];
+  }, [points, today, liveUnrealized, liveSpyMark]);
+  const data = useMemo(() => buildSeries(livePoints), [livePoints]);
 
   if (data.length < 2) {
     return <div className="flex h-56 items-center justify-center text-sm text-muted-foreground">Not enough history yet to chart the curve. It fills in once the daily snapshot has run for a few sessions.</div>;
@@ -120,7 +141,7 @@ export function EquityCurveChart({ points }: EquityCurveChartProps) {
   const spyPnl = lastValue(data.map((d) => d.spy));
   const total = realized + unrealized;
   const edge = total - spyPnl;
-  const firstEquity = points.find((p) => p.account_equity > 0)?.account_equity ?? 0;
+  const firstEquity = livePoints.find((p) => p.account_equity > 0)?.account_equity ?? 0;
   const pctOfStart = (n: number) => (firstEquity > 0 ? (n / firstEquity) * 100 : null);
   const lastYear = data[data.length - 1].date.slice(0, 4);
 

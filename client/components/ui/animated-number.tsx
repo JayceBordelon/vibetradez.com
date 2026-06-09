@@ -9,13 +9,18 @@ AnimatedNumber renders a numeric readout that counts up or down to its new
 value whenever a live update changes it, the same motion language as the
 landing page's CountUp, applied to transitions instead of entrances.
 
+Every change also signals its direction: the number phases green (up) or
+red (down) for about a second while it counts, and a small transient
+breadcrumb pops above it with the signed difference, then fades. The
+breadcrumb is absolutely positioned so it never takes layout space in the
+number's container.
+
 Behavior contract:
   - First render is INSTANT: a page load shows the real number, no 0-to-N
     theater outside the marketing page.
   - A value change tweens from the currently displayed number (so a
-    retarget mid-flight never snaps back), easeOutCubic over ~700ms:
-    fast enough to read as a tick, slow enough to register direction.
-  - prefers-reduced-motion snaps immediately.
+    retarget mid-flight never snaps back), easeOutCubic over ~700ms.
+  - prefers-reduced-motion snaps immediately, with no flash or breadcrumb.
   - tabular-nums on the wrapper so digits don't jitter the layout.
 
 The formatter is chosen by NAME, not passed as a function: server
@@ -48,39 +53,107 @@ const FORMATS = {
 
 export type AnimatedNumberKind = keyof typeof FORMATS;
 
+// The breadcrumb shows the signed step the value just took: dollar kinds
+// get signed cents, percent kinds get signed percentage points.
+function fmtDiff(kind: AnimatedNumberKind, diff: number): string {
+  const sign = diff < 0 ? "-" : "+";
+  if (kind.startsWith("pct")) {
+    return `${sign}${Math.abs(diff).toFixed(2)}%`;
+  }
+  const abs = Math.abs(diff);
+  const body = abs.toLocaleString("en-US", { minimumFractionDigits: abs < 1000 ? 2 : 0, maximumFractionDigits: abs < 1000 ? 2 : 0 });
+  return `${sign}$${body}`;
+}
+
 const DURATION_MS = 700;
+const FLASH_MS = 1000;
+const CRUMB_MS = 1100;
 
 export function AnimatedNumber({ value, kind, className }: { value: number; kind: AnimatedNumberKind; className?: string }) {
   // displayed is what's on screen; it chases `value` through the tween.
   const [displayed, setDisplayed] = useState(value);
   const displayedRef = useRef(value);
   displayedRef.current = displayed;
+  const [flash, setFlash] = useState<"up" | "down" | null>(null);
+  const [crumb, setCrumb] = useState<{ id: number; text: string; up: boolean } | null>(null);
   const mounted = useRef(false);
+  const prevTarget = useRef(value);
   const raf = useRef(0);
+  const crumbSeq = useRef(0);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const crumbTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (!mounted.current) {
       // First paint already showed the real value via useState(value).
       mounted.current = true;
+      prevTarget.current = value;
       return;
     }
-    if (value === displayedRef.current) return;
+    const from = prevTarget.current;
+    prevTarget.current = value;
+    if (value === from) return;
     if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       setDisplayed(value);
       return;
     }
-    const from = displayedRef.current;
+
+    // Direction cues: phase the number's color and float the signed step.
+    const up = value > from;
+    setFlash(up ? "up" : "down");
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(null), FLASH_MS);
+    crumbSeq.current += 1;
+    setCrumb({ id: crumbSeq.current, text: fmtDiff(kind, value - from), up });
+    clearTimeout(crumbTimer.current);
+    crumbTimer.current = setTimeout(() => setCrumb(null), CRUMB_MS);
+
     const start = performance.now();
+    const tweenFrom = displayedRef.current;
     const step = (now: number) => {
       const t = Math.min(1, (now - start) / DURATION_MS);
       const eased = 1 - (1 - t) ** 3; // easeOutCubic
-      setDisplayed(t < 1 ? from + (value - from) * eased : value);
+      setDisplayed(t < 1 ? tweenFrom + (value - tweenFrom) * eased : value);
       if (t < 1) raf.current = requestAnimationFrame(step);
     };
     cancelAnimationFrame(raf.current);
     raf.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf.current);
-  }, [value]);
+  }, [value, kind]);
 
-  return <span className={className ? `tabular-nums ${className}` : "tabular-nums"}>{FORMATS[kind](displayed)}</span>;
+  // Timers die with the component so a detached crumb can't set state.
+  useEffect(
+    () => () => {
+      clearTimeout(flashTimer.current);
+      clearTimeout(crumbTimer.current);
+      cancelAnimationFrame(raf.current);
+    },
+    [],
+  );
+
+  return (
+    <span className={className ? `relative inline-block tabular-nums ${className}` : "relative inline-block tabular-nums"}>
+      <span
+        style={{
+          color: flash === "up" ? "var(--green)" : flash === "down" ? "var(--red)" : undefined,
+          transition: "color 250ms ease",
+        }}
+      >
+        {FORMATS[kind](displayed)}
+      </span>
+      {crumb && (
+        <span
+          key={crumb.id}
+          aria-hidden
+          className="animate-vt-crumb pointer-events-none absolute -top-3 left-1/2 z-10 -translate-x-1/2 rounded-full px-1.5 font-mono text-[10px] font-bold whitespace-nowrap"
+          style={{
+            color: crumb.up ? "var(--green)" : "var(--red)",
+            background: crumb.up ? "var(--green-bg)" : "var(--red-bg)",
+          }}
+        >
+          {crumb.text}
+        </span>
+      )}
+    </span>
+  );
 }
