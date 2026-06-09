@@ -117,7 +117,7 @@ flowchart LR
 Three crons (`robfig/cron`, America/New_York, skipping weekends and holidays) drive the loop, registered whenever `TRADING_ENABLED=true`. The account trades **live** — there is no paper mode.
 
 - **~09:45 ET — the session.** Claude observes the live book through the reading tools and decides from scratch: buy equity, buy a call or put, add, trim, sell, cancel a stale order, or hold cash. Every action passes the cap sheet (the security boundary enforced in code) before it reaches the broker. The percentage caps are enforced at the tool layer, and the broker entry point adds only a flat absolute fat-finger ceiling on the way out (it does not re-check the percentages, so the tool layer is the sole enforcement point for the percentage policy). It closes the session with `write_summary`; the moves, stance, summary, and the full tool-by-tool transcript are persisted.
-- **Every 15 min, market hours — the risk sweep.** Flags the drawdown breaker and held options near expiry (detect + log).
+- **Every 15 min, market hours — the reconcile sweep.** Syncs the decision log's order statuses (and fill prices) with the broker so the dashboard shows fills within minutes.
 - **16:00 ET — the close.** Records the equity-vs-SPY snapshot and the held book, then sends the **single daily recap email**: the day's summary, every move with its reason, the closing book and headline numbers, and a link to that day's full transcript on the site.
 
 ## Hard caps
@@ -126,15 +126,18 @@ Every cap is a percentage of live account equity read at the start of the sessio
 
 | Cap | Value | Why |
 |---|---|---|
-| Max per underlying | 40% of equity | Allows real conviction, blocks all-in on one name (equity and options on the same name count together) |
-| Options premium sleeve | 50% of equity | Options are the leverage sleeve, capped so a vol crush cannot wipe the account |
-| Per-order notional | 30% of equity | One order cannot deploy the whole book |
-| Daily new deployment | 75% of settled cash per session | Paces buying across days without forcing an all-in morning |
-| Drawdown breaker | new buys halt at -35% from the high-water mark | Stops averaging down into a crater (de-risking stays allowed) |
-| Liquidity floor | stock >= $5, market cap >= $2B, option OI >= 500 and volume >= 100, spread <= ~10% | No penny stocks, no dead chains |
-| Settled-cash rule | new buys spend settled cash only | Avoids good-faith and free-ride violations on T+1 |
+| Options sleeve | option premium <= 50% of equity | Options can expire to zero; half the account is the most that rides the leverage sleeve |
+| Equity sleeve | stock value <= 50% of equity | The other half of the 50/50 split |
+| Settled-cash rule | new buys spend settled cash only | Broker T+1 compliance (good-faith violations), not a risk preference |
 
-Selling and trimming are always allowed, including while the drawdown breaker has paused new buys.
+Those two sleeves are the whole policy: there is no per-name cap, no
+per-order cap, no drawdown breaker, no liquidity floor, and no session
+deployment pacing. The model concentrates, sizes, and picks instruments
+however it judges best, with all settled cash in play every session. A
+flat absolute order ceiling at the broker entry backstops code bugs, not
+trading decisions.
+
+Selling and trimming are always allowed.
 
 ## Local development
 

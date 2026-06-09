@@ -53,7 +53,6 @@ export interface PortfolioResponse {
   unsettled_cash: number;
   high_water_mark: number;
   spy_close: number;
-  drawdown_halted: boolean;
   positions: PortfolioPosition[];
   stance: string;
   summary?: string;
