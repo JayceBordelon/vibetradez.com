@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed portfolio_update.html schwab_reauth.html analysis_window.html
+//go:embed portfolio_update.html schwab_reauth.html analysis_window.html live_trading_update.html
 var templateFS embed.FS
 
 // ── Daily portfolio-update email ──
@@ -98,6 +98,23 @@ type AnalysisWindowData struct {
 
 func RenderAnalysisWindow(d AnalysisWindowData) (string, error) {
 	return renderOne("analysis_window.html", d)
+}
+
+// ── One-time live-trading product update ──
+
+// LiveTradingUpdateData backs the one-time product-update email announcing
+// that trading runs indefinitely and walking through the day's full change
+// list (real-time UI, P&L decomposition, executions ledger, per-trade
+// pages, the two-rule cap sheet, readable transcripts). BaseURL is the
+// public site root (no trailing slash); TranscriptURL points at the day's
+// session.
+type LiveTradingUpdateData struct {
+	BaseURL       string
+	TranscriptURL string
+}
+
+func RenderLiveTradingUpdate(d LiveTradingUpdateData) (string, error) {
+	return renderOne("live_trading_update.html", d)
 }
 
 // emailFuncs gives templates locale-correct currency + percent helpers so

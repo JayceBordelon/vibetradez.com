@@ -138,6 +138,12 @@ func sendDailyRecapEmail(cfg *config.Config, db *store.Store, emailClient *email
 // for a deliberate re-send.
 const analysisWindowKey = "analysis_window_update_v1"
 
+// liveTradingUpdateKey is the sent_emails ledger key for the one-time
+// product update announcing indefinite live trading and the 2026-06-09
+// change set (real-time UI, P&L decomposition, executions ledger,
+// per-trade pages, the two-rule cap sheet).
+const liveTradingUpdateKey = "live_trading_update_2026_06_09"
+
 /*
 sendAnalysisWindowUpdate sends the one-time product-update email announcing
 the longer daily session window (one hour, up from nine minutes), the
@@ -187,6 +193,52 @@ func sendAnalysisWindowUpdate(cfg *config.Config, db *store.Store, emailClient *
 	if res.Succeeded > 0 {
 		if err := db.MarkEmailSent(analysisWindowKey); err != nil {
 			log.Printf("analysis-window update: WARNING sent but failed to record in ledger (could re-send on next boot): %v", err)
+		}
+	}
+}
+
+/*
+sendLiveTradingUpdate sends the one-time product update announcing that
+trading now runs indefinitely, with the full 2026-06-09 change list and
+the honest risk framing for the loosened cap sheet. Same self-gating
+shape as sendAnalysisWindowUpdate: runs on every boot, claims its
+sent_emails key only after at least one recipient received it, and never
+re-blasts. Best-effort: a render or send failure is logged, never fatal.
+*/
+func sendLiveTradingUpdate(cfg *config.Config, db *store.Store, emailClient *email.Client) {
+	if sent, err := db.EmailAlreadySent(liveTradingUpdateKey); err != nil {
+		log.Printf("live-trading update: could not read send ledger, skipping to be safe: %v", err)
+		return
+	} else if sent {
+		log.Printf("live-trading update: already sent (key=%s), nothing to do", liveTradingUpdateKey)
+		return
+	}
+
+	recipients := getRecipients(db)
+	if len(recipients) == 0 {
+		log.Printf("live-trading update: no subscribers, nothing to send")
+		return
+	}
+
+	base := strings.TrimRight(cfg.PublicBaseURL, "/")
+	data := templates.LiveTradingUpdateData{
+		BaseURL:       base,
+		TranscriptURL: base + "/transcripts/" + todayDate(),
+	}
+	html, err := templates.RenderLiveTradingUpdate(data)
+	if err != nil {
+		log.Printf("live-trading update: render email: %v", err)
+		return
+	}
+	subject := "VibeTradez update: live trading, live everything"
+	res := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, html, unsubURLBuilder(cfg))
+	log.Printf("live-trading update: email sent to %d/%d subscribers", res.Succeeded, res.Total)
+	if res.Failed > 0 {
+		log.Printf("live-trading update: email failures: %s", res.FailureDetail())
+	}
+	if res.Succeeded > 0 {
+		if err := db.MarkEmailSent(liveTradingUpdateKey); err != nil {
+			log.Printf("live-trading update: WARNING sent but failed to record in ledger (could re-send on next boot): %v", err)
 		}
 	}
 }
