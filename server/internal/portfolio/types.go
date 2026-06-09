@@ -60,32 +60,16 @@ captured at the start of a session. Equity is the total account value
 (positions mark plus cash). SettledCash is what new buys may spend in a
 cash account (unsettled proceeds cannot be redeployed until T+1).
 HighWaterMark is the peak account equity observed historically, used by
-the drawdown breaker. DeploymentBudget is the dollar amount of NEW buys
-allowed this session (settled cash at session start times the
-daily-deployment cap); DeployedThisSession accrues as the agent buys.
+the drawdown breaker. There is no session deployment budget: the agent may
+deploy all settled cash, gated only by the per-order, concentration,
+sleeve, and liquidity caps.
 */
 type Snapshot struct {
-	Equity              float64
-	SettledCash         float64
-	UnsettledCash       float64
-	HighWaterMark       float64
-	DeploymentBudget    float64
-	DeployedThisSession float64
-	Positions           []Position
-}
-
-/*
-LiquidityCtx carries the tradability facts a buy move must clear against
-the liquidity floor. The dispatcher fills these from the live quote /
-chain before calling the cap check, so the floor is enforced on real
-market data rather than the model's say-so.
-*/
-type LiquidityCtx struct {
-	StockPrice         float64 // underlying last/mark
-	UnderlyingMktCap   float64 // underlying market capitalization, USD
-	OptionOpenInterest int     // option contract open interest (options only)
-	OptionVolume       int     // option contract day volume (options only)
-	SpreadPct          float64 // (ask-bid)/mark on the instrument being bought
+	Equity        float64
+	SettledCash   float64
+	UnsettledCash float64
+	HighWaterMark float64
+	Positions     []Position
 }
 
 /*
@@ -101,7 +85,6 @@ type Move struct {
 	Underlying string // equity ticker the exposure keys against
 	Quantity   float64
 	Notional   float64
-	Liquidity  LiquidityCtx
 }
 
 /*

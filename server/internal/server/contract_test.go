@@ -54,14 +54,14 @@ func f64(v float64) *float64 { return &v }
 func TestContract_PortfolioResponse(t *testing.T) {
 	resp := portfolioResponse{
 		Enabled: true, Mode: "live", Date: "2026-06-04", Equity: 1, SettledCash: 1, UnsettledCash: 1,
-		HighWaterMark: 1, SPYClose: 1, DrawdownHalted: true,
+		HighWaterMark: 1, SPYClose: 1,
 		Positions:       []portfolioPositionView{},
 		PositionsSource: "live", PositionsAsOf: "2026-06-04", Stance: "x", Summary: "y",
 		Decisions: []portfolioDecisionView{},
 	}
 	assertContract(t, "portfolioResponse", resp, []string{
 		"enabled", "mode", "date", "equity", "settled_cash", "unsettled_cash", "high_water_mark",
-		"spy_close", "drawdown_halted", "positions", "positions_source", "positions_as_of",
+		"spy_close", "positions", "positions_source", "positions_as_of",
 		"stance", "summary", "decisions",
 	})
 }

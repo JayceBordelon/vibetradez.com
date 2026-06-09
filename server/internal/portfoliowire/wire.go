@@ -157,9 +157,8 @@ func (r *Reader) RecentStances(limit int) ([]portfolio.StanceEntry, error) {
 Snapshot builds the session-start account state. Equity is the marked
 value of every position plus settled cash. The high-water mark comes from
 the persisted equity curve (falling back to current equity for a fresh
-account so the drawdown breaker never trips on day one). DeploymentBudget
-is the per-session new-buy budget: settled cash times the daily-deployment
-cap.
+account so the drawdown breaker never trips on day one). There is no
+session deployment budget: all settled cash is deployable.
 
 Note: UnsettledCash is reported as 0 here. AvailableFundsAgent returns the
 cash available for a new trade (which already excludes unsettled proceeds
@@ -191,75 +190,12 @@ func (r *Reader) Snapshot(ctx context.Context) (portfolio.Snapshot, error) {
 	}
 
 	return portfolio.Snapshot{
-		Equity:              equity,
-		SettledCash:         settledCash,
-		UnsettledCash:       0,
-		HighWaterMark:       highWater,
-		DeploymentBudget:    settledCash * portfolio.DefaultDailyDeploymentPct,
-		DeployedThisSession: 0,
-		Positions:           positions,
+		Equity:        equity,
+		SettledCash:   settledCash,
+		UnsettledCash: 0,
+		HighWaterMark: highWater,
+		Positions:     positions,
 	}, nil
-}
-
-/*
-Liquidity gathers the tradability facts for a proposed buy. Price and
-spread come from the live equity quote; market cap from the Schwab
-/instruments fundamental projection; for options the open interest, volume,
-and contract spread come from the live chain row. All four floors
-(price, market cap, spread, and option OI/volume) are enforced.
-
-Market cap fails OPEN: if the /instruments call errors or returns no value,
-this passes the market-cap gate (with a logged caveat) rather than blocking
-a buy on a transient data hiccup. The other three floors still bite, and a
-successful fetch enforces the real value.
-*/
-func (r *Reader) Liquidity(ctx context.Context, m portfolio.Move) (portfolio.LiquidityCtx, error) {
-	_ = ctx
-	out := portfolio.LiquidityCtx{}
-	quotes, err := r.md.GetQuotes([]string{m.Underlying})
-	if err != nil {
-		return out, err
-	}
-	q := quotes[m.Underlying]
-	out.StockPrice = q.Mark
-	if out.StockPrice <= 0 {
-		out.StockPrice = q.LastPrice
-	}
-
-	if mc, mcErr := r.md.MarketCap(m.Underlying); mcErr == nil && mc > 0 {
-		out.UnderlyingMktCap = mc
-	} else {
-		// Fail open: don't block a buy because the fundamentals call
-		// hiccuped. The other floors still apply.
-		out.UnderlyingMktCap = marketCapUnavailableSentinel
-		logMarketCapUnavailableOnce()
-	}
-
-	switch m.AssetType {
-	case portfolio.AssetEquity:
-		out.SpreadPct = spreadPct(q.BidPrice, q.AskPrice, out.StockPrice)
-	case portfolio.AssetOption:
-		// Decode the OCC symbol to find the contract on the chain.
-		_, exp, ctype, strike, derr := exec.DecodeOCCSymbol(m.Symbol)
-		if derr != nil {
-			return out, derr
-		}
-		chain, cerr := r.md.GetOptionChain(m.Underlying, ctype, exp, exp, strike)
-		if cerr != nil {
-			return out, cerr
-		}
-		if oc := findContract(chain, ctype, strike); oc != nil {
-			out.OptionOpenInterest = oc.OpenInterest
-			out.OptionVolume = oc.TotalVolume
-			mark := oc.Mark
-			if mark <= 0 {
-				mark = (oc.Bid + oc.Ask) / 2
-			}
-			out.SpreadPct = spreadPct(oc.Bid, oc.Ask, mark)
-		}
-	}
-
-	return out, nil
 }
 
 func toPortfolioPosition(bp exec.BrokerPosition) portfolio.Position {
@@ -296,29 +232,6 @@ func toPortfolioPosition(bp exec.BrokerPosition) portfolio.Position {
 		p.DTE = daysToExpiration(p.Expiration)
 	}
 	return p
-}
-
-func spreadPct(bid, ask, mark float64) float64 {
-	if mark <= 0 || ask <= 0 || bid <= 0 {
-		return 0
-	}
-	return (ask - bid) / mark
-}
-
-func findContract(chain *schwab.OptionChain, contractType string, strike float64) *schwab.OptionContract {
-	if chain == nil {
-		return nil
-	}
-	list := chain.Calls
-	if contractType == "PUT" {
-		list = chain.Puts
-	}
-	for i := range list {
-		if list[i].StrikePrice == strike {
-			return &list[i]
-		}
-	}
-	return nil
 }
 
 /*
@@ -369,8 +282,3 @@ var (
 	_ portfolio.PortfolioReader   = (*Reader)(nil)
 	_ portfolio.PortfolioExecutor = (*Executor)(nil)
 )
-
-// marketCapUnavailableSentinel passes the market-cap floor when the
-// /instruments fundamentals call is unavailable, so a transient data hiccup
-// fails open rather than blocking a buy (see Reader.Liquidity).
-const marketCapUnavailableSentinel = 1e15

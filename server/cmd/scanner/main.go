@@ -271,7 +271,7 @@ func main() {
 			if open, _ := isMarketOpen(); !open {
 				return
 			}
-			runPortfolioRisk(db, executor, portfolioReader, portfolioCaps)
+			runPortfolioRisk(db, executor)
 		}
 		eodSnapshotJob := func() {
 			// Gated on the trading DAY, not the live session: this cron fires
