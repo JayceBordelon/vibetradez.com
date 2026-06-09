@@ -365,10 +365,11 @@ func main() {
 		runPortfolioSession(db, portfolioAgent)
 	}
 
-	// One-time product update: the longer daily analysis window. Self-gating
-	// via the sent_emails ledger, so it fires exactly once (the first boot
-	// with subscribers) and never again, no trigger flag needed.
+	// One-time product updates. Each is self-gating via the sent_emails
+	// ledger, so it fires exactly once (the first boot with subscribers)
+	// and never again, no trigger flag needed.
 	sendAnalysisWindowUpdate(cfg, db, emailClient)
+	sendLiveTradingUpdate(cfg, db, emailClient)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
