@@ -243,6 +243,9 @@ cd ../scripts/ui-audit && npm install && ./run.sh
 | Broker layer (equity + options orders, positions, account, portfolio entry points) | `server/internal/exec/` |
 | Schwab market cap (instruments fundamentals) | `server/internal/schwab/instruments.go` |
 | Portfolio crons (daily session, risk sweep, EOD snapshot) + email send | `server/cmd/scanner/portfolio.go` + `main.go` |
+| Quotes hub (Schwab WS to SSE fan-out, per-watcher lifecycle) | `server/internal/quotes/hub.go` |
+| SSE quote stream endpoint | `server/internal/server/quotes.go` |
+| Live re-pricing overlays + SSE hook | `client/lib/live-pricing.ts` + `client/hooks/use-live-quotes.ts` |
 | Portfolio store tables + methods | `server/internal/store/portfolio.go` |
 | Portfolio API endpoints | `server/internal/server/portfolio.go` |
 | Daily recap email template | `server/internal/templates/portfolio_update.html` |
