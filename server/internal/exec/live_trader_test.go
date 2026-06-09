@@ -92,3 +92,59 @@ func TestVolumeWeightedFillPrice_ZeroQuantitySkipped(t *testing.T) {
 		t.Errorf("expected zero-qty leg ignored, got %.6f", got)
 	}
 }
+
+func TestEnrichOptionContract_FillsSpecFromOCCSymbol(t *testing.T) {
+	bp := BrokerPosition{
+		Symbol:       "NVDA  260918C00215000",
+		AssetType:    "OPTION",
+		Underlying:   "NVDA",
+		ContractType: "CALL",
+	}
+	enrichOptionContract(&bp)
+	if bp.Strike != 215 {
+		t.Errorf("strike: want 215, got %v", bp.Strike)
+	}
+	if bp.Expiration != "2026-09-18" {
+		t.Errorf("expiration: want 2026-09-18, got %q", bp.Expiration)
+	}
+	if bp.ContractType != "CALL" || bp.Underlying != "NVDA" {
+		t.Errorf("passthrough fields changed: contractType=%q underlying=%q", bp.ContractType, bp.Underlying)
+	}
+}
+
+func TestEnrichOptionContract_RecoversMissingPutCallAndUnderlying(t *testing.T) {
+	// Schwab can omit putCall/underlyingSymbol; GetPositions falls back to
+	// underlying = symbol, which for an option is the 21-char OCC string.
+	// The decode must recover both so cap exposure keys against the ticker.
+	bp := BrokerPosition{
+		Symbol:     "AMD   260728P00150500",
+		AssetType:  "OPTION",
+		Underlying: "AMD   260728P00150500",
+	}
+	enrichOptionContract(&bp)
+	if bp.Strike != 150.5 {
+		t.Errorf("strike: want 150.5, got %v", bp.Strike)
+	}
+	if bp.Expiration != "2026-07-28" {
+		t.Errorf("expiration: want 2026-07-28, got %q", bp.Expiration)
+	}
+	if bp.ContractType != "PUT" {
+		t.Errorf("contractType: want PUT, got %q", bp.ContractType)
+	}
+	if bp.Underlying != "AMD" {
+		t.Errorf("underlying: want AMD, got %q", bp.Underlying)
+	}
+}
+
+func TestEnrichOptionContract_LeavesEquityAndMalformedAlone(t *testing.T) {
+	eq := BrokerPosition{Symbol: "GOOGL", AssetType: "EQUITY", Underlying: "GOOGL"}
+	enrichOptionContract(&eq)
+	if eq.Strike != 0 || eq.Expiration != "" {
+		t.Errorf("equity must not be enriched: %+v", eq)
+	}
+	bad := BrokerPosition{Symbol: "NOT-AN-OCC", AssetType: "OPTION", Underlying: "X"}
+	enrichOptionContract(&bad)
+	if bad.Strike != 0 || bad.Expiration != "" || bad.Underlying != "X" {
+		t.Errorf("malformed OCC must degrade to passthrough: %+v", bad)
+	}
+}
