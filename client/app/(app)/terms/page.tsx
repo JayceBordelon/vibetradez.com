@@ -62,7 +62,7 @@ export default function TermsPage() {
         </aside>
 
         {/* Long-form content, authored in content/terms.mdx */}
-        <article className="prose-terms min-w-0">
+        <article className="prose-terms min-w-0 max-w-2xl">
           <TermsContent />
           <div className="mt-12">
             <a href="#top" className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground sm:min-h-0">

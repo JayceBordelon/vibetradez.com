@@ -8,7 +8,9 @@ import { fmtPnlInt } from "@/lib/format";
 import { fetchClosedTrades, findClosedTrade } from "@/lib/portfolio-data";
 
 const OG_IMAGE = "/og/dashboard.png";
-const PAGE_SIZE = 5;
+// 12 rows fills a 900px desktop viewport without the dead band 5 left, and
+// keeps the pager from fragmenting the history into ten pages.
+const PAGE_SIZE = 12;
 
 // Always render per-request: the book + trade log are live, not build-time data.
 export const dynamic = "force-dynamic";
@@ -80,7 +82,12 @@ export default async function ClosedTradesPage({ searchParams }: PageProps) {
             <Stat label="Win rate" value={`${winRate.toFixed(0)}%`} />
             <Stat label="Trades" value={`${trades.length}`} />
           </StatStrip>
-          <div className="mt-6 divide-y divide-border/50 border-t border-border/50">
+          {/* Same letter-spaced caps header the holdings groups use, so the
+              sibling pages read as one family. */}
+          <h2 className="mt-6 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Round trips ({trades.length})
+          </h2>
+          <div className="mt-2 divide-y divide-border/50 border-t border-border/50">
             {pageTrades.map((t) => (
               <ClosedRow key={t.id} t={t} />
             ))}

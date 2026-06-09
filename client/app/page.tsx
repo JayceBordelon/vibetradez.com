@@ -15,6 +15,13 @@ import { Testimonials } from "@/components/landing/testimonials";
 import { TrustedBy } from "@/components/landing/trusted-by";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
+import { fetchAccountEquity } from "@/lib/portfolio-data";
+
+// The setup chapter's headline figure is the LIVE account equity, refreshed
+// at most once a minute (ISR) so the marketing page stays fast while the
+// number stays honest. Falls back to the original $5,000 deposit when the
+// manager is disabled or the API is unreachable (including at build time).
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "VibeTradez | A Model Runs My Real Brokerage Account",
@@ -32,7 +39,8 @@ const CHAPTERS = [
   { id: "receipts", label: "The receipts" },
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const equity = await fetchAccountEquity();
   return (
     <div className="relative min-h-dvh overflow-hidden bg-background text-foreground">
       <AmbientBackground position="absolute" />
@@ -131,7 +139,7 @@ export default function LandingPage() {
             One real account. <span className="text-gradient-brand">No safety net.</span>
           </>
         }
-        aside={<StatBlock value={<CountUp to={5000} prefix="$" durationMs={2600} />} label="of real money, not a simulation" sub="Unfortunately, I am writing this money off as a loss right now." />}
+        aside={<StatBlock value={<CountUp to={Math.round(equity ?? 5000)} prefix="$" durationMs={2600} />} label={equity ? "of real money in the account right now" : "of real money, not a simulation"} sub="Unfortunately, I am writing this money off as a loss right now." />}
       >
         <p>
           It is a real brokerage account with my actual money in it, run by one model. You just watch and judge whether it has any idea what it is doing.

@@ -139,14 +139,32 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
               }
             }
           }
+          // A thin labeled rule at each round boundary gives the multi-
+          // thousand-pixel scroll its landmarks; the header advertises the
+          // round count but the body otherwise never shows where one ends.
+          let lastRound: number | undefined;
           return events
             .map((ev, i) => ({ ev, i }))
             .filter(({ ev }) => ev.type !== "tool_result")
-            .map(({ ev, i }) => (
-              <li key={`${ev.round}-${ev.type}-${ev.tool_use_id ?? i}`}>
-                <EventBlock event={ev} resultPayload={resultFor.get(i)} />
-              </li>
-            ));
+            .map(({ ev, i }) => {
+              const newRound = ev.round !== lastRound && lastRound !== undefined;
+              lastRound = ev.round;
+              return (
+                <li key={`${ev.round}-${ev.type}-${ev.tool_use_id ?? i}`}>
+                  {newRound && (
+                    // Rounds are 0-indexed in the event stream; display
+                    // 1-indexed so the labels agree with the header's
+                    // "N rounds" count (the unlabeled preamble is Round 1).
+                    <div className="mb-6 flex items-center gap-3" aria-hidden>
+                      <span className="h-px flex-1 bg-border" />
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Round {ev.round + 1}</span>
+                      <span className="h-px flex-1 bg-border" />
+                    </div>
+                  )}
+                  <EventBlock event={ev} resultPayload={resultFor.get(i)} />
+                </li>
+              );
+            });
         })()}
       </ol>
       <p className="mt-8 text-[11px] leading-relaxed text-muted-foreground">
@@ -220,9 +238,13 @@ function resultStatus(raw?: string): "success" | "error" | undefined {
   try {
     const o = JSON.parse(trimmed);
     if (o && typeof o === "object" && !Array.isArray(o)) {
-      // Our tools signal failure with {"error": ...}; the server-run web /
-      // code tools use {"error_code": ...} or a nonzero shell return_code.
-      if ("error" in o || "error_code" in o) return "error";
+      // Our tools signal failure with {"error": ...}. The server-run code
+      // tools ALWAYS carry an error_code field, empty string on success, so
+      // only a non-empty error_code (or a nonzero shell return_code) is a
+      // failure; `"error_code" in o` flagged every sandbox result as an error.
+      if ("error" in o) return "error";
+      const ec = (o as { error_code?: unknown }).error_code;
+      if (typeof ec === "string" && ec !== "") return "error";
       if (typeof (o as { return_code?: unknown }).return_code === "number" && (o as { return_code: number }).return_code !== 0) {
         return "error";
       }
@@ -258,11 +280,14 @@ function EventBlock({ event, resultPayload }: { event: TranscriptEvent; resultPa
         </div>
       );
     case "thinking":
+      // Neutral border + muted label, NOT the claude accent: narration and
+      // thinking previously shared the same color treatment and were
+      // indistinguishable at scroll speed.
       return (
-        <div className="border-l-2 border-claude/40 pl-4">
+        <div className="border-l-2 border-muted-foreground/30 pl-4">
           <div className="mb-1.5 flex items-center gap-2">
-            <Brain className="h-3.5 w-3.5 text-claude" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-claude">Extended thinking</span>
+            <Brain className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Extended thinking</span>
           </div>
           <p className="whitespace-pre-wrap text-sm italic leading-relaxed text-foreground/80">{event.text}</p>
         </div>
@@ -275,6 +300,7 @@ function EventBlock({ event, resultPayload }: { event: TranscriptEvent; resultPa
           icon={<ToolIcon className="h-3.5 w-3.5" />}
           eyebrow={toolEyebrow(group)}
           name={event.tool_name ?? "tool"}
+          hint={toolSummary(event.tool_input)}
           accentClass={toolAccentClass(event.tool_name)}
           payload={formatJSON(event.tool_input)}
           status={resultStatus(resultPayload)}
@@ -288,6 +314,30 @@ function EventBlock({ event, resultPayload }: { event: TranscriptEvent; resultPa
 }
 
 /*
+toolSummary flattens a call's input into a compact "k: v · k: v" line so a
+collapsed row still says what the call touched (ticker, qty, price). Ten
+identical collapsed "get_stock_quotes" rows were unattributable without
+expanding each one. Primitive values and short primitive arrays only; nested
+objects stay behind the expander.
+*/
+function toolSummary(input: unknown): string {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return "";
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+    if (parts.length >= 4) break;
+    if (v == null) continue;
+    if (Array.isArray(v)) {
+      const prims = v.filter((x) => typeof x === "string" || typeof x === "number");
+      if (prims.length > 0) parts.push(`${k}: ${prims.slice(0, 6).join(", ")}${prims.length > 6 ? ", …" : ""}`);
+    } else if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+      const s = String(v);
+      parts.push(`${k}: ${s.length > 48 ? `${s.slice(0, 48)}…` : s}`);
+    }
+  }
+  return parts.join(" · ");
+}
+
+/*
 ToolDetails is a collapsible card for a tool call's input + result. Collapsed
 by default (a session can run dozens of calls); the body expands and collapses
 with a smooth height + fade animation via the grid-rows 0fr→1fr trick, so it
@@ -297,6 +347,7 @@ function ToolDetails({
   icon,
   eyebrow,
   name,
+  hint,
   payload,
   accentClass = "text-foreground/90",
   status,
@@ -305,6 +356,7 @@ function ToolDetails({
   icon: React.ReactNode;
   eyebrow: string;
   name: string;
+  hint?: string;
   payload: string;
   accentClass?: string;
   status?: "success" | "error";
@@ -324,10 +376,20 @@ function ToolDetails({
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{eyebrow}</span>
           <span className={cn("mt-0.5 block font-mono text-sm font-medium", accentClass)}>{name}</span>
+          {hint && <span className="mt-0.5 block truncate text-xs text-muted-foreground">{hint}</span>}
         </span>
-        {status && (
-          <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider", status === "success" ? "bg-green-bg text-green" : "bg-red-bg text-red")}>
-            {status === "success" ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+        {/* Success is the overwhelming default, so it gets a quiet check
+            instead of a repeated green pill; only failures get the loud
+            badge treatment. */}
+        {status === "success" && (
+          <span className="inline-flex shrink-0 items-center" title="success">
+            <CheckCircle2 className="h-3.5 w-3.5 text-green/70" />
+            <span className="sr-only">success</span>
+          </span>
+        )}
+        {status === "error" && (
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-red-border bg-red-bg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red">
+            <XCircle className="h-3 w-3" />
             {status}
           </span>
         )}
@@ -380,6 +442,7 @@ Keep in sync with https://platform.claude.com/docs/en/about-claude/pricing.
 The agent caches with the 5-minute TTL, so cacheWrite uses the 5m rate.
 */
 const MODEL_RATES: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
+  "claude-fable-5": { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
   "claude-opus-4-8": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   "claude-opus-4-7": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   "claude-opus-4-6": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },

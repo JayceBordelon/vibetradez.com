@@ -26,7 +26,11 @@ export function FaqList({ children }: { children: React.ReactNode }) {
   // match on the `q` prop rather than `c.type === QA`: across the MDX/RSC
   // client boundary the element type is a client reference, not the QA
   // function identity, so a type check reads as zero.
-  const count = Children.toArray(children).filter((c) => isValidElement(c) && typeof (c.props as { q?: unknown })?.q === "string").length;
+  const qas = Children.toArray(children).filter((c) => isValidElement(c) && typeof (c.props as { q?: unknown })?.q === "string");
+  const count = qas.length;
+  // First question starts expanded so the page shows what an answer looks
+  // like instead of twelve identical collapsed rows.
+  const firstSlug = count > 0 ? slug((qas[0] as React.ReactElement<{ q: string }>).props.q) : undefined;
 
   return (
     <>
@@ -45,7 +49,7 @@ export function FaqList({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      <Accordion type="single" collapsible className="border-t border-border/60">
+      <Accordion type="single" collapsible defaultValue={firstSlug} className="border-t border-border/60">
         {children}
       </Accordion>
     </>

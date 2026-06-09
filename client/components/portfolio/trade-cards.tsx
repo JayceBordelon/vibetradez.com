@@ -1,7 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 
-import { fmtMoney, fmtPnlInt, fmtPrice, pnlColor } from "@/lib/format";
+import { fmtMoney, fmtPnlInt, fmtPrice, plural, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ClosedTrade, Holding, TradeKind } from "@/types/portfolio";
 
@@ -44,13 +44,30 @@ function Row({ href, children }: { href: string; children: React.ReactNode }) {
   );
 }
 
+// SubLine renders the metadata segments with each segment non-breaking, so a
+// mobile wrap lands between fields ("exp 2026-07-28 · 49d left") instead of
+// splitting a date mid-token ("exp 2026-07- / 28").
+function SubLine({ parts }: { parts: (string | null)[] }) {
+  const present = parts.filter((p): p is string => Boolean(p));
+  return (
+    <div className="mt-1 text-xs text-muted-foreground sm:truncate">
+      {present.map((p, i) => (
+        <span key={p} className="whitespace-nowrap">
+          {p}
+          {i < present.length - 1 ? " · " : ""}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function HoldingRow({ h }: { h: Holding }) {
   const pct = h.cost_basis > 0 ? (h.unrealized_pnl / h.cost_basis) * 100 : 0;
   const up = h.unrealized_pnl >= 0;
-  const sub =
+  const sub: (string | null)[] =
     h.kind === "option"
-      ? [`${h.quantity} contracts`, h.strike ? `${fmtPrice(h.strike)} strike` : null, h.expiration ? `exp ${h.expiration}` : null, h.dte != null ? `${h.dte}d left` : null].filter(Boolean).join(" · ")
-      : [`${h.quantity} shares`, h.quantity > 0 ? `avg ${fmtMoney(h.cost_basis / h.quantity)}` : null, h.opened_date ? `opened ${h.opened_date}` : null].filter(Boolean).join(" · ");
+      ? [`${h.quantity} ${plural(h.quantity, "contract")}`, h.strike ? `${fmtPrice(h.strike)} strike` : null, h.expiration ? `exp ${h.expiration}` : null, h.dte != null ? `${h.dte}d left` : null]
+      : [`${h.quantity} ${plural(h.quantity, "share")}`, h.quantity > 0 ? `avg ${fmtMoney(h.cost_basis / h.quantity)}` : null, h.opened_date ? `opened ${h.opened_date}` : null];
   return (
     <Row href={tradeHref("holdings", h.id)}>
       <div className="min-w-0">
@@ -58,7 +75,7 @@ export function HoldingRow({ h }: { h: Holding }) {
           <span className="truncate text-base font-semibold">{h.label}</span>
           <KindChip kind={h.kind} contractType={h.contract_type} />
         </div>
-        <div className="mt-1 truncate text-xs text-muted-foreground">{sub}</div>
+        <SubLine parts={sub} />
       </div>
       <div className="flex shrink-0 items-center gap-3">
         <div className="text-right">
@@ -76,16 +93,16 @@ export function HoldingRow({ h }: { h: Holding }) {
 
 export function ClosedRow({ t }: { t: ClosedTrade }) {
   const win = t.realized_pnl >= 0;
-  const sub = [`${t.opened_date} to ${t.closed_date}`, `${t.hold_days}d held`, `entry ${fmtMoney(t.entry_price)}`, `exit ${fmtMoney(t.exit_price)}`].join(" · ");
+  const sub: (string | null)[] = [`${t.opened_date} to ${t.closed_date}`, `${t.hold_days}d held`, `entry ${fmtMoney(t.entry_price)}`, `exit ${fmtMoney(t.exit_price)}`];
   return (
     <Row href={tradeHref("closed", t.id)}>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="truncate text-base font-semibold">{t.label}</span>
           <KindChip kind={t.kind} contractType={t.contract_type} />
-          <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider", win ? "bg-green-bg text-green" : "bg-red-bg text-red")}>{win ? "Win" : "Loss"}</span>
+          <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider", win ? "border-green-border bg-green-bg text-green" : "border-red-border bg-red-bg text-red")}>{win ? "Win" : "Loss"}</span>
         </div>
-        <div className="mt-1 truncate text-xs text-muted-foreground">{sub}</div>
+        <SubLine parts={sub} />
       </div>
       <div className="flex shrink-0 items-center gap-3">
         <div className="text-right">

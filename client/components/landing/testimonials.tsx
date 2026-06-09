@@ -209,7 +209,9 @@ export function Testimonials() {
         </div>
 
         <Reveal effect="fade" duration={800} delay={300} className="mt-8 text-center">
-          <p className="text-[11px] italic text-muted-foreground/70">
+          {/* Full muted-foreground (not /70): the dimmed variant fell below
+              the readability floor on the near-black dark background. */}
+          <p className="text-[11px] italic text-muted-foreground">
             All names, likenesses, and quotes are used in a parody / satire context. No endorsement implied. No billionaires were harmed in the making of this section.
           </p>
         </Reveal>

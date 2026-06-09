@@ -10,7 +10,7 @@ import { Stat, StatStrip } from "@/components/layout/stat-strip";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { useVisiblePoll } from "@/hooks/use-visible-poll";
 import { api } from "@/lib/api";
-import { fmtMoney, fmtPnlInt } from "@/lib/format";
+import { fmtMoney, fmtPnl } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { EquityCurvePoint, PortfolioResponse } from "@/types/portfolio";
 
@@ -69,6 +69,11 @@ export function PortfolioShell() {
   // account, so default it before any reduce/length access.
   const positions = data.positions ?? [];
   const totalUnrealized = positions.reduce((s, p) => s + p.unrealized_pnl, 0);
+  // Open-book unrealized return: total unrealized P&L over the open
+  // positions' cost basis. The equity curve only advances at the EOD
+  // snapshot, so this is the live number the curve hasn't booked yet.
+  const totalCostBasis = positions.reduce((s, p) => s + p.cost_basis, 0);
+  const unrealizedPct = totalCostBasis > 0 ? (totalUnrealized / totalCostBasis) * 100 : null;
   const dayChangePct = (() => {
     if (curve.length < 2) return null;
     const prev = curve[curve.length - 2].account_equity;
@@ -86,33 +91,14 @@ export function PortfolioShell() {
 
       <SummaryStrip equity={data.equity} settledCash={data.settled_cash} investedPct={investedPct} unrealized={totalUnrealized} dayChangePct={dayChangePct} />
 
-      <Section title="Account vs SPY" subtitle="Return indexed to 100 at the start of the window. The dashed line is buy-and-hold SPY." className="mt-8 border-t border-border/40 pt-8">
-        <EquityCurveChart points={curve} />
+      {/* No border-t here: the summary strip above already draws its own
+          bottom rule, and the doubled hairline read as a ghost band in dark. */}
+      <Section title="Account vs SPY" subtitle="Return indexed to 100 at the start of the window. The dashed line is buy-and-hold SPY." className="mt-8">
+        <EquityCurveChart points={curve} unrealizedPct={unrealizedPct} />
       </Section>
 
-      {(data.summary?.trim() || data.stance.trim() || data.action_items?.trim()) && (
-        <div className="mt-10 grid items-start gap-x-10 gap-y-6 border-t border-border/40 pt-8 sm:grid-cols-2">
-          {(data.summary?.trim() || data.stance.trim()) && (
-            <section className="border-l-2 border-claude/50 pl-4">
-              <div className="flex items-center gap-2">
-                <ClaudeLogo className="h-4 w-4" />
-                <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-claude">Today&apos;s synopsis</h2>
-              </div>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground/85">{data.summary?.trim() ? data.summary : data.stance}</p>
-            </section>
-          )}
-          {data.action_items?.trim() && (
-            <section className="border-l-2 border-claude/50 pl-4">
-              <div className="flex items-center gap-2">
-                <ClaudeLogo className="h-4 w-4" />
-                <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-claude">{actionItemsLabel(data.date)}</h2>
-              </div>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground/85">{data.action_items}</p>
-            </section>
-          )}
-        </div>
-      )}
-
+      {/* The session's own synopsis and action items live on the transcript
+          page; the dashboard links there rather than duplicating them. */}
       <a href={`/transcripts/${data.date}`} className="group mt-6 flex items-center gap-3 border-t border-border/50 pt-5">
         <ClaudeLogo className="h-5 w-5 shrink-0" />
         <span className="min-w-0 flex-1">
@@ -122,7 +108,7 @@ export function PortfolioShell() {
         <ArrowRight className="h-4 w-4 shrink-0 text-claude transition-transform group-hover:translate-x-0.5" />
       </a>
 
-      <Section title="Explore" subtitle="The full book, the trade history, and today's moves live on their own pages." className="mt-10 border-t border-border/40 pt-8">
+      <Section title="Explore" subtitle="The full book, the trade history, and today's moves live on their own pages." className="mt-8 border-t border-border/40 pt-6">
         <div className="divide-y divide-border/50 border-t border-border/50">
           <ExploreLink
             href="/holdings"
@@ -134,16 +120,6 @@ export function PortfolioShell() {
       </Section>
     </div>
   );
-}
-
-// actionItemsLabel frames the plan: after a Friday (or weekend) the next
-// session is next week, otherwise tomorrow. Parsed from the date parts so it
-// never shifts a day across timezones.
-function actionItemsLabel(date: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date.trim());
-  if (!m) return "Action items for next session";
-  const day = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getDay();
-  return day === 5 || day === 6 || day === 0 ? "Next week's action items" : "Tomorrow's action items";
 }
 
 function ExploreLink({ href, title, blurb }: { href: string; title: string; blurb: string }) {
@@ -182,7 +158,7 @@ function SummaryStrip({ equity, settledCash, investedPct, unrealized, dayChangeP
         <Stat label="Settled cash" value={fmtMoney(settledCash)} icon={Coins} sub={equity > 0 ? `${((settledCash / equity) * 100).toFixed(0)}% of the book` : "dry powder"} />
         <Stat
           label="Unrealized P&L"
-          value={fmtPnlInt(unrealized)}
+          value={fmtPnl(unrealized)}
           tone={unrealized > 0 ? "positive" : unrealized < 0 ? "negative" : "neutral"}
           icon={unrealized >= 0 ? ArrowUpRight : ArrowDownRight}
           sub="open positions"
