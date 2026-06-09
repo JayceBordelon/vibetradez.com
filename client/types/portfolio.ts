@@ -65,10 +65,38 @@ export interface EquityCurvePoint {
   unsettled_cash: number;
   high_water_mark: number;
   spy_close: number;
+  /** Cumulative realized P&L of round trips closed inside the window, USD. */
+  realized_cum: number;
+  /** That day's EOD open-book unrealized P&L, USD (0 on flat days). */
+  unrealized: number;
 }
 
 export interface EquityCurveResponse {
   points: EquityCurvePoint[];
+}
+
+/* Trade-detail chart series. */
+
+export interface PositionValuePoint {
+  date: string;
+  market_value: number;
+  quantity: number;
+  cost_basis: number;
+}
+
+export interface PositionHistoryResponse {
+  symbol: string;
+  points: PositionValuePoint[];
+}
+
+export interface PricePoint {
+  date: string;
+  close: number;
+}
+
+export interface PriceHistoryResponse {
+  symbol: string;
+  points: PricePoint[];
 }
 
 /*

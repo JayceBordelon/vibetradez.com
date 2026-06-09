@@ -85,13 +85,6 @@
   --chart-grid: #e4e4e7;
   --chart-text: #52525b;
 
-  /* Rank pill background for the Top 10 tier on the history page row.
-     The chart series uses --chart-3 (zinc-400) with opacity tweaks for
-     bar fills, but white text on zinc-400 is ~2.4:1 and fails WCAG AA.
-     This token is reserved for the rank pill so the chart palette
-     stays untouched. Zinc-700 → ~10:1 on white text. */
-  --tier-pill-top10: #3f3f46;
-
   /* Brand accents. --brand-green is VibeTradez' primary green (was
      historically named --gpt back when the picker ran a parallel
      OpenAI tier; the brand and the green stayed even though GPT did
@@ -185,11 +178,6 @@
   --surface: #18181b;
   --chart-grid: #27272a;
   --chart-text: #a1a1aa;
-
-  /* See light-mode comment. Dark mode needs the pill bg LIGHTER than the
-     near-black page bg so the shape reads; zinc-600 is the lightest
-     value that still keeps ≥4.5:1 against white text. */
-  --tier-pill-top10: #52525b;
 
   /* Brand accents (dark mode) — green, see light-mode comment. */
   --brand-green: oklch(0.8545 0.1675 159.6564);

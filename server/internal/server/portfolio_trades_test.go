@@ -100,3 +100,45 @@ func TestDeriveClosedTrades_SellWithoutOpenIgnored(t *testing.T) {
 }
 
 func approx(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
+
+func TestDecoratePnlSeries_CumulativeRealizedAndDailyUnrealized(t *testing.T) {
+	points := []equityCurvePointView{
+		{Date: "2026-06-01"},
+		{Date: "2026-06-02"},
+		{Date: "2026-06-04"}, // gap: 06-03 has no curve row
+		{Date: "2026-06-05"},
+	}
+	unreal := map[string]float64{
+		"2026-06-01": 12.5,
+		"2026-06-04": -40,
+		// 06-02 and 06-05 absent: flat book days stay zero
+	}
+	closed := []closedTradeView{
+		{ClosedDate: "2026-05-20", RealizedPnl: 999}, // before window: excluded
+		{ClosedDate: "2026-06-02", RealizedPnl: 100},
+		{ClosedDate: "2026-06-03", RealizedPnl: -30}, // closed on a non-curve day: lands on 06-04
+		{ClosedDate: "2026-06-04", RealizedPnl: 10},
+	}
+	got := decoratePnlSeries(points, unreal, closed)
+	wantRealized := []float64{0, 100, 80, 80}
+	wantUnreal := []float64{12.5, 0, -40, 0}
+	for i := range got {
+		if got[i].RealizedCum != wantRealized[i] {
+			t.Errorf("point %d (%s) realized_cum: want %v, got %v", i, got[i].Date, wantRealized[i], got[i].RealizedCum)
+		}
+		if got[i].Unrealized != wantUnreal[i] {
+			t.Errorf("point %d (%s) unrealized: want %v, got %v", i, got[i].Date, wantUnreal[i], got[i].Unrealized)
+		}
+	}
+}
+
+func TestDecoratePnlSeries_EmptyInputs(t *testing.T) {
+	if got := decoratePnlSeries(nil, nil, nil); len(got) != 0 {
+		t.Errorf("nil points must stay empty, got %d", len(got))
+	}
+	points := []equityCurvePointView{{Date: "2026-06-01"}}
+	got := decoratePnlSeries(points, nil, nil)
+	if got[0].RealizedCum != 0 || got[0].Unrealized != 0 {
+		t.Errorf("no trades / no snapshots must decorate zeros: %+v", got[0])
+	}
+}

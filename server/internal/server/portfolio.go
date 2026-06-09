@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"net/http"
+	"sort"
+	"strings"
 	"time"
 
 	"vibetradez.com/internal/exec"
@@ -82,10 +84,41 @@ type equityCurvePointView struct {
 	UnsettledCash float64 `json:"unsettled_cash"`
 	HighWaterMark float64 `json:"high_water_mark"`
 	SPYClose      float64 `json:"spy_close"`
+	// P&L decomposition for the dashboard chart: cumulative realized P&L of
+	// round trips closed inside the requested window, and the open book's
+	// unrealized P&L from that day's EOD snapshot (zero on flat days).
+	RealizedCum float64 `json:"realized_cum"`
+	Unrealized  float64 `json:"unrealized"`
 }
 
 type equityCurveResponse struct {
 	Points []equityCurvePointView `json:"points"`
+}
+
+// positionValuePointView is one day of a single position's snapshot value,
+// for the trade-detail chart.
+type positionValuePointView struct {
+	Date        string  `json:"date"`
+	MarketValue float64 `json:"market_value"`
+	Quantity    float64 `json:"quantity"`
+	CostBasis   float64 `json:"cost_basis"`
+}
+
+type positionHistoryResponse struct {
+	Symbol string                   `json:"symbol"`
+	Points []positionValuePointView `json:"points"`
+}
+
+// pricePointView is one daily close from the market-data price history,
+// for the trade-detail chart's underlying line.
+type pricePointView struct {
+	Date  string  `json:"date"`
+	Close float64 `json:"close"`
+}
+
+type priceHistoryResponse struct {
+	Symbol string           `json:"symbol"`
+	Points []pricePointView `json:"points"`
 }
 
 /*
@@ -227,10 +260,55 @@ func (s *Server) handlePortfolioEquityCurve(w http.ResponseWriter, r *http.Reque
 	resp := equityCurveResponse{Points: []equityCurvePointView{}}
 	if pts, err := s.db.GetEquityCurve(start, end); err == nil {
 		for _, p := range pts {
-			resp.Points = append(resp.Points, equityCurvePointView(p))
+			resp.Points = append(resp.Points, equityCurvePointView{
+				Date:          p.Date,
+				AccountEquity: p.AccountEquity,
+				SettledCash:   p.SettledCash,
+				UnsettledCash: p.UnsettledCash,
+				HighWaterMark: p.HighWaterMark,
+				SPYClose:      p.SPYClose,
+			})
 		}
 	}
+	// Decorate the curve with the P&L decomposition: daily unrealized from
+	// the EOD book snapshots and cumulative realized from the decision log.
+	// Both degrade to zeros so a store hiccup never blanks the chart.
+	unreal, _ := s.db.GetDailyUnrealized(start, end)
+	var closed []closedTradeView
+	if decisions, err := s.db.AllPortfolioDecisions(); err == nil {
+		closed = deriveClosedTrades(decisions)
+	}
+	resp.Points = decoratePnlSeries(resp.Points, unreal, closed)
 	writeJSON(w, http.StatusOK, resp)
+}
+
+/*
+decoratePnlSeries fills each curve point's RealizedCum and Unrealized.
+RealizedCum accumulates round trips closed inside the window (a trade
+closed on a non-curve day, e.g. a half-session, lands on the next curve
+point), starting from zero at the window's first point so the series
+decomposes the window's P&L the same way the SPY comparison does.
+*/
+func decoratePnlSeries(points []equityCurvePointView, unrealizedByDate map[string]float64, closed []closedTradeView) []equityCurvePointView {
+	if len(points) == 0 {
+		return points
+	}
+	// Oldest-first realized events, then a two-pointer walk over the curve.
+	sort.SliceStable(closed, func(i, j int) bool { return closed[i].ClosedDate < closed[j].ClosedDate })
+	realized := 0.0
+	ci := 0
+	for ; ci < len(closed) && closed[ci].ClosedDate < points[0].Date; ci++ {
+		// Trades closed before the window start are not part of this
+		// window's decomposition.
+	}
+	for i := range points {
+		for ; ci < len(closed) && closed[ci].ClosedDate <= points[i].Date; ci++ {
+			realized += closed[ci].RealizedPnl
+		}
+		points[i].RealizedCum = realized
+		points[i].Unrealized = unrealizedByDate[points[i].Date]
+	}
+	return points
 }
 
 func positionView(bp exec.BrokerPosition) portfolioPositionView {
@@ -251,6 +329,58 @@ func positionView(bp exec.BrokerPosition) portfolioPositionView {
 		CostBasis:     cost,
 		UnrealizedPnl: bp.MarketValue - cost,
 	}
+}
+
+/*
+handlePortfolioPositionHistory serves a single position's per-day snapshot
+values (?symbol=, the broker symbol: ticker or OCC option symbol) for the
+trade-detail value-over-time chart. Always 200 with whatever exists, so a
+just-opened position simply charts from its first snapshot.
+*/
+func (s *Server) handlePortfolioPositionHistory(w http.ResponseWriter, r *http.Request) {
+	symbol := strings.TrimSpace(r.URL.Query().Get("symbol"))
+	resp := positionHistoryResponse{Symbol: symbol, Points: []positionValuePointView{}}
+	if symbol == "" {
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+	if pts, err := s.db.GetPositionHistory(symbol); err == nil {
+		for _, p := range pts {
+			resp.Points = append(resp.Points, positionValuePointView(p))
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+/*
+handlePriceHistory serves daily closes for an equity symbol (?symbol=,
+optional ?start= / ?end= YYYY-MM-DD bounds), for the trade-detail chart's
+underlying line. Degrades to an empty series when Schwab is unreachable or
+the symbol has no history, so the chart's other series still render.
+*/
+func (s *Server) handlePriceHistory(w http.ResponseWriter, r *http.Request) {
+	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	start := r.URL.Query().Get("start")
+	end := r.URL.Query().Get("end")
+	resp := priceHistoryResponse{Symbol: symbol, Points: []pricePointView{}}
+	if symbol == "" || s.schwab == nil {
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+	ph, err := s.schwab.GetDailyPriceHistory(symbol)
+	if err != nil {
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+	loc := easternLoc()
+	for _, c := range ph.Candles {
+		date := time.UnixMilli(c.Datetime).In(loc).Format("2006-01-02")
+		if (start != "" && date < start) || (end != "" && date > end) {
+			continue
+		}
+		resp.Points = append(resp.Points, pricePointView{Date: date, Close: c.Close})
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func decisionView(d store.PortfolioDecisionRow) portfolioDecisionView {

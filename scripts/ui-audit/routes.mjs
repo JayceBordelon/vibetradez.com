@@ -14,9 +14,11 @@
 
 export const ROUTES = [
   { slug: "landing", label: "Landing", path: "/", note: "Marketing home / hero." },
-  { slug: "dashboard", label: "Dashboard", path: "/dashboard", note: "Portfolio view: equity summary, equity-vs-SPY curve, holdings, today's moves, stance." },
+  { slug: "dashboard", label: "Dashboard", path: "/dashboard", note: "Portfolio view: stat strip, P&L-vs-SPY decomposition chart, today's executions." },
   { slug: "holdings", label: "Holdings", path: "/holdings", note: "Current held book." },
+  { slug: "holding-detail", label: "Holding detail", path: "/holdings?trade=:id", note: "One open position: stats, price/value chart, rationale." },
   { slug: "closed", label: "Closed", path: "/closed", note: "Completed round trips (paginated)." },
+  { slug: "closed-detail", label: "Closed trade detail", path: "/closed?trade=:id", note: "One round trip: stats, price/value chart over the hold, rationale." },
   { slug: "transcripts", label: "Transcripts index", path: "/transcripts/:date", note: "A day's session transcript list." },
   { slug: "transcript", label: "Session transcript", path: "/transcript/:date/:kind", note: "Full tool-by-tool session reasoning for one day." },
   { slug: "faq", label: "FAQ", path: "/faq", note: "Frequently asked questions." },

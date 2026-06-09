@@ -15,14 +15,33 @@ import { cn } from "@/lib/utils";
 import type { EquityCurvePoint, PortfolioResponse } from "@/types/portfolio";
 
 import { EquityCurveChart } from "./equity-curve-chart";
+import { TodaysExecutions } from "./todays-executions";
+
+// todaysExecutionsSubtitle counts the day's money moves ("3 moves · $4,680
+// deployed") so the section header carries the headline before a single row
+// is read. Hold-only days read as the quiet coda they are.
+function todaysExecutionsSubtitle(decisions: { action: string; notional?: number }[]): string {
+  const moves = decisions.filter((d) => d.action !== "hold");
+  const holds = decisions.length - moves.length;
+  if (moves.length === 0) {
+    return holds > 0 ? `No money moved. ${holds} position${holds === 1 ? "" : "s"} held as-is.` : "Every move the model commits today lands here as it happens.";
+  }
+  const deployed = moves.filter((d) => d.action.startsWith("buy")).reduce((s, d) => s + (d.notional ?? 0), 0);
+  const parts = [`${moves.length} move${moves.length === 1 ? "" : "s"}`];
+  if (deployed > 0) parts.push(`$${Math.round(deployed).toLocaleString("en-US")} deployed`);
+  if (holds > 0) parts.push(`${holds} held`);
+  return parts.join(" · ");
+}
 
 const REFRESH_SECONDS = 60;
 
 /*
 PortfolioShell is the v2 dashboard: one personal brokerage account managed
-by the agent. It shows the live book (equity, cash, holdings), the equity
-curve vs buy-and-hold SPY, and today's moves with the agent's rationale +
-overall stance. This is a single-account view, not a multi-user product.
+by the agent. It shows the live stat strip (equity, invested, cash,
+unrealized), the dollar P&L decomposition vs buy-and-hold SPY (realized +
+unrealized + the SPY ghost), today's executions tape, and the link into
+the day's full session transcript. Single-account view, not a multi-user
+product.
 */
 export function PortfolioShell() {
   const [data, setData] = useState<PortfolioResponse | null>(null);
@@ -69,11 +88,6 @@ export function PortfolioShell() {
   // account, so default it before any reduce/length access.
   const positions = data.positions ?? [];
   const totalUnrealized = positions.reduce((s, p) => s + p.unrealized_pnl, 0);
-  // Open-book unrealized return: total unrealized P&L over the open
-  // positions' cost basis. The equity curve only advances at the EOD
-  // snapshot, so this is the live number the curve hasn't booked yet.
-  const totalCostBasis = positions.reduce((s, p) => s + p.cost_basis, 0);
-  const unrealizedPct = totalCostBasis > 0 ? (totalUnrealized / totalCostBasis) * 100 : null;
   const dayChangePct = (() => {
     if (curve.length < 2) return null;
     const prev = curve[curve.length - 2].account_equity;
@@ -93,8 +107,16 @@ export function PortfolioShell() {
 
       {/* No border-t here: the summary strip above already draws its own
           bottom rule, and the doubled hairline read as a ghost band in dark. */}
-      <Section title="Account vs SPY" subtitle="Return indexed to 100 at the start of the window. The dashed line is buy-and-hold SPY." className="mt-8">
-        <EquityCurveChart points={curve} unrealizedPct={unrealizedPct} />
+      <Section title="P&L vs SPY" subtitle="Realized is booked round trips, unrealized is the open book's mark, and the dashed line is what buy-and-hold SPY would have earned on the same starting equity." className="mt-8">
+        <EquityCurveChart points={curve} />
+      </Section>
+
+      <Section
+        title="Today's executions"
+        subtitle={todaysExecutionsSubtitle(data.decisions ?? [])}
+        className="mt-8 border-t border-border/40 pt-6"
+      >
+        <TodaysExecutions decisions={data.decisions ?? []} />
       </Section>
 
       {/* The session's own synopsis and action items live on the transcript
@@ -108,7 +130,7 @@ export function PortfolioShell() {
         <ArrowRight className="h-4 w-4 shrink-0 text-claude transition-transform group-hover:translate-x-0.5" />
       </a>
 
-      <Section title="Explore" subtitle="The full book, the trade history, and today's moves live on their own pages." className="mt-8 border-t border-border/40 pt-6">
+      <Section title="Explore" subtitle="The full book and the complete trade history live on their own pages." className="mt-8 border-t border-border/40 pt-6">
         <div className="divide-y divide-border/50 border-t border-border/50">
           <ExploreLink
             href="/holdings"

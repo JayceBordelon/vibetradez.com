@@ -132,6 +132,69 @@ func (s *Store) GetLatestPositions() ([]PortfolioPositionRow, error) {
 }
 
 /*
+GetDailyUnrealized returns each snapshot day's total unrealized P&L
+(market value minus cost basis summed over the book) keyed by date, for
+the dashboard's P&L decomposition chart. Days without a snapshot (flat
+book, or before the cron existed) are simply absent.
+*/
+func (s *Store) GetDailyUnrealized(startDate, endDate string) (map[string]float64, error) {
+	rows, err := s.db.Query(`
+		SELECT date, SUM(market_value - cost_basis)
+		FROM portfolio_positions
+		WHERE date >= $1 AND date <= $2
+		GROUP BY date`, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("query daily unrealized: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := make(map[string]float64)
+	for rows.Next() {
+		var date string
+		var unrealized float64
+		if err := rows.Scan(&date, &unrealized); err != nil {
+			return nil, fmt.Errorf("scan daily unrealized: %w", err)
+		}
+		out[date] = unrealized
+	}
+	return out, rows.Err()
+}
+
+// PositionValuePoint is one day's snapshot of a single position's value,
+// for the trade-detail value-over-time chart.
+type PositionValuePoint struct {
+	Date        string
+	MarketValue float64
+	Quantity    float64
+	CostBasis   float64
+}
+
+/*
+GetPositionHistory returns a position's per-day snapshot values, oldest
+first: the held period exactly, since the EOD cron only snapshots days the
+book held the symbol.
+*/
+func (s *Store) GetPositionHistory(symbol string) ([]PositionValuePoint, error) {
+	rows, err := s.db.Query(`
+		SELECT date, market_value, quantity, cost_basis
+		FROM portfolio_positions
+		WHERE symbol = $1
+		ORDER BY date ASC`, symbol)
+	if err != nil {
+		return nil, fmt.Errorf("query position history: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []PositionValuePoint
+	for rows.Next() {
+		var p PositionValuePoint
+		if err := rows.Scan(&p.Date, &p.MarketValue, &p.Quantity, &p.CostBasis); err != nil {
+			return nil, fmt.Errorf("scan position history point: %w", err)
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+/*
 SavePortfolioDecision inserts one committed move/hold and returns its row
 id. Source defaults to "agent" and Mode to "live" when blank so callers
 can omit them in the common case.

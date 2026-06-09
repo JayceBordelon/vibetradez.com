@@ -347,6 +347,10 @@ def build_decisions(decision_days, session_days, positions):
     recent_start = max(0, len(decision_days) - 18)
     for pos in positions:
         od = decision_days[random.randint(recent_start, len(decision_days) - 2)]
+        # Remember the open on the position itself: the snapshot emitter
+        # backfills a per-day value row for every curve day since the open,
+        # so the trade-detail value chart has a real series to draw.
+        pos["opened"] = od.isoformat()
         by_date[od.isoformat()].append(opening_buy_for_position(pos, od))
 
     # A deep set of completed round trips, on names not currently held (so each
@@ -354,7 +358,8 @@ def build_decisions(decision_days, session_days, positions):
     # non-overlapping cycles. This is what fills the paginated /closed page.
     avail = [s for s in SYMBOLS if s not in held_names]
     closed_names = set()
-    for buy, sell in gen_closed_round_trips(decision_days, avail, NUM_CLOSED):
+    trips = list(gen_closed_round_trips(decision_days, avail, NUM_CLOSED))
+    for buy, sell in trips:
         by_date[buy["date"]].append(buy)
         by_date[sell["date"]].append(sell)
         closed_names.add(buy["underlying"])
@@ -400,7 +405,10 @@ def build_decisions(decision_days, session_days, positions):
         if not by_date[d.isoformat()]:
             by_date[d.isoformat()].append(make_decision(d, "hold"))
 
-    return by_date
+    # The round-trip pairs ride along so the snapshot emitter can backfill
+    # per-day book rows for the holding period of every closed trade (the
+    # closed-trade detail chart reads those snapshots).
+    return by_date, trips
 
 
 def fmt_money(x):
@@ -678,7 +686,7 @@ def main():
     last = curve[-1]
     positions = gen_positions(session_days[-1], last[1], last[2])
 
-    by_date = build_decisions(decision_days, session_days, positions)
+    by_date, round_trips = build_decisions(decision_days, session_days, positions)
     plans = {d.isoformat(): by_date.get(d.isoformat(), []) for d in session_days}
     stances = {d.isoformat(): random.choice(STANCES) for d in session_days}
     summaries = {d.isoformat(): random.choice(SUMMARIES) for d in session_days}
@@ -724,19 +732,60 @@ def main():
     p(",\n".join(f"  ({sql_str(d)}, {ae}, {sc}, {uc}, {hwm}, {spy})" for (d, ae, sc, uc, hwm, spy) in curve) + ";")
     p("")
 
-    # Held book, sized to the latest curve point's invested portion.
+    # Held book, sized to the latest curve point's invested portion. One
+    # snapshot row per curve day from each position's open through the
+    # latest date (the EOD cron's real behavior), walking the mark from
+    # cost basis to the current value so the trade-detail value chart and
+    # the dashboard's unrealized line both have believable history.
     if positions:
-        p("-- ── Held book (positions snapshot for the latest date) ──")
+        p("-- ── Held book (per-day snapshots from each open to the latest date) ──")
         p("INSERT INTO portfolio_positions (date, symbol, underlying, asset_type, contract_type, strike, expiration, quantity, market_value, cost_basis) VALUES")
         pvals = []
+        curve_dates = [d for (d, _ae, _sc, _uc, _hwm, _spy) in curve]
         for pos in positions:
             strike = "NULL" if pos["strike"] is None else str(pos["strike"])
             expiration = "NULL" if pos["expiration"] is None else sql_str(pos["expiration"])
-            pvals.append(
-                f"  ({sql_str(last[0])}, {sql_str(pos['symbol'])}, {sql_str(pos['underlying'])}, "
-                f"{sql_str(pos['asset_type'])}, {sql_str(pos['contract_type'])}, {strike}, {expiration}, "
-                f"{pos['quantity']}, {pos['market_value']}, {pos['cost_basis']})"
-            )
+            opened = pos.get("opened", last[0])
+            held_days = [d for d in curve_dates if opened <= d <= last[0]] or [last[0]]
+            span = max(1, len(held_days) - 1)
+            for i, d in enumerate(held_days):
+                if i == 0:
+                    mv = pos["cost_basis"]  # opens at cost
+                elif i == span:
+                    mv = pos["market_value"]  # ends at the current mark
+                else:
+                    drift = pos["cost_basis"] + (pos["market_value"] - pos["cost_basis"]) * (i / span)
+                    mv = round(max(1.0, drift * (1 + random.uniform(-0.025, 0.025))), 2)
+                pvals.append(
+                    f"  ({sql_str(d)}, {sql_str(pos['symbol'])}, {sql_str(pos['underlying'])}, "
+                    f"{sql_str(pos['asset_type'])}, {sql_str(pos['contract_type'])}, {strike}, {expiration}, "
+                    f"{pos['quantity']}, {mv}, {pos['cost_basis']})"
+                )
+        # Closed round trips get the same per-day backfill across their
+        # holding window, walking cost basis toward the exit proceeds, so
+        # the closed-trade detail chart has a value series to draw. The
+        # close date itself gets NO row: the real EOD cron snapshots after
+        # the close, when a position sold that day is already gone, and a
+        # row on the close date would resurrect the trade as a phantom
+        # holding in the latest-snapshot fallback.
+        for buy, sell in round_trips:
+            t_days = [d for d in curve_dates if buy["date"] <= d < sell["date"]]
+            if len(t_days) < 2:
+                continue
+            t_span = len(t_days)
+            t_strike = "NULL" if buy["strike"] is None else str(buy["strike"])
+            t_exp = "NULL" if buy["expiration"] is None else sql_str(buy["expiration"])
+            for i, d in enumerate(t_days):
+                if i == 0:
+                    mv = buy["notional"]
+                else:
+                    drift = buy["notional"] + (sell["notional"] - buy["notional"]) * (i / t_span)
+                    mv = round(max(1.0, drift * (1 + random.uniform(-0.03, 0.03))), 2)
+                pvals.append(
+                    f"  ({sql_str(d)}, {sql_str(buy['symbol'])}, {sql_str(buy['underlying'])}, "
+                    f"{sql_str(buy['asset_type'])}, {sql_str(buy['contract_type'])}, {t_strike}, {t_exp}, "
+                    f"{buy['quantity']}, {mv}, {buy['notional']})"
+                )
         p(",\n".join(pvals) + ";")
         p("")
 

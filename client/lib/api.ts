@@ -1,4 +1,4 @@
-import type { ClosedTradesResponse, EquityCurveResponse, HoldingsResponse, PortfolioResponse } from "@/types/portfolio";
+import type { ClosedTradesResponse, EquityCurveResponse, HoldingsResponse, PortfolioResponse, PositionHistoryResponse, PriceHistoryResponse } from "@/types/portfolio";
 import type { ApiResponse, MarketStatus, TranscriptResponse } from "@/types/trade";
 
 export interface SessionUser {
@@ -121,6 +121,20 @@ export const api = {
   // /holdings: every open position. /closed: every completed round trip.
   getHoldings: () => clientFetch<HoldingsResponse>("/api/portfolio/holdings"),
   getClosedTrades: () => clientFetch<ClosedTradesResponse>("/api/portfolio/closed"),
+
+  /*
+  Trade-detail chart series. getPositionHistory returns a position's
+  per-day snapshot values (the held period exactly); getPriceHistory
+  returns daily closes for an equity symbol, empty when the market-data
+  source is unreachable, so callers must degrade gracefully.
+  */
+  getPositionHistory: (symbol: string) => clientFetch<PositionHistoryResponse>(`/api/portfolio/position-history?symbol=${encodeURIComponent(symbol)}`),
+  getPriceHistory: (symbol: string, start?: string, end?: string) => {
+    const qs = new URLSearchParams({ symbol });
+    if (start) qs.set("start", start);
+    if (end) qs.set("end", end);
+    return clientFetch<PriceHistoryResponse>(`/api/price-history?${qs.toString()}`);
+  },
 
   /*
   Daily model-reasoning transcript. kind is "selection" (the 9:25
