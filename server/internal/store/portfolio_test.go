@@ -214,3 +214,41 @@ func TestOrderStatusReconciliation(t *testing.T) {
 		t.Errorf("open order ids after reconciliation = %v, want empty", ids)
 	}
 }
+
+func TestGetPrevCloseValues(t *testing.T) {
+	s := setupTestDB(t)
+	cleanPortfolio(s)
+
+	rows := []PortfolioPositionRow{
+		{Date: "2026-06-05", Symbol: "GOOGL", Underlying: "GOOGL", AssetType: "EQUITY", Quantity: 5, MarketValue: 1800, CostBasis: 1750},
+		{Date: "2026-06-08", Symbol: "GOOGL", Underlying: "GOOGL", AssetType: "EQUITY", Quantity: 5, MarketValue: 1851.7, CostBasis: 1750},
+		{Date: "2026-06-08", Symbol: "NVDA  260918C00215000", Underlying: "NVDA", AssetType: "OPTION", ContractType: "CALL", Quantity: 1, MarketValue: 1804, CostBasis: 1830},
+		{Date: "2026-06-09", Symbol: "GOOGL", Underlying: "GOOGL", AssetType: "EQUITY", Quantity: 5, MarketValue: 1817.7, CostBasis: 1750},
+	}
+	byDate := map[string][]PortfolioPositionRow{}
+	for _, r := range rows {
+		byDate[r.Date] = append(byDate[r.Date], r)
+	}
+	for date, batch := range byDate {
+		if err := s.SavePositionsSnapshot(date, batch); err != nil {
+			t.Fatalf("save snapshot %s: %v", date, err)
+		}
+	}
+
+	// "Yesterday" relative to 2026-06-09 is the 06-08 snapshot: both
+	// symbols held overnight, at their 06-08 closing marks. The 06-09 row
+	// must not leak in, and the older 06-05 row must lose to 06-08.
+	got, err := s.GetPrevCloseValues("2026-06-09")
+	if err != nil {
+		t.Fatalf("prev close values: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("want 2 symbols, got %v", got)
+	}
+	if got["GOOGL"] != 1851.7 {
+		t.Errorf("GOOGL prev close value: want 1851.7, got %v", got["GOOGL"])
+	}
+	if got["NVDA  260918C00215000"] != 1804 {
+		t.Errorf("option prev close value: want 1804, got %v", got["NVDA  260918C00215000"])
+	}
+}

@@ -70,10 +70,11 @@ func TestContract_PositionView(t *testing.T) {
 	v := portfolioPositionView{
 		Symbol: "MDT", Underlying: "MDT", AssetType: "EQUITY", ContractType: "CALL", Strike: 1,
 		Expiration: "2026-04-17", DTE: 1, Quantity: 1, MarketValue: 1, CostBasis: 1, UnrealizedPnl: 1,
+		OpenValue: 1, PrevCloseValue: 1,
 	}
 	assertContract(t, "portfolioPositionView", v, []string{
 		"symbol", "underlying", "asset_type", "contract_type", "strike", "expiration", "dte",
-		"quantity", "market_value", "cost_basis", "unrealized_pnl",
+		"quantity", "market_value", "cost_basis", "unrealized_pnl", "open_value", "prev_close_value",
 	})
 }
 
@@ -100,11 +101,12 @@ func TestContract_Holdings(t *testing.T) {
 	h := holdingView{
 		ID: "MDT", Kind: "stock", Symbol: "MDT", Underlying: "MDT", Label: "MDT", ContractType: "CALL",
 		Strike: 1, Expiration: "2026-04-17", DTE: 1, Quantity: 1, MarketValue: 1, CostBasis: 1,
-		UnrealizedPnl: 1, OpenedDate: "2026-06-01", OpenRationale: "r",
+		UnrealizedPnl: 1, OpenedDate: "2026-06-01", OpenRationale: "r", OpenValue: 1, PrevCloseValue: 1,
 	}
 	assertContract(t, "holdingView", h, []string{
 		"id", "kind", "symbol", "underlying", "label", "contract_type", "strike", "expiration", "dte",
 		"quantity", "market_value", "cost_basis", "unrealized_pnl", "opened_date", "open_rationale",
+		"open_value", "prev_close_value",
 	})
 	assertContract(t, "holdingsResponse", holdingsResponse{
 		Holdings: []holdingView{}, PositionsSource: "live", PositionsAsOf: "2026-06-04",

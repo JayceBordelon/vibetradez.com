@@ -6,6 +6,7 @@ import Link from "next/link";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AnimatedNumber } from "@/components/ui/animated-number";
+import { dayParts } from "@/lib/day-split";
 import { fmtMoney, fmtPrice, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ClosedTrade, Holding } from "@/types/portfolio";
@@ -48,6 +49,39 @@ function PnlCell({ pnl, pct }: { pnl: number; pct: number }) {
   );
 }
 
+/*
+DayCell stacks the session move over the overnight gap, each colored by
+its own sign, with the honest fallbacks: an unsplittable change since
+yesterday's close shows as one "day" figure, a position opened today
+shows its whole life as the session.
+*/
+function DayCell({ h }: { h: Holding }) {
+  const parts = dayParts(h);
+  if (parts.day !== null) {
+    return (
+      <div className={cn("flex flex-col items-end tabular-nums", pnlColor(parts.day))}>
+        <span className="text-sm font-medium">
+          <AnimatedNumber value={parts.day} kind="pnlInt" />
+        </span>
+        <span className="text-[10px] tracking-wider text-muted-foreground uppercase">day</span>
+      </div>
+    );
+  }
+  if (parts.today === null) return <span className="text-muted-foreground">-</span>;
+  return (
+    <div className="flex flex-col items-end tabular-nums">
+      <span className={cn("text-sm font-medium", pnlColor(parts.today))}>
+        <AnimatedNumber value={parts.today} kind="pnlInt" />
+        <span className="ml-1 text-[10px] font-normal tracking-wider text-muted-foreground uppercase">today</span>
+      </span>
+      <span className={cn("text-xs", (parts.overnight ?? 0) === 0 ? "text-muted-foreground" : pnlColor(parts.overnight ?? 0))}>
+        <AnimatedNumber value={parts.overnight ?? 0} kind="pnlInt" />
+        <span className="ml-1 text-[10px] tracking-wider text-muted-foreground uppercase">o/n</span>
+      </span>
+    </div>
+  );
+}
+
 // SymbolCell carries the row's identity + the real link (keyboard / SEO),
 // while the row itself is the pointer target.
 function SymbolCell({ href, label, chip }: { href: string; label: string; chip: React.ReactNode }) {
@@ -74,6 +108,7 @@ export function OptionsTable({ items }: { items: Holding[] }) {
             <TableHead className={cn(headCls, "text-right")}>Qty</TableHead>
             <TableHead className={cn(headCls, "text-right max-sm:hidden")}>Strike</TableHead>
             <TableHead className={cn(headCls, "max-sm:hidden")}>Expiry</TableHead>
+            <TableHead className={cn(headCls, "text-right max-md:hidden")}>Day</TableHead>
             <TableHead className={cn(headCls, "text-right")}>Value</TableHead>
             <TableHead className={cn(headCls, "text-right")}>Unrealized</TableHead>
             <TableHead className={cn(headCls, "w-6")} aria-hidden />
@@ -93,6 +128,9 @@ export function OptionsTable({ items }: { items: Holding[] }) {
                 <TableCell className={cn(cellCls, "max-sm:hidden")}>
                   <span className="whitespace-nowrap">{h.expiration || "-"}</span>
                   {h.dte != null && <span className="ml-2 text-xs text-muted-foreground">{h.dte}d left</span>}
+                </TableCell>
+                <TableCell className={cn(cellCls, numCls, "max-md:hidden")}>
+                  <DayCell h={h} />
                 </TableCell>
                 <TableCell className={cn(cellCls, numCls, "font-semibold")}>
                   <AnimatedNumber value={h.market_value} kind="money" />
@@ -125,6 +163,7 @@ export function StocksTable({ items }: { items: Holding[] }) {
             <TableHead className={cn(headCls, "text-right")}>Shares</TableHead>
             <TableHead className={cn(headCls, "text-right max-sm:hidden")}>Avg cost</TableHead>
             <TableHead className={cn(headCls, "max-sm:hidden")}>Opened</TableHead>
+            <TableHead className={cn(headCls, "text-right max-md:hidden")}>Day</TableHead>
             <TableHead className={cn(headCls, "text-right")}>Value</TableHead>
             <TableHead className={cn(headCls, "text-right")}>Unrealized</TableHead>
             <TableHead className={cn(headCls, "w-6")} aria-hidden />
@@ -142,6 +181,9 @@ export function StocksTable({ items }: { items: Holding[] }) {
                 <TableCell className={cn(cellCls, numCls)}>{h.quantity}</TableCell>
                 <TableCell className={cn(cellCls, numCls, "max-sm:hidden")}>{h.quantity > 0 ? fmtMoney(h.cost_basis / h.quantity) : "-"}</TableCell>
                 <TableCell className={cn(cellCls, "whitespace-nowrap max-sm:hidden")}>{h.opened_date || "-"}</TableCell>
+                <TableCell className={cn(cellCls, numCls, "max-md:hidden")}>
+                  <DayCell h={h} />
+                </TableCell>
                 <TableCell className={cn(cellCls, numCls, "font-semibold")}>
                   <AnimatedNumber value={h.market_value} kind="money" />
                 </TableCell>

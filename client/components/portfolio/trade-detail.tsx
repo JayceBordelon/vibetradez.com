@@ -7,7 +7,8 @@ import { Stat, StatStrip } from "@/components/layout/stat-strip";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { useLiveQuotes } from "@/hooks/use-live-quotes";
-import { fmtMoney, fmtPrice } from "@/lib/format";
+import { dayParts } from "@/lib/day-split";
+import { fmtMoney, fmtPrice, pnlColor } from "@/lib/format";
 import { repriceHoldings } from "@/lib/live-pricing";
 import { cn } from "@/lib/utils";
 import type { ClosedTrade, Holding } from "@/types/portfolio";
@@ -106,7 +107,32 @@ export function HoldingDetail({ h: initial }: { h: Holding }) {
 
       <div className="mt-6">
         <StatStrip cols={4}>
-          <Stat label="Market value" value={<AnimatedNumber value={h.market_value} kind="money" />} />
+          <Stat
+            label="Market value"
+            value={<AnimatedNumber value={h.market_value} kind="money" />}
+            sub={(() => {
+              const parts = dayParts(h);
+              if (parts.day !== null) {
+                return (
+                  <span className={cn("font-semibold", pnlColor(parts.day))}>
+                    <AnimatedNumber value={parts.day} kind="pnlInt" /> day
+                  </span>
+                );
+              }
+              if (parts.today === null) return undefined;
+              return (
+                <span className="font-semibold">
+                  <span className={pnlColor(parts.today)}>
+                    <AnimatedNumber value={parts.today} kind="pnlInt" /> today
+                  </span>
+                  <span className="text-muted-foreground"> · </span>
+                  <span className={(parts.overnight ?? 0) === 0 ? "text-muted-foreground" : pnlColor(parts.overnight ?? 0)}>
+                    <AnimatedNumber value={parts.overnight ?? 0} kind="pnlInt" /> overnight
+                  </span>
+                </span>
+              );
+            })()}
+          />
           <Stat label="Cost basis" value={<AnimatedNumber value={h.cost_basis} kind="money" />} />
           <Stat label="Unrealized P&L" value={<AnimatedNumber value={h.unrealized_pnl} kind="pnlInt" />} tone={tone} sub={<AnimatedNumber value={pct} kind="pctSigned1" />} />
           {h.kind === "option" ? <Stat label="Days to expiry" value={h.dte != null ? `${h.dte}d` : "-"} /> : <Stat label="Shares" value={`${h.quantity}`} />}
