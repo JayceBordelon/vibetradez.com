@@ -1,17 +1,22 @@
+"use client";
+
 import { CheckCircle2, ChevronRight, XCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { fmtPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PortfolioDecision } from "@/types/portfolio";
 
 /*
-TodaysExecutions is the day's tape: every move the model committed today,
-rendered as a flowing ledger in the site's hairline-divided editorial
-style (no cards). Each entry carries a 2px action-colored tick on its
-left edge, the same border language the transcript uses, so a green tick
-means money in, red means money out, and holds stay quiet and gray.
+TodaysExecutions is the day's tape as a ledger table: one row per move,
+action ink on the left, mono numerals right-aligned, the rationale as a
+truncating middle column (full text on hover), and quiet status marks.
+Money moves lead; holds settle to the bottom as the quiet coda. A row
+whose move belongs to a trade navigates to that holding or closed round
+trip.
 */
 
 type StatusKind = "filled" | "working" | "canceled" | "";
@@ -28,13 +33,13 @@ function statusKind(status?: string): StatusKind {
   return "working";
 }
 
-const ACTION_INK: Record<string, { label: string; tick: string; text: string }> = {
-  buy_equity: { label: "Buy", tick: "bg-green", text: "text-green" },
-  buy_option: { label: "Buy to open", tick: "bg-green", text: "text-green" },
-  sell_equity: { label: "Sell", tick: "bg-red", text: "text-red" },
-  sell_option: { label: "Sell to close", tick: "bg-red", text: "text-red" },
-  cancel_order: { label: "Cancel", tick: "bg-amber", text: "text-amber" },
-  hold: { label: "Hold", tick: "bg-muted-foreground/40", text: "text-muted-foreground" },
+const ACTION_INK: Record<string, { label: string; text: string }> = {
+  buy_equity: { label: "Buy", text: "text-green" },
+  buy_option: { label: "Buy to open", text: "text-green" },
+  sell_equity: { label: "Sell", text: "text-red" },
+  sell_option: { label: "Sell to close", text: "text-red" },
+  cancel_order: { label: "Cancel", text: "text-amber" },
+  hold: { label: "Hold", text: "text-muted-foreground" },
 };
 
 function StatusMark({ kind }: { kind: StatusKind }) {
@@ -65,59 +70,69 @@ function StatusMark({ kind }: { kind: StatusKind }) {
   return null;
 }
 
+const headCls = "h-9 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground first:pl-0 last:pr-0";
+const cellCls = "px-2 py-3 first:pl-0 last:pr-0";
+
 function ExecutionRow({ d }: { d: PortfolioDecision }) {
-  const ink = ACTION_INK[d.action] ?? { label: d.action, tick: "bg-muted-foreground/40", text: "text-foreground/90" };
+  const router = useRouter();
+  const ink = ACTION_INK[d.action] ?? { label: d.action, text: "text-foreground/90" };
   const isHold = d.action === "hold";
   const contract = d.contract_type ? [d.contract_type, d.strike ? `${fmtPrice(d.strike)} strike` : null, d.expiration ? `exp ${d.expiration}` : null].filter(Boolean).join(" · ") : null;
   const qty = d.quantity ?? 0;
   const showNumbers = !isHold && qty > 0 && (d.limit_price ?? 0) > 0;
-  // A move that belongs to a trade is a navigation surface: it opens the
-  // holding (still-held names) or the closed round trip.
   const href = d.trade_id ? `/${d.trade_kind === "closed" ? "closed" : "holdings"}?trade=${encodeURIComponent(d.trade_id)}` : null;
 
-  const body = (
-    <>
-      {/* Action tick: the row's left edge carries the move's color. */}
-      <span aria-hidden className={cn("absolute top-3 bottom-3 left-0 w-0.5 rounded-full", ink.tick)} />
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className={cn("font-mono text-[11px] font-bold uppercase tracking-wider", ink.text)}>{ink.label}</span>
-          <span className="text-base font-semibold">{d.underlying || d.symbol}</span>
-          {contract && <span className="text-xs text-muted-foreground">{contract}</span>}
-        </div>
-        {d.rationale && <p className="mt-1 max-w-[60ch] text-xs leading-relaxed text-muted-foreground sm:truncate">{d.rationale}</p>}
-      </div>
-      <div className="flex shrink-0 items-center gap-3">
-        <div className="flex flex-col items-end gap-1 text-right">
-          {showNumbers && (
-            <>
-              <span className="font-mono text-sm font-medium tabular-nums">
-                {qty} × <AnimatedNumber value={d.limit_price ?? 0} kind="money" />
-              </span>
-              {(d.notional ?? 0) > 0 && (
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  <AnimatedNumber value={d.notional ?? 0} kind="money" /> notional
-                </span>
-              )}
-            </>
+  return (
+    <TableRow
+      className={cn("border-border/50 transition-colors", href ? "cursor-pointer hover:bg-foreground/[0.03]" : "hover:bg-transparent")}
+      onClick={href ? () => router.push(href) : undefined}
+    >
+      <TableCell className={cellCls}>
+        <span className={cn("font-mono text-[11px] font-bold uppercase tracking-wider whitespace-nowrap", ink.text)}>{ink.label}</span>
+      </TableCell>
+      <TableCell className={cellCls}>
+        <div className="flex flex-col">
+          {href ? (
+            <Link href={href} className="font-semibold hover:underline" onClick={(e) => e.stopPropagation()}>
+              {d.underlying || d.symbol}
+            </Link>
+          ) : (
+            <span className="font-semibold">{d.underlying || d.symbol}</span>
           )}
-          <StatusMark kind={statusKind(d.status)} />
+          {contract && <span className="text-xs whitespace-nowrap text-muted-foreground">{contract}</span>}
         </div>
-        {href && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />}
-      </div>
-    </>
+      </TableCell>
+      <TableCell className={cn(cellCls, "w-full max-w-0 max-md:hidden")}>
+        {d.rationale && (
+          <p className="truncate text-xs text-muted-foreground" title={d.rationale}>
+            {d.rationale}
+          </p>
+        )}
+      </TableCell>
+      <TableCell className={cn(cellCls, "text-right tabular-nums")}>
+        {showNumbers ? (
+          <span className="font-mono text-sm whitespace-nowrap">
+            {qty} × <AnimatedNumber value={d.limit_price ?? 0} kind="money" />
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )}
+      </TableCell>
+      <TableCell className={cn(cellCls, "text-right tabular-nums max-sm:hidden")}>
+        {showNumbers && (d.notional ?? 0) > 0 ? (
+          <span className="text-xs text-muted-foreground">
+            <AnimatedNumber value={d.notional ?? 0} kind="money" />
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )}
+      </TableCell>
+      <TableCell className={cn(cellCls, "text-right")}>
+        <StatusMark kind={statusKind(d.status)} />
+      </TableCell>
+      <TableCell className={cn(cellCls, "w-6 pr-0")}>{href && <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />}</TableCell>
+    </TableRow>
   );
-
-  if (href) {
-    return (
-      <li>
-        <Link href={href} className="group relative flex items-start justify-between gap-4 rounded-lg py-3.5 pr-1 pl-4 transition-colors hover:bg-foreground/[0.03]">
-          {body}
-        </Link>
-      </li>
-    );
-  }
-  return <li className="relative flex items-start justify-between gap-4 py-3.5 pl-4">{body}</li>;
 }
 
 export function TodaysExecutions({ decisions }: { decisions: PortfolioDecision[] }) {
@@ -129,10 +144,23 @@ export function TodaysExecutions({ decisions }: { decisions: PortfolioDecision[]
   const moves = decisions.filter((d) => d.action !== "hold");
   const holds = decisions.filter((d) => d.action === "hold");
   return (
-    <ol className="divide-y divide-border/60">
-      {[...moves, ...holds].map((d, i) => (
-        <ExecutionRow key={`${d.action}-${d.symbol ?? "?"}-${i}`} d={d} />
-      ))}
-    </ol>
+    <Table>
+      <TableHeader>
+        <TableRow className="border-border/50 hover:bg-transparent">
+          <TableHead className={headCls}>Action</TableHead>
+          <TableHead className={headCls}>Symbol</TableHead>
+          <TableHead className={cn(headCls, "max-md:hidden")}>Rationale</TableHead>
+          <TableHead className={cn(headCls, "text-right")}>Qty × Limit</TableHead>
+          <TableHead className={cn(headCls, "text-right max-sm:hidden")}>Notional</TableHead>
+          <TableHead className={cn(headCls, "text-right")}>Status</TableHead>
+          <TableHead className={cn(headCls, "w-6")} aria-hidden />
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {[...moves, ...holds].map((d, i) => (
+          <ExecutionRow key={`${d.action}-${d.symbol ?? "?"}-${i}`} d={d} />
+        ))}
+      </TableBody>
+    </Table>
   );
 }

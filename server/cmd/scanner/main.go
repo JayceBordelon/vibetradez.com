@@ -20,6 +20,7 @@ import (
 	"vibetradez.com/internal/exec"
 	"vibetradez.com/internal/portfolio"
 	"vibetradez.com/internal/portfoliowire"
+	"vibetradez.com/internal/quotes"
 	"vibetradez.com/internal/schwab"
 	"vibetradez.com/internal/server"
 	"vibetradez.com/internal/store"
@@ -314,6 +315,38 @@ func main() {
 
 	sessionTTL := time.Duration(cfg.SessionTTLDays) * 24 * time.Hour
 	srv := server.New(db, schwabClient, authService, emailClient, cfg.EmailFrom, cfg.AnthropicAPIKey, cfg.AnthropicModel, cfg.SessionCookieName, sessionTTL, cfg.ServerPort, executor, cfg.UnsubscribeHMACKey, cfg.UnsubscribePrevHMACKeys, cfg.PublicBaseURL)
+
+	/*
+		Streaming quotes: fan the Schwab WebSocket out to dashboard SSE
+		subscribers so the UI re-prices the book tick by tick. Needs both a
+		Schwab client (the stream) and the executor (the held book that
+		decides which symbols to subscribe). The hub starts the upstream
+		stream on the first watcher and stops it when the last one leaves.
+	*/
+	if schwabClient != nil && executor != nil {
+		hub := quotes.New(
+			func() quotes.TickSource { return schwab.NewStreamClient(schwabClient) },
+			func(ctx context.Context) ([]string, []string) {
+				positions, err := executor.GetPositionsAgent(ctx)
+				if err != nil {
+					log.Printf("quotes hub: positions for symbol set: %v", err)
+					return nil, nil
+				}
+				var equities, options []string
+				seen := map[string]bool{}
+				for _, p := range positions {
+					if u := strings.ToUpper(strings.TrimSpace(p.Underlying)); u != "" && !seen[u] {
+						seen[u] = true
+						equities = append(equities, u)
+					}
+					if p.AssetType == "OPTION" {
+						options = append(options, p.Symbol)
+					}
+				}
+				return equities, options
+			})
+		srv.SetQuotesHub(hub)
+	}
 	go srv.Start()
 
 	log.Printf("VibeTradez portfolio manager started (API :%s)", cfg.ServerPort)

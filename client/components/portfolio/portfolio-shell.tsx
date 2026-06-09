@@ -9,6 +9,8 @@ import { Section } from "@/components/layout/section";
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
+import { useLiveQuotes } from "@/hooks/use-live-quotes";
+import { repricePositions } from "@/lib/live-pricing";
 import { useVisiblePoll } from "@/hooks/use-visible-poll";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -46,6 +48,9 @@ product.
 export function PortfolioShell() {
   const [data, setData] = useState<PortfolioResponse | null>(null);
   const [curve, setCurve] = useState<EquityCurvePoint[]>([]);
+  // Streamed quotes re-price the book between polls, so the strip moves
+  // tick by tick rather than once a minute.
+  const quotes = useLiveQuotes(Boolean(data?.enabled));
 
   const load = useCallback(() => {
     api.getPortfolio().then(setData).catch(() => {});
@@ -83,21 +88,26 @@ export function PortfolioShell() {
     );
   }
 
-  const investedPct = data.equity > 0 ? ((data.equity - data.settled_cash - data.unsettled_cash) / data.equity) * 100 : 0;
   // positions can be a nil slice (JSON null) for an enabled but all-cash
-  // account, so default it before any reduce/length access.
-  const positions = data.positions ?? [];
+  // account, so default it before any reduce/length access. The streamed
+  // quotes then overlay the latest marks so every number below is live to
+  // the tick, not to the last poll.
+  const positions = repricePositions(data.positions ?? [], quotes);
+  const positionsValue = positions.reduce((s, p) => s + p.market_value, 0);
   const totalUnrealized = positions.reduce((s, p) => s + p.unrealized_pnl, 0);
+  const equity = positionsValue + data.settled_cash + data.unsettled_cash;
+  const investedPct = equity > 0 ? (positionsValue / equity) * 100 : 0;
+  // "% today" measures LIVE equity against the last end-of-day close
+  // BEFORE today. The old version compared the curve's last two EOD
+  // points, which read as yesterday's move all day and then froze.
   const dayChangePct = (() => {
-    if (curve.length < 2) return null;
-    const prev = curve[curve.length - 2].account_equity;
-    const last = curve[curve.length - 1].account_equity;
-    return prev > 0 ? ((last - prev) / prev) * 100 : null;
+    const baseline = [...curve].reverse().find((p) => p.date < data.date)?.account_equity;
+    return baseline && baseline > 0 ? ((equity - baseline) / baseline) * 100 : null;
   })();
 
   return (
     <div className="animate-in fade-in mx-auto max-w-[1200px] px-4 py-6 duration-300 sm:px-7">
-      <SummaryStrip equity={data.equity} settledCash={data.settled_cash} investedPct={investedPct} unrealized={totalUnrealized} dayChangePct={dayChangePct} />
+      <SummaryStrip equity={equity} settledCash={data.settled_cash} investedPct={investedPct} unrealized={totalUnrealized} dayChangePct={dayChangePct} />
 
       {/* No border-t here: the summary strip above already draws its own
           bottom rule, and the doubled hairline read as a ghost band in dark. */}

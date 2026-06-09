@@ -283,6 +283,49 @@ func (s *Server) handlePortfolioEquityCurve(w http.ResponseWriter, r *http.Reque
 			})
 		}
 	}
+	// Append a synthetic LIVE point for today when the broker book is
+	// readable and the EOD snapshot hasn't landed yet, so the chart (and
+	// its headline stats) agree with the live stat strip instead of
+	// trailing it by a day. The decoration below picks up trades closed
+	// today automatically because the point is dated today.
+	today := time.Now().In(easternLoc()).Format("2006-01-02")
+	if s.executor != nil && end >= today && (len(resp.Points) == 0 || resp.Points[len(resp.Points)-1].Date < today) {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		if positions, err := s.executor.GetPositionsAgent(ctx); err == nil {
+			if settled, ferr := s.executor.AvailableFundsAgent(ctx); ferr == nil {
+				var value, unrealLive float64
+				for _, bp := range positions {
+					pv := positionView(bp)
+					value += pv.MarketValue
+					unrealLive += pv.UnrealizedPnl
+				}
+				live := equityCurvePointView{
+					Date:          today,
+					AccountEquity: value + settled,
+					SettledCash:   settled,
+					Unrealized:    unrealLive,
+				}
+				// Live SPY for the benchmark line; falls back to the prior
+				// point's close (flat segment) if the quote is unavailable.
+				if s.schwab != nil {
+					if quotes, qerr := s.schwab.GetQuotes([]string{"SPY"}); qerr == nil {
+						q := quotes["SPY"]
+						if q.Mark > 0 {
+							live.SPYClose = q.Mark
+						} else if q.LastPrice > 0 {
+							live.SPYClose = q.LastPrice
+						}
+					}
+				}
+				if live.SPYClose == 0 && len(resp.Points) > 0 {
+					live.SPYClose = resp.Points[len(resp.Points)-1].SPYClose
+				}
+				resp.Points = append(resp.Points, live)
+			}
+		}
+	}
+
 	// Decorate the curve with the P&L decomposition: daily unrealized from
 	// the EOD book snapshots and cumulative realized from the decision log.
 	// Both degrade to zeros so a store hiccup never blanks the chart.
@@ -319,7 +362,11 @@ func decoratePnlSeries(points []equityCurvePointView, unrealizedByDate map[strin
 			realized += closed[ci].RealizedPnl
 		}
 		points[i].RealizedCum = realized
-		points[i].Unrealized = unrealizedByDate[points[i].Date]
+		// A synthetic live point arrives carrying its own (live) unrealized
+		// value; only EOD points read from the snapshot map.
+		if v, ok := unrealizedByDate[points[i].Date]; ok || points[i].Unrealized == 0 {
+			points[i].Unrealized = v
+		}
 	}
 	return points
 }

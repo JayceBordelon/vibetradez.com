@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
 
-import { Stat, StatStrip } from "@/components/layout/stat-strip";
-import { HoldingRow } from "@/components/portfolio/trade-cards";
+import { LiveHoldings } from "@/components/portfolio/live-holdings";
 import { HoldingDetail } from "@/components/portfolio/trade-detail";
 import { fmtMoney, fmtPnlInt } from "@/lib/format";
 import { fetchHoldings, findHolding } from "@/lib/portfolio-data";
-import type { Holding } from "@/types/portfolio";
 
 const OG_IMAGE = "/og/dashboard.png";
 
@@ -44,22 +42,6 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   };
 }
 
-function Group({ title, items }: { title: string; items: Holding[] }) {
-  if (items.length === 0) return null;
-  return (
-    <section className="mt-8 first:mt-4">
-      <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-        {title} ({items.length})
-      </h2>
-      <div className="mt-1 divide-y divide-border/50 border-t border-border/50">
-        {items.map((h) => (
-          <HoldingRow key={h.id} h={h} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
 export default async function HoldingsPage({ searchParams }: PageProps) {
   const trade = (await searchParams).trade;
 
@@ -70,27 +52,13 @@ export default async function HoldingsPage({ searchParams }: PageProps) {
     if (h) return <HoldingDetail h={h} />;
   }
 
+  // Server-render the current book for the first paint; LiveHoldings then
+  // keeps it truly live (streamed quote re-pricing + background repoll).
   const holdings = await fetchHoldings();
-  const options = holdings.filter((h) => h.kind === "option");
-  const equities = holdings.filter((h) => h.kind === "stock");
-  const totalMV = holdings.reduce((s, h) => s + h.market_value, 0);
-  const totalPnl = holdings.reduce((s, h) => s + h.unrealized_pnl, 0);
 
   return (
     <div className="mx-auto min-w-0 max-w-[1200px] px-4 py-6 sm:px-7">
-      {holdings.length === 0 ? (
-        <div className="border-y border-border/50 px-1 py-12 text-center text-sm text-muted-foreground">No open positions. The account is in cash.</div>
-      ) : (
-        <>
-          <StatStrip cols={3}>
-            <Stat label="Market value" value={fmtMoney(totalMV)} />
-            <Stat label="Unrealized P&L" value={fmtPnlInt(totalPnl)} tone={totalPnl > 0 ? "positive" : totalPnl < 0 ? "negative" : "neutral"} />
-            <Stat label="Positions" value={`${holdings.length}`} />
-          </StatStrip>
-          <Group title="Options" items={options} />
-          <Group title="Stocks" items={equities} />
-        </>
-      )}
+      <LiveHoldings initial={holdings} />
     </div>
   );
 }
