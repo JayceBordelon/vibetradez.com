@@ -154,6 +154,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/portfolio/equity-curve", requireInternal(s.handlePortfolioEquityCurve))
 	s.mux.HandleFunc("/api/portfolio/holdings", requireInternal(s.handlePortfolioHoldings))
 	s.mux.HandleFunc("/api/portfolio/closed", requireInternal(s.handlePortfolioClosed))
+	s.mux.HandleFunc("/api/portfolio/position-history", requireInternal(s.handlePortfolioPositionHistory))
+	s.mux.HandleFunc("/api/price-history", requireInternal(s.handlePriceHistory))
 	s.mux.HandleFunc("/api/transcript", requireInternal(s.handleTranscript))
 	s.mux.HandleFunc("/api/market/status", requireInternal(s.handleMarketStatus))
 }

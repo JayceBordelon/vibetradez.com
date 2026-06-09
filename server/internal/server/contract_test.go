@@ -91,8 +91,8 @@ func TestContract_DecisionView(t *testing.T) {
 
 func TestContract_EquityCurve(t *testing.T) {
 	assertContract(t, "equityCurvePointView", equityCurvePointView{
-		Date: "2026-06-04", AccountEquity: 1, SettledCash: 1, UnsettledCash: 1, HighWaterMark: 1, SPYClose: 1,
-	}, []string{"date", "account_equity", "settled_cash", "unsettled_cash", "high_water_mark", "spy_close"})
+		Date: "2026-06-04", AccountEquity: 1, SettledCash: 1, UnsettledCash: 1, HighWaterMark: 1, SPYClose: 1, RealizedCum: 1, Unrealized: 1,
+	}, []string{"date", "account_equity", "settled_cash", "unsettled_cash", "high_water_mark", "spy_close", "realized_cum", "unrealized"})
 	assertContract(t, "equityCurveResponse", equityCurveResponse{Points: []equityCurvePointView{}}, []string{"points"})
 }
 
@@ -124,4 +124,16 @@ func TestContract_Closed(t *testing.T) {
 		"realized_pct", "hold_days", "open_rationale", "close_rationale",
 	})
 	assertContract(t, "closedTradesResponse", closedTradesResponse{Trades: []closedTradeView{}}, []string{"trades"})
+}
+
+func TestContract_PositionHistory(t *testing.T) {
+	assertContract(t, "positionValuePointView", positionValuePointView{
+		Date: "2026-06-04", MarketValue: 1, Quantity: 1, CostBasis: 1,
+	}, []string{"date", "market_value", "quantity", "cost_basis"})
+	assertContract(t, "positionHistoryResponse", positionHistoryResponse{Symbol: "NVDA", Points: []positionValuePointView{}}, []string{"symbol", "points"})
+}
+
+func TestContract_PriceHistory(t *testing.T) {
+	assertContract(t, "pricePointView", pricePointView{Date: "2026-06-04", Close: 1}, []string{"date", "close"})
+	assertContract(t, "priceHistoryResponse", priceHistoryResponse{Symbol: "NVDA", Points: []pricePointView{}}, []string{"symbol", "points"})
 }
