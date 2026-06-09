@@ -7,6 +7,7 @@ import { fmtMoney, fmtPnlInt, fmtPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ClosedTrade, Holding } from "@/types/portfolio";
 import { KindChip } from "./trade-cards";
+import { TradeHistoryChart } from "./trade-history-chart";
 
 /*
 Detail bodies for a single open holding or closed trade, echoing the v1
@@ -103,6 +104,20 @@ export function HoldingDetail({ h }: { h: Holding }) {
         </StatStrip>
       </div>
 
+      <div className="mt-8">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{h.kind === "option" ? "Contract value & underlying since open" : "Price since open"}</h2>
+        <div className="mt-3">
+          <TradeHistoryChart
+            kind={h.kind}
+            symbol={h.symbol}
+            underlying={h.underlying}
+            openedDate={h.opened_date}
+            strike={h.strike}
+            entryPrice={h.kind === "option" ? (h.quantity > 0 ? h.cost_basis / (h.quantity * 100) : undefined) : h.quantity > 0 ? h.cost_basis / h.quantity : undefined}
+          />
+        </div>
+      </div>
+
       <div className="mt-8 grid items-start gap-x-10 gap-y-6 sm:grid-cols-2">
         <Facts title="Position">
           {h.kind === "option" ? (
@@ -153,6 +168,13 @@ export function ClosedDetail({ t }: { t: ClosedTrade }) {
           <Stat label="Entry" value={fmtMoney(t.entry_price)} />
           <Stat label="Exit" value={fmtMoney(t.exit_price)} />
         </StatStrip>
+      </div>
+
+      <div className="mt-8">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{t.kind === "option" ? "Contract value & underlying over the hold" : "Price over the hold"}</h2>
+        <div className="mt-3">
+          <TradeHistoryChart kind={t.kind} symbol={t.symbol} underlying={t.underlying} openedDate={t.opened_date} closedDate={t.closed_date} strike={t.strike} entryPrice={t.entry_price} />
+        </div>
       </div>
 
       <div className="mt-8 grid items-start gap-x-10 gap-y-6 sm:grid-cols-2">
