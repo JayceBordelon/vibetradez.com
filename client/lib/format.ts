@@ -38,6 +38,19 @@ export function fmtPnlInt(n: number): string {
   return n > 0 ? `+${body}` : `-${body}`;
 }
 
+// Signed P&L with cents, for readouts that sit next to other cents-precision
+// money (the dashboard stat strip shows $4,589.75 equity, so a whole-dollar
+// +$206 beside it read as a different unit).
+export function fmtPnl(n: number): string {
+  if (!Number.isFinite(n) || n === 0) return "$0.00";
+  const body = usd.format(Math.abs(n));
+  return n > 0 ? `+${body}` : `-${body}`;
+}
+
+export function plural(n: number, unit: string): string {
+  return n === 1 ? unit : `${unit}s`;
+}
+
 export function pnlColor(v: number): string {
   if (v > 0) return "text-green";
   if (v < 0) return "text-red";

@@ -19,6 +19,7 @@ docs/ui-audits/
 
 | Date | Audit | Notes |
 |------|-------|-------|
+| 2026-06-09 | [audit.md](2026-06-09/audit.md) | Triage + fix pass: light-theme token family (7 symptoms), mobile truncation, transcript error classification + readability, fable-5 cost rates, legal measure + link contrast. Product: live hero equity, dashboard synopsis removal, unrealized chart stat. Pipeline: stepped scroll-up so the scrollspy rail settles. |
 | 2026-06-08 | [audit.md](2026-06-08/audit.md) | Baseline audit of all 9 pages. Fixed: FAQ question-count badge (10→derived). |
 
 ## The per-PR requirement

@@ -173,7 +173,7 @@ func (lt *LiveTrader) GetPositions(ctx context.Context, accountHash string) ([]B
 		case "PUT":
 			ctype = "PUT"
 		}
-		out = append(out, BrokerPosition{
+		bp := BrokerPosition{
 			Symbol:       p.Instrument.Symbol,
 			AssetType:    p.Instrument.AssetType,
 			Underlying:   underlying,
@@ -181,9 +181,37 @@ func (lt *LiveTrader) GetPositions(ctx context.Context, accountHash string) ([]B
 			MarketValue:  p.MarketValue,
 			AverageCost:  p.AveragePrice,
 			ContractType: ctype,
-		})
+		}
+		enrichOptionContract(&bp)
+		out = append(out, bp)
 	}
 	return out, nil
+}
+
+/*
+enrichOptionContract fills an OPTION position's contract spec (strike,
+expiration, and any missing put-call / underlying) by decoding its OCC
+symbol. Schwab's positions payload carries no strike or expiration fields,
+so without the decode the live book serves options with a zero strike and
+no expiry, and the dashboard's holding detail renders "-" for strike,
+expiration, and days-to-expiry. A malformed symbol degrades to passthrough.
+*/
+func enrichOptionContract(bp *BrokerPosition) {
+	if bp.AssetType != "OPTION" {
+		return
+	}
+	sym, exp, ctype, strike, err := DecodeOCCSymbol(bp.Symbol)
+	if err != nil {
+		return
+	}
+	bp.Strike = strike
+	bp.Expiration = exp
+	if bp.ContractType == "" {
+		bp.ContractType = ctype
+	}
+	if bp.Underlying == "" || bp.Underlying == bp.Symbol {
+		bp.Underlying = sym
+	}
 }
 
 func (lt *LiveTrader) PlaceOrder(ctx context.Context, accountHash string, order Order) (string, error) {

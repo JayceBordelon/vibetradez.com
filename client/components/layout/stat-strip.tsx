@@ -30,8 +30,12 @@ single section reads as one continuous strip of numbers instead of
 a row of bordered tiles.
 */
 export function StatStrip({ children, className, cols = 4 }: StatStripProps): React.JSX.Element {
+  // Dividers carry the full border token (not /50): at half opacity the
+  // hairlines vanished in light mode and the desktop dark strip read as
+  // floating text. With an odd stat count the last cell spans both mobile
+  // columns so the 2-up grid doesn't strand an empty quadrant.
   return (
-    <div className={cn("grid grid-cols-2 divide-x divide-y divide-border/50 border-y border-border/50 sm:divide-y-0 sm:border-y-0 sm:border-t sm:border-b", colsClass[cols], className)}>
+    <div className={cn("grid grid-cols-2 divide-x divide-y divide-border border-y border-border max-sm:[&>*:last-child:nth-child(odd)]:col-span-2 sm:divide-y-0 sm:border-y-0 sm:border-t sm:border-b", colsClass[cols], className)}>
       {children}
     </div>
   );

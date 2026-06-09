@@ -516,6 +516,19 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
             think("Rather than eyeball the size, I will compute the largest whole-share order that fits under both the per-order cap and today's deployment budget, then round down for headroom.")
             budget = min(1870.0, round(cash * 0.75, 2))
             shares = int(budget // px)
+            # First attempt fails (sandbox cells share no state, so the bare
+            # variables NameError). Both results mirror the real
+            # encrypted_code_execution_result shape, error_code present and
+            # empty on success, so the transcript UI's success/error
+            # classification and the red error pill render against seed data.
+            use("code_execution", {"code": (
+                "budget = min(per_order_cap, deployment_budget)\n"
+                "shares = int(budget // price)\n"
+                "print(f'shares={shares} notional={shares * price:.2f}')"
+            )})
+            res("code_execution", {"error_code": "", "type": "encrypted_code_execution_result", "content": [], "return_code": 1, "stdout": "",
+                                   "stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\nNameError: name 'per_order_cap' is not defined\n"})
+            think("Forgot the sandbox cell has no shared state, so the inputs were undefined. Re-running with the constants inlined.")
             use("code_execution", {"code": (
                 f"price = {px}\n"
                 "per_order_cap = 1870.0\n"
@@ -524,7 +537,8 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
                 "shares = int(budget // price)\n"
                 "print(f'shares={shares} notional={shares * price:.2f} headroom={budget - shares * price:.2f}')"
             )})
-            res("code_execution", {"return_code": 0, "stdout": f"shares={shares} notional={shares * px:.2f} headroom={budget - shares * px:.2f}\n"})
+            res("code_execution", {"error_code": "", "type": "encrypted_code_execution_result", "content": [], "return_code": 0,
+                                   "stdout": f"shares={shares} notional={shares * px:.2f} headroom={budget - shares * px:.2f}\n", "stderr": ""})
             did_code = True
         say(dec["rationale"])
         if dec["action"] == "buy_equity":
@@ -779,7 +793,7 @@ def main():
     for ds in sorted(transcripts):
         usage, duration_ms = usage_and_duration(transcripts[ds])
         tvals.append(
-            f"  ({sql_str(ds)}, 'portfolio', 'claude-opus-4-8', {sql_str(json.dumps(transcripts[ds]))}::jsonb, "
+            f"  ({sql_str(ds)}, 'portfolio', 'claude-fable-5', {sql_str(json.dumps(transcripts[ds]))}::jsonb, "
             f"{sql_str(json.dumps(usage))}::jsonb, {duration_ms})"
         )
     p(",\n".join(tvals) + ";")

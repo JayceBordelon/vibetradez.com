@@ -61,7 +61,19 @@ async function autoScroll(page) {
     }
     window.scrollTo(0, document.body.scrollHeight);
     await sleep(200);
+    // Step BACK UP rather than jumping: an instant scrollTo(0,0) does not
+    // walk earlier sections through the landing scrollspy's mid-viewport
+    // IntersectionObserver band (at the very top the band sits on the
+    // unobserved hero), so the rail freezes on the last chapter and the
+    // audit reports a false "scrollspy stuck" finding. Stepping up fires
+    // the observer for each section on the way, verified to settle the
+    // rail back on chapter 1.
+    for (let y = document.body.scrollHeight; y >= 0; y -= step) {
+      window.scrollTo(0, y);
+      await sleep(120);
+    }
     window.scrollTo(0, 0);
+    await sleep(450);
   });
 }
 

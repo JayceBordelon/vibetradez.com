@@ -8,6 +8,12 @@ import type { EquityCurvePoint } from "@/types/portfolio";
 
 interface EquityCurveChartProps {
   points: EquityCurvePoint[];
+  /**
+  Open-book unrealized return percent (live, not yet booked into the EOD
+  equity curve). Rendered as a third headline stat beside Account and SPY;
+  omitted when null (no open positions).
+  */
+  unrealizedPct?: number | null;
 }
 
 const chartConfig: ChartConfig = {
@@ -42,7 +48,21 @@ function fmtPctSigned(n: number): string {
   return `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
 }
 
-export function EquityCurveChart({ points }: EquityCurveChartProps) {
+const TICK_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// fmtTick abbreviates an ISO date for the x-axis ("Jun 9", or "Jun 27 '25"
+// when the point is from an earlier year than the curve's last point), so a
+// year-long window doesn't render ten full YYYY-MM-DD strings. Parsed from
+// the parts so it never shifts a day across timezones.
+function fmtTick(iso: string, lastYear: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  const month = TICK_MONTHS[Number(m[2]) - 1] ?? m[2];
+  const base = `${month} ${Number(m[3])}`;
+  return m[1] === lastYear ? base : `${base} '${m[1].slice(2)}`;
+}
+
+export function EquityCurveChart({ points, unrealizedPct = null }: EquityCurveChartProps) {
   const data = useMemo(() => buildSeries(points), [points]);
 
   if (data.length < 2) {
@@ -53,6 +73,7 @@ export function EquityCurveChart({ points }: EquityCurveChartProps) {
   const spyRet = lastReturn(data.map((d) => d.spy));
   const edge = acctRet - spyRet;
   const acctColor = acctRet >= 0 ? "var(--green)" : "var(--red)";
+  const lastYear = data[data.length - 1].date.slice(0, 4);
 
   return (
     <div>
@@ -68,8 +89,16 @@ export function EquityCurveChart({ points }: EquityCurveChartProps) {
           <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">SPY</div>
           <div className="text-2xl font-bold tabular-nums text-muted-foreground">{fmtPctSigned(spyRet)}</div>
         </div>
+        {unrealizedPct !== null && (
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Unrealized</div>
+            <div className="text-2xl font-bold tabular-nums" style={{ color: unrealizedPct >= 0 ? "var(--green)" : "var(--red)" }}>
+              {fmtPctSigned(unrealizedPct)}
+            </div>
+          </div>
+        )}
         <div
-          className={`mb-1 rounded-full px-2.5 py-1 text-xs font-semibold ${edge >= 0 ? "bg-green-bg text-green" : "bg-red-bg text-red"}`}
+          className={`mb-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${edge >= 0 ? "border-green-border bg-green-bg text-green" : "border-red-border bg-red-bg text-red"}`}
         >
           {edge >= 0 ? "Beating SPY by " : "Trailing SPY by "}
           {Math.abs(edge).toFixed(1)} pts
@@ -84,8 +113,10 @@ export function EquityCurveChart({ points }: EquityCurveChartProps) {
               <stop offset="92%" stopColor={acctColor} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid vertical={false} stroke="var(--border)" strokeOpacity={0.5} />
-          <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} minTickGap={36} />
+          {/* --chart-grid is the token tuned per theme for in-plot reference
+              lines; var(--border) at half opacity disappeared in light mode. */}
+          <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+          <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} minTickGap={36} tickFormatter={(v: string) => fmtTick(v, lastYear)} />
           <YAxis tickLine={false} axisLine={false} tickMargin={8} fontSize={11} width={40} domain={["auto", "auto"]} tickFormatter={(v: number) => v.toFixed(0)} />
           <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => `${name === "account" ? "Account" : "SPY"}: ${Number(value).toFixed(1)}`} />} />
           {/* SPY: dashed reference line, no fill */}

@@ -1,5 +1,5 @@
 import { serverFetch } from "@/lib/api";
-import type { ClosedTrade, ClosedTradesResponse, Holding, HoldingsResponse } from "@/types/portfolio";
+import type { ClosedTrade, ClosedTradesResponse, Holding, HoldingsResponse, PortfolioResponse } from "@/types/portfolio";
 
 /*
 Server-side data access for the /holdings and /closed pages. These run in
@@ -23,6 +23,17 @@ export async function fetchClosedTrades(): Promise<ClosedTrade[]> {
     return data.trades ?? [];
   } catch {
     return [];
+  }
+}
+
+// Live account equity for the landing hero. Returns null when the manager
+// is disabled or the fetch fails, so callers can fall back to static copy.
+export async function fetchAccountEquity(): Promise<number | null> {
+  try {
+    const data = await serverFetch<PortfolioResponse>("/api/portfolio");
+    return data.enabled && data.equity > 0 ? data.equity : null;
+  } catch {
+    return null;
   }
 }
 

@@ -14,7 +14,11 @@
   --popover-foreground: oklch(0 0 0);
   --primary: oklch(0.8545 0.1675 159.6564);
   --primary-foreground: oklch(0 0 0);
-  --secondary: oklch(0.9933 0.0011 197.1390);
+  /* Light secondary was oklch(0.9933 …), indistinguishable from the 0.9940
+     page background, so secondary badges (FAQ count, transcript stage pill)
+     rendered as bare floating text. A soft green tint keeps the pill shape
+     visible and pairs with the green dark-mode secondary. */
+  --secondary: oklch(0.9450 0.0410 160.0000);
   --secondary-foreground: oklch(0.1344 0 0);
   --muted: oklch(0.9702 0 0);
   --muted-foreground: oklch(0.4386 0 0);
@@ -22,7 +26,11 @@
   --accent-foreground: oklch(0.6184 0.1489 155.4444);
   --destructive: oklch(0.6665 0.2111 2.8306);
   --destructive-foreground: oklch(1.0000 0 0);
-  --border: oklch(0.9722 0.0034 247.8581);
+  /* Light border was oklch(0.9722 …) on a 0.9940 background: hairline
+     dividers, stat-strip rules, and pagination outlines all vanished in
+     light mode while reading fine in dark. 0.9220 keeps them subtle but
+     actually visible. */
+  --border: oklch(0.9220 0.0034 247.8581);
   --input: oklch(0.9401 0 0);
   --ring: oklch(0.8545 0.1675 159.6564);
   --chart-1: oklch(0.8545 0.1675 159.6564);
@@ -56,11 +64,14 @@
   /* Trading-specific colors. Hand-tuned for ≥4.5:1 contrast on the
      light-mode body bg so PnL deltas pass WCAG AA. */
   --green: #0d9f5d;
-  --green-bg: #ecfdf5;
+  /* Pill fills one tint step stronger than the old 50-level (#ecfdf5 /
+     #fef2f2), which disappeared against the white card surface: Win/Loss
+     chips and status badges read as bare colored text in light mode. */
+  --green-bg: #d1fae5;
   --green-light: #f0fdf4;
   --green-border: #6ee7b7;
   --red: #b91c1c;
-  --red-bg: #fef2f2;
+  --red-bg: #fee2e2;
   --red-light: #fef2f2;
   --red-border: #fca5a5;
   --amber: #92400e;
@@ -539,8 +550,11 @@ body {
     color: var(--foreground);
     font-weight: 600;
   }
+  /* Links use the semantic green, not --primary: the mint primary is
+     ~1.7:1 on the light background (fails WCAG AA), while --green is
+     hand-tuned to >=4.5:1 in both themes. */
   .prose-terms a {
-    color: var(--primary);
+    color: var(--green);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
@@ -565,10 +579,14 @@ body {
     color: var(--foreground);
     font-weight: 600;
   }
+  /* Horizontal padding kept tight: at 0.35rem the chip background read as
+     a stray space before adjacent punctuation ("(named `vt_session` )").
+     The remaining ~2px optical gap is the following glyph's own side
+     bearing, not removable via padding. */
   .prose-terms code {
     font-family: var(--font-mono, ui-monospace, monospace);
     font-size: 13px;
-    padding: 0.1rem 0.35rem;
+    padding: 0.1rem 0.15rem;
     border-radius: 0.3rem;
     background: var(--muted);
     color: var(--foreground);

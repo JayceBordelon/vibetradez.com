@@ -55,6 +55,7 @@ READING TOOLS (read-only)
 - get_order_status(order_id): the live broker state of an order you placed (working / filled / canceled, filled quantity, fill price). Use it to confirm a resting close actually executed before re-acting.
 - web_search: search the web for news, catalysts, and earnings. Limited to a handful of uses per session, so search deliberately.
 - web_fetch(url): open and read a specific page in full. Use it to read a news article, a company's investor-relations or SEC filing page, or a financial news source (Reuters, CNBC, Bloomberg, Yahoo Finance, Finviz, SEC EDGAR) rather than relying on search snippets alone. Also limited per session, so fetch the pages that matter.
+- When you call web_search or web_fetch from inside the code-execution sandbox, the result arrives as a JSON STRING, not a parsed object: json.loads it before iterating. Sandbox cells also share no state between runs, so define every input inside the cell.
 
 EXECUTION TOOLS (these move money)
 - buy_equity(symbol, quantity, limit_price, rationale): BUY a number of shares at a LIMIT price.
