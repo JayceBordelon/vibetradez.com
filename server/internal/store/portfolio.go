@@ -132,6 +132,54 @@ func (s *Store) GetLatestPositions() ([]PortfolioPositionRow, error) {
 }
 
 /*
+OpenOrderIDs returns the distinct broker order ids of decisions whose
+status is not yet terminal, the reconciliation work-list: the decision log
+is otherwise insert-only, so without a later status sweep a filled order
+reads "working" on the dashboard forever.
+*/
+func (s *Store) OpenOrderIDs() ([]string, error) {
+	rows, err := s.db.Query(`
+		SELECT DISTINCT schwab_order_id
+		FROM portfolio_decisions
+		WHERE schwab_order_id <> ''
+		  AND UPPER(status) NOT IN ('FILLED', 'CANCELED', 'REJECTED', 'EXPIRED', 'REPLACED')`)
+	if err != nil {
+		return nil, fmt.Errorf("query open order ids: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan open order id: %w", err)
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+/*
+UpdateDecisionOrderStatus records the broker's current state for every
+decision row carrying the order id. A positive fill price is recorded;
+zero leaves any existing fill price untouched (a cancel after a partial
+state change must not erase a real fill).
+*/
+func (s *Store) UpdateDecisionOrderStatus(schwabOrderID, status string, fillPrice float64) error {
+	var err error
+	if fillPrice > 0 {
+		_, err = s.db.Exec(`UPDATE portfolio_decisions SET status = $2, fill_price = $3 WHERE schwab_order_id = $1`,
+			schwabOrderID, status, fillPrice)
+	} else {
+		_, err = s.db.Exec(`UPDATE portfolio_decisions SET status = $2 WHERE schwab_order_id = $1`,
+			schwabOrderID, status)
+	}
+	if err != nil {
+		return fmt.Errorf("update decision order status: %w", err)
+	}
+	return nil
+}
+
+/*
 GetDailyUnrealized returns each snapshot day's total unrealized P&L
 (market value minus cost basis summed over the book) keyed by date, for
 the dashboard's P&L decomposition chart. Days without a snapshot (flat

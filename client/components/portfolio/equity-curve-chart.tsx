@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from "recharts";
 
+import { AnimatedNumber } from "@/components/ui/animated-number";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { cn } from "@/lib/utils";
 import type { EquityCurvePoint } from "@/types/portfolio";
@@ -81,8 +82,10 @@ function fmtTick(iso: string, lastYear: string): string {
 /*
 HeadlineStat is one color-keyed figure in the strip above the plot. The
 2px key bar matches its series stroke exactly, so the strip IS the legend.
+Values tween on live refresh (AnimatedNumber), so a poll tick reads as the
+number moving rather than flickering.
 */
-function HeadlineStat({ label, value, colorVar, sub, dashed }: { label: string; value: string; colorVar: string; sub?: string; dashed?: boolean }) {
+function HeadlineStat({ label, value, pctOfStart, colorVar, dashed }: { label: string; value: number; pctOfStart: number | null; colorVar: string; dashed?: boolean }) {
   return (
     <div>
       <div className="flex items-center gap-1.5">
@@ -94,9 +97,13 @@ function HeadlineStat({ label, value, colorVar, sub, dashed }: { label: string; 
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
       </div>
       <div className="mt-0.5 text-2xl font-bold tabular-nums" style={{ color: colorVar }}>
-        {value}
+        <AnimatedNumber value={value} kind="usdSigned" />
       </div>
-      {sub && <div className="text-[11px] text-muted-foreground">{sub}</div>}
+      {pctOfStart !== null && (
+        <div className="text-[11px] text-muted-foreground">
+          <AnimatedNumber value={pctOfStart} kind="pct1" /> of starting equity
+        </div>
+      )}
     </div>
   );
 }
@@ -114,19 +121,19 @@ export function EquityCurveChart({ points }: EquityCurveChartProps) {
   const total = realized + unrealized;
   const edge = total - spyPnl;
   const firstEquity = points.find((p) => p.account_equity > 0)?.account_equity ?? 0;
-  const pctOfStart = (n: number) => (firstEquity > 0 ? `${((n / firstEquity) * 100).toFixed(1)}% of starting equity` : undefined);
+  const pctOfStart = (n: number) => (firstEquity > 0 ? (n / firstEquity) * 100 : null);
   const lastYear = data[data.length - 1].date.slice(0, 4);
 
   return (
     <div>
       {/* Headline strip: the color keys ARE the plot legend. */}
       <div className="mb-5 flex flex-wrap items-end gap-x-8 gap-y-3">
-        <HeadlineStat label="Realized" value={fmtUsdSigned(realized)} colorVar="var(--green)" sub={pctOfStart(realized)} />
-        <HeadlineStat label="Unrealized" value={fmtUsdSigned(unrealized)} colorVar="var(--claude)" sub={pctOfStart(unrealized)} />
-        <HeadlineStat label="SPY buy & hold" value={fmtUsdSigned(spyPnl)} colorVar="var(--muted-foreground)" sub={pctOfStart(spyPnl)} dashed />
+        <HeadlineStat label="Realized" value={realized} pctOfStart={pctOfStart(realized)} colorVar="var(--green)" />
+        <HeadlineStat label="Unrealized" value={unrealized} pctOfStart={pctOfStart(unrealized)} colorVar="var(--claude)" />
+        <HeadlineStat label="SPY buy & hold" value={spyPnl} pctOfStart={pctOfStart(spyPnl)} colorVar="var(--muted-foreground)" dashed />
         <div className={cn("mb-1 rounded-full border px-2.5 py-1 text-xs font-semibold", edge >= 0 ? "border-green-border bg-green-bg text-green" : "border-red-border bg-red-bg text-red")}>
           {edge >= 0 ? "Beating SPY by " : "Trailing SPY by "}
-          {fmtUsdTick(Math.abs(edge))}
+          <AnimatedNumber value={Math.abs(edge)} kind="moneyInt" />
         </div>
       </div>
 

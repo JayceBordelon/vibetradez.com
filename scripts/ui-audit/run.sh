@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 #
-# One-shot UX/UI audit capture against the local Docker stack.
+# One-shot UX/UI audit capture against the local Docker stack. The output
+# is THROWAWAY analysis input for the auditing model (gitignored under
+# scripts/ui-audit/out/) — screenshots are never committed; the model
+# reads them, fixes what it finds, and the PR description carries the
+# findings.
 #
 # Boots nothing on its own — assumes the local stack is already running on
 # $BASE_URL (default http://localhost:3005). It:
 #   1. waits for /health to be green,
-#   2. resolves the dynamic routes (latest transcript date + kind) from the
-#      seeded Postgres so /transcripts/<date> and /transcript/<date>/<kind>
-#      point at real data,
-#   3. runs capture.mjs to write desktop+mobile, light+dark PNGs into
-#      docs/ui-audits/<date>/.
+#   2. resolves the dynamic routes (latest transcript date + kind, one
+#      holding and one closed trade) from the live stack,
+#   3. runs capture.mjs: the four theme x viewport combos capture
+#      concurrently into out/<date>/.
 #
 # Usage:
 #   cd vibetradez.com/local && docker compose -f docker-compose.local.yml \
@@ -21,6 +24,7 @@
 #   HEALTH_URL  server health URL         (default http://localhost:8080/health)
 #   PGURL       seeded Postgres conn      (default local stack on :5433)
 #   AUDIT_DATE  output dir date stamp     (default: today, YYYY-MM-DD)
+#   OUT_DIR     output directory          (default: ./out/<AUDIT_DATE>)
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -28,7 +32,7 @@ BASE_URL="${BASE_URL:-http://localhost:3005}"
 HEALTH_URL="${HEALTH_URL:-http://localhost:8080/health}"
 PGURL="${PGURL:-postgresql://vibetradez:vibetradez@localhost:5433/vibetradez}"
 AUDIT_DATE="${AUDIT_DATE:-$(date +%F)}"
-OUT_DIR="$(cd ../.. && pwd)/docs/ui-audits/${AUDIT_DATE}"
+OUT_DIR="${OUT_DIR:-$(pwd)/out/${AUDIT_DATE}}"
 
 echo "==> waiting for server health at ${HEALTH_URL}"
 for i in $(seq 1 40); do
@@ -96,13 +100,11 @@ AUDIT_ROUTES="$(
 )"
 
 echo "==> pruning stale captures in ${OUT_DIR}"
-# A re-run into the same dated folder must not leave captures from routes
-# that were removed or renamed since the last run: a stale screenshot would
-# get committed as if it were current. Only the JPEGs are pruned; a
-# hand-written audit.md in the folder survives.
+# A re-run must not leave captures from routes that were removed or renamed
+# since the last run: a stale screenshot would mislead the auditing model.
 rm -f "${OUT_DIR}"/*.jpg
 
 echo "==> capturing screenshots into ${OUT_DIR}"
 BASE_URL="${BASE_URL}" OUT_DIR="${OUT_DIR}" AUDIT_ROUTES="${AUDIT_ROUTES}" node capture.mjs
 
-echo "==> done. PNGs in ${OUT_DIR}"
+echo "==> done. Captures (throwaway analysis input) in ${OUT_DIR}"

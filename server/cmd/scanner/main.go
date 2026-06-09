@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -270,7 +271,7 @@ func main() {
 			if open, _ := isMarketOpen(); !open {
 				return
 			}
-			runPortfolioRisk(portfolioReader, portfolioCaps)
+			runPortfolioRisk(db, executor, portfolioReader, portfolioCaps)
 		}
 		eodSnapshotJob := func() {
 			// Gated on the trading DAY, not the live session: this cron fires
@@ -281,6 +282,13 @@ func main() {
 				log.Printf("Skipping portfolio EOD snapshot: not a trading day (%s)", reason)
 				return
 			}
+			// Settle the decision log's order statuses for the day before
+			// the snapshot + recap email read it.
+			func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				defer cancel()
+				reconcileOrderStatuses(ctx, db, executor)
+			}()
 			runPortfolioEODSnapshot(cfg, db, emailClient, portfolioReader)
 		}
 		if _, err := c.AddFunc(cfg.CronSchedulePortfolio, portfolioJob); err != nil {

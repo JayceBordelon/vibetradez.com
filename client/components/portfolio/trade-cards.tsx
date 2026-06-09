@@ -1,7 +1,8 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 
-import { fmtMoney, fmtPnlInt, fmtPrice, plural, pnlColor } from "@/lib/format";
+import { AnimatedNumber } from "@/components/ui/animated-number";
+import { fmtMoney, fmtPrice, plural, pnlColor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ClosedTrade, Holding, TradeKind } from "@/types/portfolio";
 
@@ -79,10 +80,11 @@ export function HoldingRow({ h }: { h: Holding }) {
       </div>
       <div className="flex shrink-0 items-center gap-3">
         <div className="text-right">
-          <div className="font-semibold tabular-nums">{fmtMoney(h.market_value)}</div>
+          <div className="font-semibold tabular-nums">
+            <AnimatedNumber value={h.market_value} kind="money" />
+          </div>
           <div className={cn("text-sm font-medium tabular-nums", pnlColor(h.unrealized_pnl))}>
-            {fmtPnlInt(h.unrealized_pnl)} ({up ? "+" : ""}
-            {pct.toFixed(1)}%)
+            <AnimatedNumber value={h.unrealized_pnl} kind="pnlInt" /> (<AnimatedNumber value={pct} kind="pctSigned1" />)
           </div>
         </div>
         <ChevronRight className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
@@ -106,10 +108,11 @@ export function ClosedRow({ t }: { t: ClosedTrade }) {
       </div>
       <div className="flex shrink-0 items-center gap-3">
         <div className="text-right">
-          <div className={cn("font-bold tabular-nums", pnlColor(t.realized_pnl))}>{fmtPnlInt(t.realized_pnl)}</div>
+          <div className={cn("font-bold tabular-nums", pnlColor(t.realized_pnl))}>
+            <AnimatedNumber value={t.realized_pnl} kind="pnlInt" />
+          </div>
           <div className={cn("text-sm font-semibold tabular-nums", pnlColor(t.realized_pnl))}>
-            {win ? "+" : ""}
-            {t.realized_pct.toFixed(1)}%
+            <AnimatedNumber value={t.realized_pct} kind="pctSigned1" />
           </div>
         </div>
         <ChevronRight className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />

@@ -81,11 +81,11 @@ func TestContract_DecisionView(t *testing.T) {
 	v := portfolioDecisionView{
 		Action: "buy_equity", AssetType: "EQUITY", Symbol: "MDT", Underlying: "MDT", ContractType: "CALL",
 		Strike: f64(1), Expiration: "2026-04-17", Quantity: 1, LimitPrice: 1, Notional: 1, OrderID: "o",
-		Status: "submitted", Rationale: "r",
+		Status: "submitted", Rationale: "r", TradeID: "uuid-1", TradeKind: "holding",
 	}
 	assertContract(t, "portfolioDecisionView", v, []string{
 		"action", "asset_type", "symbol", "underlying", "contract_type", "strike", "expiration",
-		"quantity", "limit_price", "notional", "order_id", "status", "rationale",
+		"quantity", "limit_price", "notional", "order_id", "status", "rationale", "trade_id", "trade_kind",
 	})
 }
 

@@ -142,3 +142,39 @@ func TestDecoratePnlSeries_EmptyInputs(t *testing.T) {
 		t.Errorf("no trades / no snapshots must decorate zeros: %+v", got[0])
 	}
 }
+
+func TestLinkDecisionTrades(t *testing.T) {
+	decisions := []portfolioDecisionView{
+		{Action: "sell_equity", Symbol: "AVGO"}, // closed a round trip today
+		{Action: "buy_equity", Symbol: "GOOGL"}, // opened a still-held name
+		{Action: "hold", Symbol: "NVDA"},        // held name, hold links to it
+		{Action: "buy_equity", Symbol: "AAPL"},  // opening decision, NOT held (unfilled)
+		{Action: "sell_equity", Symbol: "MSFT"}, // trim: held, no close today
+		{Action: "cancel_order", Symbol: ""},    // no symbol, stays unlinked
+	}
+	held := map[string]bool{"GOOGL": true, "NVDA": true, "MSFT": true}
+	opens := map[string]openMove{
+		"GOOGL": {uuid: "u-googl"},
+		"NVDA":  {uuid: "u-nvda"},
+		"MSFT":  {uuid: "u-msft"},
+		"AAPL":  {uuid: "u-aapl"},
+	}
+	closed := []closedTradeView{{ID: "c-avgo", Symbol: "AVGO", ClosedDate: "2026-06-09"}}
+
+	linkDecisionTrades(decisions, "2026-06-09", held, opens, closed)
+
+	want := []struct{ id, kind string }{
+		{"c-avgo", "closed"},
+		{"u-googl", "holding"},
+		{"u-nvda", "holding"},
+		{"", ""}, // AAPL: opening decision without a position must stay unlinked
+		{"u-msft", "holding"},
+		{"", ""},
+	}
+	for i, w := range want {
+		if decisions[i].TradeID != w.id || decisions[i].TradeKind != w.kind {
+			t.Errorf("decision %d (%s %s): got (%q, %q), want (%q, %q)",
+				i, decisions[i].Action, decisions[i].Symbol, decisions[i].TradeID, decisions[i].TradeKind, w.id, w.kind)
+		}
+	}
+}
