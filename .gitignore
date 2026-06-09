@@ -103,3 +103,4 @@ docker-compose.override.yml
 *.bak
 *.tmp
 *.temp
+scripts/ui-audit/out/

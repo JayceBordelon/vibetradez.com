@@ -53,14 +53,14 @@ The trading server runs against a live broker. A broken cron in production can m
 
 ## UX/UI audit on every client PR
 
-Any PR that touches `client/` (anything a user can see) ships with a **UX/UI
-audit**: a full-page screenshot of every page at desktop (1440×900) and mobile
-(390×844), in both light and dark themes, plus a written per-page analysis from
-a user's perspective. Any rendering messiness, overflow, broken responsive
-layout, or theme glitch the audit surfaces gets fixed in the same PR.
-
-The pipeline is committed at `scripts/ui-audit/` (Playwright / headless
-Chromium). To produce an audit:
+Any PR that touches `client/` (anything a user can see) gets a
+**model-driven UI audit**: boot the seeded local stack, look at the
+rendered app (full-page captures via `scripts/ui-audit/run.sh`, or drive
+Playwright directly for behavior like animations and live updates), fix
+what you find in the same PR, and summarize findings + fixes in the PR
+description. Screenshots are throwaway analysis input in the gitignored
+`scripts/ui-audit/out/`: never commit them. The PR description is the
+audit record.
 
 ```bash
 # fresh seeded local stack
@@ -68,24 +68,23 @@ cd local
 python3 generate-seed.py > seed.sql
 docker compose -f docker-compose.local.yml -f docker-compose.local.override.yml down -v
 docker compose -f docker-compose.local.yml -f docker-compose.local.override.yml up --build -d
-# capture (writes docs/ui-audits/<today>/<page>__<viewport>__<theme>.jpg)
+# capture analysis input (the 4 theme x viewport combos run concurrently)
 cd ../scripts/ui-audit && npm install && ./run.sh
 ```
 
-Then write `docs/ui-audits/<date>/audit.md` (follow the prior audit's
-structure, embed every screenshot), add a row to the index in
-`docs/ui-audits/README.md`, and **embed the audit in the PR description** so
-reviewers see every page without leaving the PR. The
-[PR template](.github/pull_request_template.md) carries this checklist; the full
-convention lives in [`docs/ui-audits/README.md`](docs/ui-audits/README.md).
-
-- Captures are full-page JPEGs at 1× so each audit stays ~10 MB (committed per
-  PR). The runner resolves dynamic routes (latest transcript date/kind) from the
-  seeded Postgres, and themes are forced via `localStorage["theme"]` so there is
-  no light→dark flash.
-- The pipeline auto-scrolls each page before capturing so scroll-reveal sections
-  (the landing chapters use `whileInView`) are not caught at `opacity:0`. If you
-  add a new page, add it to `scripts/ui-audit/routes.mjs`.
+- Cover both viewports and both themes on every page the change touches,
+  plus a regression glance at the rest; for behavior stills can't show,
+  write a short throwaway Playwright probe against the running stack.
+- The runner resolves dynamic routes (latest transcript date/kind, one
+  holding and one closed trade) from the live stack, forces themes via
+  `localStorage["theme"]`, and auto-scrolls each page so scroll-reveal
+  sections are not caught at `opacity:0`. New page? Add it to
+  `scripts/ui-audit/routes.mjs` and the route list in `run.sh`.
+- The [PR template](.github/pull_request_template.md) carries the
+  checklist; the convention lives in
+  [`docs/ui-audits/README.md`](docs/ui-audits/README.md). The dated
+  folders under `docs/ui-audits/` are frozen history from the old
+  commit-the-screenshots convention.
 
 ## Schema migrations live inline
 

@@ -4,8 +4,10 @@
 //
 // Drives headless Chromium over every route in routes.mjs at each viewport
 // (desktop 1440x900, mobile 390x844) in both light and dark themes, writing
-// full-page PNGs into the output directory. Four shots per page:
-//   <slug>__<viewport>__<theme>.png
+// full-page JPEGs into the output directory (throwaway analysis input for
+// the auditing model, gitignored, never committed). Four shots per page:
+//   <slug>__<viewport>__<theme>.jpg
+// The four theme x viewport combos capture concurrently.
 //
 // Theme is forced by seeding localStorage["theme"] before any page script
 // runs (next-themes, attribute="class", default storageKey "theme") and by
@@ -13,7 +15,7 @@
 // land on the settled frame rather than mid-animation.
 //
 // Usage (normally invoked by run.sh, which resolves dynamic routes):
-//   BASE_URL=http://localhost:3005 OUT_DIR=../../docs/ui-audits/2026-06-08 \
+//   BASE_URL=http://localhost:3005 OUT_DIR=./out/2026-06-09 \
 //   AUDIT_ROUTES='[{"slug":"dashboard","path":"/dashboard",...}]' \
 //   node capture.mjs
 //
@@ -30,12 +32,12 @@ import { ROUTES as STATIC_ROUTES, VIEWPORTS, THEMES } from "./routes.mjs";
 const BASE_URL = (process.env.BASE_URL || "http://localhost:3005").replace(/\/$/, "");
 const OUT_DIR = process.env.OUT_DIR;
 const SETTLE_MS = Number(process.env.SETTLE_MS || 1800);
-// Full-page audit shots are stored as JPEG so a four-shot-per-page audit
-// stays a few MB (committed to history per PR) instead of ~50MB of PNG.
-// Quality 82 keeps body text and chart labels legible.
+// JPEG keeps the working set small; the shots are throwaway analysis
+// input for the auditing model, never committed. Quality 82 keeps body
+// text and chart labels legible.
 const JPEG_QUALITY = Number(process.env.JPEG_QUALITY || 82);
-// 1x keeps each audit a few MB (it is committed per PR). Bump to 2 via env
-// for a one-off high-DPI capture when pixel-peeping a specific glitch.
+// 1x is plenty for analysis. Bump to 2 via env for a one-off high-DPI
+// capture when pixel-peeping a specific glitch.
 const SCALE = Number(process.env.SCALE || 1);
 
 if (!OUT_DIR) {
@@ -80,8 +82,19 @@ async function autoScroll(page) {
 const browser = await chromium.launch();
 const results = [];
 
+// The four theme x viewport combos run CONCURRENTLY, one browser context
+// each (routes stay serial within a combo so a page's settle time never
+// fights its sibling). Cuts a full sweep to roughly a quarter of the
+// serial wall clock.
+const combos = [];
 for (const theme of THEMES) {
   for (const vp of VIEWPORTS) {
+    combos.push({ theme, vp });
+  }
+}
+
+async function captureCombo({ theme, vp }) {
+  {
     const context = await browser.newContext({
       viewport: { width: vp.width, height: vp.height },
       deviceScaleFactor: SCALE,
@@ -131,6 +144,7 @@ for (const theme of THEMES) {
   }
 }
 
+await Promise.all(combos.map(captureCombo));
 await browser.close();
 
 const failures = results.filter((r) => r.status === "ERR" || (typeof r.status === "number" && r.status >= 400));

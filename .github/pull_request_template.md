@@ -12,14 +12,10 @@
 
 Required for any PR touching `client/` (server-only PRs may delete this section).
 
-- [ ] Regenerated the audit against the local stack (`scripts/ui-audit/run.sh`)
-- [ ] Committed `docs/ui-audits/<date>/` (screenshots + `audit.md`)
-- [ ] Added a row to the [audit index](../docs/ui-audits/README.md)
-- [ ] Fixed any rendering / responsive / theme issue the audit surfaced
-- [ ] **Embedded the audit below** (paste `audit.md`, or link it, so reviewers
-      see every page at desktop + mobile, light + dark)
-
-<!--
-Paste the contents of docs/ui-audits/<date>/audit.md here, or link to it:
-docs/ui-audits/<date>/audit.md
--->
+- [ ] Booted the fresh seeded local stack and audited the rendered app against
+      the changed code (`scripts/ui-audit/run.sh` captures for analysis, and/or
+      a Playwright probe for behavior). Output is gitignored; nothing committed.
+- [ ] Checked both viewports and both themes on every page the change touches
+- [ ] Fixed any rendering / responsive / theme / behavior issue found, in this PR
+- [ ] **Findings + fixes summarized below** (what was checked, what was found,
+      what changed)

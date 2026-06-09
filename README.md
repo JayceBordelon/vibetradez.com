@@ -206,18 +206,19 @@ Production deploys are handled by the operator's deploy pipeline (separate from 
 
 ## UX/UI audits
 
-Every PR that changes the frontend ships with a full **UX/UI audit**: a
-full-page screenshot of each page at desktop (1440×900) and mobile (390×844), in
-light and dark, with a written per-page analysis and any rendering bug it
-surfaces fixed in the same PR. Audits are committed under
-[`docs/ui-audits/`](docs/ui-audits/) (one dated folder per run) and embedded in
-the PR description.
+Every PR that changes the frontend gets a **model-driven UI audit**: Claude
+boots the seeded local stack, analyzes the rendered app (full-page captures
+at both viewports in both themes via [`scripts/ui-audit/`](scripts/ui-audit/),
+or a Playwright probe for behavior), fixes what it finds in the same PR, and
+summarizes findings + fixes in the PR description. Screenshots are throwaway
+analysis input (gitignored), never committed; the dated folders under
+[`docs/ui-audits/`](docs/ui-audits/) are frozen history from the earlier
+commit-the-screenshots convention.
 
-- **Latest audit:** [`docs/ui-audits/2026-06-08/audit.md`](docs/ui-audits/2026-06-08/audit.md)
-- **Index + convention:** [`docs/ui-audits/README.md`](docs/ui-audits/README.md)
+- **Convention:** [`docs/ui-audits/README.md`](docs/ui-audits/README.md)
 - **Capture pipeline:** [`scripts/ui-audit/`](scripts/ui-audit/) (Playwright)
 
-Generate one against the local stack:
+Run one against the local stack:
 
 ```bash
 cd local
