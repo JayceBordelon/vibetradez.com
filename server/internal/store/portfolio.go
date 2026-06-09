@@ -180,6 +180,34 @@ func (s *Store) UpdateDecisionOrderStatus(schwabOrderID, status string, fillPric
 }
 
 /*
+GetPrevCloseValues returns each held symbol's market value from the most
+recent EOD book snapshot BEFORE the given date, keyed by symbol: the
+"yesterday's close" anchor for the today-vs-overnight split. A symbol
+absent from the map was not held overnight (opened today), so it has no
+overnight component.
+*/
+func (s *Store) GetPrevCloseValues(today string) (map[string]float64, error) {
+	rows, err := s.db.Query(`
+		SELECT symbol, market_value
+		FROM portfolio_positions
+		WHERE date = (SELECT MAX(date) FROM portfolio_positions WHERE date < $1)`, today)
+	if err != nil {
+		return nil, fmt.Errorf("query prev close values: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := make(map[string]float64)
+	for rows.Next() {
+		var symbol string
+		var mv float64
+		if err := rows.Scan(&symbol, &mv); err != nil {
+			return nil, fmt.Errorf("scan prev close value: %w", err)
+		}
+		out[symbol] = mv
+	}
+	return out, rows.Err()
+}
+
+/*
 GetDailyUnrealized returns each snapshot day's total unrealized P&L
 (market value minus cost basis summed over the book) keyed by date, for
 the dashboard's P&L decomposition chart. Days without a snapshot (flat

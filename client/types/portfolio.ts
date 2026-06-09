@@ -16,6 +16,11 @@ export interface PortfolioPosition {
   market_value: number;
   cost_basis: number;
   unrealized_pnl: number;
+  /** Position valued at today's opening print (absent: no quote). */
+  open_value?: number;
+  /** Position's mark at the last EOD snapshot before today; presence means
+   *  it was held overnight (absent for positions opened today). */
+  prev_close_value?: number;
 }
 
 export type PortfolioAction = "buy_equity" | "sell_equity" | "buy_option" | "sell_option" | "hold";
@@ -125,6 +130,9 @@ export interface Holding {
   unrealized_pnl: number;
   opened_date?: string;
   open_rationale?: string;
+  /** Day-split anchors; see PortfolioPosition. */
+  open_value?: number;
+  prev_close_value?: number;
 }
 
 export interface HoldingsResponse {

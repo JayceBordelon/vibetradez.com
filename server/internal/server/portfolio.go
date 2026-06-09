@@ -35,6 +35,14 @@ type portfolioPositionView struct {
 	MarketValue   float64 `json:"market_value"`
 	CostBasis     float64 `json:"cost_basis"`
 	UnrealizedPnl float64 `json:"unrealized_pnl"`
+	// Day-split anchors. OpenValue is the position valued at today's
+	// opening print (live quote, works for stocks and OCC option symbols
+	// alike). PrevCloseValue is the position's mark in OUR last EOD
+	// snapshot before today; its presence is also the held-overnight
+	// signal (a position opened today has none, so it gets no fabricated
+	// overnight component). Either is omitted when its source has nothing.
+	OpenValue      float64 `json:"open_value,omitempty"`
+	PrevCloseValue float64 `json:"prev_close_value,omitempty"`
 }
 
 type portfolioDecisionView struct {
@@ -220,6 +228,8 @@ func (s *Server) handlePortfolio(w http.ResponseWriter, r *http.Request) {
 	if resp.Equity > resp.HighWaterMark {
 		resp.HighWaterMark = resp.Equity
 	}
+	s.attachDayAnchors(resp.Positions, date)
+
 	// Link each of today's moves to its trade page, AFTER the book has
 	// resolved: a "holding" link is only valid for a symbol actually in
 	// the current positions (an unfilled or rejected buy has an opening
@@ -476,6 +486,57 @@ func linkDecisionTrades(decisions []portfolioDecisionView, date string, held map
 		}
 		if oi, ok := opens[d.Symbol]; ok && oi.uuid != "" && held[d.Symbol] {
 			d.TradeID, d.TradeKind = oi.uuid, "holding"
+		}
+	}
+}
+
+/*
+attachDayAnchors decorates position views with the two anchors the UI
+needs to split a day into overnight (prior close to today's open) and
+session (open to now): per-unit opens from one batched live quote call
+(equities and OCC option symbols share the endpoint), and prior-close
+position values from the EOD snapshot ledger. Best-effort: a missing
+quote or snapshot just leaves the field omitted and the UI shows the
+unsplit day change.
+*/
+func (s *Server) dayAnchors(symbols []string, today string) (openPerUnit, prevCloseValue map[string]float64) {
+	prevCloseValue, err := s.db.GetPrevCloseValues(today)
+	if err != nil {
+		prevCloseValue = map[string]float64{}
+	}
+	openPerUnit = map[string]float64{}
+	if s.schwab != nil && len(symbols) > 0 {
+		if quotes, qerr := s.schwab.GetQuotes(symbols); qerr == nil {
+			for sym, q := range quotes {
+				if q.OpenPrice > 0 {
+					openPerUnit[sym] = q.OpenPrice
+				}
+			}
+		}
+	}
+	return openPerUnit, prevCloseValue
+}
+
+func (s *Server) attachDayAnchors(views []portfolioPositionView, today string) {
+	if len(views) == 0 {
+		return
+	}
+	symbols := make([]string, 0, len(views))
+	for _, v := range views {
+		symbols = append(symbols, v.Symbol)
+	}
+	open, prevClose := s.dayAnchors(symbols, today)
+	for i := range views {
+		v := &views[i]
+		mult := 1.0
+		if v.AssetType == "OPTION" {
+			mult = 100
+		}
+		if o, ok := open[v.Symbol]; ok {
+			v.OpenValue = o * v.Quantity * mult
+		}
+		if pc, ok := prevClose[v.Symbol]; ok && pc > 0 {
+			v.PrevCloseValue = pc
 		}
 	}
 }

@@ -44,7 +44,10 @@ type holdingView struct {
 	CostBasis     float64 `json:"cost_basis"`
 	UnrealizedPnl float64 `json:"unrealized_pnl"`
 	OpenedDate    string  `json:"opened_date,omitempty"`
-	OpenRationale string  `json:"open_rationale,omitempty"`
+	// Day-split anchors; see portfolioPositionView for semantics.
+	OpenValue      float64 `json:"open_value,omitempty"`
+	PrevCloseValue float64 `json:"prev_close_value,omitempty"`
+	OpenRationale  string  `json:"open_rationale,omitempty"`
 }
 
 type holdingsResponse struct {
@@ -113,6 +116,28 @@ func (s *Server) handlePortfolioHoldings(w http.ResponseWriter, r *http.Request)
 			h.OpenRationale = oi.rationale
 		}
 		resp.Holdings = append(resp.Holdings, h)
+	}
+	// Day-split anchors for each holding: open from the live quote, prior
+	// close from the EOD snapshot ledger (whose presence = held overnight).
+	if len(resp.Holdings) > 0 {
+		symbols := make([]string, 0, len(resp.Holdings))
+		for _, h := range resp.Holdings {
+			symbols = append(symbols, h.Symbol)
+		}
+		open, prevClose := s.dayAnchors(symbols, time.Now().In(easternLoc()).Format("2006-01-02"))
+		for i := range resp.Holdings {
+			h := &resp.Holdings[i]
+			mult := 1.0
+			if h.Kind == "option" {
+				mult = 100
+			}
+			if o, ok := open[h.Symbol]; ok {
+				h.OpenValue = o * h.Quantity * mult
+			}
+			if pc, ok := prevClose[h.Symbol]; ok && pc > 0 {
+				h.PrevCloseValue = pc
+			}
+		}
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

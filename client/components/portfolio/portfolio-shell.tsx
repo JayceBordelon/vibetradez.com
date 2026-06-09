@@ -10,6 +10,7 @@ import { Stat, StatStrip } from "@/components/layout/stat-strip";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { useLiveQuotes } from "@/hooks/use-live-quotes";
+import { aggregateOvernight } from "@/lib/day-split";
 import { repricePositions } from "@/lib/live-pricing";
 import { useVisiblePoll } from "@/hooks/use-visible-poll";
 import { api } from "@/lib/api";
@@ -97,17 +98,22 @@ export function PortfolioShell() {
   const totalUnrealized = positions.reduce((s, p) => s + p.unrealized_pnl, 0);
   const equity = positionsValue + data.settled_cash + data.unsettled_cash;
   const investedPct = equity > 0 ? (positionsValue / equity) * 100 : 0;
-  // "% today" measures LIVE equity against the last end-of-day close
-  // BEFORE today. The old version compared the curve's last two EOD
-  // points, which read as yesterday's move all day and then froze.
-  const dayChangePct = (() => {
-    const baseline = [...curve].reverse().find((p) => p.date < data.date)?.account_equity;
-    return baseline && baseline > 0 ? ((equity - baseline) / baseline) * 100 : null;
-  })();
+  // Day change measures LIVE equity against the last end-of-day close
+  // BEFORE today, split into the overnight gap (prior close to today's
+  // open, summed from the position anchors) and the session move (the
+  // residual, so realized intraday P&L stays included). When no position
+  // can anchor an overnight (quote source down), fall back to the unsplit
+  // day change.
+  const baseline = [...curve].reverse().find((p) => p.date < data.date)?.account_equity ?? 0;
+  const overnightDollars = aggregateOvernight(positions);
+  const dayDollars = baseline > 0 ? equity - baseline : null;
+  const overnightPct = baseline > 0 && overnightDollars !== null ? (overnightDollars / baseline) * 100 : null;
+  const todayPct = baseline > 0 && dayDollars !== null && overnightDollars !== null ? ((dayDollars - overnightDollars) / baseline) * 100 : null;
+  const dayChangePct = baseline > 0 && dayDollars !== null ? (dayDollars / baseline) * 100 : null;
 
   return (
     <div className="animate-in fade-in mx-auto max-w-[1200px] px-4 py-6 duration-300 sm:px-7">
-      <SummaryStrip equity={equity} settledCash={data.settled_cash} investedPct={investedPct} unrealized={totalUnrealized} dayChangePct={dayChangePct} />
+      <SummaryStrip equity={equity} settledCash={data.settled_cash} investedPct={investedPct} unrealized={totalUnrealized} todayPct={todayPct} overnightPct={overnightPct} dayChangePct={dayChangePct} />
 
       {/* No border-t here: the summary strip above already draws its own
           bottom rule, and the doubled hairline read as a ghost band in dark. */}
@@ -160,7 +166,7 @@ function ExploreLink({ href, title, blurb }: { href: string; title: string; blur
   );
 }
 
-function SummaryStrip({ equity, settledCash, investedPct, unrealized, dayChangePct }: { equity: number; settledCash: number; investedPct: number; unrealized: number; dayChangePct: number | null }) {
+function SummaryStrip({ equity, settledCash, investedPct, unrealized, todayPct, overnightPct, dayChangePct }: { equity: number; settledCash: number; investedPct: number; unrealized: number; todayPct: number | null; overnightPct: number | null; dayChangePct: number | null }) {
   const investedClamped = Math.min(100, Math.max(0, investedPct));
   return (
     <div>
@@ -170,7 +176,17 @@ function SummaryStrip({ equity, settledCash, investedPct, unrealized, dayChangeP
           value={<AnimatedNumber value={equity} kind="money" />}
           icon={Wallet}
           sub={
-            dayChangePct !== null ? (
+            todayPct !== null && overnightPct !== null ? (
+              <span className="font-semibold">
+                <span className={todayPct >= 0 ? "text-green" : "text-red"}>
+                  <AnimatedNumber value={todayPct} kind="pctSigned2" /> today
+                </span>
+                <span className="text-muted-foreground"> · </span>
+                <span className={overnightPct >= 0 ? "text-green" : "text-red"}>
+                  <AnimatedNumber value={overnightPct} kind="pctSigned2" /> overnight
+                </span>
+              </span>
+            ) : dayChangePct !== null ? (
               <span className={cn("font-semibold", dayChangePct >= 0 ? "text-green" : "text-red")}>
                 <AnimatedNumber value={dayChangePct} kind="pctSigned2" /> today
               </span>
