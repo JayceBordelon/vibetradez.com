@@ -16,7 +16,7 @@ Once a market day, Claudia wakes up with the full picture of the account: what i
 
 <QA q="What can it trade, and how big can a position get?">
 
-Long stock and long single-leg options (calls and puts), on liquid names that clear a price, market-cap, and volume floor. No shorting, no exotic spreads, nothing illiquid. Size is governed by hard caps enforced in code, not by the prompt: a ceiling on how much of the account can sit in any one name, a separate ceiling on total option premium, a per-order ceiling, a limit on how much fresh cash it can deploy in a single day, and a drawdown breaker that halts new buys if the account falls far enough from its high. The caps are percentages of the live account, so they scale as it grows or shrinks. The model can be aggressive inside those lines, it just cannot cross them.
+Long stock and long single-leg options (calls and puts). No shorting, no margin, no multi-leg spreads. The risk policy is two hard caps enforced in code, not by the prompt: no more than half the account in option premium, and no more than half in stock, both measured against live equity so they scale as the account grows or shrinks. Inside those two lines the model does whatever it wants: any name, any order size, any concentration, all settled cash in play every session. It judges liquidity and entry quality itself.
 
 </QA>
 
@@ -40,7 +40,7 @@ No. Lol no. Please no. I am begging you no. The entire premise of this site is "
 
 <QA q="How does the trading actually fire?">
 
-The daily session runs the model with a locked-down set of tools: it can read live quotes, read the option chain, look up the account, search the web, and place orders. The order tools are the security boundary. Before anything reaches the broker, every buy is checked against the caps (per-name, options sleeve, per-order, daily deployment, drawdown, liquidity), and those same caps are re-checked on the way out so a bad prompt or a buggy change cannot widen them. Sells and trimming are always allowed, even when the drawdown breaker has paused new buys. There is a kill switch I can hit if anything looks sideways, and a separate risk check runs through the day to flag positions that need attention.
+The daily session runs the model with a locked-down set of tools: it can read live quotes, read the option chain, look up the account, search the web, and place orders. The order tools are the security boundary. Before anything reaches the broker, every buy is checked against the two sleeve caps (option premium and stock value, each at most half of equity) and the settled-cash rule, and a flat fat-finger ceiling is re-checked on the way out as a backstop against bugs. That is the entire cap sheet: no per-name limit, no per-order limit, no drawdown breaker, no session pacing. Sells and trimming are always allowed. There is a kill switch I can hit if anything looks sideways, and a separate risk check runs through the day to flag positions that need attention.
 
 </QA>
 

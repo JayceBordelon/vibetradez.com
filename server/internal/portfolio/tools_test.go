@@ -3,6 +3,7 @@ package portfolio
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"vibetradez.com/internal/schwab"
@@ -15,7 +16,6 @@ NEVER reaches the broker (the whole point of the tool layer being the
 security boundary).
 */
 type fakeReader struct {
-	liq LiquidityCtx
 }
 
 func (f *fakeReader) Snapshot(context.Context) (Snapshot, error) { return Snapshot{}, nil }
@@ -25,7 +25,6 @@ func (f *fakeReader) GetQuotes([]string) (map[string]schwab.StockQuote, error) {
 func (f *fakeReader) GetOptionChain(string, string, string, string, float64) (*schwab.OptionChain, error) {
 	return &schwab.OptionChain{}, nil
 }
-func (f *fakeReader) Liquidity(context.Context, Move) (LiquidityCtx, error) { return f.liq, nil }
 func (f *fakeReader) GetDailyPriceHistory(string) (*schwab.PriceHistory, error) {
 	return &schwab.PriceHistory{Candles: []schwab.Candle{{Close: 100, High: 100, Low: 100}}}, nil
 }
@@ -79,14 +78,14 @@ func isErrResult(s string) bool {
 // A buy that violates a cap must be refused at the tool layer and must NOT
 // reach the broker.
 func TestDispatch_CapRejectionNeverHitsBroker(t *testing.T) {
-	reader := &fakeReader{liq: goodLiquidity()}
+	reader := &fakeReader{}
 	ex := &fakeExec{}
-	snap := baseSnapshot() // $6k, per-order cap $1,800
+	snap := baseSnapshot() // $6k equity, equity sleeve $3,000
 	d := NewToolDispatcher(reader, ex, DefaultCaps(), snap)
 
-	// $2,000 order > $1,800 per-order cap.
+	// $3,100 stock order > the $3,000 equity sleeve.
 	res := d.Dispatch(context.Background(), "buy_equity", mustJSON(t, map[string]any{
-		"symbol": "MDT", "quantity": 40.0, "limit_price": 50.0, "rationale": "test",
+		"symbol": "MDT", "quantity": 62.0, "limit_price": 50.0, "rationale": "test",
 	}))
 	if !isErrResult(res) {
 		t.Fatalf("expected a refusal, got: %s", res)
@@ -99,59 +98,56 @@ func TestDispatch_CapRejectionNeverHitsBroker(t *testing.T) {
 	}
 }
 
-// Successful buys update the working snapshot so a later buy is gated
-// against cumulative deployment, not the pristine session state.
-func TestDispatch_CumulativeDeploymentAcrossMoves(t *testing.T) {
-	reader := &fakeReader{liq: goodLiquidity()}
+// Successful buys update the working snapshot, so cumulative stock buys
+// are gated against the live equity sleeve, not the pristine session
+// state. With pacing gone, the sleeve itself is the only cumulative gate.
+func TestDispatch_CumulativeBuysRunToTheSleeve(t *testing.T) {
+	reader := &fakeReader{}
 	ex := &fakeExec{}
-	snap := baseSnapshot() // deployment budget $3,000
+	snap := baseSnapshot() // $6,000 equity: equity sleeve $3,000
 	d := NewToolDispatcher(reader, ex, DefaultCaps(), snap)
 
-	// First $1,500 buy: allowed.
-	r1 := d.Dispatch(context.Background(), "buy_equity", mustJSON(t, map[string]any{
-		"symbol": "AAA", "quantity": 100.0, "limit_price": 15.0, "rationale": "first",
+	// $1,500 + $1,400 + $100 lands exactly ON the $3,000 sleeve: all pass
+	// (the old per-order/concentration/pacing caps would have refused long
+	// before this point).
+	for i, buy := range []map[string]any{
+		{"symbol": "AAA", "quantity": 100.0, "limit_price": 15.0, "rationale": "first"},
+		{"symbol": "BBB", "quantity": 100.0, "limit_price": 14.0, "rationale": "second"},
+		{"symbol": "CCC", "quantity": 10.0, "limit_price": 10.0, "rationale": "third"},
+	} {
+		if r := d.Dispatch(context.Background(), "buy_equity", mustJSON(t, buy)); isErrResult(r) {
+			t.Fatalf("buy %d should pass, got: %s", i+1, r)
+		}
+	}
+	// One more dollar of stock must be refused on the equity sleeve.
+	r := d.Dispatch(context.Background(), "buy_equity", mustJSON(t, map[string]any{
+		"symbol": "DDD", "quantity": 1.0, "limit_price": 10.0, "rationale": "fourth",
 	}))
-	if isErrResult(r1) {
-		t.Fatalf("first buy should pass, got: %s", r1)
+	if !isErrResult(r) || !strings.Contains(r, "equity-sleeve") {
+		t.Fatalf("fourth buy should be refused on the equity sleeve, got: %s", r)
 	}
-	// Second $1,600 buy: would push deployment to $3,100 > $3,000 budget.
-	r2 := d.Dispatch(context.Background(), "buy_equity", mustJSON(t, map[string]any{
-		"symbol": "BBB", "quantity": 100.0, "limit_price": 16.0, "rationale": "second",
-	}))
-	if !isErrResult(r2) {
-		t.Fatalf("second buy should be refused on cumulative deployment, got: %s", r2)
-	}
-	if ex.buyEquityCalls != 1 {
-		t.Fatalf("exactly one buy should have reached the broker, got %d", ex.buyEquityCalls)
-	}
-	decs := d.Decisions()
-	if len(decs) != 1 || decs[0].Symbol != "AAA" {
-		t.Fatalf("expected one recorded decision for AAA, got %+v", decs)
+	if ex.buyEquityCalls != 3 {
+		t.Fatalf("exactly three buys should have reached the broker, got %d", ex.buyEquityCalls)
 	}
 }
 
 func TestDispatch_CapHeadroom(t *testing.T) {
-	snap := baseSnapshot() // $6k equity, $3k deployment budget
+	snap := baseSnapshot() // $6k equity
 	snap.Positions = []Position{{Symbol: "MDT", Underlying: "MDT", AssetType: AssetEquity, MarkValue: 1500, Quantity: 30}}
-	d := NewToolDispatcher(&fakeReader{liq: goodLiquidity()}, &fakeExec{}, DefaultCaps(), snap)
+	d := NewToolDispatcher(&fakeReader{}, &fakeExec{}, DefaultCaps(), snap)
 
 	res := d.Dispatch(context.Background(), "get_cap_headroom", mustJSON(t, map[string]any{}))
 	var out map[string]any
 	if err := json.Unmarshal([]byte(res), &out); err != nil {
 		t.Fatalf("bad json: %s", res)
 	}
-	// Per-order cap = 30% of $6,000 = $1,800.
-	if out["per_order_cap"].(float64) != 1800 {
-		t.Fatalf("expected per_order_cap 1800, got %v", out["per_order_cap"])
+	// Equity sleeve = 50% of $6,000 = $3,000; $1,500 of stock held leaves $1,500.
+	if out["equity_sleeve_remaining"].(float64) != 1500 {
+		t.Fatalf("expected equity_sleeve_remaining 1500, got %v", out["equity_sleeve_remaining"])
 	}
-	// Per-name cap = 40% of $6,000 = $2,400; MDT exposure $1,500, remaining $900.
-	names := out["held_name_exposure"].([]any)
-	if len(names) != 1 {
-		t.Fatalf("expected 1 held name, got %v", names)
-	}
-	mdt := names[0].(map[string]any)
-	if mdt["remaining"].(float64) != 900 {
-		t.Fatalf("expected MDT remaining 900, got %v", mdt["remaining"])
+	// Options sleeve untouched: full $3,000 remaining.
+	if out["options_sleeve_remaining"].(float64) != 3000 {
+		t.Fatalf("expected options_sleeve_remaining 3000, got %v", out["options_sleeve_remaining"])
 	}
 }
 
@@ -177,7 +173,7 @@ func TestPriceSummary(t *testing.T) {
 
 // hold records a continuation decision (by symbol) and never touches the broker.
 func TestDispatch_Hold(t *testing.T) {
-	d := NewToolDispatcher(&fakeReader{liq: goodLiquidity()}, &fakeExec{}, DefaultCaps(), baseSnapshot())
+	d := NewToolDispatcher(&fakeReader{}, &fakeExec{}, DefaultCaps(), baseSnapshot())
 	res := d.Dispatch(context.Background(), "hold", mustJSON(t, map[string]any{"symbol": "MDT", "rationale": "continuing to hold, thesis intact"}))
 	if isErrResult(res) {
 		t.Fatalf("hold should succeed, got: %s", res)

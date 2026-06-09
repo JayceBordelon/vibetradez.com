@@ -174,13 +174,13 @@ export default async function LandingPage() {
         weight="figure"
         title={
           <>
-            A short leash, <span className="text-gradient-brand">written in code.</span>
+            Barely a leash. <span className="text-gradient-brand">Two rules.</span>
           </>
         }
         aside={<CapList caps={caps} />}
       >
         <p>
-          So it can be dumb, but not bankrupt-me dumb. The hard caps live in the code, not in a prompt it could sweet-talk. Every limit is checked before a trade reaches the broker, then checked again at the broker. It can lose money, just not all of it at once.
+          It does whatever it wants with all the money, every session: any name, any size, all in if it likes the setup. Exactly two limits live in code where it cannot sweet-talk them: no more than half the account in option premium, no more than half in stock. It spends settled cash only because the broker insists, and a flat sanity ceiling at the broker catches code bugs, not trades. It can absolutely lose the money. That is the show.
         </p>
       </Chapter>
 
@@ -224,14 +224,17 @@ export default async function LandingPage() {
         </p>
       </Chapter>
 
-      {/* ══ Light parody social proof, a breather between the story and the ask. ══ */}
-      <div className="relative py-20 sm:py-28 lg:py-32">
+      {/* ══ Light parody social proof, a breather between the story and the ask.
+           The seam against the CTA below is deliberately tight: both sections
+           used to carry full vertical padding and stacked into a near-full
+           screen of dead space on mobile. ══ */}
+      <div className="relative pt-20 pb-8 sm:pt-28 sm:pb-10 lg:pt-32 lg:pb-12">
         <Testimonials />
         <TrustedBy />
       </div>
 
       {/* ══ THE ASK ══ final subscribe CTA, the close of the funnel ══ */}
-      <section className="relative px-5 py-20 sm:px-6 sm:py-28 lg:py-32">
+      <section className="relative px-5 pt-10 pb-20 sm:px-6 sm:pt-12 sm:pb-28 lg:pt-14 lg:pb-32">
         <div className="relative z-10 mx-auto max-w-3xl text-center">
           <div className="lg-orb lg-orb-claude absolute h-[420px] w-[420px] -top-24 -left-24 opacity-30" aria-hidden />
           <div className="lg-orb lg-orb-cyan absolute h-[360px] w-[360px] -bottom-24 -right-20 opacity-30" aria-hidden />
@@ -314,18 +317,15 @@ const toolGroups = [
 ];
 
 const caps = [
-  { label: "Per name, max position", num: 40 },
   { label: "Options sleeve, total", num: 50 },
-  { label: "Per order, max size", num: 30 },
-  { label: "Deployed per session", num: 75 },
-  { label: "Drawdown breaker", num: -35 },
+  { label: "Equities sleeve, total", num: 50 },
 ];
 
 
 const transcript: TranscriptLine[] = [
   {
     type: "thinking",
-    text: "Yesterday's note said add NVDA only if it holds the 50-day. It is holding and up on volume. Settled cash is thin, so this has to be one small add that stays under the per-name cap.",
+    text: "Yesterday's note said add NVDA only if it holds the 50-day. It is holding and up on volume. Settled cash is thin, so this is one small add sized to the cash on hand.",
   },
   {
     type: "text",

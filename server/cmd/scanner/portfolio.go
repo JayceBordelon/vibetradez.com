@@ -105,7 +105,6 @@ func sendDailyRecapEmail(cfg *config.Config, db *store.Store, emailClient *email
 		Stance:           strings.TrimSpace(stance),
 		ActionItems:      strings.TrimSpace(actionItems),
 		ActionItemsLabel: actionItemsLabel(date),
-		DrawdownHalted:   portfolio.DefaultCaps().DrawdownHalted(snap),
 		Moves:            movesFromRows(decisions),
 		Holdings:         holdingsForEmail(snap.Positions),
 		TranscriptURL:    base + "/transcripts/" + date,
@@ -280,38 +279,20 @@ func optionLabel(underlying, contractType string, strike float64, expiration str
 }
 
 /*
-runPortfolioRisk is the intraday risk-cron body (every 15 min, market
-hours). It re-reads the live snapshot and surfaces two conditions: the
-drawdown breaker (new buys halted below the high-water floor) and held
-options under the DTE floor (which the expiry rule should close or roll).
-
-Scaffold scope: this DETECTS and logs. Wiring the actual de-risking sells
-(close/roll the flagged options, force-flatten on a deep breaker trip) is a
-follow-up so the auto-sell path gets its own review before it can move real
-positions. The detection here is the safe half.
+runPortfolioRisk is the intraday cron body (every 15 min, market hours).
+With the cap sheet reduced to the two sleeve limits there is nothing to
+detect intraday anymore; the job's remaining duty is reconciling the
+decision log's order statuses against the broker so fills show up on the
+dashboard within minutes.
 */
-func runPortfolioRisk(db *store.Store, executor *exec.Service, reader *portfoliowire.Reader, caps portfolio.Caps) {
+func runPortfolioRisk(db *store.Store, executor *exec.Service) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	// Keep the decision log honest first: the log is insert-only at
-	// placement time, so without this sweep a filled order reads
-	// "working" on the dashboard until the end of time.
+	// Keep the decision log honest: the log is insert-only at placement
+	// time, so without this sweep a filled order reads "working" on the
+	// dashboard until the end of time.
 	reconcileOrderStatuses(ctx, db, executor)
-
-	snap, err := reader.Snapshot(ctx)
-	if err != nil {
-		log.Printf("portfolio risk: snapshot error: %v", err)
-		return
-	}
-	if caps.DrawdownHalted(snap) {
-		log.Printf("portfolio risk: DRAWDOWN BREAKER tripped (equity $%.2f vs high-water $%.2f, halt at -%.0f%%). New buys are blocked at the tool layer; de-risking still allowed.",
-			snap.Equity, snap.HighWaterMark, caps.DrawdownHaltPct*100)
-	}
-	for _, p := range caps.HeldOptionsBelowDTE(snap) {
-		log.Printf("portfolio risk: held option %s is at %d DTE (under the %d-day floor); expiry rule should close or roll it. [auto-close not yet wired]",
-			p.Symbol, p.DTE, caps.MinHeldOptionDTE)
-	}
 }
 
 /*

@@ -73,13 +73,6 @@ The close-of-day rundown of everything Claude did with the account: what it read
 </table>
 </td></tr>
 
-{{ if .DrawdownHalted }}
-<tr><td style="padding:14px 28px 0 28px;">
-<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;color:#b91c1c;font-size:13px;line-height:1.5;">
-The account slipped below its high-water line, so Claude is holding and trimming only. No new buys until it recovers.
-</div>
-</td></tr>
-{{ end }}
 
 <!-- Today's synopsis (write_summary, part one) -->
 {{ if or .Summary .Stance }}

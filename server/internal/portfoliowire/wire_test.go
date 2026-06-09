@@ -82,9 +82,6 @@ func TestSnapshot_AssemblesEquityAndBudget(t *testing.T) {
 		t.Fatalf("expected settled cash 2000, got %f", snap.SettledCash)
 	}
 	// Deployment budget = settled cash * 50%.
-	if snap.DeploymentBudget != 2000*portfolio.DefaultDailyDeploymentPct {
-		t.Fatalf("unexpected deployment budget %f", snap.DeploymentBudget)
-	}
 	// High-water from the store ($9,000) beats current equity.
 	if snap.HighWaterMark != 9000 {
 		t.Fatalf("expected high-water 9000, got %f", snap.HighWaterMark)

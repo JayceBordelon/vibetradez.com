@@ -60,7 +60,7 @@ Documentation tool (writes to the record, no data and no money):
 
 - **write_summary**: record the day's official session summary in plain language. Called once at the end of each session and stored as the daily record.
 
-It does not short, trade on margin, or use multi-leg option strategies. The hard caps, all expressed as a percentage of live account equity and re-validated at the broker entry point, are: a maximum exposure per underlying, a separate ceiling on total option premium, a per-order ceiling, a limit on how much fresh cash it can deploy in a single session, a liquidity floor (minimum stock price, market cap, option open interest and volume, and maximum spread), a settled-cash rule, and a drawdown breaker that halts new buys once the account falls far enough from its high-water mark. Selling and de-risking are always allowed.
+It does not short, trade on margin, or use multi-leg option strategies. The hard caps, expressed as percentages of live account equity and enforced in code at the tool layer, are: a ceiling on total option premium (half of equity) and a ceiling on total stock value (half of equity), plus a settled-cash rule required by the broker. There is no per-name limit, no per-order limit, no liquidity floor, and no drawdown breaker: within the two sleeve ceilings the model may concentrate the entire deployable account in a single position if it chooses. A flat absolute order ceiling at the broker entry exists as a software-bug backstop only. Selling and de-risking are always allowed.
 
 </Section>
 

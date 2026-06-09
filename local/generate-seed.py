@@ -82,7 +82,7 @@ def gen_equity_curve(days):
 
 
 STANCES = [
-    "Net long and comfortable. The core (MDT, COST) is doing the heavy lifting, so I let it. Trimmed a little NVDA into strength to keep the name under its concentration cap.",
+    "Net long and comfortable. The core (MDT, COST) is doing the heavy lifting, so I let it. Trimmed a little NVDA into strength to bank gains and keep dry powder.",
     "Raised cash today. Two positions hit my trim targets and nothing new was compelling enough to redeploy into, so I am happy sitting on dry powder.",
     "Quiet, deliberate session. Held everything and added a starter in AMD on the pullback to its 50-day. Still running a touch defensive versus the index.",
     "Leaning into the tape. Added to the winners and opened a small NVDA call for convexity, sized well inside the options sleeve. Watching the inflation print midweek.",
@@ -93,7 +93,7 @@ STANCES = [
     "Took profits on the AMD trade and let MDT ride. A little lighter on options, heavier on equity I am willing to hold for weeks.",
     "Cautious add. Started UNH on weakness with a tight invalidation level. If it does not work I cut it fast; the cap math leaves room for one more name.",
     "Mostly housekeeping. Tilted toward the names beating the benchmark and away from the laggards. No new risk added.",
-    "Opportunistic. A gap down in GOOGL gave a cleaner entry than I expected, so I sized up within the per-name limit. Otherwise holding.",
+    "Opportunistic. A gap down in GOOGL gave a cleaner entry than I expected, so I sized up with conviction. Otherwise holding.",
     "Patient. The book is fine versus SPY and I see no reason to fiddle. Logged the watchlist for tomorrow and stepped back.",
     "Trimmed broadly into strength to bank some of the month's gains. Core intact, just lighter and with more cash than usual.",
     "Risk-off lean. Volatility ticked up, so I cut the weakest position and parked the cash. I would rather re-enter higher than ride a name I have lost conviction in.",
@@ -101,7 +101,7 @@ STANCES = [
 ]
 
 SUMMARIES = [
-    "Started the session a little defensive after the open. Read the book and the tape, confirmed the core (MDT, COST) still earns its slot, and trimmed a bit of NVDA into strength to keep it under the concentration cap. Added a small starter where the setup was clean. Net long but comfortable, with cash held back as dry powder. Watching the inflation print midweek before doing anything bigger.",
+    "Started the session a little defensive after the open. Read the book and the tape, confirmed the core (MDT, COST) still earns its slot, and trimmed a bit of NVDA into strength to bank some gains. Added a small starter where the setup was clean. Net long but comfortable, with cash held back as dry powder. Watching the inflation print midweek before doing anything bigger.",
     "Mostly housekeeping today. Nothing new cleared the bar, so I tilted toward the names beating the benchmark and away from the laggards rather than adding fresh risk. Confirmed a prior trim had filled, banked the gain, and left the rest of the book alone. Positioned roughly in line with SPY and content to wait for a better entry.",
     "Pressed the strongest names a touch and opened a small call for convexity into a catalyst, sized well inside the options sleeve. Checked earnings dates first so I am not holding into a surprise print. Left the steady compounders untouched. Leaning long and a bit aggressive, but every position still has a defined invalidation level.",
     "Risk-off lean. Volatility ticked up, so I cut the weakest position, parked the proceeds in cash, and resisted the urge to chase the bounce. Protecting the high-water mark matters more than being a hero here. The core stays intact; I would rather re-enter higher than ride a name I have lost conviction in.",
@@ -121,8 +121,8 @@ ACTION_ITEMS = [
 RATIONALE = {
     "buy_equity": [
         "Adding to the core on a pullback to the 50-day. Trend intact, volume confirming.",
-        "Starting a position. Clean base, improving relative strength, clears the liquidity floor easily.",
-        "Pressing a winner that keeps making higher highs, sized inside the per-name cap.",
+        "Starting a position. Clean base, improving relative strength, plenty liquid to exit fast.",
+        "Pressing a winner that keeps making higher highs.",
         "Weakness looks like noise, not a broken thesis. Buying the dip with a defined invalidation.",
         "Rotating proceeds from a trim into the steadier name in the book.",
     ],
@@ -132,7 +132,7 @@ RATIONALE = {
         "Cheap optionality on a name I already like. If it works I ride it, if not the premium is the max loss.",
     ],
     "sell_equity": [
-        "Trimming into strength to keep the name under its concentration cap and bank some gains.",
+        "Trimming into strength to bank some gains and free up cash.",
         "Thesis intact but the position got too big after the run. Right-sizing it.",
         "Cutting a laggard that stopped earning its slot. Freeing capital for a better setup.",
         "Hit my trim target. Taking part of the move and letting the rest run.",
@@ -454,8 +454,7 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
     use("get_portfolio", {})
     res("get_portfolio", {
         "equity": round(invested + cash, 2), "settled_cash": cash, "unsettled_cash": 0.0,
-        "deployment_budget_left": round(cash * 0.75, 2),
-        "positions": [{"symbol": p["symbol"], "underlying": p["underlying"], "asset_type": p["asset_type"],
+                "positions": [{"symbol": p["symbol"], "underlying": p["underlying"], "asset_type": p["asset_type"],
                        "quantity": p["quantity"], "market_value": p["market_value"],
                        "unrealized_pnl": round(p["market_value"] - p["cost_basis"], 2)} for p in positions],
     })
@@ -512,17 +511,17 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
             use("web_fetch", {"url": "https://www.reuters.com/markets/companies/" + und.lower()})
             res("web_fetch", "Reuters: " + und + " reaffirmed full-year guidance and flagged steady enterprise demand. Nothing in the coverage points to a catalyst that would derail a multi-week hold.")
             did_news = True
-        think("Trend is intact and above the 50- and 200-day, earnings are not until late July so there is no print risk this week, and the spread is a penny. A starter fits cleanly inside the caps.")
+        think("Trend is intact and above the 50- and 200-day, earnings are not until late July so there is no print risk this week, and the spread is a penny. A starter fits cleanly inside the sleeve.")
         if not did_caps:
             use("get_cap_headroom", {})
-            res("get_cap_headroom", {"per_order_cap": 1870.0, "per_name_cap": 2493.0, "options_sleeve_remaining": 1240.0, "deployment_budget_left": round(cash * 0.75, 2)})
+            res("get_cap_headroom", {"options_sleeve_remaining": 1240.0, "equity_sleeve_remaining": 980.0})
             did_caps = True
         if not did_code:
             # The code-execution sandbox is auto-enabled by the web tools; here
             # the model uses it to size the order precisely against the caps
             # instead of eyeballing it.
-            think("Rather than eyeball the size, I will compute the largest whole-share order that fits under both the per-order cap and today's deployment budget, then round down for headroom.")
-            budget = min(1870.0, round(cash * 0.75, 2))
+            think("Rather than eyeball the size, I will compute the largest whole-share order that fits inside the sleeve room and the settled cash on hand, then round down for headroom.")
+            budget = min(1870.0, round(cash, 2))  # sleeve room vs settled cash
             shares = int(budget // px)
             # First attempt fails (sandbox cells share no state, so the bare
             # variables NameError). Both results mirror the real
@@ -530,18 +529,18 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
             # empty on success, so the transcript UI's success/error
             # classification and the red error pill render against seed data.
             use("code_execution", {"code": (
-                "budget = min(per_order_cap, deployment_budget)\n"
+                "budget = min(sleeve_room, settled_cash)\n"
                 "shares = int(budget // price)\n"
                 "print(f'shares={shares} notional={shares * price:.2f}')"
             )})
             res("code_execution", {"error_code": "", "type": "encrypted_code_execution_result", "content": [], "return_code": 1, "stdout": "",
-                                   "stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\nNameError: name 'per_order_cap' is not defined\n"})
+                                   "stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\nNameError: name 'sleeve_room' is not defined\n"})
             think("Forgot the sandbox cell has no shared state, so the inputs were undefined. Re-running with the constants inlined.")
             use("code_execution", {"code": (
                 f"price = {px}\n"
-                "per_order_cap = 1870.0\n"
-                f"deployment_budget = {round(cash * 0.75, 2)}\n"
-                "budget = min(per_order_cap, deployment_budget)\n"
+                "sleeve_room = 1870.0\n"
+                f"settled_cash = {round(cash, 2)}\n"
+                "budget = min(sleeve_room, settled_cash)\n"
                 "shares = int(budget // price)\n"
                 "print(f'shares={shares} notional={shares * price:.2f} headroom={budget - shares * price:.2f}')"
             )})
@@ -555,7 +554,7 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
             use("buy_option", {"occ_symbol": dec["symbol"], "underlying": und, "contract_type": dec.get("contract_type", "CALL"),
                                "strike": dec["strike"], "expiration": dec["expiration"], "contracts": dec["quantity"], "limit_price": dec["limit_price"], "rationale": dec["rationale"]})
         res(dec["action"], {"ok": True, "action": dec["action"], "symbol": dec["symbol"], "quantity": dec["quantity"],
-                            "limit_price": dec["limit_price"], "order_id": next_oid(), "deployment_budget_left": round(cash * 0.75 - dec["notional"], 2)})
+                            "limit_price": dec["limit_price"], "order_id": next_oid(), "settled_cash_left": round(cash - dec["notional"], 2)})
         step()
 
     # ── Place each sell, priced to fill ──
@@ -638,7 +637,7 @@ def mini_transcript_for_day(decisions):
         say(und + " is back on my radar. Checking the quote and the trend before I size anything.")
         use("get_stock_quotes", {"symbols": und})
         res("get_stock_quotes", {und: {"last": px, "bid": round(px - 0.05, 2), "ask": round(px + 0.05, 2), "mark": px, "totalVolume": 14_200_000}})
-        think("Setup is clean and the order fits well inside the per-name and per-order caps. Taking the position.")
+        think("Setup is clean and there is sleeve room and settled cash to spare. Taking the position.")
         say(dec["rationale"])
         if dec["action"] == "buy_equity":
             use("buy_equity", {"symbol": dec["symbol"], "quantity": dec["quantity"], "limit_price": dec["limit_price"], "rationale": dec["rationale"]})

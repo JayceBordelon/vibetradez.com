@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"vibetradez.com/internal/exec"
-	"vibetradez.com/internal/portfolio"
 	"vibetradez.com/internal/store"
 )
 
@@ -63,16 +62,15 @@ type portfolioDecisionView struct {
 type portfolioResponse struct {
 	// Enabled is false when the account/broker isn't wired (trading
 	// disabled at startup). The dashboard shows a "not running" state.
-	Enabled        bool                    `json:"enabled"`
-	Mode           string                  `json:"mode"` // always "live"
-	Date           string                  `json:"date"`
-	Equity         float64                 `json:"equity"`
-	SettledCash    float64                 `json:"settled_cash"`
-	UnsettledCash  float64                 `json:"unsettled_cash"`
-	HighWaterMark  float64                 `json:"high_water_mark"`
-	SPYClose       float64                 `json:"spy_close"`
-	DrawdownHalted bool                    `json:"drawdown_halted"`
-	Positions      []portfolioPositionView `json:"positions"`
+	Enabled       bool                    `json:"enabled"`
+	Mode          string                  `json:"mode"` // always "live"
+	Date          string                  `json:"date"`
+	Equity        float64                 `json:"equity"`
+	SettledCash   float64                 `json:"settled_cash"`
+	UnsettledCash float64                 `json:"unsettled_cash"`
+	HighWaterMark float64                 `json:"high_water_mark"`
+	SPYClose      float64                 `json:"spy_close"`
+	Positions     []portfolioPositionView `json:"positions"`
 	// PositionsSource is "live" (from the broker) or "snapshot" (the last
 	// recorded book, shown when the live broker is flat/unreachable).
 	PositionsSource string                  `json:"positions_source,omitempty"`
@@ -222,9 +220,6 @@ func (s *Server) handlePortfolio(w http.ResponseWriter, r *http.Request) {
 	if resp.Equity > resp.HighWaterMark {
 		resp.HighWaterMark = resp.Equity
 	}
-	caps := portfolio.DefaultCaps()
-	resp.DrawdownHalted = caps.DrawdownHalted(portfolio.Snapshot{Equity: resp.Equity, HighWaterMark: resp.HighWaterMark})
-
 	// Link each of today's moves to its trade page, AFTER the book has
 	// resolved: a "holding" link is only valid for a symbol actually in
 	// the current positions (an unfilled or rejected buy has an opening

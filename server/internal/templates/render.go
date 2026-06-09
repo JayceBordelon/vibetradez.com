@@ -56,7 +56,6 @@ type PortfolioUpdateData struct {
 	ActionItems      string
 	ActionItemsLabel string
 	Stance           string
-	DrawdownHalted   bool
 	Moves            []PortfolioMove
 	Holdings         []PortfolioHolding
 	TranscriptURL    string

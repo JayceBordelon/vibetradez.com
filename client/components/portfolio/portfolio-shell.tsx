@@ -97,12 +97,6 @@ export function PortfolioShell() {
 
   return (
     <div className="animate-in fade-in mx-auto max-w-[1200px] px-4 py-6 duration-300 sm:px-7">
-      {data.drawdown_halted && (
-        <div className="mb-6 rounded-md border border-red-border bg-red-bg px-4 py-3 text-sm text-red">
-          Drawdown breaker tripped: the account is below its high-water floor, so the model is holding and de-risking only. No new buys.
-        </div>
-      )}
-
       <SummaryStrip equity={data.equity} settledCash={data.settled_cash} investedPct={investedPct} unrealized={totalUnrealized} dayChangePct={dayChangePct} />
 
       {/* No border-t here: the summary strip above already draws its own

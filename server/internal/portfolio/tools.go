@@ -30,10 +30,6 @@ type PortfolioReader interface {
 	GetQuotes(symbols []string) (map[string]schwab.StockQuote, error)
 	// GetOptionChain returns the live Schwab option chain for a symbol.
 	GetOptionChain(symbol, contractType, fromDate, toDate string, strike float64) (*schwab.OptionChain, error)
-	// Liquidity gathers the tradability facts (underlying price, market
-	// cap, and for options the OI/volume/spread) for a proposed buy so the
-	// liquidity floor is enforced on live market data, not the model's say-so.
-	Liquidity(ctx context.Context, m Move) (LiquidityCtx, error)
 	// GetDailyPriceHistory returns ~1y of daily candles for trend / 52-week
 	// range / volatility context.
 	GetDailyPriceHistory(symbol string) (*schwab.PriceHistory, error)
@@ -342,14 +338,11 @@ func (d *ToolDispatcher) dispatchGetPortfolio() string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	out, _ := json.Marshal(map[string]any{
-		"equity":                  d.work.Equity,
-		"settled_cash":            d.work.SettledCash,
-		"unsettled_cash":          d.work.UnsettledCash,
-		"high_water_mark":         d.work.HighWaterMark,
-		"deployment_budget_total": d.work.DeploymentBudget,
-		"deployment_budget_left":  d.work.DeploymentBudget - d.work.DeployedThisSession,
-		"new_buys_halted":         d.caps.DrawdownHalted(d.work),
-		"positions":               d.work.Positions,
+		"equity":          d.work.Equity,
+		"settled_cash":    d.work.SettledCash,
+		"unsettled_cash":  d.work.UnsettledCash,
+		"high_water_mark": d.work.HighWaterMark,
+		"positions":       d.work.Positions,
 	})
 	return string(out)
 }
@@ -440,36 +433,21 @@ func (d *ToolDispatcher) dispatchGetCapHeadroom() string {
 	s := d.work
 	c := d.caps
 
-	perNameCap := s.Equity * c.MaxPerUnderlyingPct
-	exposures := map[string]float64{}
-	for _, p := range s.Positions {
-		u := strings.ToUpper(strings.TrimSpace(p.Underlying))
-		exposures[u] += p.MarkValue
-	}
-	heldNames := make([]map[string]any, 0, len(exposures))
-	for u, ex := range exposures {
-		heldNames = append(heldNames, map[string]any{
-			"underlying": u,
-			"exposure":   round2(ex),
-			"remaining":  round2(perNameCap - ex),
-		})
-	}
-	sleeveCap := s.Equity * c.MaxOptionsSleevePct
-	sleeveUsed := optionsSleeveValue(s)
+	optCap := s.Equity * c.MaxOptionsSleevePct
+	optUsed := sleeveValue(s, AssetOption)
+	eqCap := s.Equity * c.MaxEquitySleevePct
+	eqUsed := sleeveValue(s, AssetEquity)
 
 	out, _ := json.Marshal(map[string]any{
 		"equity":                   round2(s.Equity),
 		"settled_cash":             round2(s.SettledCash),
-		"new_buys_halted":          c.DrawdownHalted(s),
 		"high_water_mark":          round2(s.HighWaterMark),
-		"per_order_cap":            round2(s.Equity * c.MaxPerOrderPct),
-		"per_name_cap":             round2(perNameCap),
-		"options_sleeve_cap":       round2(sleeveCap),
-		"options_sleeve_used":      round2(sleeveUsed),
-		"options_sleeve_remaining": round2(sleeveCap - sleeveUsed),
-		"deployment_budget_total":  round2(s.DeploymentBudget),
-		"deployment_budget_left":   round2(s.DeploymentBudget - s.DeployedThisSession),
-		"held_name_exposure":       heldNames,
+		"options_sleeve_cap":       round2(optCap),
+		"options_sleeve_used":      round2(optUsed),
+		"options_sleeve_remaining": round2(optCap - optUsed),
+		"equity_sleeve_cap":        round2(eqCap),
+		"equity_sleeve_used":       round2(eqUsed),
+		"equity_sleeve_remaining":  round2(eqCap - eqUsed),
 	})
 	return string(out)
 }
@@ -830,13 +808,6 @@ place the order through the broker, then update the working snapshot and
 record the decision. place is the broker call (closes over the typed args).
 */
 func (d *ToolDispatcher) commitBuy(ctx context.Context, m Move, limitPrice float64, rationale string, place func() (string, int, error)) string {
-	// Liquidity gather happens outside the lock (it makes network calls).
-	liq, err := d.reader.Liquidity(ctx, m)
-	if err != nil {
-		return jsonError(fmt.Sprintf("%s: liquidity check failed: %v", m.Action, err))
-	}
-	m.Liquidity = liq
-
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -852,7 +823,6 @@ func (d *ToolDispatcher) commitBuy(ctx context.Context, m Move, limitPrice float
 
 	// Update the working snapshot so subsequent moves see this exposure.
 	d.work.SettledCash -= m.Notional
-	d.work.DeployedThisSession += m.Notional
 	d.applyBuyToPositionsLocked(m)
 
 	dec := Decision{
@@ -870,16 +840,15 @@ func (d *ToolDispatcher) commitBuy(ctx context.Context, m Move, limitPrice float
 	d.decisions = append(d.decisions, dec)
 
 	out, _ := json.Marshal(map[string]any{
-		"ok":                     true,
-		"action":                 m.Action,
-		"symbol":                 m.Symbol,
-		"quantity":               m.Quantity,
-		"limit_price":            limitPrice,
-		"notional":               m.Notional,
-		"order_id":               orderID,
-		"execution_id":           execID,
-		"deployment_budget_left": d.work.DeploymentBudget - d.work.DeployedThisSession,
-		"settled_cash_left":      d.work.SettledCash,
+		"ok":                true,
+		"action":            m.Action,
+		"symbol":            m.Symbol,
+		"quantity":          m.Quantity,
+		"limit_price":       limitPrice,
+		"notional":          m.Notional,
+		"order_id":          orderID,
+		"execution_id":      execID,
+		"settled_cash_left": d.work.SettledCash,
 	})
 	return string(out)
 }
@@ -985,12 +954,9 @@ func (d *ToolDispatcher) Decisions() []Decision {
 // interpolates, so the prompt text and the enforced numbers never drift.
 func CapsSummary(c Caps) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "- Max exposure per underlying: %.0f%% of equity (equity + option premium on the same name count together).\n", c.MaxPerUnderlyingPct*100)
 	fmt.Fprintf(&b, "- Max total option premium (the leverage sleeve): %.0f%% of equity.\n", c.MaxOptionsSleevePct*100)
-	fmt.Fprintf(&b, "- Max single order: %.0f%% of equity.\n", c.MaxPerOrderPct*100)
-	fmt.Fprintf(&b, "- Daily new-deployment budget: %.0f%% of settled cash per session (see deployment_budget_left in get_portfolio).\n", DefaultDailyDeploymentPct*100)
-	fmt.Fprintf(&b, "- New buys are HALTED once equity is down %.0f%% from the high-water mark (de-risking still allowed).\n", c.DrawdownHaltPct*100)
-	fmt.Fprintf(&b, "- Liquidity floor: stock >= $%.0f, market cap >= $%.0fB, option OI >= %d and volume >= %d, spread <= %.0f%%.\n", c.MinStockPrice, c.MinUnderlyingMktCap/1e9, c.MinOptionOpenInterest, c.MinOptionVolume, c.MaxSpreadPct*100)
+	fmt.Fprintf(&b, "- Max total stock value (the equity sleeve): %.0f%% of equity.\n", c.MaxEquitySleevePct*100)
+	fmt.Fprintf(&b, "- Those two sleeves are the WHOLE cap sheet: no per-name limit, no per-order limit, no drawdown halt, no liquidity floor, no session pacing. Concentrate, size, and pick instruments however you judge best.\n")
 	fmt.Fprintf(&b, "- You spend SETTLED cash only; unsettled sale proceeds free up at T+1.")
 	return b.String()
 }
