@@ -1,10 +1,14 @@
+"use client";
+
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
+import { useLiveQuotes } from "@/hooks/use-live-quotes";
 import { fmtMoney, fmtPrice } from "@/lib/format";
+import { repriceHoldings } from "@/lib/live-pricing";
 import { cn } from "@/lib/utils";
 import type { ClosedTrade, Holding } from "@/types/portfolio";
 import { KindChip } from "./trade-cards";
@@ -82,7 +86,11 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export function HoldingDetail({ h }: { h: Holding }) {
+export function HoldingDetail({ h: initial }: { h: Holding }) {
+  // The streamed quote for this position's symbol re-prices the headline
+  // numbers tick by tick; without a tick yet the server values stand.
+  const quotes = useLiveQuotes(true);
+  const h = repriceHoldings([initial], quotes)[0];
   const pct = h.cost_basis > 0 ? (h.unrealized_pnl / h.cost_basis) * 100 : 0;
   const tone = h.unrealized_pnl > 0 ? "positive" : h.unrealized_pnl < 0 ? "negative" : "neutral";
   return (
