@@ -49,15 +49,42 @@ if [ -z "${TX_DATE}" ]; then
 fi
 echo "    transcript date=${TX_DATE:-<none>} kind=${TX_KIND}"
 
+# Detail views open in place via ?trade=<id>, where the id is computed
+# server-side (compacted symbol), so resolve one holding and one closed
+# trade through the API rather than reproducing the id scheme in SQL.
+# Prefer an option holding so the audit exercises the dual-axis chart.
+j() { curl -fsS -H "X-VT-Source: audit" "http://localhost:8080$1" 2>/dev/null || true; }
+HOLDING_ID="$(j /api/portfolio/holdings | node -e '
+  let s = ""; process.stdin.on("data", (c) => { s += c; }).on("end", () => {
+    try {
+      const hs = JSON.parse(s).holdings ?? [];
+      const pick = hs.find((h) => h.kind === "option") ?? hs[0];
+      process.stdout.write(pick ? pick.id : "");
+    } catch { /* leave empty */ }
+  });
+')"
+CLOSED_ID="$(j /api/portfolio/closed | node -e '
+  let s = ""; process.stdin.on("data", (c) => { s += c; }).on("end", () => {
+    try {
+      const ts = JSON.parse(s).trades ?? [];
+      process.stdout.write(ts.length ? ts[0].id : "");
+    } catch { /* leave empty */ }
+  });
+')"
+echo "    holding id=${HOLDING_ID:-<none>} closed id=${CLOSED_ID:-<none>}"
+
 # Build the resolved route list as JSON for capture.mjs.
 AUDIT_ROUTES="$(
-  TX_DATE="${TX_DATE}" TX_KIND="${TX_KIND}" node -e '
+  TX_DATE="${TX_DATE}" TX_KIND="${TX_KIND}" HOLDING_ID="${HOLDING_ID}" CLOSED_ID="${CLOSED_ID}" node -e '
     const d = process.env.TX_DATE, k = process.env.TX_KIND;
+    const h = process.env.HOLDING_ID, c = process.env.CLOSED_ID;
     const routes = [
       { slug: "landing",     label: "Landing",           path: "/" },
       { slug: "dashboard",   label: "Dashboard",          path: "/dashboard" },
       { slug: "holdings",    label: "Holdings",           path: "/holdings" },
+      h && { slug: "holding-detail", label: "Holding detail", path: `/holdings?trade=${encodeURIComponent(h)}` },
       { slug: "closed",      label: "Closed",             path: "/closed" },
+      c && { slug: "closed-detail", label: "Closed trade detail", path: `/closed?trade=${encodeURIComponent(c)}` },
       d && { slug: "transcripts", label: "Transcripts index", path: `/transcripts/${d}` },
       d && { slug: "transcript",  label: "Session transcript", path: `/transcript/${d}/${k}` },
       { slug: "faq",         label: "FAQ",                path: "/faq" },
@@ -67,6 +94,13 @@ AUDIT_ROUTES="$(
     process.stdout.write(JSON.stringify(routes));
   '
 )"
+
+echo "==> pruning stale captures in ${OUT_DIR}"
+# A re-run into the same dated folder must not leave captures from routes
+# that were removed or renamed since the last run: a stale screenshot would
+# get committed as if it were current. Only the JPEGs are pruned; a
+# hand-written audit.md in the folder survives.
+rm -f "${OUT_DIR}"/*.jpg
 
 echo "==> capturing screenshots into ${OUT_DIR}"
 BASE_URL="${BASE_URL}" OUT_DIR="${OUT_DIR}" AUDIT_ROUTES="${AUDIT_ROUTES}" node capture.mjs
