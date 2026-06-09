@@ -99,16 +99,29 @@ export function PortfolioShell() {
   const equity = positionsValue + data.settled_cash + data.unsettled_cash;
   const investedPct = equity > 0 ? (positionsValue / equity) * 100 : 0;
   // Day change measures LIVE equity against the last end-of-day close
-  // BEFORE today, split into the overnight gap (prior close to today's
-  // open, summed from the position anchors) and the session move (the
-  // residual, so realized intraday P&L stays included). When no position
-  // can anchor an overnight (quote source down), fall back to the unsplit
-  // day change.
+  // BEFORE today, split phase-aware:
+  //   in session: overnight = the gap that preceded the open (summed from
+  //     position anchors), today = the residual (so realized intraday P&L
+  //     stays included);
+  //   post-close (today's REAL curve point exists): today freezes at the
+  //     completed day and overnight becomes the LIVE drift since the
+  //     close, the period we're actually in.
+  // When neither split is anchorable, fall back to the unsplit day change.
   const baseline = [...curve].reverse().find((p) => p.date < data.date)?.account_equity ?? 0;
-  const overnightDollars = aggregateOvernight(positions);
+  const todayClosePoint = curve.find((p) => p.date === data.date && !p.live);
   const dayDollars = baseline > 0 ? equity - baseline : null;
-  const overnightPct = baseline > 0 && overnightDollars !== null ? (overnightDollars / baseline) * 100 : null;
-  const todayPct = baseline > 0 && dayDollars !== null && overnightDollars !== null ? ((dayDollars - overnightDollars) / baseline) * 100 : null;
+  let todayPct: number | null = null;
+  let overnightPct: number | null = null;
+  if (baseline > 0 && todayClosePoint && todayClosePoint.account_equity > 0) {
+    todayPct = ((todayClosePoint.account_equity - baseline) / baseline) * 100;
+    overnightPct = ((equity - todayClosePoint.account_equity) / baseline) * 100;
+  } else {
+    const overnightDollars = aggregateOvernight(positions);
+    if (baseline > 0 && dayDollars !== null && overnightDollars !== null) {
+      overnightPct = (overnightDollars / baseline) * 100;
+      todayPct = ((dayDollars - overnightDollars) / baseline) * 100;
+    }
+  }
   const dayChangePct = baseline > 0 && dayDollars !== null ? (dayDollars / baseline) * 100 : null;
 
   return (
@@ -173,7 +186,7 @@ function SummaryStrip({ equity, settledCash, investedPct, unrealized, todayPct, 
       <StatStrip cols={4}>
         <Stat
           label="Account equity"
-          value={<AnimatedNumber value={equity} kind="money" />}
+          value={<AnimatedNumber value={equity} kind="money" crumb />}
           icon={Wallet}
           sub={
             todayPct !== null && overnightPct !== null ? (
@@ -195,7 +208,7 @@ function SummaryStrip({ equity, settledCash, investedPct, unrealized, todayPct, 
         />
         <Stat
           label="Invested"
-          value={<AnimatedNumber value={investedPct} kind="pct0" />}
+          value={<AnimatedNumber value={investedPct} kind="pct0" crumb neutral />}
           icon={Gauge}
           sub={
             <span className="mt-1 block h-1.5 w-full max-w-[140px] overflow-hidden rounded-full bg-foreground/[0.08]">
@@ -206,12 +219,12 @@ function SummaryStrip({ equity, settledCash, investedPct, unrealized, todayPct, 
         />
         <Stat
           label="Settled cash"
-          value={<AnimatedNumber value={settledCash} kind="money" />}
+          value={<AnimatedNumber value={settledCash} kind="money" crumb />}
           icon={Coins}
           sub={
             equity > 0 ? (
               <>
-                <AnimatedNumber value={(settledCash / equity) * 100} kind="pct0" /> of the book
+                <AnimatedNumber value={(settledCash / equity) * 100} kind="pct0" neutral /> of the book
               </>
             ) : (
               "dry powder"
@@ -220,7 +233,7 @@ function SummaryStrip({ equity, settledCash, investedPct, unrealized, todayPct, 
         />
         <Stat
           label="Unrealized P&L"
-          value={<AnimatedNumber value={unrealized} kind="pnl" />}
+          value={<AnimatedNumber value={unrealized} kind="pnl" crumb />}
           tone={unrealized > 0 ? "positive" : unrealized < 0 ? "negative" : "neutral"}
           icon={unrealized >= 0 ? ArrowUpRight : ArrowDownRight}
           sub="open positions"

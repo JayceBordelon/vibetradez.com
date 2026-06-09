@@ -43,6 +43,10 @@ type portfolioPositionView struct {
 	// overnight component). Either is omitted when its source has nothing.
 	OpenValue      float64 `json:"open_value,omitempty"`
 	PrevCloseValue float64 `json:"prev_close_value,omitempty"`
+	// TodayCloseValue is the position's mark in TODAY's EOD snapshot,
+	// present only after the 16:00 cron: its presence tells the UI the
+	// session is over and live drift is overnight movement.
+	TodayCloseValue float64 `json:"today_close_value,omitempty"`
 }
 
 type portfolioDecisionView struct {
@@ -101,6 +105,10 @@ type equityCurvePointView struct {
 	// unrealized P&L from that day's EOD snapshot (zero on flat days).
 	RealizedCum float64 `json:"realized_cum"`
 	Unrealized  float64 `json:"unrealized"`
+	// Live marks the synthetic intraday point the endpoint appends before
+	// today's EOD snapshot lands, so clients can tell "today's real close
+	// exists" (post-close) from "this is the live placeholder" (intraday).
+	Live bool `json:"live,omitempty"`
 }
 
 type equityCurveResponse struct {
@@ -315,6 +323,7 @@ func (s *Server) handlePortfolioEquityCurve(w http.ResponseWriter, r *http.Reque
 					AccountEquity: value + settled,
 					SettledCash:   settled,
 					Unrealized:    unrealLive,
+					Live:          true,
 				}
 				// Live SPY for the benchmark line; falls back to the prior
 				// point's close (flat segment) if the quote is unavailable.
@@ -499,10 +508,14 @@ position values from the EOD snapshot ledger. Best-effort: a missing
 quote or snapshot just leaves the field omitted and the UI shows the
 unsplit day change.
 */
-func (s *Server) dayAnchors(symbols []string, today string) (openPerUnit, prevCloseValue map[string]float64) {
+func (s *Server) dayAnchors(symbols []string, today string) (openPerUnit, prevCloseValue, todayCloseValue map[string]float64) {
 	prevCloseValue, err := s.db.GetPrevCloseValues(today)
 	if err != nil {
 		prevCloseValue = map[string]float64{}
+	}
+	todayCloseValue, err = s.db.GetCloseValues(today)
+	if err != nil {
+		todayCloseValue = map[string]float64{}
 	}
 	openPerUnit = map[string]float64{}
 	if s.schwab != nil && len(symbols) > 0 {
@@ -514,7 +527,7 @@ func (s *Server) dayAnchors(symbols []string, today string) (openPerUnit, prevCl
 			}
 		}
 	}
-	return openPerUnit, prevCloseValue
+	return openPerUnit, prevCloseValue, todayCloseValue
 }
 
 func (s *Server) attachDayAnchors(views []portfolioPositionView, today string) {
@@ -525,7 +538,7 @@ func (s *Server) attachDayAnchors(views []portfolioPositionView, today string) {
 	for _, v := range views {
 		symbols = append(symbols, v.Symbol)
 	}
-	open, prevClose := s.dayAnchors(symbols, today)
+	open, prevClose, todayClose := s.dayAnchors(symbols, today)
 	for i := range views {
 		v := &views[i]
 		mult := 1.0
@@ -537,6 +550,9 @@ func (s *Server) attachDayAnchors(views []portfolioPositionView, today string) {
 		}
 		if pc, ok := prevClose[v.Symbol]; ok && pc > 0 {
 			v.PrevCloseValue = pc
+		}
+		if tc, ok := todayClose[v.Symbol]; ok && tc > 0 {
+			v.TodayCloseValue = tc
 		}
 	}
 }
