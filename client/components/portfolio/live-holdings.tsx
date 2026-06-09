@@ -52,8 +52,8 @@ export function LiveHoldings({ initial }: { initial: Holding[] }) {
   return (
     <>
       <StatStrip cols={3}>
-        <Stat label="Market value" value={<AnimatedNumber value={totalMV} kind="money" />} />
-        <Stat label="Unrealized P&L" value={<AnimatedNumber value={totalPnl} kind="pnlInt" />} tone={totalPnl > 0 ? "positive" : totalPnl < 0 ? "negative" : "neutral"} />
+        <Stat label="Market value" value={<AnimatedNumber value={totalMV} kind="money" crumb />} />
+        <Stat label="Unrealized P&L" value={<AnimatedNumber value={totalPnl} kind="pnlInt" crumb />} tone={totalPnl > 0 ? "positive" : totalPnl < 0 ? "negative" : "neutral"} />
         <Stat label="Positions" value={`${live.length}`} />
       </StatStrip>
       <OptionsTable items={options} />

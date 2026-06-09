@@ -19,10 +19,20 @@ export interface DayParts {
   day: number | null;
 }
 
-export function dayParts(p: { market_value: number; cost_basis: number; open_value?: number; prev_close_value?: number }): DayParts {
+export function dayParts(p: { market_value: number; cost_basis: number; open_value?: number; prev_close_value?: number; today_close_value?: number }): DayParts {
   const open = p.open_value ?? 0;
   const prevClose = p.prev_close_value ?? 0;
+  const todayClose = p.today_close_value ?? 0;
   const heldOvernight = prevClose > 0;
+
+  // Post-close phase: today's EOD snapshot exists, so the session is
+  // done. "Today" freezes at the completed day and "overnight" becomes
+  // the LIVE drift since the close, which is the period we're actually
+  // in. (Without this, after-hours moves would keep counting as today.)
+  if (todayClose > 0) {
+    const sessionBase = heldOvernight ? prevClose : p.cost_basis;
+    return { today: todayClose - sessionBase, overnight: p.market_value - todayClose, day: null };
+  }
 
   if (heldOvernight && open > 0) {
     return { today: p.market_value - open, overnight: open - prevClose, day: null };
@@ -30,7 +40,7 @@ export function dayParts(p: { market_value: number; cost_basis: number; open_val
   if (heldOvernight) {
     return { today: null, overnight: null, day: p.market_value - prevClose };
   }
-  // Opened today: its whole life is the session; overnight is honestly 0.
+  // Opened today, session still running: its whole life is the session.
   return { today: p.market_value - p.cost_basis, overnight: 0, day: null };
 }
 

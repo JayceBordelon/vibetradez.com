@@ -21,6 +21,9 @@ export interface PortfolioPosition {
   /** Position's mark at the last EOD snapshot before today; presence means
    *  it was held overnight (absent for positions opened today). */
   prev_close_value?: number;
+  /** Position's mark in TODAY's EOD snapshot; present only after the
+   *  16:00 close, signaling that live drift is now overnight movement. */
+  today_close_value?: number;
 }
 
 export type PortfolioAction = "buy_equity" | "sell_equity" | "buy_option" | "sell_option" | "hold";
@@ -76,6 +79,9 @@ export interface EquityCurvePoint {
   realized_cum: number;
   /** That day's EOD open-book unrealized P&L, USD (0 on flat days). */
   unrealized: number;
+  /** True on the synthetic intraday point appended before today's EOD
+   *  snapshot lands. */
+  live?: boolean;
 }
 
 export interface EquityCurveResponse {
@@ -133,6 +139,7 @@ export interface Holding {
   /** Day-split anchors; see PortfolioPosition. */
   open_value?: number;
   prev_close_value?: number;
+  today_close_value?: number;
 }
 
 export interface HoldingsResponse {
