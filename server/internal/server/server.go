@@ -775,8 +775,11 @@ func (s *Server) handleSchwabCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/dashboard", http.StatusFound)
 }
 
-// Live quotes are streamed via /api/quotes/stream (SSE). The handler
-// lives in quotes_stream.go; cache + REST polling have been deleted.
+// Live-quote serving has been removed from this server: there is no
+// /api/quotes/* route today (neither the old REST polling endpoint nor an
+// SSE streaming handler). The dashboard renders marks from the portfolio
+// snapshot endpoints. The schwab quote cache that remains is used
+// server-side by the portfolio reader's liquidity checks, not over HTTP.
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")

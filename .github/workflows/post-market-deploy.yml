@@ -1,0 +1,84 @@
+name: Post-market deploy replay
+
+# main-pipeline.yml defers every deploy during the 09:00-16:30 ET window:
+# its market_hours_guard skips sync/build/deploy so a restart never lands
+# mid-session on the live trading server. This workflow is that window's
+# safety net. After the close it checks whether the droplet is behind
+# origin/main and, if so, re-runs the pipeline with the market-hours guard
+# overridden, so a push merged during the trading window still ships the
+# same day instead of waiting for the next out-of-window push.
+on:
+  schedule:
+    # GitHub cron is UTC with no DST. 16:35 ET is 20:35 UTC during EDT and
+    # 21:35 UTC during EST. Both fire year-round; the guard job below only
+    # proceeds on the one that lands at 16:xx ET, so exactly one replay runs
+    # per weekday regardless of which side of DST we are on.
+    - cron: '35 20 * * 1-5'
+    - cron: '35 21 * * 1-5'
+  workflow_dispatch:
+
+env:
+  REPO_DIR: /home/jayce/vibetradez.com
+
+jobs:
+  guard:
+    name: Post-close drift gate
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.decide.outputs.deploy }}
+    steps:
+      - name: Confirm the single 16:xx ET post-close fire (DST-correct)
+        id: et
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual dispatch: skipping the ET-time gate."
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          H=$(TZ=America/New_York date +'%H')
+          if [ "$H" = "16" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "$(TZ=America/New_York date) is not the 16:xx ET fire; skipping this one."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check whether the droplet is behind origin/main
+        id: decide
+        if: steps.et.outputs.ok == 'true'
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_HOST: ${{ secrets.HOST }}
+          SSH_USER: ${{ secrets.USERNAME }}
+          # For a scheduled run this is the latest commit on the default
+          # branch, i.e. what a deploy would bring the droplet up to.
+          ORIGIN_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          install -m 600 /dev/null key
+          printf '%s\n' "$SSH_KEY" > key
+          remote=$(ssh -i key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            "$SSH_USER@$SSH_HOST" "cd $REPO_DIR && git rev-parse HEAD")
+          rm -f key
+          echo "droplet HEAD: $remote"
+          echo "origin/main:  $ORIGIN_SHA"
+          if [ "$remote" != "$ORIGIN_SHA" ]; then
+            echo "Droplet is behind origin/main; replaying the deferred deploy."
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Droplet already at origin/main; nothing was deferred today."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  replay:
+    name: Replay deploy
+    needs: guard
+    if: needs.guard.outputs.deploy == 'true'
+    # Re-runs main-pipeline.yml with the market-hours guard overridden. The
+    # called workflow owns the deploy logic (sync, build, deploy, healthcheck,
+    # cleanup, summary), so there is no duplication here. secrets: inherit
+    # forwards HOST / USERNAME / SSH_KEY to the called workflow.
+    uses: ./.github/workflows/main-pipeline.yml
+    with:
+      override_market_hours_guard: true
+    secrets: inherit

@@ -31,34 +31,40 @@ var Holidays = map[string]string{
 	"2026-04-03": "Good Friday",
 	"2026-05-25": "Memorial Day",
 	"2026-06-19": "Juneteenth",
+	// July 4, 2026 is a Saturday, so Independence Day is observed as a FULL
+	// closure on Friday July 3 (not a half-day).
+	"2026-07-03": "Independence Day (Observed)",
 	"2026-09-07": "Labor Day",
 	"2026-11-26": "Thanksgiving",
 	"2026-12-25": "Christmas",
-	// 2027 NYSE schedule.
+	// 2027 NYSE schedule. July 4 (Sunday) and Dec 25 (Saturday) fall on a
+	// weekend, so both are observed as FULL closures on the adjacent weekday
+	// (Monday July 5 / Friday Dec 24), not half-days.
 	"2027-01-01": "New Year's Day",
 	"2027-01-18": "MLK Day",
 	"2027-02-15": "Presidents Day",
 	"2027-03-26": "Good Friday",
 	"2027-05-31": "Memorial Day",
 	"2027-06-18": "Juneteenth (Observed)",
+	"2027-07-05": "Independence Day (Observed)",
 	"2027-09-06": "Labor Day",
 	"2027-11-25": "Thanksgiving",
+	"2027-12-24": "Christmas (Observed)",
 }
 
 /*
-HalfDays are 1:00 PM ET early-close trading days. Observed July 4 +
-Christmas Eve + day after Thanksgiving are the standard NYSE half-day
-set; precise dates vary by which weekday the actual holiday lands on.
+HalfDays are 1:00 PM ET early-close trading days: the day before
+Independence Day (when July 4 is a weekday), Christmas Eve (when Dec 25
+is a weekday), and the day after Thanksgiving. When the underlying
+holiday lands on a weekend it is observed as a FULL closure on the
+adjacent weekday and belongs in Holidays, not here.
 */
 var HalfDays = map[string]string{
 	"2025-11-28": "Day after Thanksgiving",
 	"2025-12-24": "Christmas Eve",
-	"2026-07-03": "Independence Day (Observed)",
 	"2026-11-27": "Day after Thanksgiving",
 	"2026-12-24": "Christmas Eve",
-	"2027-07-05": "Independence Day (Observed)",
 	"2027-11-26": "Day after Thanksgiving",
-	"2027-12-24": "Christmas Day (Observed)",
 }
 
 // ETLocation is America/New_York. Cached at package init since

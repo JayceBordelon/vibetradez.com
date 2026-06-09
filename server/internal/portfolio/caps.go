@@ -13,11 +13,16 @@ POLICY, not advisory: with a maximize-account-value mandate the agent is
 assumed to run at or near every cap, so these values are the actual risk
 the operator is accepting.
 
-All caps are enforced at the tool layer (tools.go) via the Check* methods
-below, and re-validated at the broker entry point (exec) so a buggy
-tool-layer change cannot widen them. This struct is the single source of
-truth for the numbers; CapsSummary renders them into the agent prompt so the
-prose and the enforced values never drift.
+The full percentage cap sheet is enforced at the tool layer (tools.go) via
+the Check* methods below, and that is the SOLE enforcement point for the
+percentage policy. The broker entry point (exec) does NOT re-validate these
+percentage caps: on the way out it only re-checks a single flat absolute
+ceiling (exec.MaxPortfolioOrderCostCeiling), a gross fat-finger backstop set
+far above any sane order for the target account size. So a buggy tool-layer
+change that widened a percentage cap would NOT be caught downstream. This
+struct is the single source of truth for the numbers, and CapsSummary
+renders them into the agent prompt so the prose and the enforced values
+never drift.
 */
 type Caps struct {
 	// MaxPerUnderlyingPct caps total exposure (equity plus option premium)

@@ -15,11 +15,12 @@ func TestIsTradingDay(t *testing.T) {
 		{"2026-05-23", false, "Saturday"},
 		{"2026-05-24", false, "Sunday"},
 		{"2026-05-25", false, "Memorial Day holiday"},
-		{"2026-07-03", true, "Independence Day Observed is a half-day, still a trading day"},
+		{"2026-07-03", false, "Jul 4 2026 is Sat, so Independence Day observed is a FULL closure"},
 		{"2026-11-26", false, "Thanksgiving holiday"},
-		{"2026-11-27", true, "Day after Thanksgiving is a half-day"},
-		{"2027-12-24", true, "Christmas Day Observed 2027 is a half-day, not a closure"},
-		{"2027-12-25", false, "Christmas falls on Saturday — but Saturday rule wins"},
+		{"2026-11-27", true, "Day after Thanksgiving is a half-day, still a trading day"},
+		{"2026-12-24", true, "Christmas Eve is a half-day, still a trading day"},
+		{"2027-12-24", false, "Dec 25 2027 is Sat, so Christmas observed is a FULL closure"},
+		{"2027-12-25", false, "Christmas Day (Saturday)"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.date, func(t *testing.T) {
@@ -36,8 +37,9 @@ func TestCloseMinute(t *testing.T) {
 		want int
 	}{
 		{"2026-05-20", 960}, // 16:00
-		{"2026-07-03", 780}, // 13:00 half-day
-		{"2027-12-24", 780}, // 13:00 half-day (Christmas Day Observed)
+		{"2026-12-24", 780}, // 13:00 Christmas Eve half-day
+		{"2026-07-03", -1},  // full closure (Independence Day observed, Jul 4 is Sat)
+		{"2027-12-24", -1},  // full closure (Christmas observed, Dec 25 is Sat)
 		{"2026-05-25", -1},  // holiday
 		{"2026-05-23", -1},  // Saturday
 	}
@@ -70,8 +72,8 @@ func TestCurrentStatus(t *testing.T) {
 		{"9:25 ET premarket", mustTime("2026-05-20 09:25"), false, "premarket"},
 		{"9:30 ET open", mustTime("2026-05-20 09:30"), true, "open"},
 		{"16:00 ET close edge (closed)", mustTime("2026-05-20 16:00"), false, "afterhours"},
-		{"half-day 13:00 ET close edge", mustTime("2026-07-03 13:00"), false, "afterhours"},
-		{"half-day 12:30 ET still open", mustTime("2026-07-03 12:30"), true, "open"},
+		{"half-day 13:00 ET close edge", mustTime("2026-12-24 13:00"), false, "afterhours"},
+		{"half-day 12:30 ET still open", mustTime("2026-12-24 12:30"), true, "open"},
 		{"Saturday", mustTime("2026-05-23 12:00"), false, "closed"},
 		{"holiday (Memorial Day)", mustTime("2026-05-25 12:00"), false, "closed"},
 	}

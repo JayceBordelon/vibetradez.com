@@ -21,6 +21,15 @@ on:
         type: boolean
         default: false
         description: Skip the market-hours block (emergency deploys only).
+  # Callable by post-market-deploy.yml (the 16:35 ET replay) so a push merged
+  # during the market-hours window still ships post-close. The input mirrors
+  # the workflow_dispatch one; both are read via `inputs.` in
+  # market_hours_guard, so a caller passing true overrides the guard.
+  workflow_call:
+    inputs:
+      override_market_hours_guard:
+        type: boolean
+        default: false
 
 concurrency:
   group: deploy-vibetradez

@@ -32,7 +32,7 @@ type PriceHistory struct {
 GetDailyPriceHistory returns up to one year of daily candles for a symbol,
 used by the portfolio agent's get_price_history tool to reason about trend,
 the 52-week range, and recent volatility. Cached via the shared quote cache
-(daily bars don't move intraday, so the 15s TTL is plenty). Returns an
+(daily bars don't move intraday, so the 45s TTL is plenty). Returns an
 error on a non-200 or an empty result.
 */
 func (c *Client) GetDailyPriceHistory(symbol string) (*PriceHistory, error) {

@@ -116,13 +116,13 @@ flowchart LR
 
 Three crons (`robfig/cron`, America/New_York, skipping weekends and holidays) drive the loop, registered whenever `TRADING_ENABLED=true`. The account trades **live** — there is no paper mode.
 
-- **~09:45 ET — the session.** Claude observes the live book through the reading tools and decides from scratch: buy equity, buy a call or put, add, trim, sell, cancel a stale order, or hold cash. Every action passes the cap sheet (the security boundary enforced in code) before it reaches the broker, and the broker entry points re-check on the way out so a bad prompt or buggy change cannot widen them. It closes the session with `write_summary`; the moves, stance, summary, and the full tool-by-tool transcript are persisted.
+- **~09:45 ET — the session.** Claude observes the live book through the reading tools and decides from scratch: buy equity, buy a call or put, add, trim, sell, cancel a stale order, or hold cash. Every action passes the cap sheet (the security boundary enforced in code) before it reaches the broker. The percentage caps are enforced at the tool layer, and the broker entry point adds only a flat absolute fat-finger ceiling on the way out (it does not re-check the percentages, so the tool layer is the sole enforcement point for the percentage policy). It closes the session with `write_summary`; the moves, stance, summary, and the full tool-by-tool transcript are persisted.
 - **Every 15 min, market hours — the risk sweep.** Flags the drawdown breaker and held options near expiry (detect + log).
 - **16:00 ET — the close.** Records the equity-vs-SPY snapshot and the held book, then sends the **single daily recap email**: the day's summary, every move with its reason, the closing book and headline numbers, and a link to that day's full transcript on the site.
 
 ## Hard caps
 
-Every cap is a percentage of live account equity read at the start of the session, so the policy scales with the account. The values live in `internal/portfolio/caps.go` (`DefaultCaps`), are enforced at the tool layer, and are re-validated at the broker entry point.
+Every cap is a percentage of live account equity read at the start of the session, so the policy scales with the account. The values live in `internal/portfolio/caps.go` (`DefaultCaps`) and are enforced at the tool layer. The broker entry point re-checks only a flat absolute order-cost ceiling (`exec.MaxPortfolioOrderCostCeiling`), not these percentages, so the tool layer is the sole enforcement point for the percentage policy.
 
 | Cap | Value | Why |
 |---|---|---|
