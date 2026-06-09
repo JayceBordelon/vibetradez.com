@@ -178,3 +178,21 @@ func TestLinkDecisionTrades(t *testing.T) {
 		}
 	}
 }
+
+func TestDecoratePnlSeries_PreservesLivePointUnrealized(t *testing.T) {
+	// The synthetic live point carries its own live unrealized mark; only
+	// EOD points read from the snapshot map (which has no entry for today
+	// until the 16:00 cron runs).
+	points := []equityCurvePointView{
+		{Date: "2026-06-08"},
+		{Date: "2026-06-09", Unrealized: 42.5}, // live point
+	}
+	unreal := map[string]float64{"2026-06-08": -10}
+	got := decoratePnlSeries(points, unreal, nil)
+	if got[0].Unrealized != -10 {
+		t.Errorf("EOD point must read the snapshot map, got %v", got[0].Unrealized)
+	}
+	if got[1].Unrealized != 42.5 {
+		t.Errorf("live point's unrealized must be preserved, got %v", got[1].Unrealized)
+	}
+}

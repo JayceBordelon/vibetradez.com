@@ -20,6 +20,7 @@ import (
 	"vibetradez.com/internal/auth"
 	"vibetradez.com/internal/email"
 	"vibetradez.com/internal/exec"
+	"vibetradez.com/internal/quotes"
 	"vibetradez.com/internal/schwab"
 	"vibetradez.com/internal/store"
 	"vibetradez.com/internal/unsub"
@@ -66,6 +67,8 @@ type Server struct {
 	port           string
 	// Live auto-execution. nil = trading disabled at startup.
 	executor *exec.Service
+	// Streaming-quotes fan-out. nil = SSE endpoint disabled (no Schwab).
+	quotesHub *quotes.Hub
 
 	// Unsubscribe HMAC key + previous keys for rotation + the public-
 	// facing URL used to build email links. The /auth/unsubscribe
@@ -158,6 +161,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/price-history", requireInternal(s.handlePriceHistory))
 	s.mux.HandleFunc("/api/transcript", requireInternal(s.handleTranscript))
 	s.mux.HandleFunc("/api/market/status", requireInternal(s.handleMarketStatus))
+	s.mux.HandleFunc("/api/quotes/stream", requireInternal(s.handleQuotesStream))
 }
 
 func (s *Server) Start() {
