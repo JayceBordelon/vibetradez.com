@@ -2,14 +2,6 @@ export function fmt(n: number, d = 2): string {
   return Number(n).toFixed(d);
 }
 
-export function fmtPct(n: number): string {
-  return `${n > 0 ? "+" : ""}${fmt(n, 0)}%`;
-}
-
-export function fmtPctDec(n: number): string {
-  return `${n > 0 ? "+" : ""}${fmt(n, 1)}%`;
-}
-
 /*
 Currency is formatted with Intl.NumberFormat so it carries proper thousands
 separators ($1,480.42) and locale-correct grouping, rather than a bare

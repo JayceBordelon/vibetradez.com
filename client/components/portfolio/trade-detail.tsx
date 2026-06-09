@@ -2,8 +2,9 @@ import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
+import { AnimatedNumber } from "@/components/ui/animated-number";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
-import { fmtMoney, fmtPnlInt, fmtPrice } from "@/lib/format";
+import { fmtMoney, fmtPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ClosedTrade, Holding } from "@/types/portfolio";
 import { KindChip } from "./trade-cards";
@@ -97,9 +98,9 @@ export function HoldingDetail({ h }: { h: Holding }) {
 
       <div className="mt-6">
         <StatStrip cols={4}>
-          <Stat label="Market value" value={fmtMoney(h.market_value)} />
-          <Stat label="Cost basis" value={fmtMoney(h.cost_basis)} />
-          <Stat label="Unrealized P&L" value={fmtPnlInt(h.unrealized_pnl)} tone={tone} sub={`${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`} />
+          <Stat label="Market value" value={<AnimatedNumber value={h.market_value} kind="money" />} />
+          <Stat label="Cost basis" value={<AnimatedNumber value={h.cost_basis} kind="money" />} />
+          <Stat label="Unrealized P&L" value={<AnimatedNumber value={h.unrealized_pnl} kind="pnlInt" />} tone={tone} sub={<AnimatedNumber value={pct} kind="pctSigned1" />} />
           {h.kind === "option" ? <Stat label="Days to expiry" value={h.dte != null ? `${h.dte}d` : "-"} /> : <Stat label="Shares" value={`${h.quantity}`} />}
         </StatStrip>
       </div>
@@ -163,10 +164,10 @@ export function ClosedDetail({ t }: { t: ClosedTrade }) {
 
       <div className="mt-6">
         <StatStrip cols={4}>
-          <Stat label="Realized P&L" value={fmtPnlInt(t.realized_pnl)} tone={tone} />
-          <Stat label="Return" value={`${win ? "+" : ""}${t.realized_pct.toFixed(1)}%`} tone={tone} />
-          <Stat label="Entry" value={fmtMoney(t.entry_price)} />
-          <Stat label="Exit" value={fmtMoney(t.exit_price)} />
+          <Stat label="Realized P&L" value={<AnimatedNumber value={t.realized_pnl} kind="pnlInt" />} tone={tone} />
+          <Stat label="Return" value={<AnimatedNumber value={t.realized_pct} kind="pctSigned1" />} tone={tone} />
+          <Stat label="Entry" value={<AnimatedNumber value={t.entry_price} kind="money" />} />
+          <Stat label="Exit" value={<AnimatedNumber value={t.exit_price} kind="money" />} />
         </StatStrip>
       </div>
 

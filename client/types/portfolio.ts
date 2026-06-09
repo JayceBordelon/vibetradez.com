@@ -34,6 +34,9 @@ export interface PortfolioDecision {
   order_id?: string;
   status?: string;
   rationale: string;
+  /** The trade page this move belongs to (executions tape navigation). */
+  trade_id?: string;
+  trade_kind?: "holding" | "closed";
 }
 
 /*

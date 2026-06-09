@@ -7,10 +7,10 @@ import { useCallback, useEffect, useState } from "react";
 import { DashboardSkeleton } from "@/components/layout/dashboard-skeleton";
 import { Section } from "@/components/layout/section";
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
+import { AnimatedNumber } from "@/components/ui/animated-number";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { useVisiblePoll } from "@/hooks/use-visible-poll";
 import { api } from "@/lib/api";
-import { fmtMoney, fmtPnl } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { EquityCurvePoint, PortfolioResponse } from "@/types/portfolio";
 
@@ -163,24 +163,44 @@ function SummaryStrip({ equity, settledCash, investedPct, unrealized, dayChangeP
       <StatStrip cols={4}>
         <Stat
           label="Account equity"
-          value={fmtMoney(equity)}
+          value={<AnimatedNumber value={equity} kind="money" />}
           icon={Wallet}
-          sub={dayChangePct !== null ? <span className={cn("font-semibold", dayChangePct >= 0 ? "text-green" : "text-red")}>{`${dayChangePct >= 0 ? "+" : ""}${dayChangePct.toFixed(2)}% today`}</span> : undefined}
+          sub={
+            dayChangePct !== null ? (
+              <span className={cn("font-semibold", dayChangePct >= 0 ? "text-green" : "text-red")}>
+                <AnimatedNumber value={dayChangePct} kind="pctSigned2" /> today
+              </span>
+            ) : undefined
+          }
         />
         <Stat
           label="Invested"
-          value={`${investedPct.toFixed(0)}%`}
+          value={<AnimatedNumber value={investedPct} kind="pct0" />}
           icon={Gauge}
           sub={
             <span className="mt-1 block h-1.5 w-full max-w-[140px] overflow-hidden rounded-full bg-foreground/[0.08]">
-              <span className="block h-full rounded-full bg-gradient-brand" style={{ width: `${investedClamped}%` }} />
+              {/* The bar glides with its number: same ~700ms ease. */}
+              <span className="block h-full rounded-full bg-gradient-brand transition-[width] duration-700 ease-out" style={{ width: `${investedClamped}%` }} />
             </span>
           }
         />
-        <Stat label="Settled cash" value={fmtMoney(settledCash)} icon={Coins} sub={equity > 0 ? `${((settledCash / equity) * 100).toFixed(0)}% of the book` : "dry powder"} />
+        <Stat
+          label="Settled cash"
+          value={<AnimatedNumber value={settledCash} kind="money" />}
+          icon={Coins}
+          sub={
+            equity > 0 ? (
+              <>
+                <AnimatedNumber value={(settledCash / equity) * 100} kind="pct0" /> of the book
+              </>
+            ) : (
+              "dry powder"
+            )
+          }
+        />
         <Stat
           label="Unrealized P&L"
-          value={fmtPnl(unrealized)}
+          value={<AnimatedNumber value={unrealized} kind="pnl" />}
           tone={unrealized > 0 ? "positive" : unrealized < 0 ? "negative" : "neutral"}
           icon={unrealized >= 0 ? ArrowUpRight : ArrowDownRight}
           sub="open positions"
