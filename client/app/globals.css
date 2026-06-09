@@ -310,6 +310,39 @@ body {
     font-variant-numeric: tabular-nums;
   }
 
+  /*
+  Transient tick breadcrumb: the signed step a live number just took,
+  floated above the readout by AnimatedNumber. Pops in, drifts up, fades:
+  absolutely positioned, so it never reflows the number's container.
+  */
+  .animate-vt-crumb {
+    animation: vt-crumb 1.1s ease-out forwards;
+  }
+  @keyframes vt-crumb {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, 4px);
+    }
+    18% {
+      opacity: 1;
+      transform: translate(-50%, -2px);
+    }
+    70% {
+      opacity: 1;
+      transform: translate(-50%, -6px);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -12px);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-vt-crumb {
+      animation: none;
+      opacity: 0;
+    }
+  }
+
   /* Brand-green → Claude two-tone gradient used by the marketing
      wordmark and the cross-section underlines. */
   .text-gradient-brand {
