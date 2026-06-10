@@ -359,6 +359,32 @@ def build_decisions(decision_days, session_days, positions):
     avail = [s for s in SYMBOLS if s not in held_names]
     closed_names = set()
     trips = list(gen_closed_round_trips(decision_days, avail, NUM_CLOSED))
+
+    # Close one option round trip ON the latest session day, so today's
+    # transcript (the kitchen-sink session the dashboard links to) narrates a
+    # real sell_option ticket alongside the equity moves. The contract is
+    # re-dated to expire shortly after today (and its OCC symbol regenerated
+    # on both legs so the buy/sell pairing holds), otherwise the retargeted
+    # close would show the model selling an already-expired option.
+    today = session_days[-1]
+    today_iso = today.isoformat()
+    if not any(s["date"] == today_iso and s["action"] == "sell_option" for _b, s in trips):
+        taken = {b["symbol"] for b, _s in trips}
+        for buy, sell in trips:
+            if buy["action"] == "buy_option" and buy["date"] < today_iso and sell["date"] < today_iso:
+                sell["date"] = today_iso
+                new_exp = today + timedelta(days=12)
+                strike = buy["strike"]
+                new_sym = occ(buy["underlying"], new_exp, "CALL", strike)
+                while new_sym in taken:
+                    strike += 1
+                    new_sym = occ(buy["underlying"], new_exp, "CALL", strike)
+                for leg in (buy, sell):
+                    leg["symbol"] = new_sym
+                    leg["strike"] = strike
+                    leg["expiration"] = new_exp.isoformat()
+                break
+
     for buy, sell in trips:
         by_date[buy["date"]].append(buy)
         by_date[sell["date"]].append(sell)
@@ -378,6 +404,21 @@ def build_decisions(decision_days, session_days, positions):
                                 underlying=fresh, contract_type="", strike=None, expiration=None,
                                 quantity=qty, limit_price=px, notional=round(qty * px, 2),
                                 status="submitted", rationale=random.choice(RATIONALE["buy_equity"])))
+    # A small option opener for today as well, so the latest session shows
+    # every order-ticket shape the transcript UI renders (buy_equity,
+    # sell_equity, buy_option, sell_option, cancel_order, hold).
+    opt_und = next((s for s in SYMBOLS if s not in used and s != fresh), None) or next(
+        (s for s in SYMBOLS if s not in held_names and s != fresh), "MSFT"
+    )
+    opx = PRICES[opt_und]
+    oexp = today + timedelta(days=38)
+    ostrike = round(opx * 1.05)
+    olimit = round(opx * 0.018, 2)
+    by_date[ds].append(dict(date=ds, action="buy_option", asset_type="OPTION",
+                            symbol=occ(opt_und, oexp, "CALL", ostrike), underlying=opt_und,
+                            contract_type="CALL", strike=ostrike, expiration=oexp.isoformat(),
+                            quantity=1, limit_price=olimit, notional=round(olimit * 100, 2),
+                            status="submitted", rationale=random.choice(RATIONALE["buy_option"])))
     held_equities = [p for p in positions if p["asset_type"] == "EQUITY"]
     trimmed = None
     if held_equities:
@@ -415,13 +456,19 @@ def fmt_money(x):
     return f"${x:,.0f}"
 
 
-def transcript_for_day(decisions, stance, summary, action_items, positions):
+def transcript_for_day(decisions, stance, summary, action_items, positions, kitchen_sink=False):
     """A cohesive, realistic single-day session: read the book, confirm and
     clean up a stale working order, research a name with the reading tools and
     the news, weigh an option and pass, size within the caps, place the day's
-    moves, then document the session. Tool results are believable numbers
-    anchored to PRICES so it reads like a real run, and every tool group is
-    demonstrated once."""
+    moves, then document the session. Tool results mirror the production tool
+    layer's shapes with believable numbers anchored to PRICES.
+
+    kitchen_sink=True (the most recent session day, the one the dashboard
+    links to) widens the session so every transcript render case appears on
+    one page: all 15 portfolio tools, the Anthropic-run web and sandbox tools
+    in both success and failure states, a cap-sheet refusal, a dangling
+    tool_use with no recorded result, an empty-string tool_result, a long
+    multi-symbol quotes sweep, and long multi-paragraph thinking."""
     ev, state = [], {"r": 0}
 
     def use(tool, inp):
@@ -441,6 +488,11 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
 
     cash = 1480.42
     invested = sum(p["market_value"] for p in positions)
+    equity = round(invested + cash, 2)
+    hwm = round(equity * 1.031, 2)
+    eq_cap = round(equity * 0.5, 2)
+    opt_cap = round(equity * 0.5, 2)
+    opt_used = round(sum(p["market_value"] for p in positions if p["asset_type"] == "OPTION"), 2)
     held_option = next((p for p in positions if p["asset_type"] == "OPTION"), None)
     core = positions[0]["underlying"] if positions else "MDT"
     oid = [3100]
@@ -449,79 +501,167 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
         oid[0] += 1
         return f"live-{oid[0]}"
 
+    buys = [d for d in decisions if d["action"] in ("buy_equity", "buy_option")]
+    sells = [d for d in decisions if d["action"] in ("sell_equity", "sell_option")]
+    holds = [d for d in decisions if d["action"] == "hold"]
+
+    # The equity-sleeve numbers the cap tool reports. Derived so the starter
+    # buy fits with a little room and a triple-size order does not, which is
+    # what the kitchen-sink refusal narrates.
+    first_eq_buy = next((d for d in buys if d["action"] == "buy_equity"), None)
+    starter_notional = first_eq_buy["notional"] if first_eq_buy else 900.0
+    eq_remaining = round(starter_notional * random.uniform(1.15, 1.4), 2)
+    eq_used = round(eq_cap - eq_remaining, 2)
+
     # ── Round 0: read the account and recent history ──
     say("Starting today's session. Before I touch anything I read the live book, my recent moves, and any order I left working yesterday.")
+    if kitchen_sink:
+        think(
+            "Three things to settle before I place anything today.\n\n"
+            "First, the stale trim. I left a limit on " + core + " working overnight and I have no idea whether it filled. "
+            "If it did, the book I am about to read already reflects a smaller position and re-trimming would cut the name twice. "
+            "If it did not, the limit is probably miles from the market by now and needs to be repriced, not left to rot on the order book.\n\n"
+            "Second, sizing discipline. The last few sessions added exposure and both sleeves are getting heavier. Before any new buy I want the cap "
+            "sheet's own numbers, not my mental arithmetic, and I want the order sized in the sandbox so the share count is exact against settled cash.\n\n"
+            "Third, the watchlist. Two names pulled back to support and one of the held calls is close to its catalyst. The plan is one clean starter, "
+            "one small call if the chain is liquid enough, the repriced trim, and explicit holds on everything else so the record shows a decision on every position."
+        )
     use("get_portfolio", {})
     res("get_portfolio", {
-        "equity": round(invested + cash, 2), "settled_cash": cash, "unsettled_cash": 0.0,
-                "positions": [{"symbol": p["symbol"], "underlying": p["underlying"], "asset_type": p["asset_type"],
-                       "quantity": p["quantity"], "market_value": p["market_value"],
+        "equity": equity, "settled_cash": cash, "unsettled_cash": 0.0, "high_water_mark": hwm,
+        "positions": [{"symbol": p["symbol"], "underlying": p["underlying"], "asset_type": p["asset_type"],
+                       "quantity": p["quantity"], "market_value": p["market_value"], "cost_basis": p["cost_basis"],
                        "unrealized_pnl": round(p["market_value"] - p["cost_basis"], 2)} for p in positions],
     })
     use("get_recent_decisions", {"limit": 10})
     res("get_recent_decisions", {
         "decisions": [
-            {"date": "(yesterday)", "action": "sell_equity", "symbol": core, "rationale": "Left a limit to trim the winner into strength."},
-            {"date": "(this week)", "action": "buy_equity", "symbol": core, "rationale": "Added to the core on the pullback."},
+            {"date": "(yesterday)", "action": "sell_equity", "symbol": core, "notional": round(PRICES.get(core, 100) * 4, 2),
+             "rationale": "Left a limit to trim the winner into strength."},
+            {"date": "(this week)", "action": "buy_equity", "symbol": core, "notional": round(PRICES.get(core, 100) * 6, 2),
+             "rationale": "Added to the core on the pullback."},
+            {"date": "(this week)", "action": "hold", "symbol": "", "notional": 0,
+             "rationale": "Nothing cleared the bar. Cash stayed in reserve."},
         ],
-        "stances": ["Net long and comfortable, leaning on the core names."],
+        "stances": [
+            {"date": "(yesterday)", "stance": "Net long and comfortable, leaning on the core names."},
+            {"date": "(two days ago)", "stance": "Trimmed into strength and kept the proceeds as dry powder."},
+        ],
+        "prior_synopsis": "Trimmed the winner into strength and left the rest of the book alone. Cash held back for a cleaner entry.",
+        "prior_action_items": "Confirm the trim filled at the open. Re-check the laggards for a reason to cut. Keep the dry powder until a setup actually triggers.",
     })
     step()
 
     # ── Round 1: confirm the working order, find it stale, cancel it ──
     think("Yesterday I left a limit to trim " + core + ". Before I act on that name again I need to know whether it filled, so I am not trading a position I have already changed.")
     use("get_order_status", {"order_id": "live-2841"})
-    res("get_order_status", {"order_id": "live-2841", "status": "WORKING", "filled": False, "working": True, "filled_quantity": 0, "limit_price": round(PRICES.get(core, 100) * 1.05, 2)})
+    res("get_order_status", {"order_id": "live-2841", "status": "WORKING", "filled": False, "working": True, "terminal": False,
+                             "quantity": 4, "filled_quantity": 0, "fill_price": 0, "limit_price": round(PRICES.get(core, 100) * 1.05, 2)})
     think("It never filled and the limit is now well above the market, so it is just sitting there stale. I will cancel it and re-submit the trim at a price that will actually execute once I have done my research.")
-    use("cancel_order", {"order_id": "live-2841", "rationale": "Stale trim limit priced above the market; cancelling so I can re-submit it to fill."})
+    use("cancel_order", {"order_id": "live-2841", "rationale": "Stale trim limit priced above the market. Cancelling so I can re-submit it to fill."})
     res("cancel_order", {"ok": True, "action": "cancel_order", "order_id": "live-2841"})
     say("Cleared the stale order. The book above is current. Now I will look for one clean idea to add and right-size anything that has run too far.")
     step()
 
-    # ── Round 2 (optional): weigh a call on the held option's name and pass ──
-    if held_option is not None:
-        u = held_option["underlying"]
-        say("I already hold a " + u + " call, so I checked the chain to see whether adding more optionality made sense.")
-        use("get_option_chain", {"symbol": u, "contract_type": "CALL", "from_date": "(near month)", "to_date": "(next month)"})
-        res("get_option_chain", {"symbol": u, "underlyingPrice": PRICES.get(u, 150),
-                                 "calls": [{"strike": round(PRICES.get(u, 150) * 1.05), "bid": 2.1, "ask": 2.9, "mark": 2.5, "openInterest": 180, "volume": 22, "delta": 0.38}]})
-        think("The spread on that contract is wide and the open interest is thin. The cap math also leaves little sleeve room. Adding here would be paying up for poor liquidity, so I pass and keep the call I already own.")
+    # ── Round 2: weigh adding a call and pass on liquidity ──
+    chain_und = held_option["underlying"] if held_option is not None else core
+    if held_option is not None or kitchen_sink:
+        pu = PRICES.get(chain_und, 150)
+        if held_option is not None:
+            say("I already hold a call on " + chain_und + ", so I checked the chain to see whether adding more optionality made sense.")
+        else:
+            say("Before anything else I checked the " + chain_und + " chain to see whether a defined-risk call was a better way to express the add.")
+        use("get_option_chain", {"symbol": chain_und, "contract_type": "CALL", "from_date": "(near month)", "to_date": "(next month)"})
+        chain_exp = "(five weeks out)"
+        res("get_option_chain", {
+            "symbol": chain_und, "status": "SUCCESS", "underlyingPrice": pu, "volatility": 22.8,
+            "calls": [
+                {"putCall": "CALL", "strikePrice": round(pu * 1.02), "bid": 4.1, "ask": 4.5, "last": 4.3, "mark": 4.3,
+                 "totalVolume": 410, "openInterest": 1850, "delta": 0.46, "expirationDate": chain_exp, "daysToExpiration": 36},
+                {"putCall": "CALL", "strikePrice": round(pu * 1.05), "bid": 2.1, "ask": 2.9, "last": 2.4, "mark": 2.5,
+                 "totalVolume": 22, "openInterest": 180, "delta": 0.38, "expirationDate": chain_exp, "daysToExpiration": 36},
+                {"putCall": "CALL", "strikePrice": round(pu * 1.08), "bid": 1.2, "ask": 1.9, "last": 1.5, "mark": 1.55,
+                 "totalVolume": 9, "openInterest": 64, "delta": 0.27, "expirationDate": chain_exp, "daysToExpiration": 36},
+                {"putCall": "CALL", "strikePrice": round(pu * 1.11), "bid": 0.6, "ask": 1.3, "last": 0.9, "mark": 0.95,
+                 "totalVolume": 3, "openInterest": 21, "delta": 0.18, "expirationDate": chain_exp, "daysToExpiration": 36},
+            ],
+        })
+        think("Only the near-the-money strike has real open interest and the spreads widen fast above it. Adding here would be paying up for poor liquidity, so I pass on this chain and keep the exposure I already own.")
+        step()
+
+    # ── Kitchen sink: sweep the wider watchlist in one long quote call ──
+    if kitchen_sink:
+        say("Next a quick sweep of the wider watchlist, so the moves below are sized against the whole tape and not just the names I am touching.")
+        watch = SYMBOLS[:8]
+        use("get_stock_quotes", {"symbols": ",".join(watch)})
+        res("get_stock_quotes", {w: {"last": PRICES[w], "bid": round(PRICES[w] - 0.05, 2), "ask": round(PRICES[w] + 0.06, 2),
+                                     "mark": PRICES[w], "totalVolume": 4_000_000 + (i * 3_137_000) % 21_000_000}
+                                 for i, w in enumerate(watch)})
+        think(
+            "Reading the sweep. The megacaps are flat to slightly green and nothing on the list gapped overnight, which means the pullback names "
+            "I flagged yesterday are still sitting at their levels rather than running away from me. Volume is unremarkable across the board, "
+            "so whatever I do today is a liquidity non-event.\n\n"
+            "The two names worth acting on are the starter candidate, which held its 50-day on yesterday's dip, and the trim, which is still "
+            "pressing against its highs. Everything else is mid-range noise. No reason to widen the session beyond the plan from round one."
+        )
         step()
 
     # ── Research + place each buy ──
-    buys = [d for d in decisions if d["action"] in ("buy_equity", "buy_option")]
-    sells = [d for d in decisions if d["action"] in ("sell_equity", "sell_option")]
-    holds = [d for d in decisions if d["action"] == "hold"]
-    did_news, did_caps, did_code = False, False, False
+    did_news, did_caps, did_code, did_deep, did_refusal = False, False, False, False, False
 
     for dec in buys:
         und = dec["underlying"]
         px = PRICES.get(und) or round(dec["limit_price"], 2)
-        say(und + " pulled back to its rising 50-day on no bad news, so I am checking the quote, the trend, the fundamentals, and the headlines before sizing anything.")
+        if dec["action"] == "buy_equity":
+            say(und + " pulled back to its rising 50-day on no bad news, so I am checking the quote, the trend, the fundamentals, and the headlines before sizing anything.")
+        else:
+            say("The call idea is " + und + ". Same drill before any premium goes out: quote, trend, fundamentals, and the earnings date.")
         use("get_stock_quotes", {"symbols": und})
         res("get_stock_quotes", {und: {"last": px, "bid": round(px - 0.05, 2), "ask": round(px + 0.05, 2), "mark": px, "totalVolume": 18_500_000}})
         use("get_price_history", {"symbol": und})
         res("get_price_history", {"symbol": und, "last_close": px, "sma_20": round(px * 0.99, 2), "sma_50": round(px * 0.97, 2),
-                                  "sma_200": round(px * 0.90, 2), "pct_from_52w_high": -6.4, "return_3m_pct": 5.2, "annualized_vol_20d_pct": 24.1})
+                                  "sma_200": round(px * 0.90, 2), "high_52w": round(px * 1.068, 2), "low_52w": round(px * 0.71, 2),
+                                  "pct_from_52w_high": -6.4, "pct_from_52w_low": 40.8, "return_1m_pct": 2.1, "return_3m_pct": 5.2,
+                                  "annualized_vol_20d_pct": 24.1, "trading_days": 251})
         use("get_fundamentals", {"symbol": und})
-        res("get_fundamentals", {"symbol": und, "market_cap": 2_900_000_000_000, "pe": 31.4, "eps_ttm": round(px / 31.4, 2), "next_earnings": "2026-07-23", "beta": 1.05})
+        res("get_fundamentals", {"symbol": und, "market_cap": int(px * 12_800_000_000), "pe_ratio": 31.4, "eps_ttm": round(px / 31.4, 2),
+                                 "high_52": round(px * 1.068, 2), "low_52": round(px * 0.71, 2), "beta": 1.05,
+                                 "dividend_yield": 0.44, "dividend_amount": round(px * 0.0044, 2),
+                                 "next_earnings_date": "2026-07-23", "avg_10_day_volume": 16_400_000})
         if not did_news:
             use("web_search", {"query": und + " stock news catalyst this week"})
             res("web_search", "Top results: (1) " + und + " expands its enterprise AI tier, bookings up double digits. (2) Two analysts reiterate buy and nudge targets higher. No negative catalyst before the late-July print.")
             use("web_fetch", {"url": "https://www.reuters.com/markets/companies/" + und.lower()})
-            res("web_fetch", "Reuters: " + und + " reaffirmed full-year guidance and flagged steady enterprise demand. Nothing in the coverage points to a catalyst that would derail a multi-week hold.")
+            res("web_fetch", "Reuters: " + und + " reaffirmed full-year guidance and flagged steady enterprise demand. Nothing in the coverage points to a catalyst that would derail a multi-week hold. Saved the article text to the sandbox for a closer pass.")
             did_news = True
+        if kitchen_sink and not did_deep:
+            use("web_fetch", {"url": "https://www.wsj.com/finance/stocks/" + und.lower() + "-outlook"})
+            res("web_fetch", "")
+            say("The second fetch came back empty, that page is paywalled. The Reuters text I saved is enough, so I am grepping it for the guidance language instead.")
+            use("bash_code_execution", {"command": "grep -ic 'guidance' /tmp/reuters_" + und.lower() + ".txt"})
+            res("bash_code_execution", {"error_code": "", "type": "encrypted_bash_code_execution_result", "content": [],
+                                        "return_code": 0, "stdout": "3\n", "stderr": ""})
+            think("Guidance comes up three times in the piece and every mention is a reaffirmation. That settles the print-risk question for this week.")
+            use("text_editor_code_execution", {"command": "create", "path": "/tmp/session_notes.md",
+                                               "file_text": "# Session notes\n- " + und + ": trend intact, guidance reaffirmed, no print risk this week\n- Trim goes out priced at the bid\n- Both sleeves checked before sizing\n"})
+            res("text_editor_code_execution", {"error_code": "", "type": "encrypted_text_editor_code_execution_result", "content": [],
+                                              "is_file_update": False})
+            did_deep = True
         think("Trend is intact and above the 50- and 200-day, earnings are not until late July so there is no print risk this week, and the spread is a penny. A starter fits cleanly inside the sleeve.")
         if not did_caps:
             use("get_cap_headroom", {})
-            res("get_cap_headroom", {"options_sleeve_remaining": 1240.0, "equity_sleeve_remaining": 980.0})
+            res("get_cap_headroom", {"equity": equity, "settled_cash": cash, "high_water_mark": hwm,
+                                     "options_sleeve_cap": opt_cap, "options_sleeve_used": opt_used,
+                                     "options_sleeve_remaining": round(opt_cap - opt_used, 2),
+                                     "equity_sleeve_cap": eq_cap, "equity_sleeve_used": eq_used,
+                                     "equity_sleeve_remaining": eq_remaining})
             did_caps = True
         if not did_code:
             # The code-execution sandbox is auto-enabled by the web tools; here
             # the model uses it to size the order precisely against the caps
             # instead of eyeballing it.
             think("Rather than eyeball the size, I will compute the largest whole-share order that fits inside the sleeve room and the settled cash on hand, then round down for headroom.")
-            budget = min(1870.0, round(cash, 2))  # sleeve room vs settled cash
+            budget = min(eq_remaining, round(cash, 2))
             shares = int(budget // px)
             # First attempt fails (sandbox cells share no state, so the bare
             # variables NameError). Both results mirror the real
@@ -538,7 +678,7 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
             think("Forgot the sandbox cell has no shared state, so the inputs were undefined. Re-running with the constants inlined.")
             use("code_execution", {"code": (
                 f"price = {px}\n"
-                "sleeve_room = 1870.0\n"
+                f"sleeve_room = {eq_remaining}\n"
                 f"settled_cash = {round(cash, 2)}\n"
                 "budget = min(sleeve_room, settled_cash)\n"
                 "shares = int(budget // price)\n"
@@ -547,6 +687,19 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
             res("code_execution", {"error_code": "", "type": "encrypted_code_execution_result", "content": [], "return_code": 0,
                                    "stdout": f"shares={shares} notional={shares * px:.2f} headroom={budget - shares * px:.2f}\n", "stderr": ""})
             did_code = True
+        if kitchen_sink and not did_refusal and dec["action"] == "buy_equity":
+            # The model first tries the full-conviction size and the cap sheet
+            # refuses it, mirroring the production refusal format. The error
+            # path renders on a real order ticket this way.
+            qty_over = max(int(dec["quantity"]) * 3, int(dec["quantity"]) + 3)
+            notional_over = round(qty_over * dec["limit_price"], 2)
+            think("Conviction says triple the starter. Let the cap sheet be the judge of that.")
+            use("buy_equity", {"symbol": dec["symbol"], "quantity": qty_over, "limit_price": dec["limit_price"],
+                               "rationale": "Full-conviction size on the pullback while the setup is clean."})
+            res("buy_equity", {"error": f"buy_equity refused (equity_sleeve): this buy would put ${round(eq_used + notional_over, 2):.2f} in stock, "
+                                        f"over the equity-sleeve cap ${eq_cap:.2f} (50% of ${equity:.2f} equity). Use equity headroom of ${eq_remaining:.2f} or size down."})
+            say("The cap sheet pushed back on the full size, which is exactly what it is there for. Sizing down to the starter that fits the sleeve.")
+            did_refusal = True
         say(dec["rationale"])
         if dec["action"] == "buy_equity":
             use("buy_equity", {"symbol": dec["symbol"], "quantity": dec["quantity"], "limit_price": dec["limit_price"], "rationale": dec["rationale"]})
@@ -554,14 +707,19 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
             use("buy_option", {"occ_symbol": dec["symbol"], "underlying": und, "contract_type": dec.get("contract_type", "CALL"),
                                "strike": dec["strike"], "expiration": dec["expiration"], "contracts": dec["quantity"], "limit_price": dec["limit_price"], "rationale": dec["rationale"]})
         res(dec["action"], {"ok": True, "action": dec["action"], "symbol": dec["symbol"], "quantity": dec["quantity"],
-                            "limit_price": dec["limit_price"], "order_id": next_oid(), "settled_cash_left": round(cash - dec["notional"], 2)})
+                            "limit_price": dec["limit_price"], "notional": dec["notional"], "order_id": next_oid(), "execution_id": oid[0],
+                            "settled_cash_left": round(cash - dec["notional"], 2)})
         step()
 
     # ── Place each sell, priced to fill ──
+    last_sell_oid = "live-2841"
     for dec in sells:
         und = dec["underlying"]
         px = PRICES.get(und, round(dec["limit_price"], 2))
-        say("Re-submitting the trim on " + und + ", this time priced at the bid so it actually fills rather than sitting there.")
+        if dec["action"] == "sell_equity":
+            say("Re-submitting the trim on " + und + ", this time priced at the bid so it actually fills rather than sitting there.")
+        else:
+            say("The " + und + " call did its job and the move I bought it for has played out. Closing it rather than round-tripping the premium.")
         use("get_stock_quotes", {"symbols": und})
         res("get_stock_quotes", {und: {"last": px, "bid": round(px - 0.06, 2), "ask": round(px + 0.04, 2), "mark": px}})
         say(dec["rationale"])
@@ -569,7 +727,9 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
             use("sell_equity", {"symbol": dec["symbol"], "quantity": dec["quantity"], "limit_price": dec["limit_price"], "rationale": dec["rationale"]})
         else:
             use("sell_option", {"occ_symbol": dec["symbol"], "contracts": dec["quantity"], "limit_price": dec["limit_price"], "rationale": dec["rationale"]})
-        res(dec["action"], {"ok": True, "action": dec["action"], "symbol": dec["symbol"], "quantity": dec["quantity"], "limit_price": dec["limit_price"], "order_id": next_oid()})
+        last_sell_oid = next_oid()
+        res(dec["action"], {"ok": True, "action": dec["action"], "symbol": dec["symbol"], "quantity": dec["quantity"],
+                            "limit_price": dec["limit_price"], "order_id": last_sell_oid, "execution_id": oid[0]})
         step()
 
     # ── Every other position gets an explicit hold, logged by name ──
@@ -579,6 +739,9 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
         for dec in named_holds:
             use("hold", {"symbol": dec["symbol"], "rationale": dec["rationale"]})
             res("hold", {"ok": True, "action": "hold", "symbol": dec["symbol"]})
+        if kitchen_sink:
+            use("hold", {"rationale": "Keeping the rest of the settled cash in reserve. Nothing else on the watchlist cleared the bar today."})
+            res("hold", {"ok": True, "action": "hold"})
         step()
     else:
         use("hold", {"rationale": holds[0]["rationale"] if holds else "Opened nothing new; holding cash as dry powder."})
@@ -589,6 +752,11 @@ def transcript_for_day(decisions, stance, summary, action_items, positions):
     use("write_summary", {"synopsis": summary, "action_items": action_items})
     res("write_summary", {"ok": True, "action": "write_summary", "stored": True})
     say(stance)
+    if kitchen_sink:
+        # One last status read on the resting trim, issued right as the
+        # session wrapped. The recorder closed before the result landed, so
+        # the transcript carries a tool_use with no recorded result.
+        use("get_order_status", {"order_id": last_sell_oid})
     return ev
 
 
@@ -697,10 +865,14 @@ def main():
     # with its stored rationale, so the "View the opening/closing session" link
     # on any holding or closed trade resolves and matches the card.
     session_iso = {d.isoformat() for d in session_days}
+    latest_iso = session_days[-1].isoformat()
     transcripts = {}
     for ds in sorted(by_date):
         if ds in session_iso:
-            transcripts[ds] = transcript_for_day(plans[ds], stances[ds], summaries[ds], action_items[ds], positions)
+            # The most recent day (the one the dashboard links to) is the
+            # kitchen-sink session that exercises every transcript render case.
+            transcripts[ds] = transcript_for_day(plans[ds], stances[ds], summaries[ds], action_items[ds], positions,
+                                                 kitchen_sink=(ds == latest_iso))
         else:
             transcripts[ds] = mini_transcript_for_day(by_date[ds])
 
