@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, BookOpen, Brain, CheckCircle2, ChevronRight, CircleDollarSign, Globe, NotebookPen, SquareTerminal, XCircle } from "lucide-react";
+import { ArrowLeft, BookOpen, Braces, Brain, CheckCircle2, CircleDollarSign, Globe, NotebookPen, SquareTerminal, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -10,6 +10,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { TranscriptEvent, TranscriptResponse, TranscriptUsage } from "@/types/trade";
+
+import { resultStatus, safeStringify } from "./format";
+import { ToolBody } from "./tool-views";
 
 type Kind = "selection" | "execution" | "portfolio";
 
@@ -25,8 +28,8 @@ const KIND_COPY: Record<Kind, { title: string; blurb: string; stage: string }> =
     stage: "9:30 ET at-open agent",
   },
   portfolio: {
-    title: "Session reasoning",
-    blurb: "Everything Claudia looked at and every move she made with the account today, tool call by tool call.",
+    title: "Session ledger",
+    blurb: "Everything Claudia looked at and every move she made with the account today, rendered entry by entry like a desk blotter.",
     stage: "daily portfolio session",
   },
 };
@@ -86,9 +89,7 @@ export function TranscriptView({ date, kind }: { date: string; kind: Kind }) {
       <p className="mt-2 text-sm text-muted-foreground">{copy.blurb}</p>
 
       {state.kind === "loading" && <TranscriptSkeleton />}
-      {state.kind === "error" && (
-        <StatusBlock tone="error" title="Couldn't load the transcript" body={state.message} />
-      )}
+      {state.kind === "error" && <StatusBlock tone="error" title="Couldn't load the transcript" body={state.message} />}
       {state.kind === "ready" && (!state.data.available || (state.data.events ?? []).length === 0) && (
         <StatusBlock
           tone="muted"
@@ -108,21 +109,19 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
   return (
     <div className="mt-6">
       {data.model && (
-        <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-1 border-y border-border/40 py-3 text-xs text-muted-foreground">
-          <span>
-            Model <span className="font-mono text-foreground/80">{data.model}</span>
-          </span>
-          {data.created_at && <span>Captured {new Date(data.created_at).toLocaleString()}</span>}
-          {durationMs > 0 && <span>Ran for {formatDuration(durationMs)}</span>}
-          <span>{events.length} events</span>
-          {usage && usage.rounds > 0 && <span>{usage.rounds} rounds</span>}
+        <div className="mb-5 grid grid-cols-2 gap-x-6 gap-y-2.5 rounded-lg border border-border/60 bg-card-elevated/60 px-4 py-3 sm:grid-cols-5">
+          <MetaCell label="Model" value={data.model} />
+          {data.created_at && <MetaCell label="Captured" value={new Date(data.created_at).toLocaleString()} />}
+          {durationMs > 0 && <MetaCell label="Wall clock" value={formatDuration(durationMs)} />}
+          <MetaCell label="Entries" value={String(events.length)} />
+          {usage && usage.rounds > 0 && <MetaCell label="Rounds" value={String(usage.rounds)} />}
         </div>
       )}
       {usage && usage.rounds > 0 && <UsageBreakdown usage={usage} model={data.model} />}
-      <ol className="space-y-6">
+      <ol className="space-y-5">
         {(() => {
           // Fold each tool_result into its matching tool_use so a call and
-          // its outcome render as one element, not two stacked headers. The
+          // its outcome render as one ledger entry, not two stacked ones. The
           // result is the tool_result that follows a tool_use (matched by
           // tool_use_id when both carry one, else by adjacency so seeded /
           // id-less transcripts still pair).
@@ -155,9 +154,9 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
                     // Rounds are 0-indexed in the event stream; display
                     // 1-indexed so the labels agree with the header's
                     // "N rounds" count (the unlabeled preamble is Round 1).
-                    <div className="mb-6 flex items-center gap-3" aria-hidden>
+                    <div className="mb-5 flex items-center gap-3" aria-hidden>
                       <span className="h-px flex-1 bg-border" />
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Round {ev.round + 1}</span>
+                      <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Round {ev.round + 1}</span>
                       <span className="h-px flex-1 bg-border" />
                     </div>
                   )}
@@ -175,16 +174,23 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
   );
 }
 
-// Tools fall into three groups, each with its own icon in the transcript:
+function MetaCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="truncate font-mono text-[11px] text-foreground/85" title={value}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+// Tools fall into groups, each with its own icon and eyebrow in the ledger:
 // EXECUTION tools move money (or record the explicit no-op), DOCUMENTATION
-// tools only write to the record, and everything else is a read-only
-// reading tool.
+// tools only write to the record, WEB and CODE tools run on Anthropic's
+// side, and everything else is a read-only reading tool.
 const EXECUTION_TOOLS = new Set(["buy_equity", "sell_equity", "buy_option", "sell_option", "cancel_order", "hold"]);
 const DOCUMENTATION_TOOLS = new Set(["write_summary"]);
-// Server-side tools Anthropic runs for us, not our own get_* readers. The web
-// tools are declared directly; the code-execution sub-tools (python, bash,
-// file editor) are auto-enabled by the web tools and run in Anthropic's
-// sandbox to filter web results before they reach context.
 const WEB_TOOLS = new Set(["web_search", "web_fetch"]);
 const CODE_TOOLS = new Set(["code_execution", "bash_code_execution", "text_editor_code_execution"]);
 
@@ -213,50 +219,23 @@ function toolIcon(group: ToolGroup) {
   }
 }
 
-function toolEyebrow(group: ToolGroup): string {
+function toolTag(group: ToolGroup): string {
   switch (group) {
     case "execution":
-      return "Execution tool called";
+      return "execution";
     case "documentation":
-      return "Documentation tool called";
+      return "documentation";
     case "web":
-      return "Web tool (Anthropic-run)";
+      return "web · anthropic-run";
     case "code":
-      return "Sandbox tool (Anthropic-run)";
+      return "sandbox · anthropic-run";
     default:
-      return "Reading tool called";
+      return "reading";
   }
 }
 
-// resultStatus reads a tool result and classifies it: an {"error": ...}
-// payload is an error, an {"ok": true} or any other returned data is a
-// success. Undefined when there is no recorded result.
-function resultStatus(raw?: string): "success" | "error" | undefined {
-  if (raw === undefined) return undefined;
-  const trimmed = raw.trim();
-  if (!trimmed) return "success";
-  try {
-    const o = JSON.parse(trimmed);
-    if (o && typeof o === "object" && !Array.isArray(o)) {
-      // Our tools signal failure with {"error": ...}. The server-run code
-      // tools ALWAYS carry an error_code field, empty string on success, so
-      // only a non-empty error_code (or a nonzero shell return_code) is a
-      // failure; `"error_code" in o` flagged every sandbox result as an error.
-      if ("error" in o) return "error";
-      const ec = (o as { error_code?: unknown }).error_code;
-      if (typeof ec === "string" && ec !== "") return "error";
-      if (typeof (o as { return_code?: unknown }).return_code === "number" && (o as { return_code: number }).return_code !== 0) {
-        return "error";
-      }
-    }
-  } catch {
-    // non-JSON result (e.g. web prose) means the tool returned something.
-  }
-  return "success";
-}
-
-// toolAccentClass colors a tool by intent: buys green, sells red, holds the
-// brand/primary purple, documentation clay. Reading tools stay neutral.
+// toolAccentClass colors a tool by intent: buys green, sells red, cancels
+// amber, documentation clay. Reading tools stay neutral.
 function toolAccentClass(name?: string): string {
   if (!name) return "text-foreground/90";
   if (name.startsWith("buy_")) return "text-green";
@@ -274,51 +253,34 @@ function EventBlock({ event, resultPayload }: { event: TranscriptEvent; resultPa
         <div className="border-l-2 border-claude/40 pl-4">
           <div className="mb-1.5 flex items-center gap-2">
             <ClaudeLogo className="h-4 w-4" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-claude">Narration</span>
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-claude">Narration</span>
           </div>
-          <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-foreground/90">{event.text}</p>
+          <p className="whitespace-pre-wrap font-serif text-[15px] leading-relaxed text-foreground/90">{event.text}</p>
         </div>
       );
     case "thinking":
       // Neutral border + muted label, NOT the claude accent: narration and
-      // thinking previously shared the same color treatment and were
-      // indistinguishable at scroll speed.
+      // thinking must stay distinguishable at scroll speed.
       return (
-        <div className="border-l-2 border-muted-foreground/30 pl-4">
+        <div className="border-l-2 border-muted-foreground/25 pl-4">
           <div className="mb-1.5 flex items-center gap-2">
             <Brain className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Extended thinking</span>
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Extended thinking</span>
           </div>
-          <p className="whitespace-pre-wrap text-sm italic leading-relaxed text-foreground/80">{event.text}</p>
+          <p className="whitespace-pre-wrap text-[13px] italic leading-relaxed text-muted-foreground">{event.text}</p>
         </div>
       );
-    case "tool_use": {
-      const group = toolGroup(event.tool_name);
-      const ToolIcon = toolIcon(group);
-      return (
-        <ToolDetails
-          icon={<ToolIcon className="h-3.5 w-3.5" />}
-          eyebrow={toolEyebrow(group)}
-          name={event.tool_name ?? "tool"}
-          hint={toolSummary(event.tool_input)}
-          accentClass={toolAccentClass(event.tool_name)}
-          payload={formatJSON(event.tool_input)}
-          status={resultStatus(resultPayload)}
-          result={resultPayload !== undefined ? prettyResult(resultPayload) : undefined}
-        />
-      );
-    }
+    case "tool_use":
+      return <ToolSlip event={event} resultRaw={resultPayload} />;
     default:
       return null;
   }
 }
 
 /*
-toolSummary flattens a call's input into a compact "k: v · k: v" line so a
-collapsed row still says what the call touched (ticker, qty, price). Ten
-identical collapsed "get_stock_quotes" rows were unattributable without
-expanding each one. Primitive values and short primitive arrays only; nested
-objects stay behind the expander.
+toolSummary flattens a call's input into a compact "k: v · k: v" line so the
+entry header still says what the call touched (ticker, qty, price) without
+reading the body. Primitive values and short primitive arrays only.
 */
 function toolSummary(input: unknown): string {
   if (!input || typeof input !== "object" || Array.isArray(input)) return "";
@@ -338,73 +300,80 @@ function toolSummary(input: unknown): string {
 }
 
 /*
-ToolDetails is a collapsible card for a tool call's input + result. Collapsed
-by default (a session can run dozens of calls); the body expands and collapses
-with a smooth height + fade animation via the grid-rows 0fr→1fr trick, so it
-animates cleanly without measuring heights.
+ToolSlip is one ledger entry: a compact header line (icon, tool name, input
+hint, group tag, outcome) over the purpose-built body for that tool, with a
+per-entry raw toggle that reveals the verbatim input JSON and result string.
+Raw data is always reachable but never the primary rendering.
 */
-function ToolDetails({
-  icon,
-  eyebrow,
-  name,
-  hint,
-  payload,
-  accentClass = "text-foreground/90",
-  status,
-  result,
-}: {
-  icon: React.ReactNode;
-  eyebrow: string;
-  name: string;
-  hint?: string;
-  payload: string;
-  accentClass?: string;
-  status?: "success" | "error";
-  result?: string;
-}) {
-  const [open, setOpen] = useState(false);
+function ToolSlip({ event, resultRaw }: { event: TranscriptEvent; resultRaw?: string }) {
+  const [showRaw, setShowRaw] = useState(false);
+  const name = event.tool_name ?? "tool";
+  const group = toolGroup(event.tool_name);
+  const Icon = toolIcon(group);
+  const status = resultStatus(resultRaw);
+  const accent = toolAccentClass(event.tool_name);
+  const hint = toolSummary(event.tool_input);
+
   return (
     <div>
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full cursor-pointer items-start gap-2.5 py-1 text-left"
-      >
-        <ChevronRight className={cn("mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200", open && "rotate-90")} />
-        <span className={cn("mt-px shrink-0", accentClass)}>{icon}</span>
-        <span className="min-w-0 flex-1 leading-tight">
-          <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{eyebrow}</span>
-          <span className={cn("mt-0.5 block font-mono text-sm font-medium", accentClass)}>{name}</span>
-          {hint && <span className="mt-0.5 block truncate text-xs text-muted-foreground">{hint}</span>}
+      <div className="flex items-center gap-2">
+        <span className={cn("shrink-0", accent)} aria-hidden>
+          <Icon className="h-3.5 w-3.5" />
         </span>
+        <span className={cn("shrink-0 font-mono text-[13px] font-semibold", accent)}>{name}</span>
+        {hint && <span className="hidden min-w-0 truncate text-[11px] text-muted-foreground sm:block">{hint}</span>}
+        <span className="ml-auto hidden shrink-0 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground/80 sm:block">{toolTag(group)}</span>
         {/* Success is the overwhelming default, so it gets a quiet check
             instead of a repeated green pill; only failures get the loud
-            badge treatment. */}
+            badge, and a missing result gets a muted note pill. */}
         {status === "success" && (
-          <span className="inline-flex shrink-0 items-center" title="success">
+          <span className="inline-flex shrink-0 items-center sm:ml-0 ml-auto" title="success">
             <CheckCircle2 className="h-3.5 w-3.5 text-green/70" />
             <span className="sr-only">success</span>
           </span>
         )}
         {status === "error" && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-red-border bg-red-bg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red">
-            <XCircle className="h-3 w-3" />
-            {status}
+          <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-red-border bg-red-bg px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-red sm:ml-0">
+            <XCircle className="h-3 w-3" aria-hidden />
+            error
           </span>
         )}
-      </button>
-      <div className={cn("grid transition-all duration-200 ease-out", open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
+        {status === undefined && (
+          <span className="ml-auto inline-flex shrink-0 items-center rounded-full border border-border bg-muted px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground sm:ml-0">
+            no result
+          </span>
+        )}
+        <button
+          type="button"
+          aria-expanded={showRaw}
+          aria-label={`Toggle raw data for ${name}`}
+          onClick={() => setShowRaw((o) => !o)}
+          className={cn(
+            "inline-flex min-h-6 shrink-0 cursor-pointer items-center gap-1 rounded-md border px-1.5 font-mono text-[9px] uppercase tracking-wider transition-colors motion-reduce:transition-none",
+            showRaw ? "border-border bg-muted text-foreground" : "border-border/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+          )}
+        >
+          <Braces className="h-3 w-3" aria-hidden />
+          raw
+        </button>
+      </div>
+      <div className="mt-2 sm:pl-[22px]">
+        <ToolBody name={event.tool_name} input={event.tool_input} rawResult={resultRaw} />
+      </div>
+      <div
+        className={cn("grid transition-all duration-200 ease-out motion-reduce:transition-none", showRaw ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}
+        aria-hidden={!showRaw}
+      >
         <div className="overflow-hidden">
-          <div className="mt-1.5 ml-[26px] space-y-2.5">
-            <div className="border-l-2 border-border/50 pl-4">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Payload</div>
-              <pre className="mt-0.5 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground/70">{payload}</pre>
+          <div className="mt-2 space-y-2.5 rounded-md border border-border/60 bg-muted/30 px-3 py-2 sm:ml-[22px]">
+            <div>
+              <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Tool input</div>
+              <pre className="mt-0.5 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground/70">{formatJSON(event.tool_input)}</pre>
             </div>
-            {result && (
-              <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Returned</div>
-                <pre className="mt-0.5 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground/70">{result}</pre>
+            {resultRaw !== undefined && (
+              <div>
+                <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Raw result</div>
+                <pre className="mt-0.5 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground/70">{prettyResult(resultRaw)}</pre>
               </div>
             )}
           </div>
@@ -475,10 +444,10 @@ function UsageBreakdown({ usage, model }: { usage: TranscriptUsage; model: strin
 
   type Row = { label: string; qty: string; rate: string; cost: number };
   const rows: Row[] = [
-    { label: "Output", qty: formatTokens(usage.output_tokens), rate: r ? `$${r.output}/M` : "—", cost: r ? (usage.output_tokens * r.output) / 1_000_000 : 0 },
-    { label: "Input (fresh)", qty: formatTokens(usage.input_tokens), rate: r ? `$${r.input}/M` : "—", cost: r ? (usage.input_tokens * r.input) / 1_000_000 : 0 },
-    { label: "Cache read", qty: formatTokens(usage.cache_read_tokens), rate: r ? `$${r.cacheRead}/M` : "—", cost: r ? (usage.cache_read_tokens * r.cacheRead) / 1_000_000 : 0 },
-    { label: "Cache write (5m)", qty: formatTokens(usage.cache_creation_tokens), rate: r ? `$${r.cacheWrite}/M` : "—", cost: r ? (usage.cache_creation_tokens * r.cacheWrite) / 1_000_000 : 0 },
+    { label: "Output", qty: formatTokens(usage.output_tokens), rate: r ? `$${r.output}/M` : "n/a", cost: r ? (usage.output_tokens * r.output) / 1_000_000 : 0 },
+    { label: "Input (fresh)", qty: formatTokens(usage.input_tokens), rate: r ? `$${r.input}/M` : "n/a", cost: r ? (usage.input_tokens * r.input) / 1_000_000 : 0 },
+    { label: "Cache read", qty: formatTokens(usage.cache_read_tokens), rate: r ? `$${r.cacheRead}/M` : "n/a", cost: r ? (usage.cache_read_tokens * r.cacheRead) / 1_000_000 : 0 },
+    { label: "Cache write (5m)", qty: formatTokens(usage.cache_creation_tokens), rate: r ? `$${r.cacheWrite}/M` : "n/a", cost: r ? (usage.cache_creation_tokens * r.cacheWrite) / 1_000_000 : 0 },
   ];
   if (usage.web_search_requests > 0) {
     rows.push({ label: "Web searches", qty: String(usage.web_search_requests), rate: `$${WEB_SEARCH_USD.toFixed(2)}/ea`, cost: usage.web_search_requests * WEB_SEARCH_USD });
@@ -490,7 +459,9 @@ function UsageBreakdown({ usage, model }: { usage: TranscriptUsage; model: strin
 
   return (
     <div className="mb-6">
-      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{showCost ? "Session cost breakdown" : "Token usage"}</div>
+      <div className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        {showCost ? "Session cost breakdown" : "Token usage"}
+      </div>
       <div className="overflow-x-auto rounded-md border border-border/60">
         <table className="w-full border-collapse text-sm">
           <thead>
@@ -505,9 +476,9 @@ function UsageBreakdown({ usage, model }: { usage: TranscriptUsage; model: strin
             {rows.map((row) => (
               <tr key={row.label} className="border-b border-border/40 last:border-0">
                 <td className="px-3 py-2 text-foreground/80">{row.label}</td>
-                <td className="px-3 py-2 text-right font-mono text-foreground/70">{row.qty}</td>
-                {showCost && <td className="px-3 py-2 text-right font-mono text-muted-foreground">{row.rate}</td>}
-                {showCost && <td className="px-3 py-2 text-right font-mono text-foreground/80">{formatUsd(row.cost)}</td>}
+                <td className="px-3 py-2 text-right font-mono tabular-nums text-foreground/70">{row.qty}</td>
+                {showCost && <td className="px-3 py-2 text-right font-mono tabular-nums text-muted-foreground">{row.rate}</td>}
+                {showCost && <td className="px-3 py-2 text-right font-mono tabular-nums text-foreground/80">{formatUsd(row.cost)}</td>}
               </tr>
             ))}
           </tbody>
@@ -517,7 +488,7 @@ function UsageBreakdown({ usage, model }: { usage: TranscriptUsage; model: strin
                 <td className="px-3 py-2 font-semibold text-foreground/90" colSpan={3}>
                   Total (estimated)
                 </td>
-                <td className="px-3 py-2 text-right font-mono font-semibold text-claude">{formatUsd(total)}</td>
+                <td className="px-3 py-2 text-right font-mono font-semibold tabular-nums text-claude">{formatUsd(total)}</td>
               </tr>
             </tfoot>
           )}
@@ -556,11 +527,7 @@ function formatTokens(n: number): string {
 // for anything that can't be serialized.
 function formatJSON(value: unknown): string {
   if (value === undefined || value === null) return "(no input)";
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
+  return safeStringify(value, 2);
 }
 
 // prettyResult tries to parse a tool-result string as JSON and re-emit it
