@@ -42,10 +42,16 @@ for i in $(seq 1 40); do
 done
 
 echo "==> resolving dynamic routes from seeded Postgres"
-# psql via the running postgres container so a local psql client isn't required.
-# `date` is stored as ISO text ('YYYY-MM-DD'), so max() orders it correctly and
-# no to_char cast is needed. `|| true` keeps a transient miss from tripping set -e.
-q() { docker exec vt-local-postgres psql -U vibetradez -d vibetradez -tAc "$1" 2>/dev/null | tr -d '[:space:]' || true; }
+# Honors $PGURL (so a worktree stack on another port audits its OWN data) via
+# a local psql when available, falling back to the default stack's container
+# so a machine without psql still works. `date` is stored as ISO text
+# ('YYYY-MM-DD'), so max() orders it correctly and no to_char cast is needed.
+# `|| true` keeps a transient miss from tripping set -e.
+if command -v psql >/dev/null 2>&1; then
+  q() { psql "${PGURL}" -tAc "$1" 2>/dev/null | tr -d '[:space:]' || true; }
+else
+  q() { docker exec vt-local-postgres psql -U vibetradez -d vibetradez -tAc "$1" 2>/dev/null | tr -d '[:space:]' || true; }
+fi
 TX_DATE="$(q "SELECT max(date) FROM portfolio_sessions;")"
 TX_KIND="portfolio"
 if [ -z "${TX_DATE}" ]; then
@@ -57,7 +63,9 @@ echo "    transcript date=${TX_DATE:-<none>} kind=${TX_KIND}"
 # server-side (compacted symbol), so resolve one holding and one closed
 # trade through the API rather than reproducing the id scheme in SQL.
 # Prefer an option holding so the audit exercises the dual-axis chart.
-j() { curl -fsS -H "X-VT-Source: audit" "http://localhost:8080$1" 2>/dev/null || true; }
+# The API origin comes from HEALTH_URL so a worktree stack audits itself.
+API_BASE="${HEALTH_URL%/health}"
+j() { curl -fsS -H "X-VT-Source: audit" "${API_BASE}$1" 2>/dev/null || true; }
 HOLDING_ID="$(j /api/portfolio/holdings | node -e '
   let s = ""; process.stdin.on("data", (c) => { s += c; }).on("end", () => {
     try {
