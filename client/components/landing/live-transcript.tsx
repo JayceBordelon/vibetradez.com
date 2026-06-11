@@ -5,7 +5,17 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { cn } from "@/lib/utils";
-import type { TranscriptLine } from "./chapter-visuals";
+
+export type TranscriptLine =
+  | { type: "text"; text: string }
+  | { type: "thinking"; text: string }
+  | {
+      type: "tool";
+      tool: string;
+      payload: unknown;
+      result?: unknown;
+      open?: boolean;
+    };
 
 /*
 A faux-live transcript: it streams its messages in one at a time, with a

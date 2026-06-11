@@ -81,7 +81,7 @@ export function TranscriptView({ date, kind }: { date: string; kind: Kind }) {
       {/* Header */}
       <div className="flex flex-wrap items-center gap-2">
         <ClaudeLogo className="h-5 w-5" />
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+        <h1 className="term-display text-xl font-extrabold uppercase tracking-tight sm:text-2xl">
           {copy.title} for {prettyDate(date)}
         </h1>
         <Badge variant="secondary">{copy.stage}</Badge>

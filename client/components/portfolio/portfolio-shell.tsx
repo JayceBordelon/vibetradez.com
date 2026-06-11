@@ -211,9 +211,9 @@ function SummaryStrip({ equity, settledCash, investedPct, unrealized, todayPct, 
           value={<AnimatedNumber value={investedPct} kind="pct0" crumb neutral />}
           icon={Gauge}
           sub={
-            <span className="mt-1 block h-1.5 w-full max-w-[140px] overflow-hidden rounded-full bg-foreground/[0.08]">
+            <span className="mt-1 block h-1.5 w-full max-w-[140px] overflow-hidden bg-foreground/[0.08]">
               {/* The bar glides with its number: same ~700ms ease. */}
-              <span className="block h-full rounded-full bg-gradient-brand transition-[width] duration-700 ease-out" style={{ width: `${investedClamped}%` }} />
+              <span className="block h-full bg-green transition-[width] duration-700 ease-out" style={{ width: `${investedClamped}%` }} />
             </span>
           }
         />

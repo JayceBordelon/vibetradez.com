@@ -4,8 +4,8 @@ import { Separator } from "@/components/ui/separator";
 
 export function Footer() {
   return (
-    <footer className="relative">
-      <div className="mx-auto flex max-w-[1200px] flex-col gap-4 px-4 py-6 sm:px-7">
+    <footer className="relative border-t border-dashed border-border">
+      <div className="mx-auto flex max-w-[1200px] flex-col gap-4 px-4 py-6 font-mono sm:px-7">
         <p className="max-w-3xl text-xs leading-relaxed text-muted-foreground">
           <strong className="text-foreground">Disclaimer:</strong>{" "}Not financial advice. Trading involves substantial risk of loss. Every figure reflects one real brokerage account
           trading live with real money. Past performance does not guarantee future results.

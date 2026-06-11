@@ -25,7 +25,7 @@ function pageWindow(current: number, total: number): (number | "gap")[] {
   return out;
 }
 
-const cell = "inline-flex h-9 min-w-9 items-center justify-center rounded-full px-3 text-sm font-medium transition-colors";
+const cell = "inline-flex h-9 min-w-9 items-center justify-center px-3 font-mono text-sm font-medium tabular-nums transition-colors";
 
 function Arrow({ href, dir, disabled }: { href: string; dir: "prev" | "next"; disabled: boolean }) {
   const Icon = dir === "prev" ? ChevronLeft : ChevronRight;
@@ -64,7 +64,7 @@ export function Pagination({ basePath, page, pageSize, totalItems }: { basePath:
               &hellip;
             </span>
           ) : p === page ? (
-            <span key={p} aria-current="page" className={cn(cell, "bg-gradient-brand font-semibold text-primary-foreground")}>
+            <span key={p} aria-current="page" className={cn(cell, "bg-foreground font-semibold text-background")}>
               {p}
             </span>
           ) : (

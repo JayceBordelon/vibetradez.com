@@ -19,7 +19,7 @@ export function Section({ title, subtitle, actions, children, className, content
       {hasHeader && (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            {title && <h2 className="text-lg font-semibold tracking-tight">{title}</h2>}
+            {title && <h2 className="font-mono text-[13px] font-bold uppercase tracking-[0.14em]">{title}</h2>}
             {subtitle && <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>}
           </div>
           {actions && <div className="flex shrink-0 items-center gap-2 sm:ml-4">{actions}</div>}
