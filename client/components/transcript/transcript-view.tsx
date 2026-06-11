@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, BookOpen, Braces, Brain, CheckCircle2, CircleDollarSign, Globe, NotebookPen, SquareTerminal, XCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Braces, Brain, CheckCircle2, CircleDollarSign, Globe, NotebookPen, SquareTerminal, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -88,10 +88,57 @@ export function TranscriptView({ date, kind }: { date: string; kind: Kind }) {
       </div>
       <p className="mt-2 text-sm text-muted-foreground">{copy.blurb}</p>
 
+      {kind === "portfolio" && <SessionPager date={date} hasSummary={state.kind === "ready" && (state.data.events ?? []).some((e) => e.tool_name === "write_summary")} />}
+
       {state.kind === "loading" && <TranscriptSkeleton />}
       {state.kind === "error" && <StatusBlock tone="error" title="Couldn't load the transcript" body={state.message} />}
       {state.kind === "ready" && (!state.data.available || (state.data.events ?? []).length === 0) && <EmptyTranscript date={date} kind={kind} />}
       {state.kind === "ready" && state.data.available && (state.data.events ?? []).length > 0 && <TranscriptBody data={state.data} />}
+    </div>
+  );
+}
+
+/*
+SessionPager is the transcript's wayfinding strip: step to the previous or
+next trading day (weekends skipped, forward capped at today in market
+time) and, once the ledger has loaded, jump straight to the session
+summary at the bottom of a multi-thousand-pixel page. Sessions are
+browsable instead of URL-editable.
+*/
+function stepTradingDay(date: string, dir: 1 | -1): string {
+  const d = new Date(`${date}T12:00:00Z`);
+  do {
+    d.setUTCDate(d.getUTCDate() + dir);
+  } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+  return d.toISOString().slice(0, 10);
+}
+
+function SessionPager({ date, hasSummary }: { date: string; hasSummary: boolean }) {
+  const prev = stepTradingDay(date, -1);
+  const next = stepTradingDay(date, 1);
+  const showNext = next <= etNow().date;
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-dashed border-border py-2.5 font-mono text-[12px]">
+      <Link href={`/transcripts/${prev}`} className="inline-flex min-h-9 items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground sm:min-h-0">
+        <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+        {prettyDate(prev)}
+      </Link>
+      <span className="text-muted-foreground/40" aria-hidden>
+        //
+      </span>
+      {showNext ? (
+        <Link href={`/transcripts/${next}`} className="inline-flex min-h-9 items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground sm:min-h-0">
+          {prettyDate(next)}
+          <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+        </Link>
+      ) : (
+        <span className="inline-flex min-h-9 items-center text-muted-foreground/40 sm:min-h-0">latest session</span>
+      )}
+      {hasSummary && (
+        <a href="#session-summary" className="ml-auto inline-flex min-h-9 items-center gap-1 font-semibold text-claude underline decoration-claude/30 underline-offset-4 transition-colors hover:decoration-claude sm:min-h-0">
+          Skip to the summary
+        </a>
+      )}
     </div>
   );
 }
@@ -202,7 +249,9 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
               const newRound = ev.round !== lastRound && lastRound !== undefined;
               lastRound = ev.round;
               return (
-                <li key={`${ev.round}-${ev.type}-${ev.tool_use_id ?? i}`}>
+                // The write_summary entry doubles as the #session-summary
+                // anchor the header's "Skip to the summary" link targets.
+                <li key={`${ev.round}-${ev.type}-${ev.tool_use_id ?? i}`} id={ev.tool_name === "write_summary" ? "session-summary" : undefined} className={ev.tool_name === "write_summary" ? "scroll-mt-24" : undefined}>
                   {newRound && (
                     // Rounds are 0-indexed in the event stream; display
                     // 1-indexed so the labels agree with the header's

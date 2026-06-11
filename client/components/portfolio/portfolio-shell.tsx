@@ -128,10 +128,33 @@ export function PortfolioShell() {
     <div className="animate-in fade-in mx-auto max-w-[1200px] px-4 py-6 duration-300 sm:px-7">
       <SummaryStrip equity={equity} settledCash={data.settled_cash} investedPct={investedPct} unrealized={totalUnrealized} todayPct={todayPct} overnightPct={overnightPct} dayChangePct={dayChangePct} />
 
+      {/* The day's narrative, right under the numbers: "what is it
+          thinking?" is the first question the dashboard gets asked, and
+          the answer used to live a click away at the bottom of a very
+          long transcript page. */}
+      <section className="mt-6 rounded-md border border-claude-border bg-claude-light px-4 py-4 sm:px-5">
+        <div className="flex items-center gap-2">
+          <ClaudeLogo className="h-4 w-4" />
+          <span className="font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-claude">Claudia&apos;s read</span>
+        </div>
+        {data.stance ? (
+          <p className="mt-2 text-sm leading-relaxed text-foreground/90">{data.stance}</p>
+        ) : (
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">No stance yet today. The midday session (~12:30 PM ET) writes one after it looks at the book; until then the session log has yesterday&apos;s.</p>
+        )}
+        <a href={`/transcripts/${data.date}`} className="group mt-3 inline-flex min-h-9 items-center gap-1.5 text-xs font-semibold text-claude sm:min-h-0">
+          Read the full session, tool call by tool call
+          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+        </a>
+      </section>
+
       {/* No border-t here: the summary strip above already draws its own
           bottom rule, and the doubled hairline read as a ghost band in dark. */}
-      <Section title="P&L vs SPY" subtitle="Realized is booked round trips, unrealized is the open book's mark, and the dashed line is what buy-and-hold SPY would have earned on the same starting equity." className="mt-8">
+      <Section title="P&L vs SPY" className="mt-8">
         <EquityCurveChart points={curve} today={data.date} liveUnrealized={totalUnrealized} liveSpyMark={quotes.get("SPY")?.mark ?? null} />
+        {/* The legend explainer reads better AFTER the numbers: leading
+            with prose pushed the actual P&L below the fold on mobile. */}
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">Realized is booked round trips, unrealized is the open book&apos;s mark, and the dashed line is what buy-and-hold SPY would have earned on the same starting equity.</p>
       </Section>
 
       <Section
@@ -142,18 +165,7 @@ export function PortfolioShell() {
         <TodaysExecutions decisions={data.decisions ?? []} />
       </Section>
 
-      {/* The session's own synopsis and action items live on the transcript
-          page; the dashboard links there rather than duplicating them. */}
-      <a href={`/transcripts/${data.date}`} className="group mt-6 flex items-center gap-3 border-t border-border/50 pt-5">
-        <ClaudeLogo className="h-5 w-5 shrink-0" />
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-foreground transition-colors group-hover:text-claude">Open today&apos;s full session</span>
-          <span className="block text-xs text-muted-foreground">Every quote and chart Claudia read, the reasoning in between, and every order she placed, tool call by tool call.</span>
-        </span>
-        <ArrowRight className="h-4 w-4 shrink-0 text-claude transition-transform group-hover:translate-x-0.5" />
-      </a>
-
-      <Section title="Explore" subtitle="The full book and the complete trade history live on their own pages." className="mt-8 border-t border-border/40 pt-6">
+      <Section title="Explore" subtitle="The full book, the trade history, and the session log live on their own pages." className="mt-8 border-t border-border/40 pt-6">
         <div className="divide-y divide-border/50 border-t border-border/50">
           <ExploreLink
             href="/holdings"
@@ -161,6 +173,7 @@ export function PortfolioShell() {
             blurb={`${positions.length} open position${positions.length === 1 ? "" : "s"} the account holds right now.`}
           />
           <ExploreLink href="/closed" title="Closed trades" blurb="Every completed round trip, with realized P&L." />
+          <ExploreLink href="/transcripts" title="Sessions" blurb="The day-by-day session log, browsable back through every trading day." />
         </div>
       </Section>
     </div>
