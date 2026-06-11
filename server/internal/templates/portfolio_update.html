@@ -8,66 +8,69 @@
 <title>VibeTradez daily recap, {{ .DateLong }}</title>
 <style>
   :root { color-scheme: light dark; }
-  /* Dark-mode overrides for clients that honor prefers-color-scheme (Apple
-     Mail, iOS). Clients that ignore it (Gmail) keep the legible light base. */
+  /* The email mirrors the site's CRT terminal: the light base is the
+     printout (warm tractor-feed paper, ink text), and clients that honor
+     prefers-color-scheme (Apple Mail, iOS) flip to the tube (green-cast
+     black, phosphor accents). Gmail ignores this and keeps the printout. */
   @media (prefers-color-scheme: dark) {
-    .vt-page { background:#0a0a0a !important; }
-    .vt-card { background:#141414 !important; border-color:#272727 !important; }
-    .vt-h1 { color:#f5f5f5 !important; }
-    .vt-strong { color:#fafafa !important; }
-    .vt-text { color:#cfcfcf !important; }
-    .vt-muted { color:#9a9a9a !important; }
-    .vt-cell { background:#1a1a1a !important; border-color:#272727 !important; }
-    .vt-rule { border-color:#272727 !important; }
+    .vt-page { background:#0a120d !important; }
+    .vt-card { background:#0d1610 !important; border-color:#1e2f25 !important; }
+    .vt-h1 { color:#d9e7de !important; }
+    .vt-strong { color:#e7f1ea !important; }
+    .vt-text { color:#b9c9bf !important; }
+    .vt-muted { color:#8aa394 !important; }
+    .vt-cell { background:#101a13 !important; border-color:#1e2f25 !important; }
+    .vt-rule { border-color:#1e2f25 !important; }
     .vt-clay { background:#241710 !important; border-color:#4a2e20 !important; }
     .vt-clay-label { color:#f4a27a !important; }
-    .vt-move { border-color:#272727 !important; }
-    .vt-tradez { color:#51F0A8 !important; }
+    .vt-move { border-color:#1e2f25 !important; }
+    .vt-green { color:#34d399 !important; }
   }
 </style>
 </head>
-<body class="vt-page" style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Claude's end-of-day recap for {{ .DateLong }}: what it saw, every move it made, and the book it's holding overnight.</div>
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="vt-page" style="background:#f1f5f9;padding:24px 0;">
+<body class="vt-page" style="margin:0;padding:0;background:#f3f0e5;font-family:ui-monospace,Menlo,Consolas,'Courier New',monospace;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Claudia's end-of-day recap for {{ .DateLong }}: what she saw, every move she made, and the book she's holding overnight.</div>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="vt-page" style="background:#f3f0e5;padding:24px 0;">
 <tr><td align="center">
-<table role="presentation" width="640" cellspacing="0" cellpadding="0" class="vt-card" style="background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;">
+<table role="presentation" width="640" cellspacing="0" cellpadding="0" class="vt-card" style="background:#faf8ef;overflow:hidden;border:1px solid #d8d4c2;">
 
-<!-- Header -->
+<!-- Header: the session's title strip -->
 <tr><td style="padding:24px 28px 0 28px;">
-<p style="margin:0;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;">
-<span style="color:#0f172a;" class="vt-strong">Vibe</span><span class="vt-tradez" style="color:#0D9F5D;">Tradez</span>
-<span class="vt-muted" style="color:#94a3b8;font-weight:600;">&middot; live, real money</span>
+<p style="margin:0;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;">
+<span style="color:#1f2a24;" class="vt-strong">VIBE</span><span class="vt-green" style="color:#0d7a4a;">TRADEZ</span>
+<span class="vt-muted" style="color:#5b665f;font-weight:600;text-transform:none;letter-spacing:0;">// live, real money</span>
 </p>
-<h1 class="vt-h1" style="margin:8px 0 0 0;font-size:21px;color:#0f172a;">Daily recap &middot; {{ .DateLong }}</h1>
-<p class="vt-text" style="margin:8px 0 0 0;color:#475569;font-size:14px;line-height:1.6;">
-The close-of-day rundown of everything Claude did with the account: what it read, the moves it committed and why, and the book it is carrying overnight. One real brokerage account, decided from scratch each day.
+<p class="vt-muted" style="margin:14px 0 0 0;font-size:12px;color:#5b665f;"><span class="vt-green" style="color:#0d7a4a;font-weight:700;">$</span> <span class="vt-strong" style="color:#1f2a24;font-weight:600;">vt recap --daily</span></p>
+<h1 class="vt-h1" style="margin:6px 0 0 0;font-size:20px;color:#1f2a24;text-transform:uppercase;letter-spacing:0.02em;">Daily recap &middot; {{ .DateLong }}</h1>
+<p class="vt-text" style="margin:8px 0 0 0;color:#44514a;font-size:13px;line-height:1.6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+The close-of-day rundown of everything Claudia did with the account: what she read, the moves she committed and why, and the book she is carrying overnight. One real brokerage account, decided from scratch each midday session.
 </p>
 </td></tr>
 
 <!-- Performance highlights -->
 <tr><td style="padding:18px 28px 0 28px;">
-<div class="vt-muted" style="font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;font-weight:700;">Today's highlights</div>
+<div class="vt-muted" style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#5b665f;font-weight:700;border-top:1px dashed #d8d4c2;padding-top:14px;">Today's highlights</div>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:8px;border-collapse:separate;border-spacing:8px;">
 <tr>
-<td class="vt-cell" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;width:50%;">
-<div class="vt-muted" style="font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;font-weight:700;">Account equity</div>
-<div class="vt-strong" style="margin-top:4px;font-size:20px;font-weight:700;color:#0f172a;font-family:ui-monospace,Menlo,monospace;">{{ usd .Equity }}</div>
-{{ if .HasDayChange }}<div style="margin-top:2px;font-size:12px;font-weight:700;color:{{ if ge .DayChangePct 0.0 }}#16a34a{{ else }}#dc2626{{ end }};">{{ pct1 .DayChangePct }} today</div>{{ end }}
+<td class="vt-cell" style="background:#f3f0e5;border:1px dashed #d8d4c2;padding:12px 14px;width:50%;">
+<div class="vt-muted" style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5b665f;font-weight:700;">acct_equity</div>
+<div class="vt-strong" style="margin-top:4px;font-size:20px;font-weight:700;color:#1f2a24;">{{ usd .Equity }}</div>
+{{ if .HasDayChange }}<div style="margin-top:2px;font-size:12px;font-weight:700;color:{{ if ge .DayChangePct 0.0 }}#0d7a4a{{ else }}#b91c1c{{ end }};">{{ pct1 .DayChangePct }} today</div>{{ end }}
 </td>
-<td class="vt-cell" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;width:50%;">
-<div class="vt-muted" style="font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;font-weight:700;">Unrealized P&amp;L</div>
-<div style="margin-top:4px;font-size:20px;font-weight:700;font-family:ui-monospace,Menlo,monospace;color:{{ if gt .UnrealizedPnL 0.0 }}#16a34a{{ else if lt .UnrealizedPnL 0.0 }}#dc2626{{ else }}#0f172a{{ end }};">{{ pnl .UnrealizedPnL }}</div>
-<div class="vt-muted" style="margin-top:2px;font-size:12px;color:#64748b;">open positions</div>
+<td class="vt-cell" style="background:#f3f0e5;border:1px dashed #d8d4c2;padding:12px 14px;width:50%;">
+<div class="vt-muted" style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5b665f;font-weight:700;">unrealized_pnl</div>
+<div style="margin-top:4px;font-size:20px;font-weight:700;color:{{ if gt .UnrealizedPnL 0.0 }}#0d7a4a{{ else if lt .UnrealizedPnL 0.0 }}#b91c1c{{ else }}#1f2a24{{ end }};">{{ pnl .UnrealizedPnL }}</div>
+<div class="vt-muted" style="margin-top:2px;font-size:12px;color:#5b665f;">open positions</div>
 </td>
 </tr>
 <tr>
-<td class="vt-cell" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;width:50%;">
-<div class="vt-muted" style="font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;font-weight:700;">Invested</div>
-<div class="vt-strong" style="margin-top:4px;font-size:20px;font-weight:700;color:#0f172a;font-family:ui-monospace,Menlo,monospace;">{{ pct0 .InvestedPct }}</div>
+<td class="vt-cell" style="background:#f3f0e5;border:1px dashed #d8d4c2;padding:12px 14px;width:50%;">
+<div class="vt-muted" style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5b665f;font-weight:700;">invested</div>
+<div class="vt-strong" style="margin-top:4px;font-size:20px;font-weight:700;color:#1f2a24;">{{ pct0 .InvestedPct }}</div>
 </td>
-<td class="vt-cell" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;width:50%;">
-<div class="vt-muted" style="font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;font-weight:700;">Settled cash</div>
-<div class="vt-strong" style="margin-top:4px;font-size:20px;font-weight:700;color:#0f172a;font-family:ui-monospace,Menlo,monospace;">{{ usd .SettledCash }}</div>
+<td class="vt-cell" style="background:#f3f0e5;border:1px dashed #d8d4c2;padding:12px 14px;width:50%;">
+<div class="vt-muted" style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5b665f;font-weight:700;">settled_cash</div>
+<div class="vt-strong" style="margin-top:4px;font-size:20px;font-weight:700;color:#1f2a24;">{{ usd .SettledCash }}</div>
 </td>
 </tr>
 </table>
@@ -77,9 +80,9 @@ The close-of-day rundown of everything Claude did with the account: what it read
 <!-- Today's synopsis (write_summary, part one) -->
 {{ if or .Summary .Stance }}
 <tr><td style="padding:20px 28px 0 28px;">
-<div class="vt-clay" style="background:#fdf3ee;border:1px solid #f3d9c9;border-radius:12px;padding:16px 18px;">
-<div class="vt-clay-label" style="font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#c2410c;font-weight:700;">Today's synopsis</div>
-<p class="vt-text" style="margin:8px 0 0 0;color:#334155;font-size:14px;line-height:1.7;white-space:pre-wrap;">{{ if .Summary }}{{ .Summary }}{{ else }}{{ .Stance }}{{ end }}</p>
+<div class="vt-clay" style="background:#fdf3ee;border:1px dashed #f3d9c9;padding:16px 18px;">
+<div class="vt-clay-label" style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#c2410c;font-weight:700;">Today's synopsis</div>
+<p class="vt-text" style="margin:8px 0 0 0;color:#44514a;font-size:13px;line-height:1.7;white-space:pre-wrap;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">{{ if .Summary }}{{ .Summary }}{{ else }}{{ .Stance }}{{ end }}</p>
 </div>
 </td></tr>
 {{ end }}
@@ -87,60 +90,60 @@ The close-of-day rundown of everything Claude did with the account: what it read
 <!-- Action items for the next session (write_summary, part two) -->
 {{ if .ActionItems }}
 <tr><td style="padding:12px 28px 0 28px;">
-<div class="vt-clay" style="background:#fdf3ee;border:1px solid #f3d9c9;border-radius:12px;padding:16px 18px;">
-<div class="vt-clay-label" style="font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#c2410c;font-weight:700;">{{ if .ActionItemsLabel }}{{ .ActionItemsLabel }}{{ else }}Action items{{ end }}</div>
-<p class="vt-text" style="margin:8px 0 0 0;color:#334155;font-size:14px;line-height:1.7;white-space:pre-wrap;">{{ .ActionItems }}</p>
+<div class="vt-clay" style="background:#fdf3ee;border:1px dashed #f3d9c9;padding:16px 18px;">
+<div class="vt-clay-label" style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#c2410c;font-weight:700;">{{ if .ActionItemsLabel }}{{ .ActionItemsLabel }}{{ else }}Action items{{ end }}</div>
+<p class="vt-text" style="margin:8px 0 0 0;color:#44514a;font-size:13px;line-height:1.7;white-space:pre-wrap;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">{{ .ActionItems }}</p>
 </div>
 </td></tr>
 {{ end }}
 
 <!-- Today's moves -->
 <tr><td style="padding:22px 28px 6px 28px;">
-<div class="vt-muted" style="font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;font-weight:700;">Today's moves</div>
+<div class="vt-muted" style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#5b665f;font-weight:700;border-top:1px dashed #d8d4c2;padding-top:14px;">Today's moves</div>
 </td></tr>
 <tr><td style="padding:0 28px 4px 28px;">
 {{ if .Moves }}
 {{ range .Moves }}
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="vt-move" style="margin-top:10px;border:1px solid #e2e8f0;border-radius:10px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="vt-move" style="margin-top:10px;border:1px dashed #d8d4c2;">
 <tr>
 <td style="padding:12px 14px;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>
 <td style="font-size:13px;">
-<span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;text-transform:uppercase;{{ if .IsBuy }}background:#dcfce7;color:#15803d;{{ else if .IsSell }}background:#fee2e2;color:#b91c1c;{{ else }}background:#f1f5f9;color:#475569;{{ end }}">{{ .Action }}</span>
-{{ if .Label }}<strong class="vt-strong" style="color:#0f172a;margin-left:6px;">{{ .Label }}</strong>{{ end }}
+<span style="display:inline-block;padding:2px 8px;font-size:11px;font-weight:700;text-transform:uppercase;{{ if .IsBuy }}background:#d1fae5;color:#15803d;{{ else if .IsSell }}background:#fee2e2;color:#b91c1c;{{ else }}background:#ece9db;color:#44514a;{{ end }}">{{ .Action }}</span>
+{{ if .Label }}<strong class="vt-strong" style="color:#1f2a24;margin-left:6px;">{{ .Label }}</strong>{{ end }}
 </td>
 {{ if gt .Notional 0.0 }}
-<td align="right" class="vt-muted" style="font-size:13px;color:#475569;font-family:ui-monospace,Menlo,monospace;">{{ usd0 .Notional }}</td>
+<td align="right" class="vt-muted" style="font-size:13px;color:#44514a;">{{ usd0 .Notional }}</td>
 {{ end }}
 </tr></table>
-<p class="vt-text" style="margin:8px 0 0 0;color:#475569;font-size:13px;line-height:1.55;">{{ .Rationale }}</p>
+<p class="vt-text" style="margin:8px 0 0 0;color:#44514a;font-size:13px;line-height:1.55;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">{{ .Rationale }}</p>
 </td>
 </tr>
 </table>
 {{ end }}
 {{ else }}
-<p class="vt-muted" style="margin:8px 0 0 0;color:#64748b;font-size:13px;">No moves today. Claude looked and decided to leave the book where it is.</p>
+<p class="vt-muted" style="margin:8px 0 0 0;color:#5b665f;font-size:13px;">No moves today. Claudia looked and decided to leave the book where it is.</p>
 {{ end }}
 </td></tr>
 
 <!-- Current book -->
 {{ if .Holdings }}
 <tr><td style="padding:22px 28px 6px 28px;">
-<div class="vt-muted" style="font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;font-weight:700;">What the account holds now</div>
+<div class="vt-muted" style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#5b665f;font-weight:700;border-top:1px dashed #d8d4c2;padding-top:14px;">What the account holds now</div>
 </td></tr>
 <tr><td style="padding:0 28px 4px 28px;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;font-size:13px;">
-<thead><tr class="vt-muted" style="color:#64748b;text-align:left;">
-<th class="vt-rule" style="padding:6px;border-bottom:1px solid #e2e8f0;font-weight:600;">Position</th>
-<th class="vt-rule" style="padding:6px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600;">Value</th>
-<th class="vt-rule" style="padding:6px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:600;">Unrealized</th>
+<thead><tr class="vt-muted" style="color:#5b665f;text-align:left;">
+<th class="vt-rule" style="padding:6px;border-bottom:1px dashed #d8d4c2;font-weight:600;">Position</th>
+<th class="vt-rule" style="padding:6px;border-bottom:1px dashed #d8d4c2;text-align:right;font-weight:600;">Value</th>
+<th class="vt-rule" style="padding:6px;border-bottom:1px dashed #d8d4c2;text-align:right;font-weight:600;">Unrealized</th>
 </tr></thead>
 <tbody>
 {{ range .Holdings }}
 <tr>
-<td class="vt-rule vt-strong" style="padding:6px;border-bottom:1px solid #f1f5f9;font-weight:600;color:#0f172a;">{{ .Label }}</td>
-<td class="vt-rule vt-strong" style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;font-family:ui-monospace,Menlo,monospace;color:#0f172a;">{{ usd .MarketValue }}</td>
-<td class="vt-rule" style="padding:6px;border-bottom:1px solid #f1f5f9;text-align:right;font-family:ui-monospace,Menlo,monospace;color:{{ if gt .UnrealizedPnL 0.0 }}#16a34a{{ else if lt .UnrealizedPnL 0.0 }}#dc2626{{ else }}#0f172a{{ end }};font-weight:600;">{{ pnl .UnrealizedPnL }}</td>
+<td class="vt-rule vt-strong" style="padding:6px;border-bottom:1px dashed #e7e3d3;font-weight:600;color:#1f2a24;">{{ .Label }}</td>
+<td class="vt-rule vt-strong" style="padding:6px;border-bottom:1px dashed #e7e3d3;text-align:right;color:#1f2a24;">{{ usd .MarketValue }}</td>
+<td class="vt-rule" style="padding:6px;border-bottom:1px dashed #e7e3d3;text-align:right;color:{{ if gt .UnrealizedPnL 0.0 }}#0d7a4a{{ else if lt .UnrealizedPnL 0.0 }}#b91c1c{{ else }}#1f2a24{{ end }};font-weight:600;">{{ pnl .UnrealizedPnL }}</td>
 </tr>
 {{ end }}
 </tbody>
@@ -150,19 +153,20 @@ The close-of-day rundown of everything Claude did with the account: what it read
 
 <!-- Transcript CTA -->
 <tr><td style="padding:24px 28px 4px 28px;" align="center">
-<a href="{{ .TranscriptURL }}" style="display:inline-block;background:#51F0A8;color:#0a0a0a;text-decoration:none;font-size:14px;font-weight:700;padding:12px 24px;border-radius:9999px;">Read the full session, tool call by tool call</a>
+<a href="{{ .TranscriptURL }}" style="display:inline-block;background:#34d399;color:#0a120d;text-decoration:none;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:12px 24px;border:1px solid #34d399;">Read the full session, tool call by tool call</a>
 </td></tr>
-<tr><td style="padding:2px 28px 8px 28px;" align="center">
-<a href="{{ .DashboardURL }}" class="vt-tradez" style="font-size:12px;color:#0D9F5D;text-decoration:underline;">Or open the live dashboard</a>
+<tr><td style="padding:8px 28px 8px 28px;" align="center">
+<a href="{{ .DashboardURL }}" class="vt-green" style="font-size:12px;color:#0d7a4a;text-decoration:underline;">Or open the live dashboard</a>
 </td></tr>
 
-<!-- Footer -->
-<tr><td class="vt-rule" style="padding:8px 28px 24px 28px;border-top:1px solid #f1f5f9;">
-<p class="vt-muted" style="margin:16px 0 0 0;color:#94a3b8;font-size:11px;line-height:1.6;">
-You follow VibeTradez, so you get the daily recap. The account is a single real brokerage account run by Claude, and these notes are a window into what it does, not financial advice. Do your own thinking before you copy any of it.
+<!-- Footer: the session signs off -->
+<tr><td class="vt-rule" style="padding:8px 28px 24px 28px;border-top:1px dashed #d8d4c2;">
+<p class="vt-muted" style="margin:14px 0 0 0;font-size:12px;color:#5b665f;"><span class="vt-green" style="color:#0d7a4a;font-weight:700;">$</span> exit 0 <span style="color:#9aa79e;">&middot; the account survives another day</span></p>
+<p class="vt-muted" style="margin:12px 0 0 0;color:#7d877f;font-size:11px;line-height:1.6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+You follow VibeTradez, so you get the daily recap. The account is a single real brokerage account run by Claudia, and these notes are a window into what she does, not financial advice. Do your own thinking before you copy any of it.
 </p>
-<p class="vt-muted" style="margin:10px 0 0 0;color:#94a3b8;font-size:11px;">
-<a href="@@VT_UNSUBSCRIBE_URL@@" class="vt-muted" style="color:#94a3b8;text-decoration:underline;">Unsubscribe</a>
+<p class="vt-muted" style="margin:10px 0 0 0;color:#7d877f;font-size:11px;">
+<a href="@@VT_UNSUBSCRIBE_URL@@" class="vt-muted" style="color:#7d877f;text-decoration:underline;">Unsubscribe</a>
 </p>
 </td></tr>
 

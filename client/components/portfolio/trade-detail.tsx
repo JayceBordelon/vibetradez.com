@@ -100,7 +100,9 @@ export function HoldingDetail({ h: initial }: { h: Holding }) {
 
       <div className="flex flex-wrap items-center gap-2">
         <KindChip kind={h.kind} contractType={h.contract_type} />
-        <span className="rounded-full bg-red px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">Open</span>
+        {/* Neutral on purpose: red/green are reserved for P&L direction
+            everywhere else, and an "Open" badge in red read as a loss. */}
+        <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-secondary-foreground">Open</span>
       </div>
       <h1 className="term-display mt-2 text-2xl font-extrabold uppercase tracking-tight sm:text-3xl">{h.label}</h1>
       {h.opened_date && <p className="mt-1 text-sm text-muted-foreground">Opened {h.opened_date}</p>}

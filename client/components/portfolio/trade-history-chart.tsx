@@ -83,10 +83,15 @@ function mergeSeries(prices: PricePoint[], snapshots: PositionValuePoint[], perC
   return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
-const chartConfig: ChartConfig = {
-  price: { label: "Underlying", color: "var(--muted-foreground)" },
-  value: { label: "Position", color: "var(--green)" },
-};
+// First/last non-null reading of a series, for the win/loss line color.
+function endpoint(data: Row[], key: "price" | "value", fromEnd: boolean): number | null {
+  const idx = fromEnd ? [...data].reverse() : data;
+  for (const row of idx) {
+    const v = row[key];
+    if (v != null) return v;
+  }
+  return null;
+}
 
 export function TradeHistoryChart({ kind, symbol, underlying, openedDate, closedDate, strike, entryPrice }: TradeHistoryChartProps) {
   const [prices, setPrices] = useState<PricePoint[] | null>(null);
@@ -149,6 +154,19 @@ export function TradeHistoryChart({ kind, symbol, underlying, openedDate, closed
   const sparse = pointCount <= 12;
   const lastYear = data[data.length - 1].date.slice(0, 4);
 
+  // The POSITION line is win/loss colored, like every other P&L surface:
+  // green when the latest mark sits at or above the entry, red below it.
+  // Entry prefers the recorded avg cost / premium; a missing entry falls
+  // back to the series' own first reading so the line still takes a side.
+  const posKey = isOption ? "value" : "price";
+  const lastMark = endpoint(data, posKey, true);
+  const baseline = entryPrice != null && entryPrice > 0 ? entryPrice : endpoint(data, posKey, false);
+  const posColor = lastMark != null && baseline != null && lastMark < baseline ? "var(--red)" : "var(--green)";
+  const chartConfig: ChartConfig = {
+    price: { label: "Underlying", color: isOption ? "var(--muted-foreground)" : posColor },
+    value: { label: "Position", color: posColor },
+  };
+
   return (
     <div>
       <ChartContainer config={chartConfig} className="h-60 w-full">
@@ -177,14 +195,14 @@ export function TradeHistoryChart({ kind, symbol, underlying, openedDate, closed
             }
           />
           {havePrice && (
-            <Area xAxisId="x" yAxisId="price" type="monotone" dataKey="price" stroke={isOption ? "var(--muted-foreground)" : "var(--green)"} strokeWidth={isOption ? 1.5 : 2.5} fill="none" dot={sparse} connectNulls />
+            <Area xAxisId="x" yAxisId="price" type="monotone" dataKey="price" stroke={isOption ? "var(--muted-foreground)" : posColor} strokeWidth={isOption ? 1.5 : 2.5} fill="none" dot={sparse} connectNulls />
           )}
-          {haveValue && <Area xAxisId="x" yAxisId="value" type="monotone" dataKey="value" stroke="var(--claude)" strokeWidth={2.5} fill="none" dot={sparse} connectNulls />}
+          {haveValue && <Area xAxisId="x" yAxisId="value" type="monotone" dataKey="value" stroke={posColor} strokeWidth={2.5} fill="none" dot={sparse} connectNulls />}
         </AreaChart>
       </ChartContainer>
       {isOption && (
         <p className="mt-2 text-[11px] text-muted-foreground">
-          <span className="font-semibold" style={{ color: "var(--claude)" }}>
+          <span className="font-semibold" style={{ color: posColor }}>
             Per-contract value
           </span>{" "}
           (right) from the daily book snapshots ·{" "}

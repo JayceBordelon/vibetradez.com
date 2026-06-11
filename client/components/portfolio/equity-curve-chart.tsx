@@ -91,8 +91,11 @@ function fmtTick(iso: string, lastYear: string): string {
 /*
 HeadlineStat is one color-keyed figure in the strip above the plot. The
 2px key bar matches its series stroke exactly, so the strip IS the legend.
-Values tween on live refresh (AnimatedNumber), so a poll tick reads as the
-number moving rather than flickering.
+The VALUE, though, is colored by its sign like every other P&L figure:
+a negative realized number must read red even when its series line is
+green, or the strip claims a win the account didn't have. Values tween
+on live refresh (AnimatedNumber), so a poll tick reads as the number
+moving rather than flickering.
 */
 function HeadlineStat({ label, value, pctOfStart, colorVar, dashed }: { label: string; value: number; pctOfStart: number | null; colorVar: string; dashed?: boolean }) {
   return (
@@ -105,7 +108,7 @@ function HeadlineStat({ label, value, pctOfStart, colorVar, dashed }: { label: s
         />
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
       </div>
-      <div className="mt-0.5 text-2xl font-bold tabular-nums" style={{ color: colorVar }}>
+      <div className={cn("mt-0.5 text-2xl font-bold tabular-nums", value < 0 ? "text-red" : "text-green")}>
         <AnimatedNumber value={value} kind="usdSigned" />
       </div>
       {pctOfStart !== null && (
