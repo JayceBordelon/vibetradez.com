@@ -144,25 +144,22 @@ export default async function LandingPage() {
 
       {/* ══ 01 · THE SETUP ══ */}
       <LogSection id="setup" command="cat 01_setup.txt" comment="what this is" weight="text" title={<>One real account. <span className="phosphor text-green">No safety net.</span></>} aside={<EquityReadout equity={equity} />}>
-        <p>It is a real brokerage account with my actual money in it, run by one model. You just watch and judge whether it has any idea what it is doing.</p>
+        <p>A real brokerage account with my actual money in it, run by one model with unlimited confidence and zero dollars of its own at stake. You just watch and judge whether it has any idea what it is doing.</p>
       </LogSection>
 
       {/* ══ 02 · THE DAILY LOOP ══ */}
       <LogSection id="loop" command="crontab -l" comment="the whole schedule" flip title={<>Every weekday, it <span className="phosphor text-green">starts from scratch.</span></>} aside={<CronTable />}>
-        <p>No fixed strategy. Each midday session it checks the positions, the news, and the tape, then decides to buy, trim, sell, or hide in cash. It holds what it believes in across days, brave or stubborn.</p>
+        <p>No fixed strategy. Each midday session it checks the positions, the news, and the tape, then decides to buy, trim, sell, or hide in cash and call that discipline. It holds what it believes in across days, which is either conviction or stubbornness depending on next week.</p>
       </LogSection>
 
       {/* ══ 03 · THE GUARDRAILS ══ */}
       <LogSection id="guardrails" command="cat caps.go" comment="the entire risk policy" weight="figure" title={<>Barely a leash. <span className="phosphor text-green">Two rules.</span></>} aside={<CapsReadout />}>
-        <p>
-          Any name, any size, all in if it likes the setup. Exactly two limits live in code where it cannot sweet-talk them: at most half the account in options, at most half in stock. Every other guardrail a real trading desk would insist on? I checked the file. Not found. It can
-          absolutely lose my money. That is the show.
-        </p>
+        <p>Any name, any size, all in if it likes the setup. Exactly two limits live in code where it cannot sweet-talk them: at most half the account in options, at most half in stock. It can absolutely lose my money. That is the show.</p>
       </LogSection>
 
       {/* ══ 04 · THE TOOLBOX ══ */}
       <LogSection id="tools" command="ls -l tools/" comment="the only actions that exist" flip title={<>It can only use the <span className="phosphor text-green">tools I built.</span></>} aside={<ToolLs />}>
-        <p>Claudia does not get free rein. It can only touch the tools I hand-coded, each one tested before it ships. No surprise powers, nothing off the menu.</p>
+        <p>Claudia gets the tools I hand-built and nothing else. No surprise powers, no rogue wire transfers, no ordering GPUs on my card. If a button does not exist, she cannot press it.</p>
       </LogSection>
 
       {/* ══ 05 · THE RECEIPTS ══ */}

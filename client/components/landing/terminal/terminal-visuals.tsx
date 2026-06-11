@@ -66,7 +66,7 @@ const CRONS = [
   {
     expr: "00 16 * * MON-FRI",
     job: "the close",
-    detail: "snapshots equity vs SPY and sends the daily recap email",
+    detail: "snapshots equity vs SPY, then emails everyone the day's damage",
   },
 ];
 
@@ -82,7 +82,7 @@ export function CronTable() {
           </li>
         ))}
       </ol>
-      <p className="mt-5 border-t border-dashed border-border pt-3 text-[12px] text-muted-foreground/80">no strategy found in this file. it decides every session.</p>
+      <p className="mt-5 border-t border-dashed border-border pt-3 text-[12px] text-muted-foreground/80">there is no strategy in this file. it makes one up every session.</p>
     </div>
   );
 }
@@ -103,8 +103,6 @@ function CapPct() {
   );
 }
 
-const CAPS_ABSENT = ["per_name_cap", "stop_loss", "drawdown_breaker", "risk_committee", "adult_supervision"];
-
 export function CapsReadout() {
   return (
     <div className="font-mono text-[13px]">
@@ -112,20 +110,15 @@ export function CapsReadout() {
         <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">caps.go</span>
         <span className="phosphor text-[11px] font-bold uppercase tracking-[0.14em] text-green">enforced in code</span>
       </div>
-      <dl className="mt-4">
+      <dl className="mt-4 border-b border-border">
         {CAPS_PRESENT.map((c) => (
           <div key={c.key} className="flex items-baseline justify-between gap-6 border-t border-border py-3">
             <dt className="shrink-0 font-bold text-foreground">{c.key}</dt>
             <dd className="text-right tabular-nums text-muted-foreground">{c.value}</dd>
           </div>
         ))}
-        {CAPS_ABSENT.map((key) => (
-          <div key={key} className="flex items-baseline justify-between gap-6 border-t border-dashed border-border/70 py-3">
-            <dt className="shrink-0 text-muted-foreground/80">{key}</dt>
-            <dd className="font-bold text-red">not found</dd>
-          </div>
-        ))}
       </dl>
+      <p className="mt-3 text-[12px] text-muted-foreground/80">that is the whole file.</p>
     </div>
   );
 }
@@ -176,7 +169,7 @@ export function ToolLs() {
           <p className="mt-2 break-words border-l-2 border-border pl-4 leading-relaxed text-foreground/75">{d.names.join("  ")}</p>
         </div>
       ))}
-      <p className="border-t border-dashed border-border pt-3 text-[12px] text-muted-foreground/80">every tool hand-built and tested in CI. nothing off the menu, no rogue wire transfers.</p>
+      <p className="border-t border-dashed border-border pt-3 text-[12px] text-muted-foreground/80">every tool hand-built and tested in CI. if it is not on this list, she cannot do it.</p>
     </div>
   );
 }

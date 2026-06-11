@@ -348,18 +348,48 @@ function toolAccentClass(name?: string): string {
   return "text-foreground/90";
 }
 
+/*
+parseStanceText unwraps the session's terminal contract: the agent's last
+message is required to be a bare JSON object holding only its closing
+stance, which read as a wall of {"stance": "..."} in the ledger. When a
+narration block IS that object (with or without a stray code fence), the
+prose inside is the content; anything else renders verbatim.
+*/
+function parseStanceText(text: string): string | null {
+  let t = text.trim();
+  if (t.startsWith("```")) {
+    t = t
+      .replace(/^```[a-z]*\s*/i, "")
+      .replace(/```\s*$/, "")
+      .trim();
+  }
+  if (!t.startsWith("{")) return null;
+  try {
+    const obj: unknown = JSON.parse(t);
+    if (obj && typeof obj === "object" && "stance" in obj && typeof (obj as { stance: unknown }).stance === "string") {
+      const stance = (obj as { stance: string }).stance.trim();
+      if (stance) return stance;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 function EventBlock({ event, resultPayload }: { event: TranscriptEvent; resultPayload?: string }) {
   switch (event.type) {
-    case "text":
+    case "text": {
+      const stance = parseStanceText(event.text ?? "");
       return (
         <div className="border-l-2 border-claude/40 pl-4">
           <div className="mb-1.5 flex items-center gap-2">
             <ClaudeLogo className="h-4 w-4" />
-            <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-claude">Narration</span>
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-claude">{stance ? "Closing stance" : "Narration"}</span>
           </div>
-          <p className="whitespace-pre-wrap font-serif text-[15px] leading-relaxed text-foreground/90">{event.text}</p>
+          <p className="wrap-anywhere whitespace-pre-wrap font-serif text-[15px] leading-relaxed text-foreground/90">{stance ?? event.text}</p>
         </div>
       );
+    }
     case "thinking":
       // Neutral border + muted label, NOT the claude accent: narration and
       // thinking must stay distinguishable at scroll speed.
@@ -470,12 +500,12 @@ function ToolSlip({ event, resultRaw }: { event: TranscriptEvent; resultRaw?: st
           <div className="mt-2 space-y-2.5 rounded-md border border-border/60 bg-muted/30 px-3 py-2 sm:ml-[22px]">
             <div>
               <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Tool input</div>
-              <pre className="mt-0.5 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground/70">{formatJSON(event.tool_input)}</pre>
+              <pre className="mt-0.5 wrap-anywhere whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground/70">{formatJSON(event.tool_input)}</pre>
             </div>
             {resultRaw !== undefined && (
               <div>
                 <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Raw result</div>
-                <pre className="mt-0.5 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground/70">{prettyResult(resultRaw)}</pre>
+                <pre className="mt-0.5 wrap-anywhere whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground/70">{prettyResult(resultRaw)}</pre>
               </div>
             )}
           </div>
