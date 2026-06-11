@@ -72,3 +72,51 @@ func (c *Client) GetDailyPriceHistory(symbol string) (*PriceHistory, error) {
 	cacheSet(cacheKey, &ph)
 	return &ph, nil
 }
+
+/*
+GetIntradayPriceHistory returns minute candles for a symbol across an
+explicit epoch-millisecond window, for the trade-detail chart's adaptive
+granularity on short holds. freqMinutes must be one of Schwab's minute
+frequencies (1, 5, 10, 15, 30). Regular session only (no extended hours),
+so the line matches the marks users see elsewhere. Cached like the daily
+variant; the key carries the window so different holds don't collide.
+*/
+func (c *Client) GetIntradayPriceHistory(symbol string, startMs, endMs int64, freqMinutes int) (*PriceHistory, error) {
+	sym := strings.ToUpper(strings.TrimSpace(symbol))
+	if sym == "" {
+		return nil, fmt.Errorf("empty symbol")
+	}
+	cacheKey := fmt.Sprintf("pricehistory:%s:%d:%d:%d", sym, startMs, endMs, freqMinutes)
+	if cached, ok := cacheGet(cacheKey); ok {
+		return cached.(*PriceHistory), nil
+	}
+
+	q := url.Values{}
+	q.Set("symbol", sym)
+	q.Set("periodType", "day")
+	q.Set("frequencyType", "minute")
+	q.Set("frequency", fmt.Sprintf("%d", freqMinutes))
+	q.Set("startDate", fmt.Sprintf("%d", startMs))
+	q.Set("endDate", fmt.Sprintf("%d", endMs))
+	q.Set("needExtendedHoursData", "false")
+	u := fmt.Sprintf("%s/pricehistory?%s", marketDataBase, q.Encode())
+
+	resp, err := c.AuthenticatedGet(u)
+	if err != nil {
+		return nil, fmt.Errorf("get intraday price history: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("intraday price history HTTP %d: %s", resp.StatusCode, string(body))
+	}
+	var ph PriceHistory
+	if err := json.Unmarshal(body, &ph); err != nil {
+		return nil, fmt.Errorf("decode intraday price history: %w", err)
+	}
+	if ph.Empty || len(ph.Candles) == 0 {
+		return nil, fmt.Errorf("no intraday price history for %s", sym)
+	}
+	cacheSet(cacheKey, &ph)
+	return &ph, nil
+}

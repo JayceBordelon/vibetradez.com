@@ -13,6 +13,7 @@ const tabs = [
   { href: "/dashboard", label: "Live Dashboard", short: "Live" },
   { href: "/holdings", label: "Holdings", short: "Holdings" },
   { href: "/closed", label: "Closed", short: "Closed" },
+  { href: "/transcripts", label: "Sessions", short: "Log" },
 ] as const;
 
 interface NavBarProps {

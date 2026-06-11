@@ -432,10 +432,15 @@ func (s *Server) handlePortfolioPositionHistory(w http.ResponseWriter, r *http.R
 }
 
 /*
-handlePriceHistory serves daily closes for an equity symbol (?symbol=,
-optional ?start= / ?end= YYYY-MM-DD bounds), for the trade-detail chart's
-underlying line. Degrades to an empty series when Schwab is unreachable or
-the symbol has no history, so the chart's other series still render.
+handlePriceHistory serves the trade-detail chart's underlying line with
+adaptive granularity (?symbol=, optional ?start= / ?end= YYYY-MM-DD
+bounds). Short holds get minute candles (15-minute up to ~3 days,
+30-minute up to ~11 days, Schwab's minute-data comfort zone), longer
+holds get daily closes, and every response is thinned to a point budget
+so a year-long window never plots every bar. Intraday points carry their
+clock time in the date field ("2026-06-10T14:30", market time); daily
+points stay "2026-06-10". Degrades tier by tier (intraday, then daily,
+then empty) so the chart's other series still render.
 */
 func (s *Server) handlePriceHistory(w http.ResponseWriter, r *http.Request) {
 	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
@@ -446,12 +451,27 @@ func (s *Server) handlePriceHistory(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
+
+	loc := easternLoc()
+	today := time.Now().In(loc).Format("2006-01-02")
+	endEff := end
+	if endEff == "" || endEff > today {
+		endEff = today
+	}
+
+	if freq := intradayFreq(start, endEff); freq > 0 {
+		if pts := s.intradayPoints(symbol, start, endEff, freq, loc); len(pts) > 0 {
+			resp.Points = thinPoints(pts)
+			writeJSON(w, http.StatusOK, resp)
+			return
+		}
+	}
+
 	ph, err := s.schwab.GetDailyPriceHistory(symbol)
 	if err != nil {
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
-	loc := easternLoc()
 	for _, c := range ph.Candles {
 		date := time.UnixMilli(c.Datetime).In(loc).Format("2006-01-02")
 		if (start != "" && date < start) || (end != "" && date > end) {
@@ -459,7 +479,81 @@ func (s *Server) handlePriceHistory(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Points = append(resp.Points, pricePointView{Date: date, Close: c.Close})
 	}
+	resp.Points = thinPoints(resp.Points)
 	writeJSON(w, http.StatusOK, resp)
+}
+
+/*
+intradayFreq picks the minute-candle frequency for a holding window, or 0
+when the window is long enough that daily closes are the right grain.
+Unparseable bounds mean an unbounded window, which is daily territory.
+*/
+func intradayFreq(start, end string) int {
+	st, err1 := time.Parse("2006-01-02", start)
+	en, err2 := time.Parse("2006-01-02", end)
+	if err1 != nil || err2 != nil {
+		return 0
+	}
+	spanDays := int(en.Sub(st).Hours()/24) + 1
+	switch {
+	case spanDays <= 0:
+		return 0
+	case spanDays <= 3:
+		return 15
+	case spanDays <= 11:
+		return 30
+	default:
+		return 0
+	}
+}
+
+// intradayPoints fetches minute candles across the window and maps them to
+// market-time points keyed "YYYY-MM-DDTHH:MM". Nil on any failure: the
+// caller falls back to the daily tier.
+func (s *Server) intradayPoints(symbol, start, end string, freq int, loc *time.Location) []pricePointView {
+	st, err1 := time.ParseInLocation("2006-01-02", start, loc)
+	en, err2 := time.ParseInLocation("2006-01-02", end, loc)
+	if err1 != nil || err2 != nil {
+		return nil
+	}
+	startMs := st.UnixMilli()
+	endMs := en.AddDate(0, 0, 1).UnixMilli() // end of the last day
+	ph, err := s.schwab.GetIntradayPriceHistory(symbol, startMs, endMs, freq)
+	if err != nil {
+		return nil
+	}
+	pts := make([]pricePointView, 0, len(ph.Candles))
+	for _, c := range ph.Candles {
+		t := time.UnixMilli(c.Datetime).In(loc)
+		if t.UnixMilli() < startMs || t.UnixMilli() >= endMs {
+			continue
+		}
+		pts = append(pts, pricePointView{Date: t.Format("2006-01-02T15:04"), Close: c.Close})
+	}
+	return pts
+}
+
+/*
+thinPoints downsamples a series to a fixed budget by stride, always
+keeping the final point so the line ends on the latest mark. ~90 points
+draws a clean continuous line at every window size without crowding
+ticks or tooltips.
+*/
+func thinPoints(pts []pricePointView) []pricePointView {
+	const budget = 90
+	n := len(pts)
+	if n <= budget {
+		return pts
+	}
+	stride := (n + budget - 1) / budget
+	out := make([]pricePointView, 0, budget+1)
+	for i := 0; i < n; i += stride {
+		out = append(out, pts[i])
+	}
+	if out[len(out)-1].Date != pts[n-1].Date {
+		out = append(out, pts[n-1])
+	}
+	return out
 }
 
 // closedTrades derives the round-trip log once; degrades to nil on a store

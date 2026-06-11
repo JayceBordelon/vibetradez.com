@@ -44,11 +44,18 @@ interface TradeHistoryChartProps {
 
 const TICK_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function fmtTick(iso: string, lastYear: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+// Points are keyed "YYYY-MM-DD" (daily closes, EOD snapshots) or
+// "YYYY-MM-DDTHH:mm" (adaptive intraday candles on short holds). dayOf
+// strips the clock so window clamps and same-day checks see the date.
+const dayOf = (d: string) => d.slice(0, 10);
+
+function fmtTick(iso: string, lastYear: string, singleDay: boolean): string {
+  const [datePart, timePart] = iso.split("T");
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datePart);
   if (!m) return iso;
   const month = TICK_MONTHS[Number(m[2]) - 1] ?? m[2];
   const base = `${month} ${Number(m[3])}`;
+  if (timePart) return singleDay ? timePart : `${base} ${timePart}`;
   return m[1] === lastYear ? base : `${base} '${m[1].slice(2)}`;
 }
 
@@ -65,20 +72,24 @@ function fmtUsdTick(n: number): string {
 type Row = { date: string; price: number | null; value: number | null };
 
 /*
-mergeSeries outer-joins the two day-keyed series so Recharts gets one
-data array; either side may be missing on any given day (weekends exist
-only in snapshots, snapshot gaps exist only in closes) and connectNulls
-bridges the gaps.
+mergeSeries outer-joins the two series so Recharts gets one data array;
+either side may be missing at any key (weekends exist only in snapshots,
+snapshot gaps exist only in closes) and connectNulls bridges the gaps.
+When the price series is intraday, the EOD snapshots are keyed at 16:00
+so each day's book value sorts to the close it was captured at instead
+of the day's open.
 */
 function mergeSeries(prices: PricePoint[], snapshots: PositionValuePoint[], perContract: boolean): Row[] {
+  const intraday = prices.some((p) => p.date.includes("T"));
   const byDate = new Map<string, Row>();
   for (const p of prices) {
     byDate.set(p.date, { date: p.date, price: p.close, value: null });
   }
   for (const s of snapshots) {
-    const row = byDate.get(s.date) ?? { date: s.date, price: null, value: null };
+    const key = intraday ? `${s.date}T16:00` : s.date;
+    const row = byDate.get(key) ?? { date: key, price: null, value: null };
     row.value = s.quantity > 0 ? s.market_value / (perContract ? s.quantity * 100 : s.quantity) : null;
-    byDate.set(s.date, row);
+    byDate.set(key, row);
   }
   return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
 }
@@ -118,8 +129,9 @@ export function TradeHistoryChart({ kind, symbol, underlying, openedDate, closed
     // Clamp both series to THIS trade's window: position history is keyed
     // by symbol, and a ticker the model has traded more than once carries
     // every round trip's snapshots, which would stretch a 20-day hold's
-    // chart across months of unrelated history.
-    const within = (d: string) => (!openedDate || d >= openedDate) && (!closedDate || d <= closedDate);
+    // chart across months of unrelated history. Compare by day so intraday
+    // keys on the boundary dates survive the clamp.
+    const within = (d: string) => (!openedDate || dayOf(d) >= openedDate) && (!closedDate || dayOf(d) <= closedDate);
     const ps = prices.filter((p) => within(p.date));
     const ss = snapshots.filter((s) => within(s.date));
     // Equity: the stock IS the position, so one line. Prefer market closes;
@@ -153,6 +165,9 @@ export function TradeHistoryChart({ kind, symbol, underlying, openedDate, closed
   // a continuous line with thinned ticks.
   const sparse = pointCount <= 12;
   const lastYear = data[data.length - 1].date.slice(0, 4);
+  // Intraday windows confined to one trading day tick as bare clock
+  // times; multi-day intraday windows keep the date in front.
+  const singleDay = data.every((d) => dayOf(d.date) === dayOf(data[0].date));
 
   // The POSITION line is win/loss colored, like every other P&L surface:
   // green when the latest mark sits at or above the entry, red below it.
@@ -172,7 +187,7 @@ export function TradeHistoryChart({ kind, symbol, underlying, openedDate, closed
       <ChartContainer config={chartConfig} className="h-60 w-full">
         <AreaChart data={data} margin={{ top: 8, right: isOption ? 4 : 12, left: 4, bottom: 4 }}>
           <CartesianGrid vertical={false} stroke="var(--chart-grid)" xAxisId="x" yAxisId="price" />
-          <XAxis xAxisId="x" dataKey="date" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} minTickGap={36} tickFormatter={(v: string) => fmtTick(v, lastYear)} />
+          <XAxis xAxisId="x" dataKey="date" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} minTickGap={36} tickFormatter={(v: string) => fmtTick(v, lastYear, singleDay)} />
           {/* yAxisId names are alphabetical on purpose: Recharts v3 renders
               multiple y-axes in alphabetical id order, so "price" (left)
               paints before "value" (right). */}
@@ -187,6 +202,7 @@ export function TradeHistoryChart({ kind, symbol, underlying, openedDate, closed
           <ChartTooltip
             content={
               <ChartTooltipContent
+                labelFormatter={(label) => fmtTick(String(label), lastYear, false)}
                 formatter={(value, name) => {
                   const label = name === "price" ? (isOption ? `${underlying} close` : underlying) : "Per-contract value";
                   return `${label}: ${fmtPrice(Number(value))}`;
