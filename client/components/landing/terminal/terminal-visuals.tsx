@@ -54,7 +54,7 @@ export function EquityReadout({ equity }: { equity: number | null }) {
       the server, with the punchline that no strategy lives here. ── */
 const CRONS = [
   {
-    expr: "45 09 * * MON-FRI",
+    expr: "30 12 * * MON-FRI",
     job: "the session",
     detail: "reads the book, the news, and the tape, then trades",
   },
@@ -82,7 +82,7 @@ export function CronTable() {
           </li>
         ))}
       </ol>
-      <p className="mt-5 border-t border-dashed border-border pt-3 text-[12px] text-muted-foreground/80">no strategy found in this file. it decides every morning.</p>
+      <p className="mt-5 border-t border-dashed border-border pt-3 text-[12px] text-muted-foreground/80">no strategy found in this file. it decides every session.</p>
     </div>
   );
 }

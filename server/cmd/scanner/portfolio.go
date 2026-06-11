@@ -17,7 +17,7 @@ import (
 )
 
 /*
-runPortfolioSession is the daily portfolio-agent cron body (~9:45 ET). It
+runPortfolioSession is the daily portfolio-agent cron body (~12:30 ET). It
 runs one decision session, then persists the committed moves, the holds,
 and the overall stance. Moves are fire-and-forget LIMIT orders (the broker
 fills asynchronously); we record them as 'submitted'. Persistence is here,

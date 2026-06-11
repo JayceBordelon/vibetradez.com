@@ -60,6 +60,10 @@ func (f *fakeHW) RecentPortfolioDecisions(int) ([]store.PortfolioDecisionRow, er
 }
 func (f *fakeHW) RecentPortfolioStances(int) ([]store.PortfolioStanceRow, error) { return nil, nil }
 func (f *fakeHW) LatestPortfolioSession() (string, string, bool, error)          { return "", "", false, nil }
+func (f *fakeHW) AllPortfolioDecisions() ([]store.PortfolioDecisionRow, error)   { return nil, nil }
+func (f *fakeHW) GetEquityCurve(string, string) ([]store.EquityCurvePoint, error) {
+	return nil, nil
+}
 
 func TestSnapshot_AssemblesEquityAndBudget(t *testing.T) {
 	bk := &fakeBroker{

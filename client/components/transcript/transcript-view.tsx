@@ -30,7 +30,7 @@ const KIND_COPY: Record<Kind, { title: string; blurb: string; stage: string }> =
   portfolio: {
     title: "Session ledger",
     blurb: "Everything Claudia looked at and every move she made with the account today, rendered entry by entry like a desk blotter.",
-    stage: "daily portfolio session",
+    stage: "midday portfolio session",
   },
 };
 

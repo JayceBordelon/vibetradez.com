@@ -14,11 +14,13 @@ package portfoliowire
 
 import (
 	"context"
+	"math"
 
 	"vibetradez.com/internal/exec"
 	"vibetradez.com/internal/portfolio"
 	"vibetradez.com/internal/schwab"
 	"vibetradez.com/internal/store"
+	"vibetradez.com/internal/trades"
 )
 
 /*
@@ -52,13 +54,16 @@ type Broker interface {
 }
 
 // PortfolioStore is the slice of *store.Store the reader needs: the
-// high-water mark for the drawdown breaker, and the recent decision /
-// stance history for the get_recent_decisions tool.
+// high-water mark, the recent decision / stance history for
+// get_recent_decisions, and the full decision log + equity curve that
+// back get_track_record.
 type PortfolioStore interface {
 	GetHighWaterMark() (mark float64, ok bool, err error)
 	RecentPortfolioDecisions(limit int) ([]store.PortfolioDecisionRow, error)
 	RecentPortfolioStances(limit int) ([]store.PortfolioStanceRow, error)
 	LatestPortfolioSession() (synopsis, actionItems string, ok bool, err error)
+	AllPortfolioDecisions() ([]store.PortfolioDecisionRow, error)
+	GetEquityCurve(startDate, endDate string) ([]store.EquityCurvePoint, error)
 }
 
 /*
@@ -152,6 +157,90 @@ func (r *Reader) RecentStances(limit int) ([]portfolio.StanceEntry, error) {
 	}
 	return out, nil
 }
+
+/*
+TrackRecord assembles the agent's quantified feedback: round trips derived
+from the full decision log (the shared internal/trades derivation, the same
+numbers the public /closed page shows) and the benchmark race from the
+equity-curve ledger. recentTrips bounds only the per-trade detail list; the
+stats always cover the whole history. The curve read is best-effort: a
+ledger error leaves the benchmark zeroed rather than failing the tool.
+*/
+func (r *Reader) TrackRecord(recentTrips int) (portfolio.TrackRecord, error) {
+	decisions, err := r.st.AllPortfolioDecisions()
+	if err != nil {
+		return portfolio.TrackRecord{}, err
+	}
+	trips := trades.Derive(decisions)
+
+	var eqTrips, optTrips []trades.RoundTrip
+	for _, t := range trips {
+		if t.AssetType == "OPTION" {
+			optTrips = append(optTrips, t)
+		} else {
+			eqTrips = append(eqTrips, t)
+		}
+	}
+
+	tr := portfolio.TrackRecord{
+		Overall:      statsView(trades.Summarize(trips)),
+		EquityTrades: statsView(trades.Summarize(eqTrips)),
+		OptionTrades: statsView(trades.Summarize(optTrips)),
+		RecentTrips:  []portfolio.TrackRecordTrip{},
+	}
+	for i, t := range trips {
+		if i >= recentTrips {
+			break
+		}
+		tr.RecentTrips = append(tr.RecentTrips, portfolio.TrackRecordTrip{
+			Symbol:         t.Symbol,
+			Underlying:     t.Underlying,
+			AssetType:      t.AssetType,
+			OpenedDate:     t.OpenedDate,
+			ClosedDate:     t.ClosedDate,
+			HoldDays:       t.HoldDays,
+			EntryPrice:     r2(t.EntryPrice),
+			ExitPrice:      r2(t.ExitPrice),
+			RealizedPnl:    r2(t.RealizedPnl),
+			RealizedPct:    r2(t.RealizedPct),
+			OpenRationale:  t.OpenRationale,
+			CloseRationale: t.CloseRationale,
+		})
+	}
+
+	if points, cerr := r.st.GetEquityCurve("0000-00-00", "9999-12-31"); cerr == nil {
+		c := trades.SummarizeCurve(points)
+		tr.Benchmark = portfolio.BenchmarkRace{
+			TradingDays:      c.Days,
+			FirstDate:        c.FirstDate,
+			LastDate:         c.LastDate,
+			StartEquity:      r2(c.StartEquity),
+			CurrentEquity:    r2(c.CurrentEquity),
+			AccountReturnPct: r2(c.AccountReturnPct),
+			SpyReturnPct:     r2(c.SpyReturnPct),
+			VsSpyPct:         r2(c.VsSpyPct),
+			MaxDrawdownPct:   r2(c.MaxDrawdownPct),
+		}
+	}
+	return tr, nil
+}
+
+func statsView(s trades.Stats) portfolio.TrackRecordStats {
+	return portfolio.TrackRecordStats{
+		Trades:           s.Trades,
+		Wins:             s.Wins,
+		Losses:           s.Losses,
+		WinRatePct:       r2(s.WinRatePct),
+		TotalRealizedPnl: r2(s.TotalPnl),
+		AvgWinPnl:        r2(s.AvgWinPnl),
+		AvgLossPnl:       r2(s.AvgLossPnl),
+		AvgHoldDays:      r2(s.AvgHoldDays),
+		BiggestWin:       r2(s.BiggestWin),
+		BiggestLoss:      r2(s.BiggestLoss),
+	}
+}
+
+func r2(v float64) float64 { return math.Round(v*100) / 100 }
 
 /*
 Snapshot builds the session-start account state. Equity is the marked
