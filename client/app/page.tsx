@@ -155,8 +155,8 @@ export default async function LandingPage() {
       {/* ══ 03 · THE GUARDRAILS ══ */}
       <LogSection id="guardrails" command="cat caps.go" comment="the entire risk policy" weight="figure" title={<>Barely a leash. <span className="phosphor text-green">Two rules.</span></>} aside={<CapsReadout />}>
         <p>
-          It does whatever it wants with all the money, every session: any name, any size, all in if it likes the setup. Exactly two limits live in code where it cannot sweet-talk them: no more than half the account in option premium, no more than half in stock. It spends settled cash
-          only because the broker insists, and a flat sanity ceiling at the broker catches code bugs, not trades. It can absolutely lose the money. That is the show.
+          Any name, any size, all in if it likes the setup. Exactly two limits live in code where it cannot sweet-talk them: at most half the account in options, at most half in stock. Every other guardrail a real trading desk would insist on? I checked the file. Not found. It can
+          absolutely lose my money. That is the show.
         </p>
       </LogSection>
 

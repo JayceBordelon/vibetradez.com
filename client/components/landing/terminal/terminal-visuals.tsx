@@ -92,7 +92,7 @@ export function CronTable() {
 const CAPS_PRESENT: { key: string; value: ReactNode }[] = [
   { key: "options_sleeve", value: <CapPct /> },
   { key: "equity_sleeve", value: <CapPct /> },
-  { key: "settled_cash", value: "buys spend settled cash only" },
+  { key: "settled_cash", value: "settled cash only (the broker insists)" },
 ];
 
 function CapPct() {
@@ -103,7 +103,7 @@ function CapPct() {
   );
 }
 
-const CAPS_ABSENT = ["per_name_cap", "per_order_cap", "drawdown_breaker", "session_pacing", "adult_supervision"];
+const CAPS_ABSENT = ["per_name_cap", "stop_loss", "drawdown_breaker", "risk_committee", "adult_supervision"];
 
 export function CapsReadout() {
   return (

@@ -148,7 +148,7 @@ export function PortfolioShell() {
         <ClaudeLogo className="h-5 w-5 shrink-0" />
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold text-foreground transition-colors group-hover:text-claude">Open today&apos;s full session</span>
-          <span className="block text-xs text-muted-foreground">Every quote and chart Claude read, the reasoning in between, and every order it placed, tool call by tool call.</span>
+          <span className="block text-xs text-muted-foreground">Every quote and chart Claudia read, the reasoning in between, and every order she placed, tool call by tool call.</span>
         </span>
         <ArrowRight className="h-4 w-4 shrink-0 text-claude transition-transform group-hover:translate-x-0.5" />
       </a>
