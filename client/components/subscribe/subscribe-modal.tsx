@@ -12,23 +12,23 @@ export function SubscribeModal({ children, open, onOpenChange }: { children?: Re
       {children && <DialogTrigger asChild>{children}</DialogTrigger>}
       <DialogContent className="lg-modal top-[8%] max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-[calc(100%-1.5rem)] translate-y-0 overflow-y-auto sm:top-[50%] sm:w-auto sm:max-w-md sm:translate-y-[-50%]">
         <DialogHeader>
-          <DialogTitle className="text-lg font-extrabold">
-            Sign in or <span className="text-gradient-brand">sign up</span>
+          <DialogTitle className="font-mono text-lg font-extrabold uppercase tracking-tight">
+            Sign in or <span className="text-green">sign up</span>
           </DialogTitle>
-          <DialogDescription>One click with Google gets you the daily picks email, delivered right at the open.</DialogDescription>
+          <DialogDescription>One click with Google gets you the daily recap email after the close.</DialogDescription>
         </DialogHeader>
 
         <div className="flex gap-2">
-          <div className="flex-1 rounded-lg border bg-muted p-2.5 text-center">
-            <div className="font-mono text-lg font-extrabold text-primary">10</div>
-            <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Daily Picks</div>
+          <div className="flex-1 border border-dashed border-border bg-muted p-2.5 text-center">
+            <div className="font-mono text-lg font-extrabold text-green">1</div>
+            <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Daily Recap</div>
           </div>
-          <div className="flex-1 rounded-lg border bg-muted p-2.5 text-center">
-            <div className="font-mono text-lg font-extrabold text-primary">2x</div>
-            <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">AM + EOD</div>
+          <div className="flex-1 border border-dashed border-border bg-muted p-2.5 text-center">
+            <div className="font-mono text-lg font-extrabold text-green">16:00</div>
+            <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">After the Close</div>
           </div>
-          <div className="flex-1 rounded-lg border bg-muted p-2.5 text-center">
-            <div className="font-mono text-lg font-extrabold text-primary">$0</div>
+          <div className="flex-1 border border-dashed border-border bg-muted p-2.5 text-center">
+            <div className="font-mono text-lg font-extrabold text-green">$0</div>
             <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Always Free</div>
           </div>
         </div>

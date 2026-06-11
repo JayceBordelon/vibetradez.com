@@ -37,7 +37,7 @@ export function NotFoundContent() {
     <div className="mx-auto flex min-h-[70dvh] max-w-2xl flex-col items-center justify-center px-4 py-16 text-center sm:px-6">
       <div className="select-none font-mono text-[120px] font-extrabold leading-none tracking-tighter text-primary/15 sm:text-[160px]">404</div>
 
-      <h1 className="-mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">This trade didn&apos;t fill</h1>
+      <h1 className="term-display -mt-4 text-xl font-extrabold uppercase tracking-tight sm:text-2xl">This trade didn&apos;t fill</h1>
       <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground sm:text-base">
         The page you were looking for doesn&apos;t exist on VibeTradez. It may have moved, been renamed, or never existed in the first place.
       </p>

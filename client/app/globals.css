@@ -4,52 +4,52 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Theme: "designbyte" (tweakcn). Primary is a vivid mint green; purple
-     has been retired entirely. */
-  --background: oklch(0.9940 0 0);
-  --foreground: oklch(0 0 0);
-  --card: oklch(0.9940 0 0);
-  --card-foreground: oklch(0 0 0);
-  --popover: oklch(0.9911 0 0);
-  --popover-foreground: oklch(0 0 0);
-  --primary: oklch(0.8545 0.1675 159.6564);
-  --primary-foreground: oklch(0 0 0);
-  /* Light secondary was oklch(0.9933 …), indistinguishable from the 0.9940
-     page background, so secondary badges (FAQ count, transcript stage pill)
-     rendered as bare floating text. A soft green tint keeps the pill shape
-     visible and pairs with the green dark-mode secondary. */
-  --secondary: oklch(0.9450 0.0410 160.0000);
-  --secondary-foreground: oklch(0.1344 0 0);
-  --muted: oklch(0.9702 0 0);
-  --muted-foreground: oklch(0.4386 0 0);
-  --accent: oklch(0.9947 0.0074 164.9465);
-  --accent-foreground: oklch(0.6184 0.1489 155.4444);
+  /* Theme: the CRT terminal's PRINTOUT. Light mode is the session log on
+     warm tractor-feed paper: ink foreground, hairline rules, a deep
+     stamped-ink emerald as primary. Dark mode (below) is the tube. */
+  --background: oklch(0.9610 0.0130 95.0);
+  --foreground: oklch(0.2750 0.0200 160.0);
+  --card: oklch(0.9760 0.0110 95.0);
+  --card-foreground: oklch(0.2750 0.0200 160.0);
+  --popover: oklch(0.9760 0.0110 95.0);
+  --popover-foreground: oklch(0.2750 0.0200 160.0);
+  /* Deep emerald, not the mint: headline-and-button ink that passes AA on
+     the paper background. The mint stays the DARK primary where it glows. */
+  --primary: oklch(0.6184 0.1489 155.4444);
+  --primary-foreground: oklch(0.9900 0.0050 95.0);
+  --secondary: oklch(0.9100 0.0380 160.0);
+  --secondary-foreground: oklch(0.2750 0.0200 160.0);
+  --muted: oklch(0.9200 0.0140 95.0);
+  --muted-foreground: oklch(0.4550 0.0180 150.0);
+  --accent: oklch(0.9300 0.0300 160.0);
+  --accent-foreground: oklch(0.4000 0.1000 155.0);
   --destructive: oklch(0.6665 0.2111 2.8306);
   --destructive-foreground: oklch(1.0000 0 0);
-  /* Light border was oklch(0.9722 …) on a 0.9940 background: hairline
-     dividers, stat-strip rules, and pagination outlines all vanished in
-     light mode while reading fine in dark. 0.9220 keeps them subtle but
-     actually visible. */
-  --border: oklch(0.9220 0.0034 247.8581);
-  --input: oklch(0.9401 0 0);
-  --ring: oklch(0.8545 0.1675 159.6564);
+  /* Ink-based hairlines so dashed terminal rules read on the paper. */
+  --border: oklch(0.2750 0.0200 160.0 / 0.16);
+  --input: oklch(0.2750 0.0200 160.0 / 0.22);
+  --ring: oklch(0.6184 0.1489 155.4444);
+  /* Phosphor bloom is a dark-mode-only effect; paper gets none. */
+  --crt-glow: none;
   --chart-1: oklch(0.8545 0.1675 159.6564);
   --chart-2: oklch(0.8979 0.1884 146.5522);
   --chart-3: oklch(0.6658 0.2215 29.2981);
   --chart-4: oklch(0.7507 0.1401 230.8266);
   --chart-5: oklch(0.8257 0.1067 48.5116);
-  --sidebar: oklch(1.0000 0 0);
-  --sidebar-foreground: oklch(0 0 0);
-  --sidebar-primary: oklch(0 0 0);
-  --sidebar-primary-foreground: oklch(1.0000 0 0);
-  --sidebar-accent: oklch(0.9752 0.0307 168.3924);
-  --sidebar-accent-foreground: oklch(0 0 0);
-  --sidebar-border: oklch(0.9401 0 0);
-  --sidebar-ring: oklch(0 0 0);
+  --sidebar: oklch(0.9760 0.0110 95.0);
+  --sidebar-foreground: oklch(0.2750 0.0200 160.0);
+  --sidebar-primary: oklch(0.2750 0.0200 160.0);
+  --sidebar-primary-foreground: oklch(0.9760 0.0110 95.0);
+  --sidebar-accent: oklch(0.9300 0.0300 160.0);
+  --sidebar-accent-foreground: oklch(0.2750 0.0200 160.0);
+  --sidebar-border: oklch(0.2750 0.0200 160.0 / 0.16);
+  --sidebar-ring: oklch(0.6184 0.1489 155.4444);
   --font-sans: "Plus Jakarta Sans", sans-serif;
   --font-serif: "Lora", serif;
   --font-mono: "IBM Plex Mono", monospace;
-  --radius: 1.4rem;
+  /* Terminal chrome is square-shouldered: pills and cards collapse from
+     the old 1.4rem soft glass to tight corners everywhere. */
+  --radius: 0.4rem;
   --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
   --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
   --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
@@ -77,13 +77,13 @@
   --amber: #92400e;
   --amber-bg: #fef3c7;
   --percent-hue-l: 30%;
-  --card-elevated: #fafafa;
-  --card-hover: #ffffff;
-  --accent-subtle: #fafafa;
-  --ring-subtle: rgba(24, 24, 27, 0.12);
-  --surface: #f4f4f5;
-  --chart-grid: #e4e4e7;
-  --chart-text: #52525b;
+  --card-elevated: #f1eee2;
+  --card-hover: #fbf8ef;
+  --accent-subtle: #f1eee2;
+  --ring-subtle: rgba(31, 41, 36, 0.14);
+  --surface: #edeade;
+  --chart-grid: #ddd9c8;
+  --chart-text: #5a655d;
 
   /* Brand accents. --brand-green is VibeTradez' primary green (was
      historically named --gpt back when the picker ran a parallel
@@ -114,42 +114,46 @@
 }
 
 .dark {
-  --background: oklch(0 0 0);
-  --foreground: oklch(0.9551 0 0);
-  --card: oklch(0.1448 0 0);
-  --card-foreground: oklch(0.9551 0 0);
-  --popover: oklch(0.2210 0.0015 197.0452);
-  --popover-foreground: oklch(0.9551 0 0);
+  /* The TUBE: green-cast near-black, phosphor-tinted foreground, mint
+     primary that earns the glow. */
+  --background: oklch(0.1380 0.0140 165.0);
+  --foreground: oklch(0.9000 0.0260 160.0);
+  --card: oklch(0.1800 0.0180 165.0);
+  --card-foreground: oklch(0.9000 0.0260 160.0);
+  --popover: oklch(0.2000 0.0180 165.0);
+  --popover-foreground: oklch(0.9000 0.0260 160.0);
   --primary: oklch(0.8545 0.1675 159.6564);
-  --primary-foreground: oklch(0 0 0);
-  --secondary: oklch(0.4700 0.0900 160.0079);
+  --primary-foreground: oklch(0.1380 0.0140 165.0);
+  --secondary: oklch(0.3200 0.0600 160.0);
   --secondary-foreground: oklch(0.9551 0 0);
-  --muted: oklch(0.2653 0.0037 286.1465);
-  --muted-foreground: oklch(0.6731 0 0);
-  --accent: oklch(0.3004 0.0609 159.8938);
+  --muted: oklch(0.2200 0.0180 165.0);
+  --muted-foreground: oklch(0.6600 0.0300 158.0);
+  --accent: oklch(0.2800 0.0500 160.0);
   --accent-foreground: oklch(0.9970 0 0);
   --destructive: oklch(0.7425 0.1696 1.0847);
   --destructive-foreground: oklch(1.0000 0 0);
-  --border: oklch(0.2138 0.0019 286.2347);
-  --input: oklch(0.3523 0 0);
+  /* Phosphor-tinted hairlines so dashed rules read as raster, not gray. */
+  --border: oklch(0.7600 0.1500 160.0 / 0.16);
+  --input: oklch(0.7600 0.1500 160.0 / 0.24);
   --ring: oklch(0.8545 0.1675 159.6564);
+  --crt-glow: 0 0 18px color-mix(in srgb, var(--green) 45%, transparent);
   --chart-1: oklch(0.8545 0.1675 159.6564);
   --chart-2: oklch(0.9173 0.1562 144.8458);
   --chart-3: oklch(0.8531 0.0883 357.4250);
   --chart-4: oklch(0.8104 0.1216 228.4326);
   --chart-5: oklch(0.8257 0.1067 48.5116);
-  --sidebar: oklch(0.1448 0 0);
-  --sidebar-foreground: oklch(0.9551 0 0);
+  --sidebar: oklch(0.1800 0.0180 165.0);
+  --sidebar-foreground: oklch(0.9000 0.0260 160.0);
   --sidebar-primary: oklch(0.8545 0.1675 159.6564);
-  --sidebar-primary-foreground: oklch(1.0000 0 0);
-  --sidebar-accent: oklch(0.2824 0.0678 156.5634);
+  --sidebar-primary-foreground: oklch(0.1380 0.0140 165.0);
+  --sidebar-accent: oklch(0.2800 0.0500 160.0);
   --sidebar-accent-foreground: oklch(0.8545 0.1675 159.6564);
-  --sidebar-border: oklch(0.3452 0.0098 241.9410);
+  --sidebar-border: oklch(0.7600 0.1500 160.0 / 0.16);
   --sidebar-ring: oklch(0.8545 0.1675 159.6564);
   --font-sans: "Plus Jakarta Sans", sans-serif;
   --font-serif: "Lora", serif;
   --font-mono: "IBM Plex Mono", monospace;
-  --radius: 1.4rem;
+  --radius: 0.4rem;
   --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
   --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
   --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
@@ -171,13 +175,13 @@
   --amber: #fbbf24;
   --amber-bg: rgba(251, 191, 36, 0.15);
   --percent-hue-l: 62%;
-  --card-elevated: #1c1c1f;
-  --card-hover: #18181b;
-  --accent-subtle: #18181b;
-  --ring-subtle: rgba(244, 244, 245, 0.14);
-  --surface: #18181b;
-  --chart-grid: #27272a;
-  --chart-text: #a1a1aa;
+  --card-elevated: #101a13;
+  --card-hover: #0d1610;
+  --accent-subtle: #0d1610;
+  --ring-subtle: rgba(220, 240, 228, 0.14);
+  --surface: #0d1610;
+  --chart-grid: #1d2b21;
+  --chart-text: #8aa394;
 
   /* Brand accents (dark mode) — green, see light-mode comment. */
   --brand-green: oklch(0.8545 0.1675 159.6564);
@@ -662,42 +666,12 @@ body {
 
   /*
   ── CRT terminal system ──────────────────────────────────────────────
-  Scoped theme for the landing page only. The `.crt` wrapper re-maps the
-  shadcn tokens inside it so every reused component (transcript, cards,
-  toggles) adopts the terminal palette without forking:
-
-    dark  = the tube. Green-cast near-black, phosphor text glow,
-            scanlines + vignette overlays.
-    light = the printout. Warm tractor-feed paper, ink text, perforated
-            edge strips, zero glow. A session log somebody printed.
-
-  Square corners on purpose: --radius collapses to 0.4rem so pills and
-  cards inside read as terminal chrome, not the app's soft glass.
+  The site-wide aesthetic. The palette lives in the :root/.dark tokens
+  (dark = the tube: green-cast near-black with phosphor glow; light =
+  the printout: warm tractor-feed paper with ink text). The utilities
+  below are the chrome: raster overlays, perforation strips, the caret,
+  the buttons. The overlays render once in the root layout.
   */
-  .crt {
-    --background: oklch(0.9610 0.0130 95.0);
-    --foreground: oklch(0.2750 0.0200 160.0);
-    --card: oklch(0.9760 0.0110 95.0);
-    --card-foreground: oklch(0.2750 0.0200 160.0);
-    --muted: oklch(0.9200 0.0140 95.0);
-    --muted-foreground: oklch(0.4550 0.0180 150.0);
-    --border: oklch(0.2750 0.0200 160.0 / 0.16);
-    --radius: 0.4rem;
-    --crt-glow: none;
-    --crt-accent: var(--green);
-    background: var(--background);
-    color: var(--foreground);
-  }
-  .dark .crt {
-    --background: oklch(0.1380 0.0140 165.0);
-    --foreground: oklch(0.9000 0.0260 160.0);
-    --card: oklch(0.1800 0.0180 165.0);
-    --card-foreground: oklch(0.9000 0.0260 160.0);
-    --muted: oklch(0.2200 0.0180 165.0);
-    --muted-foreground: oklch(0.6600 0.0300 158.0);
-    --border: oklch(0.7600 0.1500 160.0 / 0.16);
-    --crt-glow: 0 0 18px color-mix(in srgb, var(--green) 45%, transparent);
-  }
 
   /* Display face for oversized terminal headlines. Falls back to the
      body mono so SSR before the font loads still reads as terminal. */

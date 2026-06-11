@@ -102,7 +102,7 @@ export function HoldingDetail({ h: initial }: { h: Holding }) {
         <KindChip kind={h.kind} contractType={h.contract_type} />
         <span className="rounded-full bg-red px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">Open</span>
       </div>
-      <h1 className="mt-2 text-3xl font-extrabold tracking-tight">{h.label}</h1>
+      <h1 className="term-display mt-2 text-2xl font-extrabold uppercase tracking-tight sm:text-3xl">{h.label}</h1>
       {h.opened_date && <p className="mt-1 text-sm text-muted-foreground">Opened {h.opened_date}</p>}
 
       <div className="mt-6">
@@ -191,7 +191,7 @@ export function ClosedDetail({ t }: { t: ClosedTrade }) {
         <KindChip kind={t.kind} contractType={t.contract_type} />
         <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider", win ? "bg-green-bg text-green" : "bg-red-bg text-red")}>{win ? "Win" : "Loss"}</span>
       </div>
-      <h1 className="mt-2 text-3xl font-extrabold tracking-tight">{t.label}</h1>
+      <h1 className="term-display mt-2 text-2xl font-extrabold uppercase tracking-tight sm:text-3xl">{t.label}</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         Held {t.opened_date} to {t.closed_date} ({t.hold_days} days)
       </p>

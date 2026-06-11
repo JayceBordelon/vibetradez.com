@@ -43,7 +43,7 @@ export default function PrivacyPage() {
           <Lock className="h-5 w-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Privacy Policy</h1>
+          <h1 className="term-display text-xl font-extrabold uppercase tracking-tight sm:text-2xl">Privacy Policy</h1>
           <p className="mt-1 text-sm text-muted-foreground">Last updated: May 2026</p>
         </div>
       </div>

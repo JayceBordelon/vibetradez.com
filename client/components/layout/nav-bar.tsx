@@ -24,14 +24,14 @@ export function NavBar({ onSubscribe }: NavBarProps) {
   const { user, loading } = useSession();
 
   return (
-    <header className="relative z-30">
-      <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-7 sm:py-3">
-        <Link href="/" className="inline-flex min-h-11 shrink-0 items-center py-2 text-[19px] font-extrabold tracking-tight sm:min-h-9 sm:py-0 sm:text-[21px]">
-          <span className="text-foreground">Vibe</span>
-          <span className="text-gradient-brand">Tradez</span>
+    <header className="sticky top-0 z-30 border-b border-dashed border-border bg-background/90 backdrop-blur-sm">
+      <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-x-4 gap-y-0 px-4 py-2 sm:px-7 sm:py-2.5">
+        <Link href="/" className="inline-flex min-h-11 shrink-0 items-center py-2 font-mono text-[15px] font-extrabold tracking-tight sm:min-h-9 sm:py-0">
+          <span className="text-foreground">VIBE</span>
+          <span className="phosphor text-green">TRADEZ</span>
         </Link>
 
-        <nav className="order-3 flex w-full items-center justify-center gap-1 sm:order-none sm:ml-3 sm:w-auto sm:justify-start">
+        <nav className="order-3 flex w-full items-center justify-center gap-1 sm:order-none sm:ml-4 sm:w-auto sm:justify-start">
           {tabs.map((tab) => {
             const isActive = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
             return (
@@ -40,13 +40,15 @@ export function NavBar({ onSubscribe }: NavBarProps) {
                 href={tab.href}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "relative inline-flex min-h-9 items-center px-3 py-1.5 text-sm font-semibold tracking-tight transition-colors sm:min-h-0 sm:px-4",
-                  isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                  "relative inline-flex min-h-9 items-center px-3 py-1.5 font-mono text-[12px] font-bold uppercase tracking-[0.08em] transition-colors sm:min-h-0",
+                  isActive ? "phosphor text-green" : "text-muted-foreground hover:text-foreground"
                 )}
               >
+                <span aria-hidden className={cn("mr-1.5", isActive ? "text-green" : "text-muted-foreground/50")}>
+                  {isActive ? ">" : "·"}
+                </span>
                 <span className="sm:hidden">{tab.short}</span>
                 <span className="hidden sm:inline">{tab.label}</span>
-                {isActive && <span aria-hidden className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-gradient-brand sm:inset-x-3" />}
               </Link>
             );
           })}
@@ -55,7 +57,7 @@ export function NavBar({ onSubscribe }: NavBarProps) {
         <div className="ml-auto flex items-center gap-2">
           <ThemeToggle />
           {loading ? (
-            <div className="h-8 w-20 rounded-full bg-foreground/5 dark:bg-white/5" aria-hidden="true" />
+            <div className="h-8 w-20 border border-dashed border-border bg-muted/40" aria-hidden="true" />
           ) : user ? (
             <AccountMenu user={user} />
           ) : (
@@ -64,7 +66,7 @@ export function NavBar({ onSubscribe }: NavBarProps) {
                 variant="outline"
                 size="sm"
                 onClick={onSubscribe}
-                className="h-9 gap-1.5 rounded-full border-foreground/10 bg-foreground/5 px-3 text-xs font-semibold hover:bg-foreground/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 sm:px-3.5 sm:text-sm"
+                className="h-9 gap-1.5 rounded-none border-border bg-transparent px-3 font-mono text-xs font-bold uppercase tracking-[0.08em] hover:border-green hover:bg-transparent hover:text-green sm:px-3.5"
                 aria-label="Sign in or sign up"
               >
                 Sign in

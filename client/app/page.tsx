@@ -1,6 +1,5 @@
 import { ArrowRight, LogIn } from "lucide-react";
 import type { Metadata } from "next";
-import { Martian_Mono } from "next/font/google";
 import Link from "next/link";
 
 import { LiveTranscript, type TranscriptLine } from "@/components/landing/live-transcript";
@@ -19,21 +18,13 @@ import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { fetchAccountEquity } from "@/lib/portfolio-data";
 
 /*
-The landing page is a CRT trading terminal: dark mode is the tube
-(phosphor glow, scanlines), light mode is the printout of the same
-session on tractor-feed paper. The whole story reads as one scrollback
-buffer: shell prompts open each beat and the supporting visuals are
-command output. The `.crt` wrapper in globals.css remaps the theme
-tokens so reused components adopt the palette automatically.
+The landing page is the front door of the CRT trading terminal: dark
+mode is the tube (phosphor glow, scanlines), light mode is the printout
+of the same session on tractor-feed paper. The whole story reads as one
+scrollback buffer: shell prompts open each beat and the supporting
+visuals are command output. The palette and chrome are site-wide now
+(globals.css tokens + overlays in the root layout).
 */
-
-// Display face for the oversized terminal headlines. Loaded here (not in
-// the root layout) so only the landing route pays for it.
-const martian = Martian_Mono({
-  subsets: ["latin"],
-  weight: ["400", "700", "800"],
-  variable: "--font-display",
-});
 
 // The hero's headline figure is the LIVE account equity, refreshed at
 // most once a minute (ISR) so the marketing page stays fast while the
@@ -56,12 +47,7 @@ function sessionStamp(): string {
 export default async function LandingPage() {
   const equity = await fetchAccountEquity();
   return (
-    <div className={`crt relative min-h-dvh overflow-hidden ${martian.variable}`}>
-      {/* Tube raster (dark) and printout perforation strips (light). */}
-      <div className="crt-overlay" aria-hidden />
-      <div className="crt-tractor crt-tractor-left" aria-hidden />
-      <div className="crt-tractor crt-tractor-right" aria-hidden />
-
+    <div className="relative min-h-dvh overflow-hidden">
       {/* ── Status bar: the terminal's title strip. Sticky so the session
             chrome never leaves the screen. ── */}
       <nav className="sticky top-0 z-50 border-b border-dashed border-border bg-background/90 backdrop-blur-sm">

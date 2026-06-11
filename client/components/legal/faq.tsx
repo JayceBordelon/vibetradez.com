@@ -39,7 +39,7 @@ export function FaqList({ children }: { children: React.ReactNode }) {
           <HelpCircle className="h-5 w-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Frequently Asked Questions</h1>
+          <h1 className="term-display text-xl font-extrabold uppercase tracking-tight sm:text-2xl">Frequently Asked Questions</h1>
           <div className="mt-1 flex items-center gap-2">
             <p className="text-sm text-muted-foreground">How VibeTradez works under the hood.</p>
             <Badge variant="secondary" className="text-[11px]">

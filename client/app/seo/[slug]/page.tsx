@@ -23,7 +23,7 @@ const CARDS: Record<string, Card> = {
       <>
         One silly model.
         <br />
-        <span className="text-gradient-brand">Zero humans.</span>
+        <span className="text-[#34d399]">Zero humans.</span>
       </>
     ),
     subtitle: "An LLM picks 3 options contracts before the bell and auto-fires all 3 in a real brokerage account at the open. By close, you see whether it was right.",
@@ -34,7 +34,7 @@ const CARDS: Record<string, Card> = {
       <>
         Three real trades,
         <br />
-        <span className="text-gradient-brand">ticking live.</span>
+        <span className="text-[#34d399]">ticking live.</span>
       </>
     ),
     subtitle: "Today's auto-fired options picks with marks streaming in real time, each badged as a real Schwab position.",
@@ -45,7 +45,7 @@ const CARDS: Record<string, Card> = {
       <>
         Every pick.
         <br />
-        <span className="text-gradient-brand">Every outcome.</span>
+        <span className="text-[#34d399]">Every outcome.</span>
       </>
     ),
     subtitle: "Win rate, P&L, and conviction calibration across every trade the model has ever fired. Fully public, nothing hidden.",
@@ -56,7 +56,7 @@ const CARDS: Record<string, Card> = {
       <>
         How the experiment
         <br />
-        <span className="text-gradient-brand">actually works.</span>
+        <span className="text-[#34d399]">actually works.</span>
       </>
     ),
     subtitle: "One model, no humans, real money. The two-call pipeline, the data sources, the guardrails, and the honest odds.",
@@ -67,7 +67,7 @@ const CARDS: Record<string, Card> = {
       <>
         Not financial advice.
         <br />
-        <span className="text-gradient-brand">Real risk.</span>
+        <span className="text-[#34d399]">Real risk.</span>
       </>
     ),
     subtitle: "An experimental, educational project. Machine-generated suggestions, auto-executed with real money, reviewed by no one.",
@@ -78,7 +78,7 @@ const CARDS: Record<string, Card> = {
       <>
         Minimal data.
         <br />
-        <span className="text-gradient-brand">No trackers.</span>
+        <span className="text-[#34d399]">No trackers.</span>
       </>
     ),
     subtitle: "No analytics SDK, no ad network, no data broker. Just the email you signed up with and a session cookie.",
@@ -96,10 +96,10 @@ export default async function SeoCardPage({ params }: { params: Promise<{ slug: 
 
   return (
     <div
-      style={{ width: 1200, height: 630, background: "linear-gradient(135deg, #0b0a14 0%, #14122b 55%, #0b0a14 100%)" }}
-      className="relative overflow-hidden font-sans text-white"
+      style={{ width: 1200, height: 630, background: "linear-gradient(135deg, #05130c 0%, #0a2014 55%, #05130c 100%)" }}
+      className="relative overflow-hidden font-mono text-white"
     >
-      {/* Ambient indigo/violet glass orbs */}
+      {/* Ambient phosphor orbs on the tube */}
       <div className="lg-orb lg-orb-cyan absolute -top-40 -left-32 h-[560px] w-[560px] opacity-50" aria-hidden />
       <div className="lg-orb lg-orb-claude absolute -right-40 -bottom-48 h-[560px] w-[560px] opacity-45" aria-hidden />
 
@@ -107,15 +107,15 @@ export default async function SeoCardPage({ params }: { params: Promise<{ slug: 
         {/* Top: wordmark */}
         <div className="flex items-center justify-between">
           <span className="text-[34px] font-extrabold tracking-tight">
-            Vibe<span className="text-gradient-brand">Tradez</span>
+            VIBE<span style={{ color: "#34d399", textShadow: "0 0 18px rgba(52, 211, 153, 0.45)" }}>TRADEZ</span>
           </span>
-          <span className="rounded-full border border-white/15 bg-white/[0.06] px-4 py-1.5 text-[15px] font-medium text-white/80">{card.eyebrow}</span>
+          <span className="border border-dashed border-white/25 px-4 py-1.5 text-[15px] font-medium uppercase tracking-[0.1em] text-white/80">{card.eyebrow}</span>
         </div>
 
         {/* Middle: headline + subtitle */}
-        <div className="max-w-[900px]">
-          <h1 className="text-[78px] font-extrabold leading-[1.02] tracking-[-0.03em]">{card.title}</h1>
-          <p className="mt-7 max-w-[760px] text-[26px] leading-snug text-white/65">{card.subtitle}</p>
+        <div className="max-w-[980px]">
+          <h1 className="text-[68px] font-extrabold uppercase leading-[1.04] tracking-[-0.02em]">{card.title}</h1>
+          <p className="mt-7 max-w-[800px] font-sans text-[26px] leading-snug text-white/65">{card.subtitle}</p>
         </div>
 
         {/* Bottom: powered by */}
