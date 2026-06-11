@@ -1,145 +1,81 @@
 # vibetradez.com
 
-An AI runs a single personal brokerage account. Each session Claude decides from scratch what to do with the money (buy equity, buy options, trim, sell, or hold cash), sizing each move within hard caps enforced at the tool layer and holding positions across days. The mandate is to grow the account, benchmarked against buy-and-hold SPY. This is one account, not a multi-user product. Subscribers watch and get a daily recap email.
+An AI runs a single real brokerage account. Each trading day Claude (we call her Claudia) reads the book, the tape, and the news, then decides from scratch what to do with the money: buy equity, buy options, trim, sell, or hold cash. Positions are held across days, every move is sized inside hard caps enforced in code, and the benchmark is buy-and-hold SPY. Subscribers watch and get one recap email a day.
 
-> The autonomous portfolio manager is the whole system. It runs whenever `TRADING_ENABLED=true` and trades **live** with real money against the Schwab Trader API — there is no paper mode. (The original three-pick options bot has been removed.)
+> **This is live.** The account trades real money against the Schwab Trader API whenever `TRADING_ENABLED=true`. There is no paper mode. Every number on the site comes from one real account.
 
-## Related repos
+## The daily loop
 
-- [jaycebordelon.com](https://github.com/JayceBordelon/jaycebordelon.com): personal portfolio and blog. Standalone deployable, planned to run on its own droplet.
+One session per trading day, around midday, when spreads have settled and the morning's information is already on the tape.
 
-Google OAuth is handled in-process by the trading-server binary at `/auth/google/start` and `/auth/google/callback`. The Google Cloud Console redirect URI is `https://vibetradez.com/auth/google/callback`.
+```
+        ┌── observes ──────────────────────────────────────┐
+        │   the live book · quotes · option chains ·       │
+        │   price history · news · cap headroom ·          │
+        │   its own realized track record vs SPY           │
+        ▼                                                  │
+   ┌─────────┐   buy · sell · trim · hold   ┌──────────┐   │
+   │ Claudia │ ───────────────────────────▶ │  Schwab  │ ──┘
+   └─────────┘    every order passes the    └──────────┘
+        │         cap sheet (in code) first
+        │
+        └── writes a synopsis + action items, read back
+            as the starting point of the next session
+```
+
+Three crons drive the day (America/New_York, weekends and holidays skipped):
+
+```
+30 12 * * MON-FRI    the session   reads everything, then trades
+*/15 .. * * MON-FRI  the sweep     reconciles fills against the broker
+00 16 * * MON-FRI    the close     snapshots equity vs SPY, sends the recap
+```
+
+Orders are fire-and-forget LIMITs that fill over the afternoon. The full tool-by-tool reasoning of every session is public at `/transcripts/<date>`.
+
+## The guardrails
+
+The entire risk policy is two sleeve caps, enforced at the tool layer where the model cannot talk its way past them:
+
+| Cap | Value |
+|---|---|
+| Options sleeve | premium at risk ≤ 50% of live equity |
+| Equity sleeve | stock value ≤ 50% of live equity |
+
+Buys also spend settled cash only (broker T+1 compliance, not a risk preference), and a flat absolute order ceiling at the broker entry backstops code bugs, not trades. There is no per-name cap, no stop loss, no drawdown breaker. The model concentrates and sizes however it judges best, and it can absolutely lose the money. That is the show.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    User(["Visitors"])
-    Google(["Google OAuth"])
+```
+   visitors ──▶ traefik ─┬─ /api /auth /health ──▶ trading-server (Go)
+                         └─ everything else ─────▶ trading-frontend (Next.js)
 
-    subgraph Droplet["Droplet · docker compose"]
-      direction TB
-      Traefik(["Traefik · TLS · path routing"])
-      TF["trading-frontend<br/>Next.js"]
-      TS["trading-server<br/>Go · cron · email ·<br/>in-process Google OAuth"]
-    end
-
-    subgraph Backing["Backing services"]
-      direction TB
-      DB[("Postgres<br/>portfolio + sessions")]
-      Schwab["Schwab API<br/>data · orders · positions · WS"]
-      Claude["Anthropic Claude"]
-      Resend["Resend"]
-    end
-
-    User --> Traefik
-    Traefik -->|"static + SSR"| TF
-    Traefik -->|"/api · /auth · /health"| TS
-    TS -.->|"SSE live ticks"| TF
-    TS -.->|"/auth/google/* dance"| Google
-
-    TS --> DB
-    TS --> Schwab
-    TS --> Claude
-    TS --> Resend
+   trading-server owns every outbound dependency:
+     postgres    the book, sessions, transcripts, subscribers
+     schwab      market data + the Trader API (orders, positions, streams)
+     anthropic   Claudia, the portfolio agent
+     resend      the daily recap email
 ```
 
-Visitors hit Traefik, which routes by path: `/api`, `/auth`, and `/health` go to the Go trading-server, everything else goes to the Next.js trading-frontend. The trading-server owns every outbound dependency: Postgres for the book (positions snapshots, decisions, the equity curve) plus users and sessions, Schwab for live quotes and the Trader API (orders, positions, account), Anthropic Claude for the portfolio agent, and Resend for email. Sign-in is a direct Google OAuth flow handled in the trading-server binary, and the session cookie is validated against a local sessions table on each `/api/*` request. The frontend does not talk to anything outside the droplet directly. Live ticks flow back to it as SSE from the trading-server.
+Sign-in is in-process Google OAuth on the trading-server. Live quotes stream from Schwab's WebSocket and fan out to browsers as SSE. The frontend talks to nothing outside the droplet.
 
-## What's here
+## Repo layout
 
 ```
-vibetradez.com/
-├── server/                 Go API (portfolio agent, crons, Schwab, in-process Google OAuth, Resend email)
-│   ├── cmd/scanner/         Main entry point, cron registration, daily lifecycle (main.go + portfolio.go)
-│   ├── internal/
-│   │   ├── portfolio/       v2 portfolio manager: cap sheet (the security boundary), tool layer, agent loop, prompt
-│   │   ├── portfoliowire/   Adapters binding the portfolio agent to Schwab + exec + store
-│   │   ├── exec/            Broker layer: equity + options orders, positions, account, portfolio entry points
-│   │   ├── schwab/          Schwab OAuth + Market Data + instruments (market cap) + streaming client
-│   │   ├── store/           PostgreSQL data layer (portfolio_* tables, subscribers, sessions, transcripts)
-│   │   ├── server/          HTTP API handlers (/api/portfolio*, SSE /api/quotes/stream, health)
-│   │   ├── templates/       HTML email templates (daily portfolio recap, Schwab re-auth nag, one-time launch announcement)
-│   │   ├── auth/            In-process Google OAuth (users + sessions in a dedicated Postgres pool)
-│   │   ├── calendar/        NYSE holiday + half-day calendar, market-hours math
-│   │   ├── quotes/          Live-quotes hub (Schwab WS to SSE fan-out)
-│   │   ├── config/          Environment variable loading
-│   │   └── email/           Resend email client
-│   ├── Dockerfile
-│   └── go.mod
-├── client/                  Next.js frontend (Next.js 16, shadcn/ui, Recharts v3)
-│   ├── app/                 App Router: /, /dashboard, /holdings, /closed, /transcripts/[date], /faq, /terms, /privacy
-│   ├── components/          Portfolio dashboard, holdings + closed lists, trade detail, layout, subscribe
-│   ├── hooks/               Custom React hooks (live quotes via SSE, market status)
-│   ├── lib/                 API client, formatters
-│   ├── types/               TypeScript interfaces (portfolio.ts, trade.ts)
-│   └── Dockerfile
-├── local/                   Self-contained Docker stack with seeded Postgres for offline dev
-├── docker-compose.yml       Production stack (traefik + trading-server + trading-frontend)
-└── .github/workflows/       PR checks: lint + build + test on every PR
+server/    Go API: portfolio agent + tools + cap sheet (internal/portfolio),
+           Schwab client, store, crons, in-process OAuth, email
+client/    Next.js 16 frontend: dashboard, holdings, closed trades,
+           session transcripts, in a CRT terminal aesthetic
+local/     Self-contained Docker stack with seeded Postgres for offline dev
 ```
-
-## Tech stack
 
 | Component | Choice |
 |---|---|
-| Server | Go 1.25, PostgreSQL (DO managed), Anthropic Claude (claude-opus-4-8), Schwab Market Data + Trader API, Resend email |
-| Client | Next.js 16, React 19, Tailwind CSS v4, shadcn/ui (new-york), Recharts v3, TradingView Lightweight Charts |
-| Auth | In-process Google OAuth (`golang.org/x/oauth2`), sessions in a dedicated Postgres pool |
-| Live data | Schwab WebSocket Streamer API, fanned out to browsers via SSE |
-| Infra | Docker Compose, Traefik v2.10 (in-repo), Let's Encrypt, Digital Ocean Droplet |
+| Server | Go 1.25, PostgreSQL, Anthropic Claude, Schwab Market Data + Trader API, Resend |
+| Client | Next.js 16, React 19, Tailwind v4, shadcn/ui, Recharts v3 |
+| Infra | Docker Compose + Traefik on a Digital Ocean droplet |
 
-## Daily lifecycle (v2 portfolio manager)
-
-Read the day as an **agent–environment loop**, the way an RL environment is drawn: Claude is the policy, the market and the brokerage account are the environment, the reading tools are observations, the execution tools are actions (gated by the cap sheet), and the equity curve versus SPY is the reward signal. There is no training loop here, though: the policy is fixed within a session, and "memory" is the prior decisions, stances, and summaries it reads back the next day, not weight updates.
-
-```mermaid
-flowchart LR
-    classDef agent fill:#ede9fe,stroke:#7c3aed,color:#0f172a
-    classDef env fill:#f1f5f9,stroke:#334155,color:#0f172a
-    classDef guard fill:#fef2f2,stroke:#b91c1c,color:#0f172a
-    classDef mem fill:#fdf3ee,stroke:#c2410c,color:#0f172a
-
-    AGENT["Claude — the policy<br/>one session, ~12:30 ET<br/>decides from scratch"]:::agent
-    CAPS{{"Cap sheet · hard limits in code<br/>(the security boundary)"}}:::guard
-    ENV["Environment<br/>Schwab market data + Trader account"]:::env
-    MEM[("Memory &amp; scoreboard<br/>decisions · stances · summaries<br/>equity curve vs SPY")]:::mem
-
-    ENV -->|"observation / context — reading tools:<br/>portfolio, quotes, chain, price history,<br/>fundamentals, cap headroom, order status, news,<br/>track record, market context"| AGENT
-    AGENT -->|"action — execution tools:<br/>buy · sell · cancel · hold"| CAPS
-    CAPS -->|"within limits"| ENV
-    AGENT -->|"documentation — write_summary"| MEM
-    ENV -->|"fills + marks"| MEM
-    MEM -.->|"carried into the next session (memory across days)"| AGENT
-    MEM -.->|"reward signal — P&amp;L vs SPY"| AGENT
-```
-
-Three crons (`robfig/cron`, America/New_York, skipping weekends and holidays) drive the loop, registered whenever `TRADING_ENABLED=true`. The account trades **live** — there is no paper mode.
-
-- **~12:30 ET — the session.** Midday on purpose: spreads have settled, the morning's information is on the tape, and limit orders still have hours to fill. Claude observes the live book through the reading tools (including its own realized track record and a market-regime read) and decides from scratch: buy equity, buy a call or put, add, trim, sell, cancel a stale order, or hold cash. Every action passes the cap sheet (the security boundary enforced in code) before it reaches the broker. The percentage caps are enforced at the tool layer, and the broker entry point adds only a flat absolute fat-finger ceiling on the way out (it does not re-check the percentages, so the tool layer is the sole enforcement point for the percentage policy). It closes the session with `write_summary`; the moves, stance, summary, and the full tool-by-tool transcript are persisted.
-- **Every 15 min, market hours — the reconcile sweep.** Syncs the decision log's order statuses (and fill prices) with the broker so the dashboard shows fills within minutes.
-- **16:00 ET — the close.** Records the equity-vs-SPY snapshot and the held book, then sends the **single daily recap email**: the day's summary, every move with its reason, the closing book and headline numbers, and a link to that day's full transcript on the site.
-
-## Hard caps
-
-Every cap is a percentage of live account equity read at the start of the session, so the policy scales with the account. The values live in `internal/portfolio/caps.go` (`DefaultCaps`) and are enforced at the tool layer. The broker entry point re-checks only a flat absolute order-cost ceiling (`exec.MaxPortfolioOrderCostCeiling`), not these percentages, so the tool layer is the sole enforcement point for the percentage policy.
-
-| Cap | Value | Why |
-|---|---|---|
-| Options sleeve | option premium <= 50% of equity | Options can expire to zero; half the account is the most that rides the leverage sleeve |
-| Equity sleeve | stock value <= 50% of equity | The other half of the 50/50 split |
-| Settled-cash rule | new buys spend settled cash only | Broker T+1 compliance (good-faith violations), not a risk preference |
-
-Those two sleeves are the whole policy: there is no per-name cap, no
-per-order cap, no drawdown breaker, no liquidity floor, and no session
-deployment pacing. The model concentrates, sizes, and picks instruments
-however it judges best, with all settled cash in play every session. A
-flat absolute order ceiling at the broker entry backstops code bugs, not
-trading decisions.
-
-Selling and trimming are always allowed.
-
-## Local development
+## Run it locally
 
 ```bash
 cd local
@@ -147,135 +83,17 @@ docker compose -f docker-compose.local.yml up --build
 # http://localhost:3001
 ```
 
-The self-contained local stack boots Postgres, the Go server, the Next.js frontend, and the mocked auth service with seeded data. Stub keys are baked in so the server starts without real Claude / Schwab / Resend calls, and the cron jobs are pushed to Sunday so they never fire.
+The local stack boots Postgres, the server, and the frontend with seeded data and stub keys, so nothing real is called and no cron ever fires. For a server-only loop: `cd server && go test ./... && go build ./...`. For client-only dev: `cd client && npm run dev`.
 
-For a server-only build:
+Schema migrations run inline at server boot (`internal/store/store.go`). Required env vars are listed in `server/.env.example`, and a missing one fails the boot loudly.
 
-```bash
-cd server
-go test ./...   # requires local Postgres at TEST_DATABASE_URL (defaults to dev string)
-go build ./...
-```
+## CI and deploys
 
-For client-only dev (against a remote server):
+Every PR runs Biome + `next build` on the client and gofmt / vet / build / `go test -race` on the server. Merges to `main` deploy via the operator's pipeline. Every PR that touches the client gets a model-driven UI audit (`scripts/ui-audit/`, convention in `docs/ui-audits/README.md`).
 
-```bash
-cd client
-npm install
-npm run dev
-```
+## Related
 
-## Database
-
-PostgreSQL hosted on Digital Ocean Managed Databases. Schema auto-migrates on server boot (CREATE TABLE IF NOT EXISTS for new tables, ALTER TABLE ... IF NOT EXISTS for additive columns). The full migration history lives inline in `server/internal/store/store.go`'s `migrate()` function. The v2 tables are `portfolio_decisions` (every move and hold, each with a stable URL-safe `uuid` used as the trade id behind its detail route), `portfolio_positions` (the held-book snapshot), `portfolio_sessions` (the daily stance, synopsis, and action items), and `portfolio_equity_curve` (account equity vs SPY). Subscribers and the per-day session transcripts live alongside them.
-
-## Environment variables
-
-Required env vars are read from `server/.env` (loaded into the trading-server container via the docker-compose `env_file:` directive). Every required var causes the binary to `log.Fatal` on boot if missing, so a misconfigured container never serves traffic. See `server/.env.example` for the full list, including `TRADING_ENABLED` and the portfolio cron schedules.
-
-The client does not have its own env file in production. The `API_URL` env var is set in the compose file to point at the trading-server's internal hostname.
-
-## Model version refresh policy
-
-The agent model is configured via the `ANTHROPIC_MODEL` env var with the default defined as the `DefaultAnthropicModel` constant in `server/internal/config/config.go`.
-
-Any time work touches the portfolio agent or this default, fetch the official Anthropic Go SDK documentation and refresh the default to the current latest production model. Anthropic publishes new model versions regularly, and a stale default degrades quality silently. The page to read is:
-
-- Anthropic Go SDK: <https://platform.claude.com/docs/en/api/sdks/go>
-
-## Hostname routing
-
-This service binds `Host(\`vibetradez.com\`)` plus the `www` subdomain via Traefik labels in `docker-compose.yml`. Route priority:
-
-- `/api/*`, `/auth/*`, `/health` go to the trading-server (priority 20)
-- everything else goes to the trading-frontend (priority 10)
-
-Traefik runs as the `traefik` service in this same `docker-compose.yml` (TLS via Let's Encrypt) and shares the `vibetradez-network` bridge network with the two app services.
-
-## API protection
-
-All `/api/*` routes on the trading server require the `X-VT-Source` header. Without it, requests return 403. The Next.js frontend includes this header on every fetch call via its server-side API proxy.
-
-## CI / CD
-
-`.github/workflows/pr-checks.yml` runs on every pull request:
-
-1. Biome on the client
-2. `next build` on the client
-3. gofmt / `go vet` / `go build` / `go test -race` on the server (with an ephemeral Postgres service container)
-4. actionlint on the workflow files
-
-Production deploys are handled by the operator's deploy pipeline (separate from this repo).
-
-## UX/UI audits
-
-Every PR that changes the frontend gets a **model-driven UI audit**: Claude
-boots the seeded local stack, analyzes the rendered app (full-page captures
-at both viewports in both themes via [`scripts/ui-audit/`](scripts/ui-audit/),
-or a Playwright probe for behavior), fixes what it finds in the same PR, and
-summarizes findings + fixes in the PR description. Screenshots are throwaway
-analysis input (gitignored), never committed; the dated folders under
-[`docs/ui-audits/`](docs/ui-audits/) are frozen history from the earlier
-commit-the-screenshots convention.
-
-- **Convention:** [`docs/ui-audits/README.md`](docs/ui-audits/README.md)
-- **Capture pipeline:** [`scripts/ui-audit/`](scripts/ui-audit/) (Playwright)
-
-Run one against the local stack:
-
-```bash
-cd local
-python3 generate-seed.py > seed.sql
-docker compose -f docker-compose.local.yml -f docker-compose.local.override.yml down -v
-docker compose -f docker-compose.local.yml -f docker-compose.local.override.yml up --build -d
-cd ../scripts/ui-audit && npm install && ./run.sh
-```
-
-## Where the load-bearing logic lives
-
-| Concern | Path |
-|---|---|
-| Cap sheet (the security boundary) + pure cap checks | `server/internal/portfolio/caps.go` |
-| Portfolio tool layer (buy/sell equity + option, hold, reads) | `server/internal/portfolio/tools.go` |
-| Portfolio agent loop + final-JSON stance parse | `server/internal/portfolio/agent.go` |
-| Mandate prompt | `server/internal/portfolio/prompt.go` |
-| Adapters to Schwab + exec + store | `server/internal/portfoliowire/wire.go` |
-| Broker layer (equity + options orders, positions, account, portfolio entry points) | `server/internal/exec/` |
-| Schwab market cap (instruments fundamentals) | `server/internal/schwab/instruments.go` |
-| Portfolio crons (daily session, risk sweep, EOD snapshot) + email send | `server/cmd/scanner/portfolio.go` + `main.go` |
-| Quotes hub (Schwab WS to SSE fan-out, per-watcher lifecycle) | `server/internal/quotes/hub.go` |
-| SSE quote stream endpoint | `server/internal/server/quotes.go` |
-| Live re-pricing overlays + SSE hook | `client/lib/live-pricing.ts` + `client/hooks/use-live-quotes.ts` |
-| Portfolio store tables + methods | `server/internal/store/portfolio.go` |
-| Portfolio API endpoints | `server/internal/server/portfolio.go` |
-| Daily recap email template | `server/internal/templates/portfolio_update.html` |
-| Portfolio dashboard | `client/components/portfolio/` |
-| In-process Google OAuth | `server/internal/auth/` |
-
-## Common operations
-
-### Re-authorize Schwab OAuth
-
-Visit `https://vibetradez.com/auth/schwab` in a browser. Tokens are stored in the `oauth_tokens` table and auto-refresh.
-
-### Check server health
-
-```bash
-curl https://vibetradez.com/health | jq
-```
-
-Returns per-service status for database, Anthropic, Schwab, and api with latencies. The Anthropic check goes through the official SDK and warns (instead of fails) when a stub local key is detected.
-
-### Docker commands on production
-
-```bash
-ssh jayce@<server>
-cd <project-path>
-docker compose logs trading-server --tail 50    # View Go server logs
-docker compose logs trading-frontend --tail 50  # View Next.js logs
-docker compose restart trading-server           # Restart Go server
-docker compose up -d --force-recreate trading-server  # Full recreate
-```
+[jaycebordelon.com](https://github.com/JayceBordelon/jaycebordelon.com) is the builder's portfolio and blog, a separate stack with no shared infra.
 
 ## License
 
