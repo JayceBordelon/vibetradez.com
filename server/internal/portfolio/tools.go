@@ -47,6 +47,10 @@ type PortfolioReader interface {
 	// items, so the agent starts the day where it left off. ok is false when
 	// there is no prior session on record.
 	PriorSession() (synopsis, actionItems string, ok bool, err error)
+	// TrackRecord returns realized outcomes: closed round trips with P&L,
+	// win/loss stats split by instrument, and the account-vs-SPY benchmark
+	// race. The agent's quantified feedback signal (get_track_record).
+	TrackRecord(recentTrips int) (TrackRecord, error)
 }
 
 /*
@@ -180,7 +184,20 @@ func ToolDefinitions() []anthropic.ToolUnionParam {
 		}},
 		{OfTool: &anthropic.ToolParam{
 			Name:        "get_cap_headroom",
-			Description: anthropic.String("How much room you have left under every hard cap right now: per-order limit, per-name capacity (with current exposure for each name you hold), options-sleeve room, remaining daily deployment budget, and whether the drawdown breaker has halted new buys. Use it to size precisely instead of getting orders rejected."),
+			Description: anthropic.String("How much room you have left under the two sleeve caps right now: options premium used and remaining, stock value used and remaining (each capped at half of live equity), plus settled cash. Use it to size precisely instead of getting orders rejected."),
+			InputSchema: anthropic.ToolInputSchemaParam{Properties: map[string]any{}, Required: []string{}},
+		}},
+		{OfTool: &anthropic.ToolParam{
+			Name:        "get_track_record",
+			Description: anthropic.String("Your realized results to date: recent closed round trips with entry/exit prices and P&L, win rate and average winner vs loser split by equity vs options, and the account's return versus buy-and-hold SPY with max drawdown. This is the only quantified signal of what has actually been working, so read it before sizing new risk and weight it above your own prior narrative."),
+			InputSchema: anthropic.ToolInputSchemaParam{
+				Properties: map[string]any{"recent_trips": map[string]any{"type": "integer", "description": "Max closed trades to list in detail (default 15). The stats always cover the full history."}},
+				Required:   []string{},
+			},
+		}},
+		{OfTool: &anthropic.ToolParam{
+			Name:        "get_market_context",
+			Description: anthropic.String("One-call market regime read: SPY and QQQ trend summaries (last close, 20/50/200-day moving averages, 52-week range position, 1-month and 3-month returns, realized vol) plus the current VIX level. Call it once early in the session instead of spending web searches asking what the market is doing."),
 			InputSchema: anthropic.ToolInputSchemaParam{Properties: map[string]any{}, Required: []string{}},
 		}},
 		{OfTool: &anthropic.ToolParam{
@@ -201,7 +218,7 @@ func ToolDefinitions() []anthropic.ToolUnionParam {
 		}},
 		{OfTool: &anthropic.ToolParam{
 			Name:        "buy_equity",
-			Description: anthropic.String("Submit a BUY LIMIT order for shares of an equity. Notional (quantity × limit_price) is checked against the per-order, concentration, settled-cash, daily-deployment, and drawdown caps before anything reaches the broker. Returns the order id on success or a clear refusal string."),
+			Description: anthropic.String("Submit a BUY LIMIT order for shares of an equity. Notional (quantity × limit_price) is checked against the settled-cash rule and the equity-sleeve cap before anything reaches the broker. Returns the order id on success or a clear refusal string."),
 			InputSchema: anthropic.ToolInputSchemaParam{
 				Properties: map[string]any{
 					"symbol":      str("Equity ticker."),
@@ -227,7 +244,7 @@ func ToolDefinitions() []anthropic.ToolUnionParam {
 		}},
 		{OfTool: &anthropic.ToolParam{
 			Name:        "buy_option",
-			Description: anthropic.String("Submit a BUY_TO_OPEN LIMIT for a long single-leg option. Notional (contracts × limit_price × 100) is checked against the per-order, concentration (counts toward the underlying alongside any equity), options-sleeve, settled-cash, daily-deployment, drawdown, and liquidity caps. occ_symbol and underlying both come from get_option_chain."),
+			Description: anthropic.String("Submit a BUY_TO_OPEN LIMIT for a long single-leg option. Notional (contracts × limit_price × 100) is checked against the settled-cash rule and the options-sleeve cap. occ_symbol and underlying both come from get_option_chain."),
 			InputSchema: anthropic.ToolInputSchemaParam{
 				Properties: map[string]any{
 					"occ_symbol":    str("The 21-char OCC option symbol from get_option_chain."),
@@ -311,6 +328,10 @@ func (d *ToolDispatcher) Dispatch(ctx context.Context, name string, input json.R
 		return d.dispatchGetFundamentals(input)
 	case "get_cap_headroom":
 		return d.dispatchGetCapHeadroom()
+	case "get_track_record":
+		return d.dispatchGetTrackRecord(input)
+	case "get_market_context":
+		return d.dispatchGetMarketContext()
 	case "get_recent_decisions":
 		return d.dispatchGetRecentDecisions(input)
 	case "get_order_status":
@@ -385,7 +406,23 @@ func (d *ToolDispatcher) dispatchGetOptionChain(input json.RawMessage) string {
 	if err != nil {
 		return jsonError(fmt.Sprintf("get_option_chain: %v", err))
 	}
-	out, _ := json.Marshal(chain)
+	// Pair the chain with the underlying's realized vol so the model can
+	// judge whether the IV it is about to pay is rich or cheap. Long
+	// options bought with IV far above realized need a move bigger than
+	// the recent tape just to break even. Best-effort: a history failure
+	// returns the bare chain rather than failing the call.
+	resp := map[string]any{"chain": chain}
+	if ph, herr := d.reader.GetDailyPriceHistory(args.Symbol); herr == nil && len(ph.Candles) > 0 {
+		closes := make([]float64, len(ph.Candles))
+		for i, k := range ph.Candles {
+			closes[i] = k.Close
+		}
+		if v := annualizedVol(closes, 20); v > 0 {
+			resp["underlying_realized_vol_20d_annualized_pct"] = round2(v)
+			resp["vol_note"] = "Compare each contract's implied volatility against this realized vol before buying premium."
+		}
+	}
+	out, _ := json.Marshal(resp)
 	return string(out)
 }
 
@@ -450,6 +487,59 @@ func (d *ToolDispatcher) dispatchGetCapHeadroom() string {
 		"equity_sleeve_remaining":  round2(eqCap - eqUsed),
 	})
 	return string(out)
+}
+
+/*
+dispatchGetTrackRecord surfaces realized outcomes: the agent's quantified
+feedback loop. The stats always cover full history; recent_trips only
+bounds the per-trade detail list so the context stays lean.
+*/
+func (d *ToolDispatcher) dispatchGetTrackRecord(input json.RawMessage) string {
+	var args struct {
+		RecentTrips int `json:"recent_trips"`
+	}
+	_ = json.Unmarshal(input, &args)
+	if args.RecentTrips <= 0 {
+		args.RecentTrips = 15
+	}
+	tr, err := d.reader.TrackRecord(args.RecentTrips)
+	if err != nil {
+		return jsonError(fmt.Sprintf("get_track_record: %v", err))
+	}
+	out, _ := json.Marshal(tr)
+	return string(out)
+}
+
+/*
+dispatchGetMarketContext condenses the market regime into one read: SPY +
+QQQ trend summaries from the same price-history path the per-symbol tool
+uses, plus the VIX level when the quote is available. Each piece degrades
+independently so one failed upstream call doesn't blank the whole read.
+*/
+func (d *ToolDispatcher) dispatchGetMarketContext() string {
+	out := map[string]any{}
+	for _, sym := range []string{"SPY", "QQQ"} {
+		key := strings.ToLower(sym)
+		ph, err := d.reader.GetDailyPriceHistory(sym)
+		if err != nil {
+			out[key] = map[string]any{"error": err.Error()}
+			continue
+		}
+		out[key] = priceSummary(sym, ph)
+	}
+	if quotes, err := d.reader.GetQuotes([]string{"$VIX.X"}); err == nil {
+		if q, ok := quotes["$VIX.X"]; ok {
+			v := q.LastPrice
+			if v == 0 {
+				v = q.ClosePrice
+			}
+			if v > 0 {
+				out["vix"] = round2(v)
+			}
+		}
+	}
+	b, _ := json.Marshal(out)
+	return string(b)
 }
 
 func (d *ToolDispatcher) dispatchGetRecentDecisions(input json.RawMessage) string {

@@ -58,8 +58,8 @@ const STATE_CONFIG: Record<FreshnessState, StateConfig> = {
     dotColor: "bg-amber",
     ringColor: "bg-amber",
     showPing: false,
-    description: "Pre-market session. Daily picks publish at 9:25 AM ET, just before the open.",
-    trailing: () => <small className="text-muted-foreground">Picks publish at 9:25 AM ET</small>,
+    description: "Pre-market hours. The model's daily session runs around 12:30 PM ET.",
+    trailing: () => <small className="text-muted-foreground">Session runs ~12:30 PM ET</small>,
   },
   loading: {
     label: "Loading\u2026",

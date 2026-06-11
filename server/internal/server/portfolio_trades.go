@@ -3,11 +3,11 @@ package server
 import (
 	"context"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
 	"vibetradez.com/internal/store"
+	"vibetradez.com/internal/trades"
 )
 
 /*
@@ -208,152 +208,47 @@ func openingMoves(db *store.Store) map[string]openMove {
 	return out
 }
 
-// tradeAcc accumulates an open round trip until a sell flattens it.
-type tradeAcc struct {
-	openQty      float64
-	openCost     float64
-	soldQty      float64
-	proceeds     float64
-	costConsumed float64
-	openDate     string
-	closeDate    string
-	openReason   string
-	closeReason  string
-	uuid         string // the opening buy's stable uuid; becomes the trade's id
-	assetType    string
-	underlying   string
-	contractType string
-	expiration   string
-	strike       *float64
-}
-
-const qtyEpsilon = 1e-6
-
 /*
-deriveClosedTrades walks the decision log forward, pairing buys with the
-sells that flatten them (average-cost), and emits one closed trade per
-completed round trip. Sells with no matching open lot are ignored (they
-can't form a round trip we have the entry for). Result is newest-close
-first.
+deriveClosedTrades maps the shared round-trip derivation (internal/trades,
+the same source the portfolio agent reads through get_track_record) into
+the client-facing view: stable route ids, kind, and display label.
 */
 func deriveClosedTrades(decisions []store.PortfolioDecisionRow) []closedTradeView {
-	open := map[string]*tradeAcc{}
-	var out []closedTradeView
-
-	for _, d := range decisions {
-		switch d.Action {
-		case "buy_equity", "buy_option":
-			a := open[d.Symbol]
-			if a == nil {
-				a = &tradeAcc{}
-				open[d.Symbol] = a
-			}
-			if a.openQty <= qtyEpsilon {
-				// start of a fresh cycle: capture entry context
-				a.openDate = d.Date
-				a.openReason = d.Rationale
-				a.uuid = d.Uuid
-				a.assetType = d.AssetType
-				a.underlying = d.Underlying
-				a.contractType = d.ContractType
-				a.expiration = d.Expiration
-				a.strike = d.Strike
-				a.soldQty, a.proceeds, a.costConsumed = 0, 0, 0
-			}
-			mult := assetMult(d.AssetType)
-			cost := d.Quantity * decisionPrice(d) * mult
-			a.openQty += d.Quantity
-			a.openCost += cost
-
-		case "sell_equity", "sell_option":
-			a := open[d.Symbol]
-			if a == nil || a.openQty <= qtyEpsilon {
-				continue // no open lot to close against
-			}
-			mult := assetMult(d.AssetType)
-			sellQty := d.Quantity
-			if sellQty > a.openQty {
-				sellQty = a.openQty
-			}
-			avgCost := a.openCost / a.openQty
-			costPortion := avgCost * sellQty
-			a.openQty -= sellQty
-			a.openCost -= costPortion
-			a.soldQty += sellQty
-			a.proceeds += sellQty * decisionPrice(d) * mult
-			a.costConsumed += costPortion
-			a.closeReason = d.Rationale
-			a.closeDate = d.Date
-			if a.openQty <= qtyEpsilon {
-				out = append(out, a.build(d.Symbol))
-				delete(open, d.Symbol)
-			}
+	trips := trades.Derive(decisions)
+	out := make([]closedTradeView, 0, len(trips))
+	for _, t := range trips {
+		strike := 0.0
+		if t.Strike != nil {
+			strike = *t.Strike
 		}
+		id := t.Uuid
+		if id == "" {
+			id = compactSymbol(t.Symbol) + "-" + t.ClosedDate // legacy rows predating the uuid column
+		}
+		out = append(out, closedTradeView{
+			ID:             id,
+			Kind:           kindOf(t.AssetType),
+			Symbol:         t.Symbol,
+			Underlying:     t.Underlying,
+			Label:          instrumentLabel(t.AssetType, t.Underlying, t.Symbol, t.ContractType, strike, t.Expiration),
+			ContractType:   t.ContractType,
+			Strike:         strike,
+			Expiration:     t.Expiration,
+			Quantity:       t.Quantity,
+			OpenedDate:     t.OpenedDate,
+			ClosedDate:     t.ClosedDate,
+			EntryPrice:     t.EntryPrice,
+			ExitPrice:      t.ExitPrice,
+			CostBasis:      t.CostBasis,
+			Proceeds:       t.Proceeds,
+			RealizedPnl:    t.RealizedPnl,
+			RealizedPct:    t.RealizedPct,
+			HoldDays:       t.HoldDays,
+			OpenRationale:  t.OpenRationale,
+			CloseRationale: t.CloseRationale,
+		})
 	}
-
-	sort.SliceStable(out, func(i, j int) bool { return out[i].ClosedDate > out[j].ClosedDate })
 	return out
-}
-
-func (a *tradeAcc) build(symbol string) closedTradeView {
-	mult := assetMult(a.assetType)
-	units := a.soldQty * mult
-	entry, exit := 0.0, 0.0
-	if units > 0 {
-		entry = a.costConsumed / units
-		exit = a.proceeds / units
-	}
-	realized := a.proceeds - a.costConsumed
-	pct := 0.0
-	if a.costConsumed > 0 {
-		pct = realized / a.costConsumed * 100
-	}
-	strike := 0.0
-	if a.strike != nil {
-		strike = *a.strike
-	}
-	id := a.uuid
-	if id == "" {
-		id = compactSymbol(symbol) + "-" + a.closeDate // legacy rows predating the uuid column
-	}
-	return closedTradeView{
-		ID:             id,
-		Kind:           kindOf(a.assetType),
-		Symbol:         symbol,
-		Underlying:     a.underlying,
-		Label:          instrumentLabel(a.assetType, a.underlying, symbol, a.contractType, strike, a.expiration),
-		ContractType:   a.contractType,
-		Strike:         strike,
-		Expiration:     a.expiration,
-		Quantity:       a.soldQty,
-		OpenedDate:     a.openDate,
-		ClosedDate:     a.closeDate,
-		EntryPrice:     entry,
-		ExitPrice:      exit,
-		CostBasis:      a.costConsumed,
-		Proceeds:       a.proceeds,
-		RealizedPnl:    realized,
-		RealizedPct:    pct,
-		HoldDays:       daysBetween(a.openDate, a.closeDate),
-		OpenRationale:  a.openReason,
-		CloseRationale: a.closeReason,
-	}
-}
-
-// decisionPrice prefers the recorded fill, falling back to the limit price
-// (the fire-and-forget LIMIT the order was submitted at).
-func decisionPrice(d store.PortfolioDecisionRow) float64 {
-	if d.FillPrice != nil && *d.FillPrice > 0 {
-		return *d.FillPrice
-	}
-	return d.LimitPrice
-}
-
-func assetMult(assetType string) float64 {
-	if assetType == "OPTION" {
-		return 100
-	}
-	return 1
 }
 
 func kindOf(assetType string) string {
@@ -395,19 +290,6 @@ func dteFromExpiration(expiration string) int {
 	today := time.Now().In(easternLoc())
 	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, easternLoc())
 	d := int(exp.Sub(today).Hours() / 24)
-	if d < 0 {
-		return 0
-	}
-	return d
-}
-
-func daysBetween(start, end string) int {
-	s, err1 := time.Parse("2006-01-02", start)
-	e, err2 := time.Parse("2006-01-02", end)
-	if err1 != nil || err2 != nil {
-		return 0
-	}
-	d := int(e.Sub(s).Hours() / 24)
 	if d < 0 {
 		return 0
 	}

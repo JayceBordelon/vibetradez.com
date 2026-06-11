@@ -137,7 +137,7 @@ function ExecutionRow({ d }: { d: PortfolioDecision }) {
 
 export function TodaysExecutions({ decisions }: { decisions: PortfolioDecision[] }) {
   if (decisions.length === 0) {
-    return <p className="py-6 text-sm text-muted-foreground">No executions today. The model held the book as-is, or the market hasn&apos;t opened yet.</p>;
+    return <p className="py-6 text-sm text-muted-foreground">No executions today. Either the midday session (~12:30 PM ET) hasn&apos;t run yet, or it looked at the book and chose to leave everything alone.</p>;
   }
   // Money moves lead the tape; holds settle to the bottom as the quiet
   // "and everything else stayed put" coda.

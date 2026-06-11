@@ -100,12 +100,12 @@ flowchart LR
     classDef guard fill:#fef2f2,stroke:#b91c1c,color:#0f172a
     classDef mem fill:#fdf3ee,stroke:#c2410c,color:#0f172a
 
-    AGENT["Claude — the policy<br/>one session, ~09:45 ET<br/>decides from scratch"]:::agent
+    AGENT["Claude — the policy<br/>one session, ~12:30 ET<br/>decides from scratch"]:::agent
     CAPS{{"Cap sheet · hard limits in code<br/>(the security boundary)"}}:::guard
     ENV["Environment<br/>Schwab market data + Trader account"]:::env
     MEM[("Memory &amp; scoreboard<br/>decisions · stances · summaries<br/>equity curve vs SPY")]:::mem
 
-    ENV -->|"observation / context — reading tools:<br/>portfolio, quotes, chain, price history,<br/>fundamentals, cap headroom, order status, news"| AGENT
+    ENV -->|"observation / context — reading tools:<br/>portfolio, quotes, chain, price history,<br/>fundamentals, cap headroom, order status, news,<br/>track record, market context"| AGENT
     AGENT -->|"action — execution tools:<br/>buy · sell · cancel · hold"| CAPS
     CAPS -->|"within limits"| ENV
     AGENT -->|"documentation — write_summary"| MEM
@@ -116,7 +116,7 @@ flowchart LR
 
 Three crons (`robfig/cron`, America/New_York, skipping weekends and holidays) drive the loop, registered whenever `TRADING_ENABLED=true`. The account trades **live** — there is no paper mode.
 
-- **~09:45 ET — the session.** Claude observes the live book through the reading tools and decides from scratch: buy equity, buy a call or put, add, trim, sell, cancel a stale order, or hold cash. Every action passes the cap sheet (the security boundary enforced in code) before it reaches the broker. The percentage caps are enforced at the tool layer, and the broker entry point adds only a flat absolute fat-finger ceiling on the way out (it does not re-check the percentages, so the tool layer is the sole enforcement point for the percentage policy). It closes the session with `write_summary`; the moves, stance, summary, and the full tool-by-tool transcript are persisted.
+- **~12:30 ET — the session.** Midday on purpose: spreads have settled, the morning's information is on the tape, and limit orders still have hours to fill. Claude observes the live book through the reading tools (including its own realized track record and a market-regime read) and decides from scratch: buy equity, buy a call or put, add, trim, sell, cancel a stale order, or hold cash. Every action passes the cap sheet (the security boundary enforced in code) before it reaches the broker. The percentage caps are enforced at the tool layer, and the broker entry point adds only a flat absolute fat-finger ceiling on the way out (it does not re-check the percentages, so the tool layer is the sole enforcement point for the percentage policy). It closes the session with `write_summary`; the moves, stance, summary, and the full tool-by-tool transcript are persisted.
 - **Every 15 min, market hours — the reconcile sweep.** Syncs the decision log's order statuses (and fill prices) with the broker so the dashboard shows fills within minutes.
 - **16:00 ET — the close.** Records the equity-vs-SPY snapshot and the held book, then sends the **single daily recap email**: the day's summary, every move with its reason, the closing book and headline numbers, and a link to that day's full transcript on the site.
 

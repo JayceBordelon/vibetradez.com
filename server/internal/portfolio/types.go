@@ -59,10 +59,10 @@ Snapshot is the account state the cap checks and the agent reason over,
 captured at the start of a session. Equity is the total account value
 (positions mark plus cash). SettledCash is what new buys may spend in a
 cash account (unsettled proceeds cannot be redeployed until T+1).
-HighWaterMark is the peak account equity observed historically, used by
-the drawdown breaker. There is no session deployment budget: the agent may
-deploy all settled cash, gated only by the per-order, concentration,
-sleeve, and liquidity caps.
+HighWaterMark is the peak account equity observed historically, surfaced
+for context. There is no session deployment budget: the agent may deploy
+all settled cash, gated only by the settled-cash rule and the two sleeve
+caps.
 */
 type Snapshot struct {
 	Equity        float64
@@ -125,6 +125,65 @@ type HistoryEntry struct {
 type StanceEntry struct {
 	Date   string
 	Stance string
+}
+
+/*
+TrackRecord is the get_track_record payload: realized outcomes, not
+narrative. Closed round trips with P&L, the win/loss stats split by
+instrument, and the account-vs-SPY benchmark race. This is the agent's
+only quantified feedback signal, so the JSON names are written for the
+model to reason over directly.
+*/
+type TrackRecord struct {
+	Overall      TrackRecordStats  `json:"overall"`
+	EquityTrades TrackRecordStats  `json:"equity_trades"`
+	OptionTrades TrackRecordStats  `json:"option_trades"`
+	RecentTrips  []TrackRecordTrip `json:"recent_closed_trades"`
+	Benchmark    BenchmarkRace     `json:"benchmark"`
+}
+
+// TrackRecordStats summarizes one bucket of closed round trips.
+type TrackRecordStats struct {
+	Trades           int     `json:"trades"`
+	Wins             int     `json:"wins"`
+	Losses           int     `json:"losses"`
+	WinRatePct       float64 `json:"win_rate_pct"`
+	TotalRealizedPnl float64 `json:"total_realized_pnl"`
+	AvgWinPnl        float64 `json:"avg_win_pnl"`
+	AvgLossPnl       float64 `json:"avg_loss_pnl"`
+	AvgHoldDays      float64 `json:"avg_hold_days"`
+	BiggestWin       float64 `json:"biggest_win"`
+	BiggestLoss      float64 `json:"biggest_loss"`
+}
+
+// TrackRecordTrip is one completed round trip in the detail list.
+type TrackRecordTrip struct {
+	Symbol         string  `json:"symbol"`
+	Underlying     string  `json:"underlying,omitempty"`
+	AssetType      string  `json:"asset_type"`
+	OpenedDate     string  `json:"opened_date"`
+	ClosedDate     string  `json:"closed_date"`
+	HoldDays       int     `json:"hold_days"`
+	EntryPrice     float64 `json:"entry_price"`
+	ExitPrice      float64 `json:"exit_price"`
+	RealizedPnl    float64 `json:"realized_pnl"`
+	RealizedPct    float64 `json:"realized_pct"`
+	OpenRationale  string  `json:"open_rationale,omitempty"`
+	CloseRationale string  `json:"close_rationale,omitempty"`
+}
+
+// BenchmarkRace is the account's return since inception against
+// buy-and-hold SPY over the same window, with the deepest drawdown.
+type BenchmarkRace struct {
+	TradingDays      int     `json:"trading_days"`
+	FirstDate        string  `json:"first_date,omitempty"`
+	LastDate         string  `json:"last_date,omitempty"`
+	StartEquity      float64 `json:"start_equity"`
+	CurrentEquity    float64 `json:"current_equity"`
+	AccountReturnPct float64 `json:"account_return_pct"`
+	SpyReturnPct     float64 `json:"spy_return_pct"`
+	VsSpyPct         float64 `json:"vs_spy_pct"`
+	MaxDrawdownPct   float64 `json:"max_drawdown_pct"`
 }
 
 /*

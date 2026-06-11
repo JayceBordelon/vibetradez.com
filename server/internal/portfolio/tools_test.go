@@ -37,6 +37,7 @@ func (f *fakeReader) OrderStatus(context.Context, string) (OrderStatus, error) {
 	return OrderStatus{}, nil
 }
 func (f *fakeReader) PriorSession() (string, string, bool, error) { return "", "", false, nil }
+func (f *fakeReader) TrackRecord(int) (TrackRecord, error)        { return TrackRecord{}, nil }
 
 type fakeExec struct {
 	buyEquityCalls int

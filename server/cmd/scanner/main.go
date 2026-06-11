@@ -123,7 +123,7 @@ func checkClockSkew() {
 		skew = -skew
 	}
 	if skew > maxAcceptableSkew {
-		log.Printf("clock-skew WARNING: local clock differs from cloudflare by %s (threshold %s). The portfolio crons (the 9:45 ET session, the every-15-min risk sweep, and the 16:00 ET EOD snapshot) WILL fire at the wrong wall-clock time", skew.Truncate(time.Second), maxAcceptableSkew)
+		log.Printf("clock-skew WARNING: local clock differs from cloudflare by %s (threshold %s). The portfolio crons (the 12:30 ET session, the every-15-min risk sweep, and the 16:00 ET EOD snapshot) WILL fire at the wrong wall-clock time", skew.Truncate(time.Second), maxAcceptableSkew)
 	} else {
 		log.Printf("clock-skew probe: local clock within %s of cloudflare (rtt=%s)", skew.Truncate(time.Millisecond), rtt.Truncate(time.Millisecond))
 	}
@@ -256,7 +256,7 @@ func main() {
 	c := cron.New(cron.WithLocation(loc))
 
 	/*
-		Portfolio crons: the daily decision session (~9:45 ET), the intraday
+		Portfolio crons: the daily decision session (~12:30 ET), the intraday
 		risk sweep (every 15 min, market hours), and the EOD equity-curve
 		snapshot (16:00 ET).
 	*/

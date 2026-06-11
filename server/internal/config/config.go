@@ -211,11 +211,12 @@ func Load() *Config {
 		TradingEnabled:          os.Getenv("TRADING_ENABLED") == "true",
 		PublicBaseURL:           getEnvOrDefault("PUBLIC_BASE_URL", "https://vibetradez.com"),
 		OperatorEmail:           getEnvOrDefault("OPERATOR_EMAIL", "bordelonjayce@gmail.com"),
-		// Portfolio agent fires ~9:45 ET, after the opening-auction
-		// volatility settles. Risk cron sweeps every 15 minutes during
-		// market hours for the drawdown breaker + held-option expiry rule.
-		// EOD snapshot writes the equity curve at 16:00 ET.
-		CronSchedulePortfolio:   getEnvOrDefault("CRON_SCHEDULE_PORTFOLIO", "45 9 * * 1-5"),
+		// Portfolio agent fires ~12:30 ET: spreads have settled, the
+		// morning's information is on the tape, and limit orders still
+		// have hours to fill. The risk cron's remaining duty is the
+		// 15-minute order-status reconcile during market hours. EOD
+		// snapshot writes the equity curve at 16:00 ET.
+		CronSchedulePortfolio:   getEnvOrDefault("CRON_SCHEDULE_PORTFOLIO", "30 12 * * 1-5"),
 		CronScheduleRisk:        getEnvOrDefault("CRON_SCHEDULE_RISK", "*/15 10-15 * * 1-5"),
 		CronScheduleEODSnapshot: getEnvOrDefault("CRON_SCHEDULE_EOD_SNAPSHOT", "0 16 * * 1-5"),
 	}

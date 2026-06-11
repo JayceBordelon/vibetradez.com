@@ -149,14 +149,14 @@ export default async function LandingPage() {
 
       {/* ══ 02 · THE DAILY LOOP ══ */}
       <LogSection id="loop" command="crontab -l" comment="the whole schedule" flip title={<>Every weekday, it <span className="phosphor text-green">starts from scratch.</span></>} aside={<CronTable />}>
-        <p>No fixed strategy. Each morning it checks the positions, the news, and the tape, then decides to buy, trim, sell, or hide in cash. It holds what it believes in across days, brave or stubborn.</p>
+        <p>No fixed strategy. Each midday session it checks the positions, the news, and the tape, then decides to buy, trim, sell, or hide in cash. It holds what it believes in across days, brave or stubborn.</p>
       </LogSection>
 
       {/* ══ 03 · THE GUARDRAILS ══ */}
       <LogSection id="guardrails" command="cat caps.go" comment="the entire risk policy" weight="figure" title={<>Barely a leash. <span className="phosphor text-green">Two rules.</span></>} aside={<CapsReadout />}>
         <p>
-          It does whatever it wants with all the money, every session: any name, any size, all in if it likes the setup. Exactly two limits live in code where it cannot sweet-talk them: no more than half the account in option premium, no more than half in stock. It spends settled cash
-          only because the broker insists, and a flat sanity ceiling at the broker catches code bugs, not trades. It can absolutely lose the money. That is the show.
+          Any name, any size, all in if it likes the setup. Exactly two limits live in code where it cannot sweet-talk them: at most half the account in options, at most half in stock. Every other guardrail a real trading desk would insist on? I checked the file. Not found. It can
+          absolutely lose my money. That is the show.
         </p>
       </LogSection>
 

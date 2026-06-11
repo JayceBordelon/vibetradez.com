@@ -7,40 +7,39 @@
   <title>{{.Subject}}</title>
   <style>
     :root { color-scheme: light dark; }
+    /* Terminal theme: light is the printout (paper + ink), dark is the
+       tube (green-cast black + phosphor) for clients that honor it. */
     @media (prefers-color-scheme: dark) {
-      .body-bg { background-color: #0f172a !important; }
-      .header-bg { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important; }
-      .content-bg { background-color: #1e293b !important; }
-      .footer-bg { background-color: #1e293b !important; border-color: #334155 !important; }
-      .text-primary { color: #f1f5f9 !important; }
-      .text-secondary { color: #cbd5e1 !important; }
-      .info-bg { background-color: #422006 !important; border-color: #92400e !important; }
-      .info-label { color: #fbbf24 !important; }
-      .info-text { color: #fde68a !important; }
+      .vt-page { background-color: #0a120d !important; }
+      .vt-card { background-color: #0d1610 !important; border-color: #1e2f25 !important; }
+      .vt-strong { color: #e7f1ea !important; }
+      .vt-text { color: #b9c9bf !important; }
+      .vt-muted { color: #8aa394 !important; }
+      .vt-rule { border-color: #1e2f25 !important; }
+      .vt-warn { background-color: #422006 !important; border-color: #92400e !important; }
+      .vt-warn-label { color: #fbbf24 !important; }
+      .vt-warn-text { color: #fde68a !important; }
+      .vt-green { color: #34d399 !important; }
     }
   </style>
 </head>
-<body class="body-bg" style="margin: 0; padding: 0; background-color: #fafafa; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; -webkit-font-smoothing: antialiased;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="body-bg" style="background-color: #fafafa;">
+<body class="vt-page" style="margin: 0; padding: 0; background-color: #f3f0e5; font-family: ui-monospace, Menlo, Consolas, 'Courier New', monospace; -webkit-font-smoothing: antialiased;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="vt-page" style="background-color: #f3f0e5;">
     <tr>
       <td align="center" style="padding: 32px 16px;">
-        <table role="presentation" cellspacing="0" cellpadding="0" style="width: 100%; max-width: 580px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" class="vt-card" style="width: 100%; max-width: 580px; background-color: #faf8ef; border: 1px solid #d8d4c2;">
 
-          <!-- Brand accent bar -->
+          <!-- Header: title strip -->
           <tr>
-            <td style="height: 4px; background: linear-gradient(90deg, #10B981, #059669); border-radius: 12px 12px 0 0; font-size: 0; line-height: 0;">&nbsp;</td>
-          </tr>
-
-          <!-- Header -->
-          <tr>
-            <td class="header-bg" style="padding: 24px 28px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+            <td class="vt-rule" style="padding: 18px 24px; border-bottom: 1px dashed #d8d4c2;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
                   <td>
-                    <span style="font-size: 24px; font-weight: 800; color: #10B981; letter-spacing: -0.5px;">Vibe</span><span style="font-size: 24px; font-weight: 800; color: #059669; letter-spacing: -0.5px;">Tradez</span>
+                    <span class="vt-strong" style="font-size: 15px; font-weight: 800; color: #1f2a24;">VIBE</span><span class="vt-green" style="font-size: 15px; font-weight: 800; color: #0d7a4a;">TRADEZ</span>
+                    <span class="vt-muted" style="font-size: 12px; color: #5b665f;">// operator alert</span>
                   </td>
                   <td align="right">
-                    <span style="color: #94a3b8; font-size: 13px; font-weight: 500; background: rgba(255,255,255,0.08); padding: 5px 11px; border-radius: 6px;">{{.Date}}</span>
+                    <span class="vt-muted" style="color: #5b665f; font-size: 12px;">{{.Date}}</span>
                   </td>
                 </tr>
               </table>
@@ -49,48 +48,40 @@
 
           <!-- Content -->
           <tr>
-            <td class="content-bg" style="background-color: #ffffff; padding: 32px 28px;">
+            <td style="padding: 26px 24px;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
-                  <td align="center" style="padding: 12px 0 20px 0;">
-                    <table role="presentation" cellspacing="0" cellpadding="0">
-                      <tr>
-                        <td style="width: 56px; height: 56px; border-radius: 50%; background: #fef3c7; text-align: center; vertical-align: middle; font-size: 24px; color: #b45309;">!</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-                <tr>
-                  <td align="center">
-                    <h1 class="text-primary" style="margin: 0 0 8px 0; font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;">Schwab re-authorization needed</h1>
-                    <p class="text-secondary" style="margin: 0 0 24px 0; font-size: 14px; color: #64748b; line-height: 1.6;">
-                      Schwab caps refresh tokens at 7 days from the last consent. The current token is {{.DaysOld}} day(s) old, so auto-execution and live quotes will stop working within {{.DaysRemaining}} day(s) (or already have).
+                  <td>
+                    <p class="vt-muted" style="margin: 0 0 6px 0; font-size: 12px; color: #5b665f;"><span class="vt-green" style="color: #0d7a4a; font-weight: 700;">$</span> <span class="vt-strong" style="color: #1f2a24; font-weight: 600;">vt auth status --schwab</span></p>
+                    <h1 class="vt-strong" style="margin: 0 0 8px 0; font-size: 19px; font-weight: 800; color: #1f2a24; text-transform: uppercase; letter-spacing: 0.02em;">Schwab re-authorization needed</h1>
+                    <p class="vt-text" style="margin: 0 0 20px 0; font-size: 13px; color: #44514a; line-height: 1.6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                      Schwab caps refresh tokens at 7 days from the last consent. The current token is {{.DaysOld}} day(s) old, so trading and live quotes will stop working within {{.DaysRemaining}} day(s) (or already have).
                     </p>
                   </td>
                 </tr>
                 <tr>
                   <td>
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="info-bg" style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 8px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="vt-warn" style="background-color: #fffbeb; border: 1px dashed #fde68a;">
                       <tr>
-                        <td style="padding: 16px 20px;">
-                          <p class="info-label" style="margin: 0 0 6px 0; font-size: 11px; font-weight: 700; color: #b45309; text-transform: uppercase; letter-spacing: 0.5px;">Token issued</p>
-                          <p class="info-text" style="margin: 0 0 12px 0; font-size: 13px; color: #1e293b; line-height: 1.6; font-family: 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;">{{.IssuedAt}}</p>
-                          <p class="info-label" style="margin: 0 0 6px 0; font-size: 11px; font-weight: 700; color: #b45309; text-transform: uppercase; letter-spacing: 0.5px;">Expires</p>
-                          <p class="info-text" style="margin: 0; font-size: 13px; color: #1e293b; line-height: 1.6; font-family: 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;">{{.ExpiresAt}}</p>
+                        <td style="padding: 14px 18px;">
+                          <p class="vt-warn-label" style="margin: 0 0 4px 0; font-size: 11px; font-weight: 700; color: #b45309; text-transform: uppercase; letter-spacing: 0.08em;">token_issued</p>
+                          <p class="vt-warn-text" style="margin: 0 0 12px 0; font-size: 13px; color: #1f2a24; line-height: 1.6;">{{.IssuedAt}}</p>
+                          <p class="vt-warn-label" style="margin: 0 0 4px 0; font-size: 11px; font-weight: 700; color: #b45309; text-transform: uppercase; letter-spacing: 0.08em;">expires</p>
+                          <p class="vt-warn-text" style="margin: 0; font-size: 13px; color: #1f2a24; line-height: 1.6;">{{.ExpiresAt}}</p>
                         </td>
                       </tr>
                     </table>
                   </td>
                 </tr>
                 <tr>
-                  <td align="center" style="padding-top: 24px;">
-                    <a href="{{.ReauthURL}}" style="display: inline-block; padding: 12px 28px; background: #51F0A8; color: #0a0a0a; text-decoration: none; font-size: 14px; font-weight: 700; border-radius: 9999px; letter-spacing: 0.2px;">Re-authorize Schwab</a>
+                  <td align="center" style="padding-top: 22px;">
+                    <a href="{{.ReauthURL}}" style="display: inline-block; padding: 12px 26px; background: #34d399; color: #0a120d; text-decoration: none; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; border: 1px solid #34d399;">Re-authorize Schwab</a>
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding-top: 16px;" align="center">
-                    <p class="text-secondary" style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.6;">
-                      Sign in once and you're good for another 7 days. Tomorrow's 9:30 ET cron will fail if this isn't done.
+                  <td style="padding-top: 14px;" align="center">
+                    <p class="vt-muted" style="margin: 0; font-size: 12px; color: #5b665f; line-height: 1.6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                      Sign in once and you're good for another 7 days. The next midday session (~12:30 ET) will fail if this isn't done.
                     </p>
                   </td>
                 </tr>
@@ -98,23 +89,10 @@
             </td>
           </tr>
 
-          <!-- Brand accent bar -->
+          <!-- Footer: sign-off -->
           <tr>
-            <td style="height: 3px; background: linear-gradient(90deg, #10B981, #059669); font-size: 0; line-height: 0;">&nbsp;</td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td class="footer-bg" style="padding: 20px 28px; background-color: #f1f5f9; border-radius: 0 0 12px 12px;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                <tr>
-                  <td align="center">
-                    <p style="margin: 0;">
-                      <span style="font-size: 14px; font-weight: 700; color: #10B981;">Vibe</span><span style="font-size: 14px; font-weight: 700; color: #059669;">Tradez</span>
-                    </p>
-                  </td>
-                </tr>
-              </table>
+            <td class="vt-rule" style="padding: 14px 24px 18px 24px; border-top: 1px dashed #d8d4c2;">
+              <p class="vt-muted" style="margin: 0; font-size: 12px; color: #5b665f;"><span class="vt-green" style="color: #0d7a4a; font-weight: 700;">$</span> exit 1 <span style="color: #9aa79e;">&middot; needs a human for this one</span></p>
             </td>
           </tr>
 

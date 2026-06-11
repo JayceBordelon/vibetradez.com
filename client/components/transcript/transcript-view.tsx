@@ -29,8 +29,8 @@ const KIND_COPY: Record<Kind, { title: string; blurb: string; stage: string }> =
   },
   portfolio: {
     title: "Session ledger",
-    blurb: "Everything Claudia looked at and every move she made with the account today, rendered entry by entry like a desk blotter.",
-    stage: "daily portfolio session",
+    blurb: "Everything Claudia looked at and every move she made with the account that day, rendered entry by entry like a desk blotter.",
+    stage: "midday portfolio session",
   },
 };
 
@@ -90,16 +90,69 @@ export function TranscriptView({ date, kind }: { date: string; kind: Kind }) {
 
       {state.kind === "loading" && <TranscriptSkeleton />}
       {state.kind === "error" && <StatusBlock tone="error" title="Couldn't load the transcript" body={state.message} />}
-      {state.kind === "ready" && (!state.data.available || (state.data.events ?? []).length === 0) && (
-        <StatusBlock
-          tone="muted"
-          title="No transcript recorded"
-          body={`No session activity was recorded for ${prettyDate(date)}. This happens on days the ${copy.stage} didn't run (weekends, holidays) or when a session ended without making any moves.`}
-        />
-      )}
+      {state.kind === "ready" && (!state.data.available || (state.data.events ?? []).length === 0) && <EmptyTranscript date={date} kind={kind} />}
       {state.kind === "ready" && state.data.available && (state.data.events ?? []).length > 0 && <TranscriptBody data={state.data} />}
     </div>
   );
+}
+
+/*
+The empty state is time-aware, because "no transcript" means different
+things: a future date (the session hasn't happened), today before the
+session window (it hasn't run yet), today right after the window (it may
+still be running), a weekend (markets closed), or a genuinely blank past
+trading day. All boundaries are computed in market time (America/New_York)
+so overnight hours never blame a day that hasn't started. Only the live
+portfolio kind knows a schedule; archived v1 kinds get the generic past
+message.
+*/
+const ET_NOW_FMT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/New_York",
+  hour12: false,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+function etNow(): { date: string; minutes: number } {
+  const parts: Record<string, string> = {};
+  for (const p of ET_NOW_FMT.formatToParts(new Date())) parts[p.type] = p.value;
+  const hour = Number(parts.hour) % 24; // en-CA can render midnight as "24"
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, minutes: hour * 60 + Number(parts.minute) };
+}
+
+// Day of week for a YYYY-MM-DD without timezone drift (anchored to UTC noon).
+function weekdayOf(date: string): number {
+  return new Date(`${date}T12:00:00Z`).getUTCDay();
+}
+
+const SESSION_START_MIN = 12 * 60 + 30; // the daily session kicks off ~12:30 PM ET
+const SESSION_SETTLED_MIN = 14 * 60; // by ~2:00 PM ET its transcript is saved
+
+function EmptyTranscript({ date, kind }: { date: string; kind: Kind }) {
+  const human = prettyDate(date);
+  const dow = weekdayOf(date);
+
+  if (dow === 0 || dow === 6) {
+    return <StatusBlock tone="muted" title="Markets closed" body={`${human} ${dow === 6 ? "is a Saturday" : "is a Sunday"}. Sessions only run on trading days, so there is nothing to replay here.`} />;
+  }
+
+  if (kind === "portfolio") {
+    const now = etNow();
+    if (date > now.date) {
+      return <StatusBlock tone="muted" title="Hasn't happened yet" body={`${human} is still in the future. The session runs around 12:30 PM Eastern on trading days, and its transcript lands here once the session wraps.`} />;
+    }
+    if (date === now.date && now.minutes < SESSION_START_MIN) {
+      return <StatusBlock tone="muted" title="Hasn't run yet" body={`Today's session starts around 12:30 PM Eastern. The full transcript lands here once it wraps, usually within the hour.`} />;
+    }
+    if (date === now.date && now.minutes < SESSION_SETTLED_MIN) {
+      return <StatusBlock tone="muted" title="Session in progress" body={`Today's session is running right now (or just wrapped). The transcript appears here as soon as it is saved, so check back in a few minutes.`} />;
+    }
+  }
+
+  return <StatusBlock tone="muted" title="No transcript recorded" body={`No session activity was recorded for ${human}. That usually means a market holiday, or a session that failed before anything could be recorded.`} />;
 }
 
 function TranscriptBody({ data }: { data: TranscriptResponse }) {
