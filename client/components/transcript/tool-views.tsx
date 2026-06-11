@@ -117,7 +117,7 @@ class BodyBoundary extends Component<{ raw?: string; children: ReactNode }, { fa
   }
   render() {
     if (this.state.failed) {
-      return <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground/70">{this.props.raw ?? "(no result recorded)"}</pre>;
+      return <pre className="wrap-anywhere whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground/70">{this.props.raw ?? "(no result recorded)"}</pre>;
     }
     return this.props.children;
   }
@@ -191,9 +191,9 @@ function GenericResult({ r }: { r: ParsedResult }) {
     );
   }
   if (r.arr) {
-    return <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground/75">{safeStringify(r.arr, 2)}</pre>;
+    return <pre className="wrap-anywhere whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground/75">{safeStringify(r.arr, 2)}</pre>;
   }
-  return <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/85">{r.raw}</p>;
+  return <p className="wrap-anywhere whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/85">{r.raw}</p>;
 }
 
 // instrumentLabel renders a symbol for display: OCC option symbols decode to
@@ -871,7 +871,7 @@ function WebSourceBody({ name, input, r }: { name: string; input?: Dict; r: Pars
   } else if (r.obj) {
     body = <GenericResult r={r} />;
   } else {
-    body = <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/85">{r.raw}</p>;
+    body = <p className="wrap-anywhere whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/85">{r.raw}</p>;
   }
 
   return (
@@ -928,24 +928,24 @@ function TerminalBody({ name, input, r }: { name: string; input?: Dict; r: Parse
           </span>
         )}
       </div>
-      {source && <pre className="whitespace-pre-wrap break-words px-3 py-2 leading-relaxed text-zinc-100">{source}</pre>}
-      {!source && input && <pre className="whitespace-pre-wrap break-words px-3 py-2 leading-relaxed text-zinc-100">{safeStringify(input, 2)}</pre>}
+      {source && <pre className="wrap-anywhere whitespace-pre-wrap break-words px-3 py-2 leading-relaxed text-zinc-100">{source}</pre>}
+      {!source && input && <pre className="wrap-anywhere whitespace-pre-wrap break-words px-3 py-2 leading-relaxed text-zinc-100">{safeStringify(input, 2)}</pre>}
       {r.errorMessage !== undefined && (
         <div className="border-t border-white/10 px-3 py-2">
           <div className="mb-0.5 text-[9px] uppercase tracking-[0.14em] text-red-400/80">error</div>
-          <pre className="whitespace-pre-wrap break-words leading-relaxed text-red-300">{r.errorMessage}</pre>
+          <pre className="wrap-anywhere whitespace-pre-wrap break-words leading-relaxed text-red-300">{r.errorMessage}</pre>
         </div>
       )}
       {stdout !== undefined && stdout !== "" && (
         <div className="border-t border-white/10 px-3 py-2">
           <div className="mb-0.5 text-[9px] uppercase tracking-[0.14em] text-zinc-500">stdout</div>
-          <pre className="whitespace-pre-wrap break-words leading-relaxed text-zinc-300">{stdout}</pre>
+          <pre className="wrap-anywhere whitespace-pre-wrap break-words leading-relaxed text-zinc-300">{stdout}</pre>
         </div>
       )}
       {stderr !== undefined && stderr !== "" && (
         <div className="border-t border-white/10 px-3 py-2">
           <div className="mb-0.5 text-[9px] uppercase tracking-[0.14em] text-red-400/80">stderr</div>
-          <pre className="whitespace-pre-wrap break-words leading-relaxed text-red-300">{stderr}</pre>
+          <pre className="wrap-anywhere whitespace-pre-wrap break-words leading-relaxed text-red-300">{stderr}</pre>
         </div>
       )}
       {isEditor && r.recorded && !failed && (
