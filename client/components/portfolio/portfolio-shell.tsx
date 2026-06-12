@@ -15,9 +15,10 @@ import { repricePositions } from "@/lib/live-pricing";
 import { useVisiblePoll } from "@/hooks/use-visible-poll";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import type { EquityCurvePoint, PortfolioResponse } from "@/types/portfolio";
+import type { ClosedTrade, EquityCurvePoint, PortfolioResponse } from "@/types/portfolio";
 
 import { EquityCurveChart } from "./equity-curve-chart";
+import { PerformanceMetrics } from "./performance-metrics";
 import { TodaysExecutions } from "./todays-executions";
 
 // todaysExecutionsSubtitle counts the day's money moves ("3 moves · $4,680
@@ -41,14 +42,15 @@ const REFRESH_SECONDS = 60;
 /*
 PortfolioShell is the v2 dashboard: one personal brokerage account managed
 by the agent. It shows the live stat strip (equity, invested, cash,
-unrealized), the dollar P&L decomposition vs buy-and-hold SPY (realized +
-unrealized + the SPY ghost), today's executions tape, and the link into
-the day's full session transcript. Single-account view, not a multi-user
-product.
+unrealized), the performance section (account value over time / P&L
+decomposition vs buy-and-hold SPY, plus the drawdown and round-trip
+quality strip), today's executions tape, and the link into the day's full
+session transcript. Single-account view, not a multi-user product.
 */
 export function PortfolioShell() {
   const [data, setData] = useState<PortfolioResponse | null>(null);
   const [curve, setCurve] = useState<EquityCurvePoint[]>([]);
+  const [trades, setTrades] = useState<ClosedTrade[]>([]);
   // Streamed quotes re-price the book between polls, so the strip moves
   // tick by tick rather than once a minute.
   const quotes = useLiveQuotes(Boolean(data?.enabled));
@@ -58,6 +60,12 @@ export function PortfolioShell() {
     api
       .getEquityCurve()
       .then((r) => setCurve(r.points ?? []))
+      .catch(() => {});
+    // Closed trades feed the win-rate / profit-factor strip; polled with
+    // the rest so an intraday fill (the 15-minute reconcile) shows up.
+    api
+      .getClosedTrades()
+      .then((r) => setTrades(r.trades ?? []))
       .catch(() => {});
   }, []);
 
@@ -126,7 +134,7 @@ export function PortfolioShell() {
 
   return (
     <div className="animate-in fade-in mx-auto max-w-[1200px] px-4 py-6 duration-300 sm:px-7">
-      <SummaryStrip equity={equity} settledCash={data.settled_cash} investedPct={investedPct} unrealized={totalUnrealized} todayPct={todayPct} overnightPct={overnightPct} dayChangePct={dayChangePct} />
+      <SummaryStrip equity={equity} settledCash={data.settled_cash} unsettledCash={data.unsettled_cash} investedPct={investedPct} unrealized={totalUnrealized} todayPct={todayPct} overnightPct={overnightPct} dayChangePct={dayChangePct} />
 
       {/* The day's narrative, right under the numbers: "what is it
           thinking?" is the first question the dashboard gets asked, and
@@ -150,11 +158,9 @@ export function PortfolioShell() {
 
       {/* No border-t here: the summary strip above already draws its own
           bottom rule, and the doubled hairline read as a ghost band in dark. */}
-      <Section title="P&L vs SPY" className="mt-8">
-        <EquityCurveChart points={curve} today={data.date} liveUnrealized={totalUnrealized} liveSpyMark={quotes.get("SPY")?.mark ?? null} />
-        {/* The legend explainer reads better AFTER the numbers: leading
-            with prose pushed the actual P&L below the fold on mobile. */}
-        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">Realized is booked round trips, unrealized is the open book&apos;s mark, and the dashed line is what buy-and-hold SPY would have earned on the same starting equity.</p>
+      <Section title="Performance" className="mt-8">
+        <EquityCurveChart points={curve} today={data.date} liveEquity={equity} liveUnrealized={totalUnrealized} liveSpyMark={quotes.get("SPY")?.mark ?? null} />
+        {curve.length >= 2 && <PerformanceMetrics points={curve} trades={trades} today={data.date} liveEquity={equity} />}
       </Section>
 
       <Section
@@ -192,7 +198,7 @@ function ExploreLink({ href, title, blurb }: { href: string; title: string; blur
   );
 }
 
-function SummaryStrip({ equity, settledCash, investedPct, unrealized, todayPct, overnightPct, dayChangePct }: { equity: number; settledCash: number; investedPct: number; unrealized: number; todayPct: number | null; overnightPct: number | null; dayChangePct: number | null }) {
+function SummaryStrip({ equity, settledCash, unsettledCash, investedPct, unrealized, todayPct, overnightPct, dayChangePct }: { equity: number; settledCash: number; unsettledCash: number; investedPct: number; unrealized: number; todayPct: number | null; overnightPct: number | null; dayChangePct: number | null }) {
   const investedClamped = Math.min(100, Math.max(0, investedPct));
   return (
     <div>
@@ -203,12 +209,14 @@ function SummaryStrip({ equity, settledCash, investedPct, unrealized, todayPct, 
           icon={Wallet}
           sub={
             todayPct !== null && overnightPct !== null ? (
+              // The two segments stack on phones: side by side they
+              // overflow the 2-up grid cell and truncate to "+3.38% o…".
               <span className="font-semibold">
                 <span className={todayPct >= 0 ? "text-green" : "text-red"}>
                   <AnimatedNumber value={todayPct} kind="pctSigned2" /> today
                 </span>
-                <span className="text-muted-foreground"> · </span>
-                <span className={overnightPct >= 0 ? "text-green" : "text-red"}>
+                <span className="text-muted-foreground max-sm:hidden"> · </span>
+                <span className={cn("max-sm:block", overnightPct >= 0 ? "text-green" : "text-red")}>
                   <AnimatedNumber value={overnightPct} kind="pctSigned2" /> overnight
                 </span>
               </span>
@@ -238,6 +246,14 @@ function SummaryStrip({ equity, settledCash, investedPct, unrealized, todayPct, 
             equity > 0 ? (
               <>
                 <AnimatedNumber value={(settledCash / equity) * 100} kind="pct0" neutral /> of the book
+                {/* T+1 money in flight is invisible otherwise, and a buy
+                    that "won't fit" makes no sense until you can see it. */}
+                {unsettledCash > 0 && (
+                  <>
+                    {" · "}
+                    <AnimatedNumber value={unsettledCash} kind="moneyInt" neutral /> settling
+                  </>
+                )}
               </>
             ) : (
               "dry powder"
