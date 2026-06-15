@@ -95,7 +95,7 @@ documentation each time work touches the trade picker. It should always
 point at the latest production Claude model available in the SDK at the
 time of the edit. See CLAUDE.md "Model version refresh" for the policy.
 */
-const DefaultAnthropicModel = "claude-fable-5"
+const DefaultAnthropicModel = "claude-opus-4-8"
 
 func getEnvOrDefault(key, def string) string {
 	if v := os.Getenv(key); v != "" {
