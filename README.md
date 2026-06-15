@@ -1,6 +1,6 @@
 # vibetradez.com
 
-An AI runs a single real brokerage account. Each trading day Claude (we call her Claudia) reads the book, the tape, and the news, then decides from scratch what to do with the money: buy equity, buy options, trim, sell, or hold cash. Positions are held across days, every move is sized inside hard caps enforced in code, and the benchmark is buy-and-hold SPY. Subscribers watch and get one recap email a day.
+An AI runs a single real brokerage account. Each trading day Claude (we call her Claudia) reads the book, the tape, and the news, then decides from scratch what to do with the money: buy equity, buy options, trim, sell, or hold cash. Positions are held across days, every move is sized at the model's full discretion (the only hard rule in code is that it spends settled cash), and the benchmark is buy-and-hold SPY. Subscribers watch and get one recap email a day.
 
 > **This is live.** The account trades real money against the Schwab Trader API whenever `TRADING_ENABLED=true`. There is no paper mode. Every number on the site comes from one real account.
 
@@ -11,13 +11,13 @@ One session per trading day, around midday, when spreads have settled and the mo
 ```
         ┌── observes ──────────────────────────────────────┐
         │   the live book · quotes · option chains ·       │
-        │   price history · news · cap headroom ·          │
+        │   price history · news · settled cash ·          │
         │   its own realized track record vs SPY           │
         ▼                                                  │
    ┌─────────┐   buy · sell · trim · hold   ┌──────────┐   │
    │ Claudia │ ───────────────────────────▶ │  Schwab  │ ──┘
-   └─────────┘    every order passes the    └──────────┘
-        │         cap sheet (in code) first
+   └─────────┘    every buy passes the      └──────────┘
+        │         settled-cash rule (in code) first
         │
         └── writes a synopsis + action items, read back
             as the starting point of the next session
@@ -35,14 +35,16 @@ Orders are fire-and-forget LIMITs that fill over the afternoon. The full tool-by
 
 ## The guardrails
 
-The entire risk policy is two sleeve caps, enforced at the tool layer where the model cannot talk its way past them:
+There aren't any on the allocation, by design. The model has full discretion over how the account is split: any mix of stocks and options, any size, the whole account behind one name if that is the conviction. There is no allocation split, no per-name cap, no stop loss, and no drawdown breaker.
 
-| Cap | Value |
+Two rules remain, and neither is a risk policy:
+
+| Rule | Why it exists |
 |---|---|
-| Options sleeve | premium at risk ≤ 50% of live equity |
-| Equity sleeve | stock value ≤ 50% of live equity |
+| Spends settled cash only | Broker T+1 compliance for a cash account, not a risk preference |
+| Flat absolute per-order ceiling at the broker entry | A fat-finger backstop against code bugs, not a trading constraint |
 
-Buys also spend settled cash only (broker T+1 compliance, not a risk preference), and a flat absolute order ceiling at the broker entry backstops code bugs, not trades. There is no per-name cap, no stop loss, no drawdown breaker. The model concentrates and sizes however it judges best, and it can absolutely lose the money. That is the show.
+The model concentrates and sizes however it judges best, and it can absolutely lose the money. That is the show.
 
 ## Architecture
 
@@ -62,7 +64,7 @@ Sign-in is in-process Google OAuth on the trading-server. Live quotes stream fro
 ## Repo layout
 
 ```
-server/    Go API: portfolio agent + tools + cap sheet (internal/portfolio),
+server/    Go API: portfolio agent + tools + gates (internal/portfolio),
            Schwab client, store, crons, in-process OAuth, email
 client/    Next.js 16 frontend: dashboard, holdings, closed trades,
            session transcripts, in a CRT terminal aesthetic

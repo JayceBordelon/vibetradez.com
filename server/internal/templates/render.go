@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed portfolio_update.html schwab_reauth.html analysis_window.html live_trading_update.html
+//go:embed portfolio_update.html schwab_reauth.html analysis_window.html live_trading_update.html full_discretion_update.html
 var templateFS embed.FS
 
 // ── Daily portfolio-update email ──
@@ -105,7 +105,7 @@ func RenderAnalysisWindow(d AnalysisWindowData) (string, error) {
 // LiveTradingUpdateData backs the one-time product-update email announcing
 // that trading runs indefinitely and walking through the day's full change
 // list (real-time UI, P&L decomposition, executions ledger, per-trade
-// pages, the two-rule cap sheet, readable transcripts). BaseURL is the
+// pages, that day's risk framing, readable transcripts). BaseURL is the
 // public site root (no trailing slash); TranscriptURL points at the day's
 // session.
 type LiveTradingUpdateData struct {
@@ -115,6 +115,23 @@ type LiveTradingUpdateData struct {
 
 func RenderLiveTradingUpdate(d LiveTradingUpdateData) (string, error) {
 	return renderOne("live_trading_update.html", d)
+}
+
+// ── One-time full-discretion product update ──
+
+// FullDiscretionUpdateData backs the one-time product-update email
+// announcing that the 50/50 stock-vs-options split was removed and the
+// model now allocates the account however it judges best, with the
+// settled-cash rule as the only buy-side gate that remains. BaseURL is the
+// public site root (no trailing slash); TranscriptURL points at the day's
+// session.
+type FullDiscretionUpdateData struct {
+	BaseURL       string
+	TranscriptURL string
+}
+
+func RenderFullDiscretionUpdate(d FullDiscretionUpdateData) (string, error) {
+	return renderOne("full_discretion_update.html", d)
 }
 
 // emailFuncs gives templates locale-correct currency + percent helpers so

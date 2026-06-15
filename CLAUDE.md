@@ -4,12 +4,12 @@ Operator notes for this repo. Read before touching the trading service.
 
 ## Architecture: autonomous portfolio manager
 
-VibeTradez is an autonomous **portfolio manager** that runs a single personal brokerage account: one daily agent decides from scratch (buy equity, buy options, trim, sell, or hold cash), sizes within hard caps, and holds positions across days. Mandate: grow the account, benchmarked to SPY. (The original three-pick options bot has been removed.)
+VibeTradez is an autonomous **portfolio manager** that runs a single personal brokerage account: one daily agent decides from scratch (buy equity, buy options, trim, sell, or hold cash), sizes positions however it judges best, and holds positions across days. Mandate: grow the account, benchmarked to SPY. (The original three-pick options bot has been removed.)
 
 - **It's one account, not a multi-user product.** UI and copy treat it as a single book; subscribers watch and get the daily recap email, they don't trade.
 - **Live-only, runs whenever enabled.** The manager runs whenever `TRADING_ENABLED=true` and trades live with real money against the Schwab Trader API. There is no paper mode (the paper trader was removed), so enabling it is the deliberate action. Read the daily transcript to see exactly what it did.
-- **Where it lives:** `internal/portfolio` (cap sheet = the security boundary in `caps.go`, tool layer, agent), `internal/portfoliowire` (adapters to Schwab + exec + store), `internal/exec` (broker: equity/options orders, positions, the portfolio entry points), the `portfolio_*` store tables, the three crons in `cmd/scanner` (daily session ~12:30 ET, intraday risk sweep, 16:00 EOD equity-curve snapshot), the `/api/portfolio*` endpoints, and `client/components/portfolio` (the dashboard).
-- **The cap sheet is two sleeves**: option premium <= 50% of live equity and stock value <= 50% of live equity. That's the whole risk policy: no per-name cap, no per-order cap, no drawdown breaker, no liquidity floor, no session pacing. The settled-cash rule (broker T+1 compliance) also gates buys. Enforced at the **tool layer only** (`caps.go` `Check*`); the broker entry point re-checks only a flat $25k absolute fat-finger ceiling (`exec.MaxPortfolioOrderCostCeiling`), so the tool layer is the sole enforcement point. Don't add caps in the prompt, the policy lives in code.
+- **Where it lives:** `internal/portfolio` (the gates = the security boundary in `guards.go`, tool layer, agent), `internal/portfoliowire` (adapters to Schwab + exec + store), `internal/exec` (broker: equity/options orders, positions, the portfolio entry points), the `portfolio_*` store tables, the three crons in `cmd/scanner` (daily session ~12:30 ET, intraday risk sweep, 16:00 EOD equity-curve snapshot), the `/api/portfolio*` endpoints, and `client/components/portfolio` (the dashboard).
+- **The model has full discretion over allocation**: any mix of stocks and options, any size, the whole account in one name if it wants. There is no allocation split, no per-name cap, no per-order cap, no drawdown breaker, no liquidity floor, no session pacing. Two gates remain and neither is a risk policy: the settled-cash rule (broker T+1 compliance) gates buys, and sell validation rejects an oversell or a sell of a position not held. Enforced at the **tool layer only** (`guards.go` `Check*`); the broker entry point re-checks only a flat $25k absolute fat-finger ceiling (`exec.MaxPortfolioOrderCostCeiling`), a code-bug backstop, so the tool layer is the sole enforcement point. Full discretion is intentional: don't add allocation caps back in the prompt or the code.
 - The intraday cron's remaining duty is reconciling decision-log order statuses against the broker (fills show on the dashboard within ~15 min).
 
 ## Development rules
@@ -176,7 +176,7 @@ docker compose up -d --force-recreate trading-server  # Full recreate (env reloa
 
 | Concern | Path |
 |---|---|
-| Cap sheet (the security boundary) + pure cap checks | `server/internal/portfolio/caps.go` |
+| Gates (the security boundary): settled-cash + sell validation | `server/internal/portfolio/guards.go` |
 | Portfolio tool layer (buy/sell equity + option, hold, reads) | `server/internal/portfolio/tools.go` |
 | Portfolio agent loop + final-JSON stance parse | `server/internal/portfolio/agent.go` |
 | Mandate prompt | `server/internal/portfolio/prompt.go` |

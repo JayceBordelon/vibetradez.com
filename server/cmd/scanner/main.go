@@ -238,12 +238,11 @@ func main() {
 	var (
 		portfolioAgent  *portfolio.Agent
 		portfolioReader *portfoliowire.Reader
-		portfolioCaps   = portfolio.DefaultCaps()
 	)
 	if executor != nil {
 		portfolioReader = portfoliowire.NewReader(schwabClient, executor, db)
 		portfolioExecutor := portfoliowire.NewExecutor(executor)
-		portfolioAgent = portfolio.NewAgent(cfg.AnthropicAPIKey, cfg.AnthropicModel, portfolioReader, portfolioExecutor, portfolioCaps)
+		portfolioAgent = portfolio.NewAgent(cfg.AnthropicAPIKey, cfg.AnthropicModel, portfolioReader, portfolioExecutor)
 		log.Printf("portfolio: manager ready (model=%s, mode=live)", cfg.AnthropicModel)
 	} else {
 		log.Printf("portfolio: manager NOT started (needs TRADING_ENABLED=true and a configured Schwab client to trade live)")
@@ -370,6 +369,7 @@ func main() {
 	// and never again, no trigger flag needed.
 	sendAnalysisWindowUpdate(cfg, db, emailClient)
 	sendLiveTradingUpdate(cfg, db, emailClient)
+	sendFullDiscretionUpdate(cfg, db, emailClient)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)

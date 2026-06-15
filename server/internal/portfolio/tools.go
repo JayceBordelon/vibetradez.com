@@ -76,8 +76,9 @@ wraps exec.Service (task 2 adds the equity/sell entry points). Each method
 mirrors the boundary exec already uses for options: it persists an order
 row and returns the broker order id plus the internal execution id. The
 broker side re-checks only a flat absolute order-cost ceiling
-(exec.MaxPortfolioOrderCostCeiling), NOT the percentage cap sheet, so the
-tool-layer Check* calls are the sole enforcement point for the percentages.
+(exec.MaxPortfolioOrderCostCeiling) as a fat-finger backstop, so the
+tool-layer Check* calls (settled cash on buys, holdings on sells) are the
+sole enforcement point.
 */
 type PortfolioExecutor interface {
 	BuyEquity(ctx context.Context, symbol string, quantity float64, limitPrice float64) (orderID string, execID int, err error)
@@ -95,18 +96,17 @@ ToolDispatcher holds the agent-run-scoped state and dispatches tool calls
 to the read/write services. One per Run; not safe for concurrent runs (mu
 serializes the write side).
 
-It is the SECURITY BOUNDARY between the model and real money. Every cap
-gate lives here (delegating the math to caps.go). The dispatcher keeps a
+It is the SECURITY BOUNDARY between the model and real money. Every gate
+lives here (delegating the math to guards.go). The dispatcher keeps a
 mutable WORKING snapshot that starts as the session snapshot and is updated
-after every committed move, so cumulative exposure across multiple buys in
-one session is enforced correctly (the second buy sees the first buy's
-exposure). Adding tools or relaxing gates without thinking about blast
-radius is how this becomes a real-money incident.
+after every committed move, so the settled-cash gate sees cumulative spend
+across multiple buys in one session correctly (the second buy sees the
+first buy's spend). Adding tools or relaxing gates without thinking about
+blast radius is how this becomes a real-money incident.
 */
 type ToolDispatcher struct {
 	reader PortfolioReader
 	exec   PortfolioExecutor
-	caps   Caps
 
 	mu          sync.Mutex
 	work        Snapshot // mutable working snapshot; updated as moves commit
@@ -115,11 +115,10 @@ type ToolDispatcher struct {
 	actionItems string // plan for the next session, from write_summary
 }
 
-func NewToolDispatcher(reader PortfolioReader, exec PortfolioExecutor, caps Caps, snap Snapshot) *ToolDispatcher {
+func NewToolDispatcher(reader PortfolioReader, exec PortfolioExecutor, snap Snapshot) *ToolDispatcher {
 	return &ToolDispatcher{
 		reader: reader,
 		exec:   exec,
-		caps:   caps,
 		work:   snap,
 	}
 }
@@ -183,11 +182,6 @@ func ToolDefinitions() []anthropic.ToolUnionParam {
 			},
 		}},
 		{OfTool: &anthropic.ToolParam{
-			Name:        "get_cap_headroom",
-			Description: anthropic.String("How much room you have left under the two sleeve caps right now: options premium used and remaining, stock value used and remaining (each capped at half of live equity), plus settled cash. Use it to size precisely instead of getting orders rejected."),
-			InputSchema: anthropic.ToolInputSchemaParam{Properties: map[string]any{}, Required: []string{}},
-		}},
-		{OfTool: &anthropic.ToolParam{
 			Name:        "get_track_record",
 			Description: anthropic.String("Your realized results to date: recent closed round trips with entry/exit prices and P&L, win rate and average winner vs loser split by equity vs options, and the account's return versus buy-and-hold SPY with max drawdown. This is the only quantified signal of what has actually been working, so read it before sizing new risk and weight it above your own prior narrative."),
 			InputSchema: anthropic.ToolInputSchemaParam{
@@ -218,7 +212,7 @@ func ToolDefinitions() []anthropic.ToolUnionParam {
 		}},
 		{OfTool: &anthropic.ToolParam{
 			Name:        "buy_equity",
-			Description: anthropic.String("Submit a BUY LIMIT order for shares of an equity. Notional (quantity × limit_price) is checked against the settled-cash rule and the equity-sleeve cap before anything reaches the broker. Returns the order id on success or a clear refusal string."),
+			Description: anthropic.String("Submit a BUY LIMIT order for shares of an equity. Notional (quantity × limit_price) is checked against the settled-cash rule before anything reaches the broker. Returns the order id on success or a clear refusal string."),
 			InputSchema: anthropic.ToolInputSchemaParam{
 				Properties: map[string]any{
 					"symbol":      str("Equity ticker."),
@@ -244,7 +238,7 @@ func ToolDefinitions() []anthropic.ToolUnionParam {
 		}},
 		{OfTool: &anthropic.ToolParam{
 			Name:        "buy_option",
-			Description: anthropic.String("Submit a BUY_TO_OPEN LIMIT for a long single-leg option. Notional (contracts × limit_price × 100) is checked against the settled-cash rule and the options-sleeve cap. occ_symbol and underlying both come from get_option_chain."),
+			Description: anthropic.String("Submit a BUY_TO_OPEN LIMIT for a long single-leg option. Notional (contracts × limit_price × 100) is checked against the settled-cash rule. occ_symbol and underlying both come from get_option_chain."),
 			InputSchema: anthropic.ToolInputSchemaParam{
 				Properties: map[string]any{
 					"occ_symbol":    str("The 21-char OCC option symbol from get_option_chain."),
@@ -326,8 +320,6 @@ func (d *ToolDispatcher) Dispatch(ctx context.Context, name string, input json.R
 		return d.dispatchGetPriceHistory(input)
 	case "get_fundamentals":
 		return d.dispatchGetFundamentals(input)
-	case "get_cap_headroom":
-		return d.dispatchGetCapHeadroom()
 	case "get_track_record":
 		return d.dispatchGetTrackRecord(input)
 	case "get_market_context":
@@ -461,31 +453,6 @@ func (d *ToolDispatcher) dispatchGetFundamentals(input json.RawMessage) string {
 		return jsonError(fmt.Sprintf("get_fundamentals: %v", err))
 	}
 	out, _ := json.Marshal(f)
-	return string(out)
-}
-
-func (d *ToolDispatcher) dispatchGetCapHeadroom() string {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	s := d.work
-	c := d.caps
-
-	optCap := s.Equity * c.MaxOptionsSleevePct
-	optUsed := sleeveValue(s, AssetOption)
-	eqCap := s.Equity * c.MaxEquitySleevePct
-	eqUsed := sleeveValue(s, AssetEquity)
-
-	out, _ := json.Marshal(map[string]any{
-		"equity":                   round2(s.Equity),
-		"settled_cash":             round2(s.SettledCash),
-		"high_water_mark":          round2(s.HighWaterMark),
-		"options_sleeve_cap":       round2(optCap),
-		"options_sleeve_used":      round2(optUsed),
-		"options_sleeve_remaining": round2(optCap - optUsed),
-		"equity_sleeve_cap":        round2(eqCap),
-		"equity_sleeve_used":       round2(eqUsed),
-		"equity_sleeve_remaining":  round2(eqCap - eqUsed),
-	})
 	return string(out)
 }
 
@@ -901,8 +868,8 @@ func (d *ToolDispatcher) commitBuy(ctx context.Context, m Move, limitPrice float
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if capErr := d.caps.CheckBuy(d.work, m); capErr != nil {
-		return jsonError(fmt.Sprintf("%s refused (%s): %s", m.Action, capErr.Code, capErr.Message))
+	if gErr := CheckBuy(d.work, m); gErr != nil {
+		return jsonError(fmt.Sprintf("%s refused (%s): %s", m.Action, gErr.Code, gErr.Message))
 	}
 
 	orderID, execID, err := place()
@@ -947,8 +914,8 @@ func (d *ToolDispatcher) commitSell(ctx context.Context, m Move, limitPrice floa
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if capErr := d.caps.CheckSell(d.work, m); capErr != nil {
-		return jsonError(fmt.Sprintf("%s refused (%s): %s", m.Action, capErr.Code, capErr.Message))
+	if gErr := CheckSell(d.work, m); gErr != nil {
+		return jsonError(fmt.Sprintf("%s refused (%s): %s", m.Action, gErr.Code, gErr.Message))
 	}
 
 	orderID, execID, err := place()
@@ -977,9 +944,9 @@ func (d *ToolDispatcher) commitSell(ctx context.Context, m Move, limitPrice floa
 /*
 applyBuyToPositionsLocked folds a committed buy into the working snapshot:
 add to an existing position with the same symbol, or append a new one.
-MarkValue is approximated as the notional just committed (cost), which is
-the right basis for the concentration/sleeve caps on subsequent moves.
-Caller holds d.mu.
+MarkValue is approximated as the notional just committed (cost), which
+keeps the working snapshot the next move reads consistent. Caller holds
+d.mu.
 */
 func (d *ToolDispatcher) applyBuyToPositionsLocked(m Move) {
 	for i := range d.work.Positions {
@@ -1038,17 +1005,6 @@ func (d *ToolDispatcher) Decisions() []Decision {
 	out := make([]Decision, len(d.decisions))
 	copy(out, d.decisions)
 	return out
-}
-
-// CapsSummary renders the cap sheet as the human-readable block the prompt
-// interpolates, so the prompt text and the enforced numbers never drift.
-func CapsSummary(c Caps) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "- Max total option premium (the leverage sleeve): %.0f%% of equity.\n", c.MaxOptionsSleevePct*100)
-	fmt.Fprintf(&b, "- Max total stock value (the equity sleeve): %.0f%% of equity.\n", c.MaxEquitySleevePct*100)
-	fmt.Fprintf(&b, "- Those two sleeves are the WHOLE cap sheet: no per-name limit, no per-order limit, no drawdown halt, no liquidity floor, no session pacing. Concentrate, size, and pick instruments however you judge best.\n")
-	fmt.Fprintf(&b, "- You spend SETTLED cash only; unsettled sale proceeds free up at T+1.")
-	return b.String()
 }
 
 func splitCSV(s string) []string {

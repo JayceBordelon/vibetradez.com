@@ -87,34 +87,29 @@ export function CronTable() {
   );
 }
 
-/* ── The cap sheet, dumped like a config file. The joke is everything
-      the file does NOT contain, so the absent keys print in red. ── */
-const CAPS_PRESENT: { key: string; value: ReactNode }[] = [
-  { key: "options_sleeve", value: <CapPct /> },
-  { key: "equity_sleeve", value: <CapPct /> },
-  { key: "settled_cash", value: "settled cash only (the broker insists)" },
+/* ── guards.go, dumped like a config file. The joke is how little is left
+      in it: every allocation limit is gone, so those keys print "none" in
+      red, and the one real rule is the broker's. ── */
+const GUARD_LINES: { key: string; value: ReactNode; tone?: "red" | "muted" }[] = [
+  { key: "allocation_split", value: "none", tone: "red" },
+  { key: "per_name_cap", value: "none", tone: "red" },
+  { key: "per_order_cap", value: "none", tone: "red" },
+  { key: "drawdown_halt", value: "none", tone: "red" },
+  { key: "settled_cash", value: "settled cash only (the broker insists)", tone: "muted" },
 ];
 
-function CapPct() {
-  return (
-    <>
-      &lt;= <CountUp to={50} suffix="%" durationMs={1400} /> of live equity
-    </>
-  );
-}
-
-export function CapsReadout() {
+export function GuardsReadout() {
   return (
     <div className="font-mono text-[13px]">
       <div className="flex items-baseline justify-between gap-4">
-        <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">caps.go</span>
+        <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">guards.go</span>
         <span className="phosphor text-[11px] font-bold uppercase tracking-[0.14em] text-green">enforced in code</span>
       </div>
       <dl className="mt-4 border-b border-border">
-        {CAPS_PRESENT.map((c) => (
+        {GUARD_LINES.map((c) => (
           <div key={c.key} className="flex items-baseline justify-between gap-6 border-t border-border py-3">
             <dt className="shrink-0 font-bold text-foreground">{c.key}</dt>
-            <dd className="text-right tabular-nums text-muted-foreground">{c.value}</dd>
+            <dd className={cn("text-right tabular-nums", c.tone === "red" ? "text-red" : "text-muted-foreground")}>{c.value}</dd>
           </div>
         ))}
       </dl>
@@ -138,12 +133,12 @@ const TOOL_DIRS: ToolDir[] = [
     bits: "dr--r--r--",
     dir: "reading/",
     note: "look, never touch",
-    names: ["get_portfolio", "get_stock_quotes", "get_option_chain", "get_price_history", "get_fundamentals", "get_cap_headroom", "get_recent_decisions", "get_order_status", "web_search", "web_fetch"],
+    names: ["get_portfolio", "get_stock_quotes", "get_option_chain", "get_price_history", "get_fundamentals", "get_track_record", "get_market_context", "get_recent_decisions", "get_order_status", "web_search", "web_fetch"],
   },
   {
     bits: "drwx------",
     dir: "execution/",
-    note: "capped, real money",
+    note: "real money",
     names: ["buy_equity", "sell_equity", "buy_option", "sell_option", "cancel_order", "hold"],
     accent: "green",
   },
@@ -203,11 +198,11 @@ const TAPE: { text: string; tone?: "green" | "red" | "muted" }[] = [
   { text: "buy_equity NVDA x9 @ 141.19 · filled" },
   { text: "hold MSFT", tone: "muted" },
   { text: "SPY · the one to beat", tone: "muted" },
-  { text: "options_sleeve 50% max", tone: "muted" },
+  { text: "buy_option NVDA 145C · all in", tone: "green" },
   { text: "write_summary · very confident note filed" },
   { text: "settled_cash $3,920.10", tone: "muted" },
   { text: "sell_equity · loser cut, lesson pending", tone: "red" },
-  { text: "equity_sleeve 50% max", tone: "muted" },
+  { text: "no allocation cap · full discretion", tone: "muted" },
   { text: "cancel_order · second thoughts", tone: "muted" },
 ];
 
