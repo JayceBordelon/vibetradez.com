@@ -223,7 +223,7 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 				input, _ := json.Marshal(b.Input)
 				rec.AddToolUse(round, string(b.Name), b.ID, input)
 			case anthropic.WebSearchToolResultBlock:
-				rec.AddToolResult(round, "web_search", b.ToolUseID, truncJSON(b.Content, serverResultCap))
+				rec.AddToolResult(round, "web_search", b.ToolUseID, slimWebSearchResult(b.Content))
 			case anthropic.WebFetchToolResultBlock:
 				rec.AddToolResult(round, "web_fetch", b.ToolUseID, truncJSON(b.Content, serverResultCap))
 			case anthropic.CodeExecutionToolResultBlock:
@@ -280,6 +280,39 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 		return parseStance(text), nil
 	}
 	return "", fmt.Errorf("exceeded max tool rounds (%d)", maxToolRounds)
+}
+
+/*
+slimWebSearchResult records only the human-meaningful part of a web_search
+result, the source list (title, url, page age), and drops the large opaque
+encrypted_content blob the API attaches to each result for citation replay.
+The search query is already captured on the server_tool_use block, so the
+transcript shows the query plus the sources it returned, without dumping
+kilobytes of encrypted noise per source. A search that errored keeps its
+error code; an empty result records nothing, which the transcript view
+renders as "the search returned nothing".
+*/
+func slimWebSearchResult(content anthropic.WebSearchToolResultBlockContentUnion) string {
+	if len(content.OfWebSearchResultBlockArray) > 0 {
+		sources := make([]map[string]string, 0, len(content.OfWebSearchResultBlockArray))
+		for _, src := range content.OfWebSearchResultBlockArray {
+			sources = append(sources, map[string]string{
+				"title":    src.Title,
+				"url":      src.URL,
+				"page_age": src.PageAge,
+			})
+		}
+		b, err := json.Marshal(sources)
+		if err != nil {
+			return ""
+		}
+		return string(b)
+	}
+	if content.ErrorCode != "" {
+		b, _ := json.Marshal(map[string]string{"error_code": string(content.ErrorCode)})
+		return string(b)
+	}
+	return ""
 }
 
 // truncJSON marshals a server-tool result and caps its length so a large
