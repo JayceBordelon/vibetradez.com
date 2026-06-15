@@ -85,25 +85,25 @@ STANCES = [
     "Net long and comfortable. The core (MDT, COST) is doing the heavy lifting, so I let it. Trimmed a little NVDA into strength to bank gains and keep dry powder.",
     "Raised cash today. Two positions hit my trim targets and nothing new was compelling enough to redeploy into, so I am happy sitting on dry powder.",
     "Quiet, deliberate session. Held everything and added a starter in AMD on the pullback to its 50-day. Still running a touch defensive versus the index.",
-    "Leaning into the tape. Added to the winners and opened a small NVDA call for convexity, sized well inside the options sleeve. Watching the inflation print midweek.",
+    "Leaning into the tape. Added to the winners and opened a small NVDA call for convexity, sized to premium I am fine writing off. Watching the inflation print midweek.",
     "Rotated. Closed PLTR after the run and moved the proceeds toward COST, which has been the steadiest line in the book.",
     "Defensive. The drawdown has me trimming rather than adding. Protecting the high-water mark matters more than chasing a bounce here.",
     "Flat by design. Everything I own still earns its slot and the setups I am watching have not triggered. Cash is a position.",
     "Pressed the strongest names a little. Concentration is intentional at this size: I would rather own more of real conviction than spread it thin.",
     "Took profits on the AMD trade and let MDT ride. A little lighter on options, heavier on equity I am willing to hold for weeks.",
-    "Cautious add. Started UNH on weakness with a tight invalidation level. If it does not work I cut it fast; the cap math leaves room for one more name.",
+    "Cautious add. Started UNH on weakness with a tight invalidation level. If it does not work I cut it fast, and there is still settled cash for one more name.",
     "Mostly housekeeping. Tilted toward the names beating the benchmark and away from the laggards. No new risk added.",
     "Opportunistic. A gap down in GOOGL gave a cleaner entry than I expected, so I sized up with conviction. Otherwise holding.",
     "Patient. The book is fine versus SPY and I see no reason to fiddle. Logged the watchlist for tomorrow and stepped back.",
     "Trimmed broadly into strength to bank some of the month's gains. Core intact, just lighter and with more cash than usual.",
     "Risk-off lean. Volatility ticked up, so I cut the weakest position and parked the cash. I would rather re-enter higher than ride a name I have lost conviction in.",
-    "Added selectively and held the rest. The options sleeve is near its ceiling, so any new directional view goes through equity from here.",
+    "Added selectively and held the rest. I am already carrying enough option premium for my taste, so any new directional view goes through equity from here.",
 ]
 
 SUMMARIES = [
     "Started the session a little defensive after the open. Read the book and the tape, confirmed the core (MDT, COST) still earns its slot, and trimmed a bit of NVDA into strength to bank some gains. Added a small starter where the setup was clean. Net long but comfortable, with cash held back as dry powder. Watching the inflation print midweek before doing anything bigger.",
     "Mostly housekeeping today. Nothing new cleared the bar, so I tilted toward the names beating the benchmark and away from the laggards rather than adding fresh risk. Confirmed a prior trim had filled, banked the gain, and left the rest of the book alone. Positioned roughly in line with SPY and content to wait for a better entry.",
-    "Pressed the strongest names a touch and opened a small call for convexity into a catalyst, sized well inside the options sleeve. Checked earnings dates first so I am not holding into a surprise print. Left the steady compounders untouched. Leaning long and a bit aggressive, but every position still has a defined invalidation level.",
+    "Pressed the strongest names a touch and opened a small call for convexity into a catalyst, sized to premium I can lose without it hurting the book. Checked earnings dates first so I am not holding into a surprise print. Left the steady compounders untouched. Leaning long and a bit aggressive, but every position still has a defined invalidation level.",
     "Risk-off lean. Volatility ticked up, so I cut the weakest position, parked the proceeds in cash, and resisted the urge to chase the bounce. Protecting the high-water mark matters more than being a hero here. The core stays intact; I would rather re-enter higher than ride a name I have lost conviction in.",
     "Quiet, deliberate day. Reviewed every holding, found the theses intact, and added a starter in a name on a clean pullback to its 50-day. Re-checked a resting exit from a prior session, saw it had filled, and updated the book. Running a touch defensive versus the index and watching the watchlist for tomorrow.",
     "Took profits where the move had run and let the real conviction names ride. Rotated some of the proceeds into the steadiest line in the book rather than reaching for something new. A little lighter on options, heavier on equity I am happy to hold for weeks. Comfortable and patient from here.",
@@ -114,7 +114,7 @@ ACTION_ITEMS = [
     "Nothing forcing my hand. Re-check the laggards for a reason to cut, watch GOOGL for a cleaner entry, and keep the dry powder until a setup actually triggers.",
     "Watch the call I opened into its catalyst; set a mental stop at the premium I paid. Reassess COST if it gaps. Earnings calendar is clear this week, so no print risk to manage.",
     "Defensive footing: if the drawdown deepens, trim the weakest name first. Otherwise hold and wait. Re-run the watchlist tomorrow and look for a re-entry higher.",
-    "Confirm yesterday's exit actually settled. Look at adding to the winner on any pullback to the 20-day. Keep an eye on the options sleeve, it is near its ceiling.",
+    "Confirm yesterday's exit actually settled. Look at adding to the winner on any pullback to the 20-day. Keep the option premium modest, I am already carrying a few calls.",
     "Let the winners run, no new risk planned. Check UNH into its invalidation level and cut it fast if it breaks. Otherwise patient, and reassess the cash level end of week.",
 ]
 
@@ -127,7 +127,7 @@ RATIONALE = {
         "Rotating proceeds from a trim into the steadier name in the book.",
     ],
     "buy_option": [
-        "Small call for convexity into the catalyst. Defined risk, well under the options sleeve cap.",
+        "Small call for convexity into the catalyst. Defined risk, premium I am comfortable losing.",
         "Buying time, not lottery tickets: enough DTE that theta is not punishing, strike where the chain is liquid.",
         "Cheap optionality on a name I already like. If it works I ride it, if not the premium is the max loss.",
     ],
@@ -459,14 +459,14 @@ def fmt_money(x):
 def transcript_for_day(decisions, stance, summary, action_items, positions, kitchen_sink=False):
     """A cohesive, realistic single-day session: read the book, confirm and
     clean up a stale working order, research a name with the reading tools and
-    the news, weigh an option and pass, size within the caps, place the day's
-    moves, then document the session. Tool results mirror the production tool
-    layer's shapes with believable numbers anchored to PRICES.
+    the news, weigh an option and pass, size against the settled cash, place
+    the day's moves, then document the session. Tool results mirror the
+    production tool layer's shapes with believable numbers anchored to PRICES.
 
     kitchen_sink=True (the most recent session day, the one the dashboard
     links to) widens the session so every transcript render case appears on
-    one page: all 15 portfolio tools, the Anthropic-run web and sandbox tools
-    in both success and failure states, a cap-sheet refusal, a dangling
+    one page: the portfolio tools, the Anthropic-run web and sandbox tools
+    in both success and failure states, a settled-cash refusal, a dangling
     tool_use with no recorded result, an empty-string tool_result, a long
     multi-symbol quotes sweep, and long multi-paragraph thinking."""
     ev, state = [], {"r": 0}
@@ -490,9 +490,6 @@ def transcript_for_day(decisions, stance, summary, action_items, positions, kitc
     invested = sum(p["market_value"] for p in positions)
     equity = round(invested + cash, 2)
     hwm = round(equity * 1.031, 2)
-    eq_cap = round(equity * 0.5, 2)
-    opt_cap = round(equity * 0.5, 2)
-    opt_used = round(sum(p["market_value"] for p in positions if p["asset_type"] == "OPTION"), 2)
     held_option = next((p for p in positions if p["asset_type"] == "OPTION"), None)
     core = positions[0]["underlying"] if positions else "MDT"
     oid = [3100]
@@ -505,14 +502,6 @@ def transcript_for_day(decisions, stance, summary, action_items, positions, kitc
     sells = [d for d in decisions if d["action"] in ("sell_equity", "sell_option")]
     holds = [d for d in decisions if d["action"] == "hold"]
 
-    # The equity-sleeve numbers the cap tool reports. Derived so the starter
-    # buy fits with a little room and a triple-size order does not, which is
-    # what the kitchen-sink refusal narrates.
-    first_eq_buy = next((d for d in buys if d["action"] == "buy_equity"), None)
-    starter_notional = first_eq_buy["notional"] if first_eq_buy else 900.0
-    eq_remaining = round(starter_notional * random.uniform(1.15, 1.4), 2)
-    eq_used = round(eq_cap - eq_remaining, 2)
-
     # ── Round 0: read the account and recent history ──
     say("Starting today's session. Before I touch anything I read the live book, my recent moves, and any order I left working yesterday.")
     if kitchen_sink:
@@ -521,8 +510,8 @@ def transcript_for_day(decisions, stance, summary, action_items, positions, kitc
             "First, the stale trim. I left a limit on " + core + " working overnight and I have no idea whether it filled. "
             "If it did, the book I am about to read already reflects a smaller position and re-trimming would cut the name twice. "
             "If it did not, the limit is probably miles from the market by now and needs to be repriced, not left to rot on the order book.\n\n"
-            "Second, sizing discipline. The last few sessions added exposure and both sleeves are getting heavier. Before any new buy I want the cap "
-            "sheet's own numbers, not my mental arithmetic, and I want the order sized in the sandbox so the share count is exact against settled cash.\n\n"
+            "Second, sizing discipline. The last few sessions added exposure, so before any new buy I want the order sized in the sandbox, "
+            "not my mental arithmetic, so the share count is exact against the settled cash on hand.\n\n"
             "Third, the watchlist. Two names pulled back to support and one of the held calls is close to its catalyst. The plan is one clean starter, "
             "one small call if the chain is liquid enough, the repriced trim, and explicit holds on everything else so the record shows a decision on every position."
         )
@@ -607,7 +596,7 @@ def transcript_for_day(decisions, stance, summary, action_items, positions, kitc
         step()
 
     # ── Research + place each buy ──
-    did_news, did_caps, did_code, did_deep, did_refusal = False, False, False, False, False
+    did_news, did_code, did_deep, did_refusal = False, False, False, False
 
     for dec in buys:
         und = dec["underlying"]
@@ -643,25 +632,17 @@ def transcript_for_day(decisions, stance, summary, action_items, positions, kitc
                                         "return_code": 0, "stdout": "3\n", "stderr": ""})
             think("Guidance comes up three times in the piece and every mention is a reaffirmation. That settles the print-risk question for this week.")
             use("text_editor_code_execution", {"command": "create", "path": "/tmp/session_notes.md",
-                                               "file_text": "# Session notes\n- " + und + ": trend intact, guidance reaffirmed, no print risk this week\n- Trim goes out priced at the bid\n- Both sleeves checked before sizing\n"})
+                                               "file_text": "# Session notes\n- " + und + ": trend intact, guidance reaffirmed, no print risk this week\n- Trim goes out priced at the bid\n- Order sized against settled cash before placing\n"})
             res("text_editor_code_execution", {"error_code": "", "type": "encrypted_text_editor_code_execution_result", "content": [],
                                               "is_file_update": False})
             did_deep = True
-        think("Trend is intact and above the 50- and 200-day, earnings are not until late July so there is no print risk this week, and the spread is a penny. A starter fits cleanly inside the sleeve.")
-        if not did_caps:
-            use("get_cap_headroom", {})
-            res("get_cap_headroom", {"equity": equity, "settled_cash": cash, "high_water_mark": hwm,
-                                     "options_sleeve_cap": opt_cap, "options_sleeve_used": opt_used,
-                                     "options_sleeve_remaining": round(opt_cap - opt_used, 2),
-                                     "equity_sleeve_cap": eq_cap, "equity_sleeve_used": eq_used,
-                                     "equity_sleeve_remaining": eq_remaining})
-            did_caps = True
+        think("Trend is intact and above the 50- and 200-day, earnings are not until late July so there is no print risk this week, and the spread is a penny. A starter fits cleanly within today's settled cash.")
         if not did_code:
             # The code-execution sandbox is auto-enabled by the web tools; here
-            # the model uses it to size the order precisely against the caps
-            # instead of eyeballing it.
-            think("Rather than eyeball the size, I will compute the largest whole-share order that fits inside the sleeve room and the settled cash on hand, then round down for headroom.")
-            budget = min(eq_remaining, round(cash, 2))
+            # the model uses it to size the order precisely against the settled
+            # cash on hand instead of eyeballing it.
+            think("Rather than eyeball the size, I will compute the largest whole-share order the settled cash on hand can fund, then round down for a little slack.")
+            budget = round(cash, 2)
             shares = int(budget // px)
             # First attempt fails (sandbox cells share no state, so the bare
             # variables NameError). Both results mirror the real
@@ -669,36 +650,34 @@ def transcript_for_day(decisions, stance, summary, action_items, positions, kitc
             # empty on success, so the transcript UI's success/error
             # classification and the red error pill render against seed data.
             use("code_execution", {"code": (
-                "budget = min(sleeve_room, settled_cash)\n"
-                "shares = int(budget // price)\n"
+                "shares = int(settled_cash // price)\n"
                 "print(f'shares={shares} notional={shares * price:.2f}')"
             )})
             res("code_execution", {"error_code": "", "type": "encrypted_code_execution_result", "content": [], "return_code": 1, "stdout": "",
-                                   "stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\nNameError: name 'sleeve_room' is not defined\n"})
+                                   "stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\nNameError: name 'settled_cash' is not defined\n"})
             think("Forgot the sandbox cell has no shared state, so the inputs were undefined. Re-running with the constants inlined.")
             use("code_execution", {"code": (
                 f"price = {px}\n"
-                f"sleeve_room = {eq_remaining}\n"
                 f"settled_cash = {round(cash, 2)}\n"
-                "budget = min(sleeve_room, settled_cash)\n"
-                "shares = int(budget // price)\n"
-                "print(f'shares={shares} notional={shares * price:.2f} headroom={budget - shares * price:.2f}')"
+                "shares = int(settled_cash // price)\n"
+                "print(f'shares={shares} notional={shares * price:.2f} cash_left={settled_cash - shares * price:.2f}')"
             )})
             res("code_execution", {"error_code": "", "type": "encrypted_code_execution_result", "content": [], "return_code": 0,
-                                   "stdout": f"shares={shares} notional={shares * px:.2f} headroom={budget - shares * px:.2f}\n", "stderr": ""})
+                                   "stdout": f"shares={shares} notional={shares * px:.2f} cash_left={budget - shares * px:.2f}\n", "stderr": ""})
             did_code = True
         if kitchen_sink and not did_refusal and dec["action"] == "buy_equity":
-            # The model first tries the full-conviction size and the cap sheet
-            # refuses it, mirroring the production refusal format. The error
-            # path renders on a real order ticket this way.
-            qty_over = max(int(dec["quantity"]) * 3, int(dec["quantity"]) + 3)
+            # The model first tries a size that needs more than the settled cash
+            # on hand and the settled-cash gate refuses it, mirroring the
+            # production refusal format. The error path renders on a real order
+            # ticket this way.
+            qty_over = int(cash // dec["limit_price"]) + 6
             notional_over = round(qty_over * dec["limit_price"], 2)
-            think("Conviction says triple the starter. Let the cap sheet be the judge of that.")
+            think("Conviction wants a bigger position than today's settled cash can fund. The only thing that can stop me is whether the cash has settled, so let the tool check it.")
             use("buy_equity", {"symbol": dec["symbol"], "quantity": qty_over, "limit_price": dec["limit_price"],
                                "rationale": "Full-conviction size on the pullback while the setup is clean."})
-            res("buy_equity", {"error": f"buy_equity refused (equity_sleeve): this buy would put ${round(eq_used + notional_over, 2):.2f} in stock, "
-                                        f"over the equity-sleeve cap ${eq_cap:.2f} (50% of ${equity:.2f} equity). Use equity headroom of ${eq_remaining:.2f} or size down."})
-            say("The cap sheet pushed back on the full size, which is exactly what it is there for. Sizing down to the starter that fits the sleeve.")
+            res("buy_equity", {"error": f"buy_equity refused (settled_cash): order notional ${notional_over:.2f} exceeds settled cash ${round(cash, 2):.2f}. "
+                                        f"Unsettled proceeds cannot be redeployed until they settle (T+1)."})
+            say("Not enough settled cash for the oversized order, which is the broker's line and not a risk rule. Sizing down to what the cash on hand actually buys.")
             did_refusal = True
         say(dec["rationale"])
         if dec["action"] == "buy_equity":
@@ -805,7 +784,7 @@ def mini_transcript_for_day(decisions):
         say(und + " is back on my radar. Checking the quote and the trend before I size anything.")
         use("get_stock_quotes", {"symbols": und})
         res("get_stock_quotes", {und: {"last": px, "bid": round(px - 0.05, 2), "ask": round(px + 0.05, 2), "mark": px, "totalVolume": 14_200_000}})
-        think("Setup is clean and there is sleeve room and settled cash to spare. Taking the position.")
+        think("Setup is clean and there is settled cash to spare. Taking the position.")
         say(dec["rationale"])
         if dec["action"] == "buy_equity":
             use("buy_equity", {"symbol": dec["symbol"], "quantity": dec["quantity"], "limit_price": dec["limit_price"], "rationale": dec["rationale"]})
@@ -836,7 +815,7 @@ def mini_transcript_for_day(decisions):
             res("hold", {"ok": True, "action": "hold", "symbol": dec.get("symbol", "")})
         step()
 
-    use("write_summary", {"synopsis": "Logged the day's moves and kept the book inside the caps.", "action_items": "Reassess the open positions next session and act if a setup triggers."})
+    use("write_summary", {"synopsis": "Logged the day's moves and sized each one against the settled cash on hand.", "action_items": "Reassess the open positions next session and act if a setup triggers."})
     res("write_summary", {"ok": True, "action": "write_summary", "stored": True})
     say("Session done for the day.")
     return ev

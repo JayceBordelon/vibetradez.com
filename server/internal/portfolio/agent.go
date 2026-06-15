@@ -54,16 +54,14 @@ type Agent struct {
 	model  string
 	reader PortfolioReader
 	exec   PortfolioExecutor
-	caps   Caps
 }
 
 /*
-NewAgent wires the Anthropic client + read/write dependencies + the cap
-policy. apiKey + model are injected by the caller (cmd/scanner/main.go) so
-the portfolio agent uses the same model the rest of the system does. Pass
-DefaultCaps() unless an override is configured.
+NewAgent wires the Anthropic client + read/write dependencies. apiKey +
+model are injected by the caller (cmd/scanner/main.go) so the portfolio
+agent uses the same model the rest of the system does.
 */
-func NewAgent(apiKey, model string, reader PortfolioReader, exec PortfolioExecutor, caps Caps) *Agent {
+func NewAgent(apiKey, model string, reader PortfolioReader, exec PortfolioExecutor) *Agent {
 	return &Agent{
 		client: anthropic.NewClient(
 			option.WithAPIKey(apiKey),
@@ -72,7 +70,6 @@ func NewAgent(apiKey, model string, reader PortfolioReader, exec PortfolioExecut
 		model:  model,
 		reader: reader,
 		exec:   exec,
-		caps:   caps,
 	}
 }
 
@@ -95,8 +92,8 @@ func (a *Agent) Run(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("read portfolio snapshot: %w", err)
 	}
 
-	dispatcher := NewToolDispatcher(a.reader, a.exec, a.caps, snap)
-	prompt := buildPrompt(a.caps)
+	dispatcher := NewToolDispatcher(a.reader, a.exec, snap)
+	prompt := buildPrompt()
 
 	rec := transcript.New()
 	start := time.Now()
@@ -428,16 +425,16 @@ func extractJSONObject(s string) string {
 }
 
 /*
-buildPrompt interpolates today's date and the cap summary into the system
-prompt. The live book and the prior session are NOT embedded here: the model
-reads them itself through get_portfolio and get_recent_decisions, so the
-prompt stays free of duplicated, per-day state.
+buildPrompt interpolates today's date into the system prompt. The live book
+and the prior session are NOT embedded here: the model reads them itself
+through get_portfolio and get_recent_decisions, so the prompt stays free of
+duplicated, per-day state.
 */
-func buildPrompt(caps Caps) string {
+func buildPrompt() string {
 	now := time.Now().In(easternTime())
 	today := now.Format("2006-01-02")
 	weekday := now.Weekday().String()
-	return fmt.Sprintf(SystemPrompt, today, weekday, CapsSummary(caps))
+	return fmt.Sprintf(SystemPrompt, today, weekday)
 }
 
 func easternTime() *time.Location {

@@ -9,7 +9,7 @@ import { ScrollIndicator } from "@/components/landing/scroll-indicator";
 import { SubscribeCTA } from "@/components/landing/subscribe-cta";
 import { LogSection } from "@/components/landing/terminal/log-section";
 import { SessionClock } from "@/components/landing/terminal/session-clock";
-import { CapsReadout, CronTable, EquityReadout, HeroStatStrip, TickerTape, ToolLs } from "@/components/landing/terminal/terminal-visuals";
+import { CronTable, EquityReadout, GuardsReadout, HeroStatStrip, TickerTape, ToolLs } from "@/components/landing/terminal/terminal-visuals";
 import { TypeLines } from "@/components/landing/terminal/type-lines";
 import { Testimonials } from "@/components/landing/testimonials";
 import { TrustedBy } from "@/components/landing/trusted-by";
@@ -153,8 +153,8 @@ export default async function LandingPage() {
       </LogSection>
 
       {/* ══ 03 · THE GUARDRAILS ══ */}
-      <LogSection id="guardrails" command="cat caps.go" comment="the entire risk policy" weight="figure" title={<>Barely a leash. <span className="phosphor text-green">Two rules.</span></>} aside={<CapsReadout />}>
-        <p>Any name, any size, all in if it likes the setup. Exactly two limits live in code where it cannot sweet-talk them: at most half the account in options, at most half in stock. It can absolutely lose my money. That is the show.</p>
+      <LogSection id="guardrails" command="cat guards.go" comment="what little governs the money" weight="figure" title={<>The leash came off. <span className="phosphor text-green">One rule.</span></>} aside={<GuardsReadout />}>
+        <p>Any name, any size, any mix of stocks and options, all in if it likes the setup. There is no split it has to hold and no cap on a single name. The only rule in the file is the broker's: it spends cash that has settled, nothing more. It can absolutely lose my money. That is the show.</p>
       </LogSection>
 
       {/* ══ 04 · THE TOOLBOX ══ */}
@@ -296,7 +296,7 @@ const transcript: TranscriptLine[] = [
     tool: "write_summary",
     payload: {
       synopsis: "Added a small NVDA position on a 50-day hold; kept MSFT.",
-      action_items: ["Trim NVDA if it loses the 50-day", "Re-check options-sleeve room before adding again"],
+      action_items: ["Trim NVDA if it loses the 50-day", "Confirm the NVDA fill settled before redeploying"],
     },
     result: { ok: true, action: "write_summary", stored: true },
   },

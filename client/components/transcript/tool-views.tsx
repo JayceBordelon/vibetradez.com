@@ -89,9 +89,6 @@ function renderBody(name: string | undefined, input: Dict | undefined, r: Parsed
     case "get_fundamentals":
       view = renderFundamentals(r);
       break;
-    case "get_cap_headroom":
-      view = renderCapHeadroom(r);
-      break;
     case "get_recent_decisions":
       view = renderRecentDecisions(r);
       break;
@@ -490,56 +487,6 @@ function renderFundamentals(r: ParsedResult): ReactNode {
           </div>
         ))}
       </dl>
-    </div>
-  );
-}
-
-// ── get_cap_headroom: sleeve gauges ──────────────────────────────────────
-
-function SleeveGauge({ label, cap, used, remaining }: { label: string; cap?: number; used?: number; remaining?: number }) {
-  if (cap === undefined && used === undefined && remaining === undefined) return null;
-  const usedValue = used ?? (cap !== undefined && remaining !== undefined ? cap - remaining : undefined);
-  const pct = cap !== undefined && cap > 0 && usedValue !== undefined ? Math.min(100, Math.max(0, (usedValue / cap) * 100)) : undefined;
-  const fill = pct === undefined ? "" : pct < 70 ? "bg-green" : pct < 90 ? "bg-amber" : "bg-red";
-  return (
-    <div>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-        <span className="text-xs font-medium text-foreground/85">{label}</span>
-        {pct !== undefined && cap !== undefined && usedValue !== undefined && (
-          <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-            {fmtUsd(usedValue)} of {fmtUsd(cap)} used
-          </span>
-        )}
-      </div>
-      {pct !== undefined ? (
-        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${label} ${pct.toFixed(0)} percent used`}>
-          <div className={cn("h-full rounded-full", fill)} style={{ width: `${pct}%` }} />
-        </div>
-      ) : null}
-      {remaining !== undefined && <div className="mt-1 font-mono text-[11px] tabular-nums text-muted-foreground">{fmtUsd(remaining)} of headroom remaining</div>}
-    </div>
-  );
-}
-
-function renderCapHeadroom(r: ParsedResult): ReactNode {
-  const o = r.obj;
-  if (!o) return null;
-  const optRem = pickNum(o, "options_sleeve_remaining");
-  const eqRem = pickNum(o, "equity_sleeve_remaining");
-  if (optRem === undefined && eqRem === undefined) return null;
-  const equity = pickNum(o, "equity");
-  const cash = pickNum(o, "settled_cash");
-
-  return (
-    <div className="space-y-3">
-      {(equity !== undefined || cash !== undefined) && (
-        <div className="flex flex-wrap gap-x-6 gap-y-1.5">
-          {equity !== undefined && <Cell label="Account equity" value={fmtUsd(equity)} />}
-          {cash !== undefined && <Cell label="Settled cash" value={fmtUsd(cash)} />}
-        </div>
-      )}
-      <SleeveGauge label="Equity sleeve" cap={pickNum(o, "equity_sleeve_cap")} used={pickNum(o, "equity_sleeve_used")} remaining={eqRem} />
-      <SleeveGauge label="Options sleeve" cap={pickNum(o, "options_sleeve_cap")} used={pickNum(o, "options_sleeve_used")} remaining={optRem} />
     </div>
   );
 }

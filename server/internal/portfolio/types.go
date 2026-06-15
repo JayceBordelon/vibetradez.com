@@ -33,10 +33,10 @@ const (
 Position is one holding in the account, as reported by the broker.
 MarkValue is the current market value of the whole position (mark times
 quantity times the contract multiplier for options). Underlying is the
-equity ticker the position keys against for concentration accounting: for
+equity ticker the position keys against when grouping exposure by name: for
 an equity position it equals Symbol, for an option it is the underlying
-stock symbol (not the OCC option symbol). This is what lets the
-concentration cap treat MDT stock and MDT calls as exposure to the same
+stock symbol (not the OCC option symbol). This is what lets the book and
+the track record treat MDT stock and MDT calls as exposure to the same
 name.
 */
 type Position struct {
@@ -61,8 +61,7 @@ captured at the start of a session. Equity is the total account value
 cash account (unsettled proceeds cannot be redeployed until T+1).
 HighWaterMark is the peak account equity observed historically, surfaced
 for context. There is no session deployment budget: the agent may deploy
-all settled cash, gated only by the settled-cash rule and the two sleeve
-caps.
+all settled cash, gated only by the settled-cash rule.
 */
 type Snapshot struct {
 	Equity        float64

@@ -161,7 +161,7 @@ func TestOrderStatusReconciliation(t *testing.T) {
 	submitted := PortfolioDecisionRow{
 		Date: "2026-06-09", Source: "agent", Action: "buy_option", AssetType: "OPTION",
 		Symbol: "NVDA  260918C00215000", Underlying: "NVDA", Quantity: 1, LimitPrice: 18.30, Notional: 1830,
-		Mode: "live", SchwabOrderID: "ord-2", Status: "submitted", Rationale: "sleeve",
+		Mode: "live", SchwabOrderID: "ord-2", Status: "submitted", Rationale: "convexity",
 	}
 	alreadyFilled := PortfolioDecisionRow{
 		Date: "2026-06-09", Source: "agent", Action: "sell_equity", AssetType: "EQUITY",

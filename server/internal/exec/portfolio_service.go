@@ -9,21 +9,22 @@ import (
 /*
 MaxPortfolioOrderCostCeiling is a gross, absolute defense-in-depth ceiling
 on the total cost of any single order the v2 portfolio manager submits. It
-is NOT the risk policy — the real per-order cap is a percentage of live
-equity enforced in internal/portfolio (caps.go, CheckBuy). This is only a
-catastrophe backstop on the way out to the broker: it catches a fat-finger
-or a buggy caller that tries to push an absurd order (e.g. 10,000 shares),
-regardless of what the tool layer believed. Set deliberately far above any
-sane order for the target account size so it never blocks legitimate
-sizing; if the account ever grows past it, raise it consciously.
+is NOT a risk policy and not how allocation is governed: the model has full
+discretion over sizing, gated upstream only by the settled-cash rule in
+internal/portfolio (guards.go, CheckBuy). This is only a catastrophe
+backstop on the way out to the broker: it catches a fat-finger or a buggy
+caller that tries to push an absurd order (e.g. 10,000 shares), regardless
+of what the tool layer believed. Set deliberately far above any sane order
+for the target account size so it never blocks legitimate sizing. If the
+account ever grows past it, raise it consciously.
 */
 const MaxPortfolioOrderCostCeiling = 25000.00
 
 /*
 PlaceEquityOrderAgent submits a single equity LIMIT order (side "BUY" or
 "SELL") for the v2 portfolio manager and returns the broker order id. It is
-intentionally thin: the portfolio tool layer has already enforced the real
-risk caps, so this method only builds the order, re-checks the gross
+intentionally thin: the portfolio tool layer has already enforced the
+settled-cash rule, so this method only builds the order, re-checks the gross
 catastrophe ceiling, and submits. It does NOT write the v1 executions/trades
 tables — portfolio moves are persisted to portfolio_decisions by the caller
 after the agent run. Held under the service mutex so it can't race the v1
@@ -56,8 +57,8 @@ func (s *Service) PlaceEquityOrderAgent(ctx context.Context, symbol, side string
 PlaceOptionOrderAgent submits a single option LIMIT order against a
 pre-built OCC symbol (instruction "BUY_TO_OPEN" or "SELL_TO_CLOSE") for the
 v2 portfolio manager and returns the broker order id. Same thin contract as
-PlaceEquityOrderAgent: real caps are upstream, this re-checks only the gross
-ceiling (limit × 100 × contracts) and submits.
+PlaceEquityOrderAgent: the settled-cash gate is upstream, this re-checks
+only the gross ceiling (limit × 100 × contracts) and submits.
 */
 func (s *Service) PlaceOptionOrderAgent(ctx context.Context, occSymbol, instruction string, quantity int, limitPrice float64) (string, error) {
 	s.mu.Lock()

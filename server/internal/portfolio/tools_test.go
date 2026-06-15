@@ -11,9 +11,9 @@ import (
 
 /*
 fakeReader / fakeExec stub the two interfaces. fakeExec records how many
-broker calls actually happened so a test can assert that a cap rejection
-NEVER reaches the broker (the whole point of the tool layer being the
-security boundary).
+broker calls actually happened so a test can assert that a refusal NEVER
+reaches the broker (the whole point of the tool layer being the security
+boundary).
 */
 type fakeReader struct {
 }
@@ -76,79 +76,61 @@ func isErrResult(s string) bool {
 	return ok
 }
 
-// A buy that violates a cap must be refused at the tool layer and must NOT
-// reach the broker.
-func TestDispatch_CapRejectionNeverHitsBroker(t *testing.T) {
+// A buy beyond the settled cash must be refused at the tool layer and must
+// NOT reach the broker.
+func TestDispatch_RefusalNeverHitsBroker(t *testing.T) {
 	reader := &fakeReader{}
 	ex := &fakeExec{}
-	snap := baseSnapshot() // $6k equity, equity sleeve $3,000
-	d := NewToolDispatcher(reader, ex, DefaultCaps(), snap)
+	snap := baseSnapshot() // $6,000 settled cash
+	d := NewToolDispatcher(reader, ex, snap)
 
-	// $3,100 stock order > the $3,000 equity sleeve.
+	// $6,200 stock order > the $6,000 settled cash.
 	res := d.Dispatch(context.Background(), "buy_equity", mustJSON(t, map[string]any{
-		"symbol": "MDT", "quantity": 62.0, "limit_price": 50.0, "rationale": "test",
+		"symbol": "MDT", "quantity": 124.0, "limit_price": 50.0, "rationale": "test",
 	}))
 	if !isErrResult(res) {
 		t.Fatalf("expected a refusal, got: %s", res)
 	}
 	if ex.buyEquityCalls != 0 {
-		t.Fatalf("cap-rejected order must not reach the broker, got %d calls", ex.buyEquityCalls)
+		t.Fatalf("refused order must not reach the broker, got %d calls", ex.buyEquityCalls)
 	}
 	if len(d.Decisions()) != 0 {
-		t.Fatalf("rejected order must not record a decision, got %d", len(d.Decisions()))
+		t.Fatalf("refused order must not record a decision, got %d", len(d.Decisions()))
 	}
 }
 
-// Successful buys update the working snapshot, so cumulative stock buys
-// are gated against the live equity sleeve, not the pristine session
-// state. With pacing gone, the sleeve itself is the only cumulative gate.
-func TestDispatch_CumulativeBuysRunToTheSleeve(t *testing.T) {
+// Successful buys decrement the working snapshot's settled cash, so
+// cumulative buys are gated against the cash actually left, not the pristine
+// session state. With the allocation caps gone, settled cash is the only
+// cumulative gate, and allocation across names is unconstrained.
+func TestDispatch_CumulativeBuysRunToSettledCash(t *testing.T) {
 	reader := &fakeReader{}
 	ex := &fakeExec{}
-	snap := baseSnapshot() // $6,000 equity: equity sleeve $3,000
-	d := NewToolDispatcher(reader, ex, DefaultCaps(), snap)
+	snap := baseSnapshot() // $6,000 settled cash
 
-	// $1,500 + $1,400 + $100 lands exactly ON the $3,000 sleeve: all pass
-	// (the old per-order/concentration/pacing caps would have refused long
-	// before this point).
+	d := NewToolDispatcher(reader, ex, snap)
+
+	// $3,000 + $2,800 + $200 spends exactly the $6,000 settled cash: all pass
+	// (the old allocation caps would have refused the very first $3,000
+	// single-name order).
 	for i, buy := range []map[string]any{
-		{"symbol": "AAA", "quantity": 100.0, "limit_price": 15.0, "rationale": "first"},
-		{"symbol": "BBB", "quantity": 100.0, "limit_price": 14.0, "rationale": "second"},
-		{"symbol": "CCC", "quantity": 10.0, "limit_price": 10.0, "rationale": "third"},
+		{"symbol": "AAA", "quantity": 200.0, "limit_price": 15.0, "rationale": "first"},
+		{"symbol": "BBB", "quantity": 200.0, "limit_price": 14.0, "rationale": "second"},
+		{"symbol": "CCC", "quantity": 20.0, "limit_price": 10.0, "rationale": "third"},
 	} {
 		if r := d.Dispatch(context.Background(), "buy_equity", mustJSON(t, buy)); isErrResult(r) {
 			t.Fatalf("buy %d should pass, got: %s", i+1, r)
 		}
 	}
-	// One more dollar of stock must be refused on the equity sleeve.
+	// One more dollar must be refused: there is no settled cash left.
 	r := d.Dispatch(context.Background(), "buy_equity", mustJSON(t, map[string]any{
 		"symbol": "DDD", "quantity": 1.0, "limit_price": 10.0, "rationale": "fourth",
 	}))
-	if !isErrResult(r) || !strings.Contains(r, "equity-sleeve") {
-		t.Fatalf("fourth buy should be refused on the equity sleeve, got: %s", r)
+	if !isErrResult(r) || !strings.Contains(r, "settled cash") {
+		t.Fatalf("fourth buy should be refused on settled cash, got: %s", r)
 	}
 	if ex.buyEquityCalls != 3 {
 		t.Fatalf("exactly three buys should have reached the broker, got %d", ex.buyEquityCalls)
-	}
-}
-
-func TestDispatch_CapHeadroom(t *testing.T) {
-	snap := baseSnapshot() // $6k equity
-	snap.Positions = []Position{{Symbol: "MDT", Underlying: "MDT", AssetType: AssetEquity, MarkValue: 1500, Quantity: 30}}
-	d := NewToolDispatcher(&fakeReader{}, &fakeExec{}, DefaultCaps(), snap)
-
-	res := d.Dispatch(context.Background(), "get_cap_headroom", mustJSON(t, map[string]any{}))
-	var out map[string]any
-	if err := json.Unmarshal([]byte(res), &out); err != nil {
-		t.Fatalf("bad json: %s", res)
-	}
-	// Equity sleeve = 50% of $6,000 = $3,000; $1,500 of stock held leaves $1,500.
-	if out["equity_sleeve_remaining"].(float64) != 1500 {
-		t.Fatalf("expected equity_sleeve_remaining 1500, got %v", out["equity_sleeve_remaining"])
-	}
-	// Options sleeve untouched: full $3,000 remaining.
-	if out["options_sleeve_remaining"].(float64) != 3000 {
-		t.Fatalf("expected options_sleeve_remaining 3000, got %v", out["options_sleeve_remaining"])
 	}
 }
 
@@ -174,7 +156,7 @@ func TestPriceSummary(t *testing.T) {
 
 // hold records a continuation decision (by symbol) and never touches the broker.
 func TestDispatch_Hold(t *testing.T) {
-	d := NewToolDispatcher(&fakeReader{}, &fakeExec{}, DefaultCaps(), baseSnapshot())
+	d := NewToolDispatcher(&fakeReader{}, &fakeExec{}, baseSnapshot())
 	res := d.Dispatch(context.Background(), "hold", mustJSON(t, map[string]any{"symbol": "MDT", "rationale": "continuing to hold, thesis intact"}))
 	if isErrResult(res) {
 		t.Fatalf("hold should succeed, got: %s", res)
