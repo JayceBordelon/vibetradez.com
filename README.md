@@ -6,7 +6,7 @@ An AI runs a single real brokerage account. Each trading day Claude (we call her
 
 ## The daily loop
 
-One session per trading day, around midday, when spreads have settled and the morning's information is already on the tape.
+Three sessions per trading day — at the open (~9:45 ET, once the opening spreads settle), midday (~12:30 ET, the main read), and before the close (~15:30 ET) — each a fresh automated pass with the full tool surface. The open reacts to the overnight tape, midday sets the core positioning, and the pre-close positions the book for overnight. Each session reads back the synopsis and action items the previous one left, so the three chain through the day.
 
 ```
         ┌── observes ──────────────────────────────────────┐
@@ -23,15 +23,17 @@ One session per trading day, around midday, when spreads have settled and the mo
             as the starting point of the next session
 ```
 
-Three crons drive the day (America/New_York, weekends and holidays skipped):
+Five crons drive the day (America/New_York, weekends and holidays skipped):
 
 ```
-30 12 * * MON-FRI    the session   reads everything, then trades
-*/15 .. * * MON-FRI  the sweep     reconciles fills against the broker
-00 16 * * MON-FRI    the close     snapshots equity vs SPY, sends the recap
+45 9  * * MON-FRI    session: open       reads everything, then trades (post-auction)
+30 12 * * MON-FRI    session: midday     the primary read of the book
+30 15 * * MON-FRI    session: pre-close  positions for overnight (skipped on half-days)
+*/15 .. * * MON-FRI  sweep               reconciles fills against the broker
+00 16 * * MON-FRI    EOD                 snapshots equity vs SPY, sends the recap
 ```
 
-Orders are fire-and-forget LIMITs that fill over the afternoon. The full tool-by-tool reasoning of every session is public at `/transcripts/<date>`.
+Orders are fire-and-forget LIMITs that fill asynchronously. Alongside the broker feed, the model pulls free, no-account real-time signal to stay current on hot names — headlines (Yahoo Finance + Google News RSS) and retail hype (StockTwits trending + bull/bear sentiment) — on top of its built-in web search. The full tool-by-tool reasoning of all three daily sessions is merged into one public transcript per day at `/transcripts/<date>`.
 
 ## The guardrails
 

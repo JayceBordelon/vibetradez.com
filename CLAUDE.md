@@ -8,7 +8,7 @@ VibeTradez is an autonomous **portfolio manager** that runs a single personal br
 
 - **It's one account, not a multi-user product.** UI and copy treat it as a single book; subscribers watch and get the daily recap email, they don't trade.
 - **Live-only, runs whenever enabled.** The manager runs whenever `TRADING_ENABLED=true` and trades live with real money against the Schwab Trader API. There is no paper mode (the paper trader was removed), so enabling it is the deliberate action. Read the daily transcript to see exactly what it did.
-- **Where it lives:** `internal/portfolio` (the gates = the security boundary in `guards.go`, tool layer, agent), `internal/portfoliowire` (adapters to Schwab + exec + store), `internal/exec` (broker: equity/options orders, positions, the portfolio entry points), the `portfolio_*` store tables, the three crons in `cmd/scanner` (daily session ~12:30 ET, intraday risk sweep, 16:00 EOD equity-curve snapshot), the `/api/portfolio*` endpoints, and `client/components/portfolio` (the dashboard).
+- **Where it lives:** `internal/portfolio` (the gates = the security boundary in `guards.go`, tool layer, agent), `internal/portfoliowire` (adapters to Schwab + exec + store), `internal/exec` (broker: equity/options orders, positions, the portfolio entry points), the `portfolio_*` store tables, the portfolio crons in `cmd/scanner` (three decision sessions — open ~9:45, midday ~12:30, pre-close ~15:30 ET — plus the intraday risk sweep and the 16:00 EOD equity-curve snapshot), the `/api/portfolio*` endpoints, and `client/components/portfolio` (the dashboard).
 - **The model has full discretion over allocation**: any mix of stocks and options, any size, the whole account in one name if it wants. There is no allocation split, no per-name cap, no per-order cap, no drawdown breaker, no liquidity floor, no session pacing. Two gates remain and neither is a risk policy: the settled-cash rule (broker T+1 compliance) gates buys, and sell validation rejects an oversell or a sell of a position not held. Enforced at the **tool layer only** (`guards.go` `Check*`); the broker entry point re-checks only a flat $25k absolute fat-finger ceiling (`exec.MaxPortfolioOrderCostCeiling`), a code-bug backstop, so the tool layer is the sole enforcement point. Full discretion is intentional: don't add allocation caps back in the prompt or the code.
 - The intraday cron's remaining duty is reconciling decision-log order statuses against the broker (fills show on the dashboard within ~15 min).
 
@@ -183,7 +183,8 @@ docker compose up -d --force-recreate trading-server  # Full recreate (env reloa
 | Adapters to Schwab + exec + store | `server/internal/portfoliowire/wire.go` |
 | Broker layer (equity + options orders, positions, account, portfolio entry points) | `server/internal/exec/` |
 | Schwab market cap (instruments fundamentals) | `server/internal/schwab/instruments.go` |
-| Portfolio crons (daily session, risk sweep, EOD snapshot) + email send | `server/cmd/scanner/portfolio.go` + `main.go` |
+| Free news + hype tools (Yahoo/Google News RSS, StockTwits trending + sentiment) | `server/internal/marketnews/` |
+| Portfolio crons (open/midday/pre-close sessions, risk sweep, EOD snapshot) + email send | `server/cmd/scanner/portfolio.go` + `main.go` |
 | Quotes hub (Schwab WS to SSE fan-out, per-watcher lifecycle) | `server/internal/quotes/hub.go` |
 | SSE quote stream endpoint | `server/internal/server/quotes.go` |
 | Live re-pricing overlays + SSE hook | `client/lib/live-pricing.ts` + `client/hooks/use-live-quotes.ts` |

@@ -17,6 +17,7 @@ import (
 	"math"
 
 	"vibetradez.com/internal/exec"
+	"vibetradez.com/internal/marketnews"
 	"vibetradez.com/internal/portfolio"
 	"vibetradez.com/internal/schwab"
 	"vibetradez.com/internal/store"
@@ -73,13 +74,14 @@ snapshot from the broker (positions + settled cash) and the store
 Schwab.
 */
 type Reader struct {
-	md MarketData
-	bk Broker
-	st PortfolioStore
+	md   MarketData
+	bk   Broker
+	st   PortfolioStore
+	news *marketnews.Client
 }
 
-func NewReader(md MarketData, bk Broker, st PortfolioStore) *Reader {
-	return &Reader{md: md, bk: bk, st: st}
+func NewReader(md MarketData, bk Broker, st PortfolioStore, news *marketnews.Client) *Reader {
+	return &Reader{md: md, bk: bk, st: st, news: news}
 }
 
 func (r *Reader) GetQuotes(symbols []string) (map[string]schwab.StockQuote, error) {
@@ -122,6 +124,21 @@ func (r *Reader) GetDailyPriceHistory(symbol string) (*schwab.PriceHistory, erro
 
 func (r *Reader) GetFundamentals(symbol string) (*schwab.Fundamentals, error) {
 	return r.md.GetFundamentals(symbol)
+}
+
+// TickerNews / TrendingTickers / SocialSentiment back the free news + hype
+// tools. They hit public, keyless endpoints (Yahoo + Google News RSS,
+// StockTwits) so there are no credentials to wire.
+func (r *Reader) TickerNews(symbols []string, perSymbol int) ([]marketnews.NewsItem, error) {
+	return r.news.TickerNews(symbols, perSymbol)
+}
+
+func (r *Reader) TrendingTickers(limit int) ([]marketnews.TrendingTicker, error) {
+	return r.news.TrendingTickers(limit)
+}
+
+func (r *Reader) SocialSentiment(symbol string) (marketnews.Sentiment, error) {
+	return r.news.SocialSentiment(symbol)
 }
 
 // RecentDecisions maps the store's recent decision rows to the agent's

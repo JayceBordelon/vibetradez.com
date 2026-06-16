@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"vibetradez.com/internal/marketnews"
 	"vibetradez.com/internal/schwab"
 )
 
@@ -38,6 +39,15 @@ func (f *fakeReader) OrderStatus(context.Context, string) (OrderStatus, error) {
 }
 func (f *fakeReader) PriorSession() (string, string, bool, error) { return "", "", false, nil }
 func (f *fakeReader) TrackRecord(int) (TrackRecord, error)        { return TrackRecord{}, nil }
+func (f *fakeReader) TickerNews([]string, int) ([]marketnews.NewsItem, error) {
+	return nil, nil
+}
+func (f *fakeReader) TrendingTickers(int) ([]marketnews.TrendingTicker, error) {
+	return nil, nil
+}
+func (f *fakeReader) SocialSentiment(string) (marketnews.Sentiment, error) {
+	return marketnews.Sentiment{}, nil
+}
 
 type fakeExec struct {
 	buyEquityCalls int

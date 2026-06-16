@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"vibetradez.com/internal/exec"
+	"vibetradez.com/internal/marketnews"
 	"vibetradez.com/internal/portfolio"
 	"vibetradez.com/internal/schwab"
 	"vibetradez.com/internal/store"
@@ -72,7 +73,7 @@ func TestSnapshot_AssemblesEquityAndBudget(t *testing.T) {
 			{Symbol: "MDT", AssetType: "EQUITY", Underlying: "MDT", Quantity: 20, MarketValue: 1600, AverageCost: 78},
 		},
 	}
-	r := NewReader(&fakeMD{}, bk, &fakeHW{mark: 9000, ok: true})
+	r := NewReader(&fakeMD{}, bk, &fakeHW{mark: 9000, ok: true}, marketnews.NewClient())
 
 	snap, err := r.Snapshot(context.Background())
 	if err != nil {
@@ -97,7 +98,7 @@ func TestSnapshot_AssemblesEquityAndBudget(t *testing.T) {
 
 func TestSnapshot_FreshAccountUsesEquityAsHighWater(t *testing.T) {
 	bk := &fakeBroker{funds: 6000}
-	r := NewReader(&fakeMD{}, bk, &fakeHW{ok: false}) // empty curve
+	r := NewReader(&fakeMD{}, bk, &fakeHW{ok: false}, marketnews.NewClient()) // empty curve
 	snap, err := r.Snapshot(context.Background())
 	if err != nil {
 		t.Fatal(err)

@@ -18,6 +18,7 @@ import (
 	"vibetradez.com/internal/config"
 	"vibetradez.com/internal/email"
 	"vibetradez.com/internal/exec"
+	"vibetradez.com/internal/marketnews"
 	"vibetradez.com/internal/portfolio"
 	"vibetradez.com/internal/portfoliowire"
 	"vibetradez.com/internal/quotes"
@@ -123,7 +124,7 @@ func checkClockSkew() {
 		skew = -skew
 	}
 	if skew > maxAcceptableSkew {
-		log.Printf("clock-skew WARNING: local clock differs from cloudflare by %s (threshold %s). The portfolio crons (the 12:30 ET session, the every-15-min risk sweep, and the 16:00 ET EOD snapshot) WILL fire at the wrong wall-clock time", skew.Truncate(time.Second), maxAcceptableSkew)
+		log.Printf("clock-skew WARNING: local clock differs from cloudflare by %s (threshold %s). The portfolio crons (the open/midday/pre-close sessions, the every-15-min risk sweep, and the 16:00 ET EOD snapshot) WILL fire at the wrong wall-clock time", skew.Truncate(time.Second), maxAcceptableSkew)
 	} else {
 		log.Printf("clock-skew probe: local clock within %s of cloudflare (rtt=%s)", skew.Truncate(time.Millisecond), rtt.Truncate(time.Millisecond))
 	}
@@ -240,7 +241,7 @@ func main() {
 		portfolioReader *portfoliowire.Reader
 	)
 	if executor != nil {
-		portfolioReader = portfoliowire.NewReader(schwabClient, executor, db)
+		portfolioReader = portfoliowire.NewReader(schwabClient, executor, db, marketnews.NewClient())
 		portfolioExecutor := portfoliowire.NewExecutor(executor)
 		portfolioAgent = portfolio.NewAgent(cfg.AnthropicAPIKey, cfg.AnthropicModel, portfolioReader, portfolioExecutor)
 		log.Printf("portfolio: manager ready (model=%s, mode=live)", cfg.AnthropicModel)
@@ -255,17 +256,21 @@ func main() {
 	c := cron.New(cron.WithLocation(loc))
 
 	/*
-		Portfolio crons: the daily decision session (~12:30 ET), the intraday
-		risk sweep (every 15 min, market hours), and the EOD equity-curve
-		snapshot (16:00 ET).
+		Portfolio crons: three decision sessions a day (open ~9:45, midday
+		~12:30, pre-close ~15:30 ET), the intraday risk sweep (every 15 min,
+		market hours), and the EOD equity-curve snapshot (16:00 ET).
 	*/
 	if portfolioAgent != nil {
-		portfolioJob := func() {
-			if open, reason := isMarketOpen(); !open {
-				log.Printf("Skipping portfolio session: Market closed (%s)", reason)
-				return
-			}
-			runPortfolioSession(db, portfolioAgent)
+		// One job per intraday slot. Each is gated on the live market window,
+		// so the pre-close slot is correctly skipped on half-days (13:00
+		// close) where 15:30 is already after hours.
+		portfolioSlots := []struct {
+			schedule string
+			slot     string
+		}{
+			{cfg.CronSchedulePortfolioOpen, "open"},
+			{cfg.CronSchedulePortfolioMidday, "midday"},
+			{cfg.CronSchedulePortfolioClose, "close"},
 		}
 		riskJob := func() {
 			if open, _ := isMarketOpen(); !open {
@@ -291,8 +296,18 @@ func main() {
 			}()
 			runPortfolioEODSnapshot(cfg, db, emailClient, portfolioReader)
 		}
-		if _, err := c.AddFunc(cfg.CronSchedulePortfolio, portfolioJob); err != nil {
-			log.Fatalf("Failed to add portfolio session cron job: %v", err)
+		for _, ps := range portfolioSlots {
+			ps := ps
+			job := func() {
+				if open, reason := isMarketOpen(); !open {
+					log.Printf("Skipping portfolio %s session: market closed (%s)", ps.slot, reason)
+					return
+				}
+				runPortfolioSession(db, portfolioAgent, ps.slot)
+			}
+			if _, err := c.AddFunc(ps.schedule, job); err != nil {
+				log.Fatalf("Failed to add portfolio %s session cron job: %v", ps.slot, err)
+			}
 		}
 		if _, err := c.AddFunc(cfg.CronScheduleRisk, riskJob); err != nil {
 			log.Fatalf("Failed to add portfolio risk cron job: %v", err)
@@ -300,7 +315,7 @@ func main() {
 		if _, err := c.AddFunc(cfg.CronScheduleEODSnapshot, eodSnapshotJob); err != nil {
 			log.Fatalf("Failed to add portfolio EOD snapshot cron job: %v", err)
 		}
-		log.Printf("portfolio: crons registered (session=%s, risk=%s, eod=%s)", cfg.CronSchedulePortfolio, cfg.CronScheduleRisk, cfg.CronScheduleEODSnapshot)
+		log.Printf("portfolio: crons registered (open=%s, midday=%s, close=%s, risk=%s, eod=%s)", cfg.CronSchedulePortfolioOpen, cfg.CronSchedulePortfolioMidday, cfg.CronSchedulePortfolioClose, cfg.CronScheduleRisk, cfg.CronScheduleEODSnapshot)
 	}
 
 	// Daily Schwab refresh-token expiry warning (12:00 ET).
@@ -350,7 +365,7 @@ func main() {
 
 	log.Printf("VibeTradez portfolio manager started (API :%s)", cfg.ServerPort)
 	if portfolioAgent != nil {
-		log.Printf("Portfolio session schedule: %s (ET, mode=live)", cfg.CronSchedulePortfolio)
+		log.Printf("Portfolio session schedule: open=%s midday=%s close=%s (ET, mode=live)", cfg.CronSchedulePortfolioOpen, cfg.CronSchedulePortfolioMidday, cfg.CronSchedulePortfolioClose)
 	}
 
 	go checkClockSkew()
@@ -361,7 +376,7 @@ func main() {
 
 	if os.Getenv("RUN_ON_START") == "true" && portfolioAgent != nil {
 		log.Println("Running initial portfolio session...")
-		runPortfolioSession(db, portfolioAgent)
+		runPortfolioSession(db, portfolioAgent, "midday")
 	}
 
 	// One-time product updates. Each is self-gating via the sent_emails
@@ -499,4 +514,51 @@ func saveTranscript(db *store.Store, date, kind string, tr *transcript.Transcrip
 		return
 	}
 	log.Printf("transcript: saved %s for %s (%d events, %d output tokens, %dms)", kind, date, len(tr.Events), tr.Usage.OutputTokens, tr.DurationMS)
+}
+
+/*
+saveSessionTranscript persists one intraday session's transcript into the
+day's single "portfolio" row. The three daily sessions (open / midday /
+close) are merged in order so /transcripts/<date> renders the whole day as
+one continuous reasoning log, each session preceded by a labeled separator.
+The first session of the day merges into an empty prior, which just labels
+it. Best-effort: a read or unmarshal failure falls back to the merge against
+whatever prior state we recovered, so a transcript is never lost.
+*/
+func saveSessionTranscript(db *store.Store, date, slot string, tr *transcript.Transcript) {
+	if tr == nil {
+		return
+	}
+	sep := portfolioSessionSeparator(slot)
+	var prior transcript.Transcript
+	if view, err := db.GetTranscript(date, "portfolio"); err != nil {
+		log.Printf("transcript: read prior portfolio for %s failed: %v", date, err)
+	} else if view != nil {
+		prior.Model = view.Model
+		prior.DurationMS = view.DurationMS
+		if uerr := json.Unmarshal(view.Events, &prior.Events); uerr != nil {
+			log.Printf("transcript: unmarshal prior portfolio events for %s failed: %v", date, uerr)
+		}
+		if len(view.Usage) > 0 {
+			if uerr := json.Unmarshal(view.Usage, &prior.Usage); uerr != nil {
+				log.Printf("transcript: unmarshal prior portfolio usage for %s failed: %v", date, uerr)
+			}
+		}
+	}
+	merged := transcript.Merge(prior, *tr, sep)
+	saveTranscript(db, date, "portfolio", &merged)
+}
+
+// portfolioSessionSeparator labels each intraday session inside the merged
+// daily transcript so a reader can see where the open / midday / pre-close
+// passes begin.
+func portfolioSessionSeparator(slot string) string {
+	switch slot {
+	case "open":
+		return "═══ OPEN SESSION (≈9:45 AM ET) ═══"
+	case "close":
+		return "═══ PRE-CLOSE SESSION (≈3:30 PM ET) ═══"
+	default:
+		return "═══ MIDDAY SESSION (≈12:30 PM ET) ═══"
+	}
 }
