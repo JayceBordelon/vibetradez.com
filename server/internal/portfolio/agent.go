@@ -86,14 +86,14 @@ Anthropic API failure or unparseable final JSON, Run returns the partial
 decisions collected from successful tool calls plus an error so the caller
 can log and send the error-path email.
 */
-func (a *Agent) Run(ctx context.Context) (*Result, error) {
+func (a *Agent) Run(ctx context.Context, slot string) (*Result, error) {
 	snap, err := a.reader.Snapshot(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read portfolio snapshot: %w", err)
 	}
 
 	dispatcher := NewToolDispatcher(a.reader, a.exec, snap)
-	prompt := buildPrompt()
+	prompt := buildPrompt(slot)
 
 	rec := transcript.New()
 	start := time.Now()
@@ -463,11 +463,29 @@ and the prior session are NOT embedded here: the model reads them itself
 through get_portfolio and get_recent_decisions, so the prompt stays free of
 duplicated, per-day state.
 */
-func buildPrompt() string {
+func buildPrompt(slot string) string {
 	now := time.Now().In(easternTime())
 	today := now.Format("2006-01-02")
 	weekday := now.Weekday().String()
-	return fmt.Sprintf(SystemPrompt, today, weekday)
+	return fmt.Sprintf(SystemPrompt, today, weekday, slotDirective(slot))
+}
+
+/*
+slotDirective is the per-session paragraph interpolated into the prompt's
+third %s. There are three sessions a trading day and each has a distinct
+job: the open reacts to the overnight tape, midday is the primary read, and
+the pre-close positions for overnight. The cron passes the slot; an unknown
+or empty slot falls through to the midday directive.
+*/
+func slotDirective(slot string) string {
+	switch slot {
+	case "open":
+		return "RIGHT NOW you are the OPEN session (about 9:45 AM Eastern). The overnight tape and the opening move are your freshest information — gaps, pre-market headlines, earnings reactions. Spreads are still wider than they will be midday, so size entries carefully and favor liquid names. This is the session to cut a thesis that broke overnight or to press a clear, news-driven move; you get two more looks today, so you need not do everything at once."
+	case "close":
+		return "RIGHT NOW you are the PRE-CLOSE session (about 3:30 PM Eastern), your last look before the 16:00 close. Decide what to carry overnight versus trim now, manage anything near option expiry, and clean up any dangling exits. A LIMIT order you place now may not fill before the close, so price closes to execute and treat anything left working as overnight risk."
+	default:
+		return "RIGHT NOW you are the MIDDAY session (about 12:30 PM Eastern). Spreads have settled and the morning's information is on the tape. This is your primary read of the book and your deepest research pass: set the day's core positioning, and carry out or consciously revise the action items your open session left you."
+	}
 }
 
 func easternTime() *time.Location {

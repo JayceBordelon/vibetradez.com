@@ -185,3 +185,52 @@ func (r *Recorder) Transcript() Transcript {
 	}
 	return Transcript{Model: r.model, Events: r.events, Usage: r.usage, DurationMS: r.durationMS}
 }
+
+/*
+Merge folds a later intraday session's transcript into the day's existing
+one so the three daily sessions (open / midday / close) share a single
+(date, kind) row and render as one continuous reasoning log. The later
+events are appended after the prior ones with their Round numbers shifted
+past the prior session's highest round, so the UI's per-round grouping
+stays monotonic across the seam. A non-empty separatorLabel is inserted as
+a narration event marking where the new session begins. Token usage and
+wall-clock duration are summed; the model id prefers the later session's
+(they are normally identical). Merging into a zero-value prior (no row yet)
+just returns next with the separator prepended, so the first session of the
+day is handled by the same path.
+*/
+func Merge(prior, next Transcript, separatorLabel string) Transcript {
+	offset := 0
+	for _, e := range prior.Events {
+		if e.Round+1 > offset {
+			offset = e.Round + 1
+		}
+	}
+	merged := make([]Event, 0, len(prior.Events)+len(next.Events)+1)
+	merged = append(merged, prior.Events...)
+	if separatorLabel != "" {
+		merged = append(merged, Event{Round: offset, Type: EventText, Text: separatorLabel})
+	}
+	for _, e := range next.Events {
+		e.Round += offset
+		merged = append(merged, e)
+	}
+	model := next.Model
+	if model == "" {
+		model = prior.Model
+	}
+	return Transcript{
+		Model:  model,
+		Events: merged,
+		Usage: Usage{
+			InputTokens:         prior.Usage.InputTokens + next.Usage.InputTokens,
+			OutputTokens:        prior.Usage.OutputTokens + next.Usage.OutputTokens,
+			CacheReadTokens:     prior.Usage.CacheReadTokens + next.Usage.CacheReadTokens,
+			CacheCreationTokens: prior.Usage.CacheCreationTokens + next.Usage.CacheCreationTokens,
+			WebSearchRequests:   prior.Usage.WebSearchRequests + next.Usage.WebSearchRequests,
+			WebFetchRequests:    prior.Usage.WebFetchRequests + next.Usage.WebFetchRequests,
+			Rounds:              prior.Usage.Rounds + next.Usage.Rounds,
+		},
+		DurationMS: prior.DurationMS + next.DurationMS,
+	}
+}

@@ -149,7 +149,7 @@ export default async function LandingPage() {
 
       {/* ══ 02 · THE DAILY LOOP ══ */}
       <LogSection id="loop" command="crontab -l" comment="the whole schedule" flip title={<>Every weekday, it <span className="phosphor text-green">starts from scratch.</span></>} aside={<CronTable />}>
-        <p>No fixed strategy. Each midday session it checks the positions, the news, and the tape, then decides to buy, trim, sell, or hide in cash and call that discipline. It holds what it believes in across days, which is either conviction or stubbornness depending on next week.</p>
+        <p>No fixed strategy. Three times a day — at the open, midday, and before the close — it checks the positions, the news and retail hype, and the tape, then decides to buy, trim, sell, or hide in cash and call that discipline. It holds what it believes in across days, which is either conviction or stubbornness depending on next week.</p>
       </LogSection>
 
       {/* ══ 03 · THE GUARDRAILS ══ */}

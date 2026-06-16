@@ -84,9 +84,11 @@ type Config struct {
 		Portfolio-manager cron schedules. The manager runs live whenever
 		TradingEnabled is true.
 	*/
-	CronSchedulePortfolio   string
-	CronScheduleRisk        string
-	CronScheduleEODSnapshot string
+	CronSchedulePortfolioOpen   string
+	CronSchedulePortfolioMidday string
+	CronSchedulePortfolioClose  string
+	CronScheduleRisk            string
+	CronScheduleEODSnapshot     string
 }
 
 /*
@@ -211,13 +213,20 @@ func Load() *Config {
 		TradingEnabled:          os.Getenv("TRADING_ENABLED") == "true",
 		PublicBaseURL:           getEnvOrDefault("PUBLIC_BASE_URL", "https://vibetradez.com"),
 		OperatorEmail:           getEnvOrDefault("OPERATOR_EMAIL", "bordelonjayce@gmail.com"),
-		// Portfolio agent fires ~12:30 ET: spreads have settled, the
-		// morning's information is on the tape, and limit orders still
-		// have hours to fill. The risk cron's remaining duty is the
-		// 15-minute order-status reconcile during market hours. EOD
-		// snapshot writes the equity curve at 16:00 ET.
-		CronSchedulePortfolio:   getEnvOrDefault("CRON_SCHEDULE_PORTFOLIO", "30 12 * * 1-5"),
-		CronScheduleRisk:        getEnvOrDefault("CRON_SCHEDULE_RISK", "*/15 10-15 * * 1-5"),
-		CronScheduleEODSnapshot: getEnvOrDefault("CRON_SCHEDULE_EOD_SNAPSHOT", "0 16 * * 1-5"),
+		// The portfolio agent runs three sessions per trading day, each a
+		// fresh pass with the full tool surface: the open (~9:45 ET, after the
+		// opening spreads settle), midday (~12:30 ET, the main read), and
+		// pre-close (~15:30 ET, leaving limit orders time to fill before the
+		// 16:00 recap). Each is gated on the live market window, so the
+		// pre-close slot is skipped on half-days where 15:30 is past the 13:00
+		// close. Midday falls back to the legacy CRON_SCHEDULE_PORTFOLIO
+		// override so an existing deployment keeps its tuned time. The risk
+		// cron reconciles order status every 15 min during market hours; the
+		// EOD snapshot writes the equity curve at 16:00 ET.
+		CronSchedulePortfolioOpen:   getEnvOrDefault("CRON_SCHEDULE_PORTFOLIO_OPEN", "45 9 * * 1-5"),
+		CronSchedulePortfolioMidday: getEnvOrDefault("CRON_SCHEDULE_PORTFOLIO_MIDDAY", getEnvOrDefault("CRON_SCHEDULE_PORTFOLIO", "30 12 * * 1-5")),
+		CronSchedulePortfolioClose:  getEnvOrDefault("CRON_SCHEDULE_PORTFOLIO_CLOSE", "30 15 * * 1-5"),
+		CronScheduleRisk:            getEnvOrDefault("CRON_SCHEDULE_RISK", "*/15 10-15 * * 1-5"),
+		CronScheduleEODSnapshot:     getEnvOrDefault("CRON_SCHEDULE_EOD_SNAPSHOT", "0 16 * * 1-5"),
 	}
 }

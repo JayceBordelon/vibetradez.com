@@ -50,13 +50,23 @@ export function EquityReadout({ equity }: { equity: number | null }) {
   );
 }
 
-/* ── crontab -l. The three real crons that drive the day, verbatim from
+/* ── crontab -l. The five real crons that drive the day, verbatim from
       the server, with the punchline that no strategy lives here. ── */
 const CRONS = [
   {
+    expr: "45 9 * * MON-FRI",
+    job: "the open",
+    detail: "reacts to the overnight tape and the opening move, once spreads settle",
+  },
+  {
     expr: "30 12 * * MON-FRI",
-    job: "the session",
-    detail: "reads the book, the news, and the tape, then trades",
+    job: "midday",
+    detail: "the primary read: the book, the news and hype, and the tape, then trades",
+  },
+  {
+    expr: "30 15 * * MON-FRI",
+    job: "the pre-close",
+    detail: "decides what to carry overnight versus trim, before the bell",
   },
   {
     expr: "*/15 10-15 * * MON-FRI",
@@ -133,7 +143,7 @@ const TOOL_DIRS: ToolDir[] = [
     bits: "dr--r--r--",
     dir: "reading/",
     note: "look, never touch",
-    names: ["get_portfolio", "get_stock_quotes", "get_option_chain", "get_price_history", "get_fundamentals", "get_track_record", "get_market_context", "get_recent_decisions", "get_order_status", "web_search", "web_fetch"],
+    names: ["get_portfolio", "get_stock_quotes", "get_option_chain", "get_price_history", "get_fundamentals", "get_track_record", "get_market_context", "get_recent_decisions", "get_order_status", "get_ticker_news", "get_trending_tickers", "get_social_sentiment", "web_search", "web_fetch"],
   },
   {
     bits: "drwx------",

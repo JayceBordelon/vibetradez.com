@@ -11,6 +11,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
+	"vibetradez.com/internal/marketnews"
 	"vibetradez.com/internal/schwab"
 )
 
@@ -51,6 +52,15 @@ type PortfolioReader interface {
 	// win/loss stats split by instrument, and the account-vs-SPY benchmark
 	// race. The agent's quantified feedback signal (get_track_record).
 	TrackRecord(recentTrips int) (TrackRecord, error)
+	// TickerNews returns recent free headlines (Yahoo + Google News RSS) for
+	// the given symbols — keyless public sources behind get_ticker_news.
+	TickerNews(symbols []string, perSymbol int) ([]marketnews.NewsItem, error)
+	// TrendingTickers returns the StockTwits trending symbols (hottest first)
+	// for discovering names not already on the book (get_trending_tickers).
+	TrendingTickers(limit int) ([]marketnews.TrendingTicker, error)
+	// SocialSentiment returns the aggregate retail bull/bear read for a symbol
+	// (get_social_sentiment).
+	SocialSentiment(symbol string) (marketnews.Sentiment, error)
 }
 
 /*
@@ -195,6 +205,33 @@ func ToolDefinitions() []anthropic.ToolUnionParam {
 			InputSchema: anthropic.ToolInputSchemaParam{Properties: map[string]any{}, Required: []string{}},
 		}},
 		{OfTool: &anthropic.ToolParam{
+			Name:        "get_ticker_news",
+			Description: anthropic.String("Recent free headlines for one or more tickers, merged from Yahoo Finance and Google News and deduped, newest first. Catch catalysts, earnings reactions, upgrades/downgrades, and breaking news before you size or hold a name. Returns headline, source, url, and publish time — read the dates: the open session especially wants TODAY's news."),
+			InputSchema: anthropic.ToolInputSchemaParam{
+				Properties: map[string]any{
+					"symbols":    str("Comma-separated tickers, e.g. 'NVDA,AAPL'."),
+					"per_symbol": map[string]any{"type": "integer", "description": "Max headlines per ticker (default 5)."},
+				},
+				Required: []string{"symbols"},
+			},
+		}},
+		{OfTool: &anthropic.ToolParam{
+			Name:        "get_trending_tickers",
+			Description: anthropic.String("The symbols retail is talking about most right now (StockTwits trending, hottest first). Use it to DISCOVER hot names you are not already watching, then research them with quotes, price history, news, and fundamentals before acting. Hype is a lead, never a thesis."),
+			InputSchema: anthropic.ToolInputSchemaParam{
+				Properties: map[string]any{"limit": map[string]any{"type": "integer", "description": "Max trending tickers to return (default 15)."}},
+				Required:   []string{},
+			},
+		}},
+		{OfTool: &anthropic.ToolParam{
+			Name:        "get_social_sentiment",
+			Description: anthropic.String("Aggregate retail bull/bear read for a ticker from a sample of recent StockTwits posts: how many messages were sampled and the bullish vs bearish split. A crowd-mood gauge, not a fundamental signal — use it to judge whether a move is already crowded, not as a reason to trade."),
+			InputSchema: anthropic.ToolInputSchemaParam{
+				Properties: map[string]any{"symbol": str("Equity ticker.")},
+				Required:   []string{"symbol"},
+			},
+		}},
+		{OfTool: &anthropic.ToolParam{
 			Name:        "get_recent_decisions",
 			Description: anthropic.String("Your own recent moves and daily stance notes across prior sessions, plus the synopsis and action items you wrote at the end of your last session (your plan for today), so you can keep a coherent thesis instead of starting from scratch. Returns the latest moves, the last several stances, and prior_synopsis + prior_action_items."),
 			InputSchema: anthropic.ToolInputSchemaParam{
@@ -320,6 +357,12 @@ func (d *ToolDispatcher) Dispatch(ctx context.Context, name string, input json.R
 		return d.dispatchGetPriceHistory(input)
 	case "get_fundamentals":
 		return d.dispatchGetFundamentals(input)
+	case "get_ticker_news":
+		return d.dispatchGetTickerNews(input)
+	case "get_trending_tickers":
+		return d.dispatchGetTrendingTickers(input)
+	case "get_social_sentiment":
+		return d.dispatchGetSocialSentiment(input)
 	case "get_track_record":
 		return d.dispatchGetTrackRecord(input)
 	case "get_market_context":
@@ -376,6 +419,57 @@ func (d *ToolDispatcher) dispatchGetStockQuotes(input json.RawMessage) string {
 		return jsonError(fmt.Sprintf("get_stock_quotes: %v", err))
 	}
 	out, _ := json.Marshal(quotes)
+	return string(out)
+}
+
+func (d *ToolDispatcher) dispatchGetTickerNews(input json.RawMessage) string {
+	var args struct {
+		Symbols   string `json:"symbols"`
+		PerSymbol int    `json:"per_symbol"`
+	}
+	if err := json.Unmarshal(input, &args); err != nil {
+		return jsonError("invalid arguments to get_ticker_news")
+	}
+	symbols := splitCSV(args.Symbols)
+	if len(symbols) == 0 {
+		return jsonError("get_ticker_news: symbols is empty")
+	}
+	items, err := d.reader.TickerNews(symbols, args.PerSymbol)
+	if err != nil {
+		return jsonError(fmt.Sprintf("get_ticker_news: %v", err))
+	}
+	out, _ := json.Marshal(map[string]any{"news": items})
+	return string(out)
+}
+
+func (d *ToolDispatcher) dispatchGetTrendingTickers(input json.RawMessage) string {
+	var args struct {
+		Limit int `json:"limit"`
+	}
+	_ = json.Unmarshal(input, &args)
+	items, err := d.reader.TrendingTickers(args.Limit)
+	if err != nil {
+		return jsonError(fmt.Sprintf("get_trending_tickers: %v", err))
+	}
+	out, _ := json.Marshal(map[string]any{"trending": items})
+	return string(out)
+}
+
+func (d *ToolDispatcher) dispatchGetSocialSentiment(input json.RawMessage) string {
+	var args struct {
+		Symbol string `json:"symbol"`
+	}
+	if err := json.Unmarshal(input, &args); err != nil {
+		return jsonError("invalid arguments to get_social_sentiment")
+	}
+	if args.Symbol == "" {
+		return jsonError("get_social_sentiment: symbol is required")
+	}
+	s, err := d.reader.SocialSentiment(args.Symbol)
+	if err != nil {
+		return jsonError(fmt.Sprintf("get_social_sentiment: %v", err))
+	}
+	out, _ := json.Marshal(s)
 	return string(out)
 }
 

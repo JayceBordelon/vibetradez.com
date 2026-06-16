@@ -17,19 +17,20 @@ import (
 )
 
 /*
-runPortfolioSession is the daily portfolio-agent cron body (~12:30 ET). It
-runs one decision session, then persists the committed moves, the holds,
+runPortfolioSession is one portfolio-agent cron body, fired once per slot
+(open ~9:45, midday ~12:30, pre-close ~15:30 ET). It runs one decision
+session, then persists the committed moves, the holds,
 and the overall stance. Moves are fire-and-forget LIMIT orders (the broker
 fills asynchronously); we record them as 'submitted'. Persistence is here,
 not in the executor adapter, because the dispatcher's recorded decisions
 carry the rationale the executor never sees.
 */
-func runPortfolioSession(db *store.Store, agent *portfolio.Agent) {
+func runPortfolioSession(db *store.Store, agent *portfolio.Agent, slot string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 	defer cancel()
 
 	date := todayDate()
-	result, err := agent.Run(ctx)
+	result, err := agent.Run(ctx, slot)
 	if err != nil {
 		log.Printf("portfolio: session error: %v", err)
 		// Still fall through: a partial result may carry moves that did
@@ -49,7 +50,7 @@ func runPortfolioSession(db *store.Store, agent *portfolio.Agent) {
 	if err != nil && result.Stance == "" && len(result.Decisions) == 0 {
 		result.Stance = "Session did not complete. No trades were placed."
 		if result.Summary == "" {
-			result.Summary = "The daily session ended before a decision was reached, so the book is unchanged and no orders were submitted today."
+			result.Summary = "This session ended before a decision was reached, so the book is unchanged and no orders were submitted in it."
 		}
 	}
 
@@ -68,7 +69,7 @@ func runPortfolioSession(db *store.Store, agent *portfolio.Agent) {
 	// public account, so balances are shown, not redacted).
 	// The single subscriber recap goes out at the EOD snapshot cron (16:00),
 	// not here, so it reflects the full day and the closing book.
-	saveTranscript(db, date, "portfolio", result.Transcript)
+	saveSessionTranscript(db, date, slot, result.Transcript)
 }
 
 /*
