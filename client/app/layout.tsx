@@ -34,7 +34,7 @@ export const metadata: Metadata = {
     template: "%s | VibeTradez",
   },
   description:
-    "A live experiment in letting one silly model run real money. Every weekday Claudia looks at the account, the news, and the market, then decides what to do: buy a stock, buy a call or a put, trim, sell, or hold cash. She holds what she believes in across days, all sized within hard caps. Watch the book live and get the daily recap, free.",
+    "A live experiment in letting one silly model run real money. Every weekday Claudia looks at the account, the news, and the market, then decides what to do: buy a call or a put, trim, sell, or hold cash. She trades options only, holds what she believes in across days, all sized within hard caps. Watch the book live and get the recap, free.",
   keywords: ["AI trading", "AI portfolio manager", "stocks", "options", "Claude", "autonomous trading", "brokerage account"],
   authors: [{ name: "Jayce Bordelon", url: "https://jaycebordelon.com" }],
   openGraph: {
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     url: "https://vibetradez.com",
     siteName: "VibeTradez",
     title: "VibeTradez | An AI Runs a Real Brokerage Account",
-    description: "One silly model running one real brokerage account. Watch the book live and get the daily recap, free.",
+    description: "One silly model running one real brokerage account. Watch the book live and get the recap, free.",
     images: [
       {
         url: "/og/landing.png",
@@ -56,7 +56,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "VibeTradez | An AI Runs a Real Brokerage Account",
-    description: "One silly model running one real brokerage account. Watch the book live and get the daily recap, free.",
+    description: "One silly model running one real brokerage account. Watch the book live and get the recap, free.",
     creator: "@JayceBordelon",
     images: ["/og/landing.png"],
   },

@@ -8,64 +8,8 @@ import (
 	"strings"
 )
 
-//go:embed portfolio_update.html schwab_reauth.html analysis_window.html live_trading_update.html full_discretion_update.html options_only_update.html
+//go:embed schwab_reauth.html analysis_window.html live_trading_update.html options_only_update.html
 var templateFS embed.FS
-
-// ── Daily portfolio-update email ──
-
-// PortfolioMove is one row in the daily portfolio-update email: a buy,
-// sell, or hold the model committed, with its rationale. IsBuy/IsSell/IsHold
-// drive the badge color (html/template can't switch on a string cleanly).
-type PortfolioMove struct {
-	Action    string // "Buy" | "Sell" | "Hold"
-	Label     string // "AAPL" or "MDT 79C 2026-04-17"; empty for a hold
-	Notional  float64
-	Rationale string
-	IsBuy     bool
-	IsSell    bool
-	IsHold    bool
-}
-
-// PortfolioHolding is one row in the email's current-holdings table.
-type PortfolioHolding struct {
-	Label         string
-	MarketValue   float64
-	UnrealizedPnL float64
-}
-
-/*
-PortfolioUpdateData backs the daily subscriber portfolio-update email. It
-describes the single managed brokerage account: the day's stance, the moves
-the model made with their reasons, and the current book.
-*/
-type PortfolioUpdateData struct {
-	Date     string // raw YYYY-MM-DD (links)
-	DateLong string // "June 4, 2026" (display)
-	Equity   float64
-	// DayChangePct is today's move vs the prior close; HasDayChange is false
-	// when there isn't a prior curve point to compare against.
-	DayChangePct  float64
-	HasDayChange  bool
-	SettledCash   float64
-	InvestedPct   float64
-	UnrealizedPnL float64 // total open unrealized across the book
-	// Summary is today's synopsis (write_summary); ActionItems is the plan for
-	// the next session, headed by ActionItemsLabel ("Tomorrow's…"/"Next week's…").
-	// Stance is the shorter positioning note backing the synopsis.
-	Summary          string
-	ActionItems      string
-	ActionItemsLabel string
-	Stance           string
-	Moves            []PortfolioMove
-	Holdings         []PortfolioHolding
-	TranscriptURL    string
-	DashboardURL     string
-}
-
-// RenderPortfolioUpdate renders the daily subscriber portfolio-update email.
-func RenderPortfolioUpdate(d PortfolioUpdateData) (string, error) {
-	return renderOne("portfolio_update.html", d)
-}
 
 // ── Schwab re-auth operator nag ──
 
@@ -115,23 +59,6 @@ type LiveTradingUpdateData struct {
 
 func RenderLiveTradingUpdate(d LiveTradingUpdateData) (string, error) {
 	return renderOne("live_trading_update.html", d)
-}
-
-// ── One-time full-discretion product update ──
-
-// FullDiscretionUpdateData backs the one-time product-update email
-// announcing that the 50/50 stock-vs-options split was removed and the
-// model now allocates the account however it judges best, with the
-// settled-cash rule as the only buy-side gate that remains. BaseURL is the
-// public site root (no trailing slash); TranscriptURL points at the day's
-// session.
-type FullDiscretionUpdateData struct {
-	BaseURL       string
-	TranscriptURL string
-}
-
-func RenderFullDiscretionUpdate(d FullDiscretionUpdateData) (string, error) {
-	return renderOne("full_discretion_update.html", d)
 }
 
 // ── One-time options-only product update ──

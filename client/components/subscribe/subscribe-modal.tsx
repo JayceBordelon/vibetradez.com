@@ -15,13 +15,13 @@ export function SubscribeModal({ children, open, onOpenChange }: { children?: Re
           <DialogTitle className="font-mono text-lg font-extrabold uppercase tracking-tight">
             Sign in or <span className="text-green">sign up</span>
           </DialogTitle>
-          <DialogDescription>One click with Google gets you the daily recap email after the close.</DialogDescription>
+          <DialogDescription>One click with Google gets you the recap email each session the model trades.</DialogDescription>
         </DialogHeader>
 
         <div className="flex gap-2">
           <div className="flex-1 border border-dashed border-border bg-muted p-2.5 text-center">
             <div className="font-mono text-lg font-extrabold text-green">1</div>
-            <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Daily Recap</div>
+            <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Session Recaps</div>
           </div>
           <div className="flex-1 border border-dashed border-border bg-muted p-2.5 text-center">
             <div className="font-mono text-lg font-extrabold text-green">16:00</div>

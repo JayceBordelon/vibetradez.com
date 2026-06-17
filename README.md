@@ -61,7 +61,7 @@ The model concentrates and sizes however it judges best within those caps, and i
      postgres    the book, sessions, transcripts, subscribers
      schwab      market data + the Trader API (orders, positions, streams)
      anthropic   Claudia, the portfolio agent
-     resend      the daily recap email
+     resend      the model-authored recap email
 ```
 
 Sign-in is in-process Google OAuth on the trading-server. Live quotes stream from Schwab's WebSocket and fan out to browsers as SSE. The frontend talks to nothing outside the droplet.
