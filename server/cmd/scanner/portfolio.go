@@ -73,63 +73,49 @@ func runPortfolioSession(db *store.Store, agent *portfolio.Agent, slot string) {
 }
 
 /*
-sendDailyRecapEmail builds and sends the single end-of-day recap to
-subscribers at the 16:00 close. It pulls the whole day from the record:
-Claude's session summary + stance, every move it committed with the reason,
-the closing book and headline numbers (equity, day change, invested, cash,
-unrealized), and a link to the full tool-by-tool transcript on the site.
-Subscribers are watchers, so this is informational. Best-effort: a render
-or send failure is logged, never fatal. snap is the closing snapshot the
-EOD cron already fetched (so we don't hit the broker twice).
+recapEmailSender implements portfolio.RecapSender. The model now authors the
+recap email body itself (via the send_recap_email tool) and this delivers it
+to every subscriber — replacing the old templated end-of-day recap. Claude
+writes one per session, but only when it actually traded and at most once per
+session (both gated in the tool layer). Best-effort and per-recipient (so one
+bad address can't sink the batch); a per-recipient unsubscribe link is
+guaranteed even if the model forgot it.
 */
-func sendDailyRecapEmail(cfg *config.Config, db *store.Store, emailClient *email.Client, date string, snap portfolio.Snapshot, dayChangePct float64, hasDayChange bool) {
-	recipients := getRecipients(db)
+type recapEmailSender struct {
+	cfg    *config.Config
+	db     *store.Store
+	client *email.Client
+}
+
+func (s *recapEmailSender) SendRecapEmail(_ context.Context, subject, html string) (int, error) {
+	recipients := getRecipients(s.db)
 	if len(recipients) == 0 {
-		return
+		log.Printf("portfolio recap: no subscribers, nothing to send")
+		return 0, nil
 	}
-
-	_, stance, summary, actionItems, _, _ := db.GetPortfolioSession(date)
-	decisions, derr := db.GetPortfolioDecisions(date)
-	if derr != nil {
-		log.Printf("portfolio recap: read decisions: %v", derr)
-	}
-
-	base := strings.TrimRight(cfg.PublicBaseURL, "/")
-	data := templates.PortfolioUpdateData{
-		Date:             date,
-		DateLong:         longDate(date),
-		Equity:           snap.Equity,
-		DayChangePct:     dayChangePct,
-		HasDayChange:     hasDayChange,
-		SettledCash:      snap.SettledCash,
-		Summary:          strings.TrimSpace(summary),
-		Stance:           strings.TrimSpace(stance),
-		ActionItems:      strings.TrimSpace(actionItems),
-		ActionItemsLabel: actionItemsLabel(date),
-		Moves:            movesFromRows(decisions),
-		Holdings:         holdingsForEmail(snap.Positions),
-		TranscriptURL:    base + "/transcripts/" + date,
-		DashboardURL:     base + "/dashboard",
-	}
-	if snap.Equity > 0 {
-		invested := snap.Equity - snap.SettledCash - snap.UnsettledCash
-		data.InvestedPct = invested / snap.Equity * 100
-	}
-	for _, p := range snap.Positions {
-		data.UnrealizedPnL += p.MarkValue - p.CostBasis
-	}
-
-	html, err := templates.RenderPortfolioUpdate(data)
-	if err != nil {
-		log.Printf("portfolio recap: render email: %v", err)
-		return
-	}
-	subject := fmt.Sprintf("VibeTradez daily recap: %s", data.DateLong)
-	res := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, html, unsubURLBuilder(cfg))
-	log.Printf("portfolio recap: email sent to %d/%d subscribers", res.Succeeded, res.Total)
+	res := s.client.SendPersonalizedToList(s.cfg.EmailFrom, recipients, subject, ensureUnsubscribe(html), unsubURLBuilder(s.cfg))
+	log.Printf("portfolio recap: model-authored email sent to %d/%d subscribers", res.Succeeded, res.Total)
 	if res.Failed > 0 {
 		log.Printf("portfolio recap: email failures: %s", res.FailureDetail())
 	}
+	if res.Succeeded == 0 && res.Failed > 0 {
+		return 0, fmt.Errorf("all %d recipient sends failed", res.Failed)
+	}
+	return res.Succeeded, nil
+}
+
+// ensureUnsubscribe guarantees the per-recipient unsubscribe placeholder is in
+// the model-authored HTML (bulk-email compliance): if the model left it out,
+// append a minimal footer carrying it just before </body>.
+func ensureUnsubscribe(html string) string {
+	if strings.Contains(html, "@@VT_UNSUBSCRIBE_URL@@") {
+		return html
+	}
+	footer := `<p style="margin:16px 0 0;font-size:11px;color:#94a3b8;">VibeTradez is one real account run by an AI. Not financial advice. <a href="@@VT_UNSUBSCRIBE_URL@@" style="color:#94a3b8;text-decoration:underline;">Unsubscribe</a></p>`
+	if i := strings.LastIndex(strings.ToLower(html), "</body>"); i >= 0 {
+		return html[:i] + footer + html[i:]
+	}
+	return html + footer
 }
 
 // analysisWindowKey is the sent_emails ledger key for the one-time product
@@ -360,83 +346,6 @@ func longDate(date string) string {
 	return t.Format("January 2, 2006")
 }
 
-// actionItemsLabel frames the next-session plan: after a Friday (or weekend)
-// the next session is next week, otherwise it's tomorrow.
-func actionItemsLabel(date string) string {
-	t, err := time.Parse("2006-01-02", date)
-	if err != nil {
-		return "Action items for next session"
-	}
-	switch t.Weekday() {
-	case time.Friday, time.Saturday, time.Sunday:
-		return "Next week's action items"
-	default:
-		return "Tomorrow's action items"
-	}
-}
-
-// movesFromRows maps persisted decision rows to the email's move list.
-func movesFromRows(rows []store.PortfolioDecisionRow) []templates.PortfolioMove {
-	out := make([]templates.PortfolioMove, 0, len(rows))
-	for _, d := range rows {
-		m := templates.PortfolioMove{Notional: d.Notional, Rationale: d.Rationale}
-		at := portfolio.AssetType(d.AssetType)
-		switch d.Action {
-		case "buy_equity", "buy_option":
-			m.Action = "Buy"
-			m.IsBuy = true
-			m.Label = instrumentLabel(at, d.Symbol, d.Underlying)
-		case "sell_equity", "sell_option":
-			m.Action = "Sell"
-			m.IsSell = true
-			m.Label = instrumentLabel(at, d.Symbol, d.Underlying)
-		default:
-			m.Action = "Hold"
-			m.IsHold = true
-			if d.Symbol != "" {
-				m.Label = instrumentLabel(at, d.Symbol, d.Underlying)
-			}
-		}
-		out = append(out, m)
-	}
-	return out
-}
-
-func holdingsForEmail(positions []portfolio.Position) []templates.PortfolioHolding {
-	out := make([]templates.PortfolioHolding, 0, len(positions))
-	for _, p := range positions {
-		label := p.Symbol
-		if p.AssetType == portfolio.AssetOption {
-			label = optionLabel(p.Underlying, p.ContractType, p.Strike, p.Expiration)
-		}
-		out = append(out, templates.PortfolioHolding{
-			Label:         label,
-			MarketValue:   p.MarkValue,
-			UnrealizedPnL: p.MarkValue - p.CostBasis,
-		})
-	}
-	return out
-}
-
-// instrumentLabel renders a friendly position label. For options it decodes
-// the OCC symbol to "UNDERLYING STRIKE C/P EXP"; for equity it's the ticker.
-func instrumentLabel(assetType portfolio.AssetType, symbol, underlying string) string {
-	if assetType == portfolio.AssetOption {
-		if _, exp, ctype, strike, err := exec.DecodeOCCSymbol(symbol); err == nil {
-			return optionLabel(underlying, ctype, strike, exp)
-		}
-	}
-	return symbol
-}
-
-func optionLabel(underlying, contractType string, strike float64, expiration string) string {
-	letter := "C"
-	if contractType == "PUT" {
-		letter = "P"
-	}
-	return fmt.Sprintf("%s %g%s %s", underlying, strike, letter, expiration)
-}
-
 /*
 runPortfolioRisk is the intraday cron body (every 15 min, market hours).
 There is no intraday risk policy to enforce (the model has full discretion
@@ -551,19 +460,8 @@ func runPortfolioEODSnapshot(cfg *config.Config, db *store.Store, emailClient *e
 		log.Printf("portfolio EOD snapshot: persist positions: %v", err)
 	}
 	log.Printf("portfolio EOD snapshot: equity $%.2f, high-water $%.2f, SPY %.2f, %d positions", snap.Equity, hwm, spyClose, len(posRows))
-
-	// Day change vs the prior close (the curve now ends with today's point).
-	dayChangePct, hasDayChange := 0.0, false
-	if pts, err := db.GetEquityCurve("0000-00-00", todayDate()); err == nil && len(pts) >= 2 {
-		prev := pts[len(pts)-2].AccountEquity
-		if prev > 0 {
-			dayChangePct = (snap.Equity - prev) / prev * 100
-			hasDayChange = true
-		}
-	}
-
-	// The single subscriber recap for the day goes out here, at the close.
-	sendDailyRecapEmail(cfg, db, emailClient, todayDate(), snap, dayChangePct, hasDayChange)
+	// No recap email is sent here anymore: the model writes and sends its own
+	// recap at the end of each session it trades, via the send_recap_email tool.
 }
 
 // fetchSPYClose reads SPY's latest/close mark for the benchmark column.

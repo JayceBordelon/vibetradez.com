@@ -54,6 +54,7 @@ type Agent struct {
 	model  string
 	reader PortfolioReader
 	exec   PortfolioExecutor
+	recap  RecapSender
 }
 
 /*
@@ -72,6 +73,11 @@ func NewAgent(apiKey, model string, reader PortfolioReader, exec PortfolioExecut
 		exec:   exec,
 	}
 }
+
+// SetRecapSender wires the email sender the agent's send_recap_email tool uses.
+// Optional: left unset, the tool refuses gracefully. cmd/scanner sets it once
+// the email client and subscriber store are available.
+func (a *Agent) SetRecapSender(s RecapSender) { a.recap = s }
 
 /*
 Run is the agent entry point. It reads the live account snapshot, invokes
@@ -93,6 +99,7 @@ func (a *Agent) Run(ctx context.Context, slot string) (*Result, error) {
 	}
 
 	dispatcher := NewToolDispatcher(a.reader, a.exec, snap)
+	dispatcher.SetRecapSender(a.recap)
 	prompt := buildPrompt(slot)
 
 	rec := transcript.New()

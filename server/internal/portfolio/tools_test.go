@@ -216,3 +216,56 @@ func TestDispatch_Hold(t *testing.T) {
 		t.Fatal("hold without symbol should error")
 	}
 }
+
+type fakeRecap struct {
+	calls    int
+	lastSubj string
+}
+
+func (f *fakeRecap) SendRecapEmail(_ context.Context, subject, _ string) (int, error) {
+	f.calls++
+	f.lastSubj = subject
+	return 7, nil
+}
+
+// send_recap_email is gated: it refuses on a hold-only session, sends once
+// after a real trade, and refuses a second send in the same session.
+func TestDispatch_SendRecapEmail(t *testing.T) {
+	recap := &fakeRecap{}
+	d := NewToolDispatcher(&fakeReader{}, &fakeExec{}, baseSnapshot())
+	d.SetRecapSender(recap)
+
+	args := func() json.RawMessage {
+		return mustJSON(t, map[string]any{"subject": "VibeTradez recap", "html": "<p>today's moves</p> @@VT_UNSUBSCRIBE_URL@@"})
+	}
+
+	// No trade yet → refused, and the sender is never touched.
+	if r := d.Dispatch(context.Background(), "send_recap_email", args()); !isErrResult(r) {
+		t.Fatalf("recap on a no-trade session should be refused, got: %s", r)
+	}
+	if recap.calls != 0 {
+		t.Fatalf("a refused recap must not send, got %d sends", recap.calls)
+	}
+
+	// Make a real trade.
+	buy := mustJSON(t, map[string]any{"occ_symbol": "NVDA  260116C1", "underlying": "NVDA", "contract_type": "CALL", "strike": 150.0, "expiration": "2026-01-16", "contracts": 1, "limit_price": 4.0, "rationale": "x"})
+	if r := d.Dispatch(context.Background(), "buy_option", buy); isErrResult(r) {
+		t.Fatalf("buy should pass, got: %s", r)
+	}
+
+	// Now the recap sends, exactly once, with the model's subject.
+	if r := d.Dispatch(context.Background(), "send_recap_email", args()); isErrResult(r) {
+		t.Fatalf("recap after a trade should send, got: %s", r)
+	}
+	if recap.calls != 1 || recap.lastSubj != "VibeTradez recap" {
+		t.Fatalf("recap should have sent once with the subject, got calls=%d subj=%q", recap.calls, recap.lastSubj)
+	}
+
+	// A second send in the same session is refused (at most one per session).
+	if r := d.Dispatch(context.Background(), "send_recap_email", args()); !isErrResult(r) {
+		t.Fatalf("a second recap in one session should be refused, got: %s", r)
+	}
+	if recap.calls != 1 {
+		t.Fatalf("only one recap per session, got %d sends", recap.calls)
+	}
+}
