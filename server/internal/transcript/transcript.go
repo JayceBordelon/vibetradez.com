@@ -31,6 +31,11 @@ const (
 	EventToolUse EventType = "tool_use"
 	// EventToolResult is the result string we fed back for a tool call.
 	EventToolResult EventType = "tool_result"
+	// EventSessionMarker labels the seam between two intraday sessions merged
+	// into one day's transcript (open / midday / pre-close). Its Text is the
+	// human session label; the UI renders it as a session divider and builds
+	// the day's session jump bar from these markers.
+	EventSessionMarker EventType = "session_marker"
 )
 
 /*
@@ -193,7 +198,8 @@ one so the three daily sessions (open / midday / close) share a single
 events are appended after the prior ones with their Round numbers shifted
 past the prior session's highest round, so the UI's per-round grouping
 stays monotonic across the seam. A non-empty separatorLabel is inserted as
-a narration event marking where the new session begins. Token usage and
+a session-marker event (EventSessionMarker) marking where the new session
+begins, so the UI can render a session divider and jump bar. Token usage and
 wall-clock duration are summed; the model id prefers the later session's
 (they are normally identical). Merging into a zero-value prior (no row yet)
 just returns next with the separator prepended, so the first session of the
@@ -209,7 +215,7 @@ func Merge(prior, next Transcript, separatorLabel string) Transcript {
 	merged := make([]Event, 0, len(prior.Events)+len(next.Events)+1)
 	merged = append(merged, prior.Events...)
 	if separatorLabel != "" {
-		merged = append(merged, Event{Round: offset, Type: EventText, Text: separatorLabel})
+		merged = append(merged, Event{Round: offset, Type: EventSessionMarker, Text: separatorLabel})
 	}
 	for _, e := range next.Events {
 		e.Round += offset

@@ -32,7 +32,7 @@ narration, tool calls, and their results.
 */
 export interface TranscriptEvent {
   round: number;
-  type: "text" | "thinking" | "tool_use" | "tool_result";
+  type: "text" | "thinking" | "tool_use" | "tool_result" | "session_marker";
   text?: string;
   tool_name?: string;
   tool_use_id?: string;

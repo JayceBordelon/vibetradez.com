@@ -6,24 +6,26 @@ import (
 )
 
 /*
-The portfolio manager has full discretion over what it holds and how it
-splits the account between stocks and options. There is no allocation
-split, no per-name concentration cap, no per-order cap, no drawdown
-breaker, no liquidity floor, and no session pacing: the model sizes and
-picks instruments however it judges best.
+The portfolio manager trades OPTIONS ONLY and sizes methodically rather
+than concentrating the account in a single bet. Equity buys are disabled
+entirely (see tools.go); legacy shares are liquidated through sell_equity.
 
-Two gates remain, enforced here, and neither is a risk preference:
+The buy-side gates enforced here, in order:
 
-  - The settled-cash rule (CheckBuy): a cash account cannot spend
-    unsettled sale proceeds until they settle at T+1. This is broker
-    compliance, not a view on how the money should be allocated.
-  - Sell validation (CheckSell): you cannot sell a position you do not
-    hold, or sell more than you hold.
+  - Settled-cash rule (CheckBuy): a cash account cannot spend unsettled
+    sale proceeds until they settle at T+1. Broker compliance.
+  - Per-position cap (CheckOptionSize): a single option position may not
+    exceed MaxSingleOptionFrac of account equity.
+  - Per-underlying cap (CheckUnderlyingExposure): total exposure to one
+    underlying may not exceed MaxPerUnderlyingFrac of account equity.
 
-Both are enforced at the tool layer (tools.go), which is the SOLE
-enforcement point. The broker entry point additionally re-checks one flat
-absolute order-cost ceiling (exec.MaxPortfolioOrderCostCeiling), a
-fat-finger backstop against code bugs, not a trading constraint.
+Sell validation (CheckSell): you cannot sell a position you do not hold,
+or sell more than you hold. Sells and de-risking are never blocked.
+
+All are enforced at the tool layer (tools.go), the SOLE enforcement point.
+The broker entry point additionally re-checks one flat absolute order-cost
+ceiling (exec.MaxPortfolioOrderCostCeiling), a fat-finger backstop against
+code bugs, not a trading constraint.
 */
 
 // floatTol absorbs floating-point noise so a buy sized to exactly the
@@ -99,4 +101,75 @@ func CheckSell(s Snapshot, m Move) *GuardError {
 		return nil
 	}
 	return guardErr("no_position", "no open position in %s to sell.", want)
+}
+
+/*
+Options-only sizing discipline. The mandate is to trade options only and to
+diversify rather than over-expose the account to one bet. Two soft risk
+limits, expressed as fractions of account equity, are made hard at the tool
+layer (the model is told the same limits in the prompt):
+
+  - MaxSingleOptionFrac: one option position may not exceed this share of
+    equity (per-position concentration).
+  - MaxPerUnderlyingFrac: total exposure to one underlying (all option
+    positions on that name plus the proposed buy) may not exceed this share.
+
+Both apply to option BUYS only; sells/de-risking are never blocked, and
+equity buys are disabled entirely. When equity is unknown (<= 0) the caps
+are skipped rather than blocking all trading.
+*/
+const (
+	MaxSingleOptionFrac  = 0.10
+	MaxPerUnderlyingFrac = 0.25
+)
+
+/*
+CheckOptionSize caps a single option position at MaxSingleOptionFrac of
+account equity, measured as the resulting exposure (the current mark of any
+existing position in the same contract plus the proposed buy's notional).
+Applies to option buys only; returns nil otherwise.
+*/
+func CheckOptionSize(s Snapshot, m Move) *GuardError {
+	if m.Action != ActionBuyOption || s.Equity <= 0 {
+		return nil
+	}
+	limit := MaxSingleOptionFrac * s.Equity
+	want := strings.ToUpper(strings.TrimSpace(m.Symbol))
+	existing := 0.0
+	for _, p := range s.Positions {
+		if p.AssetType == AssetOption && strings.ToUpper(strings.TrimSpace(p.Symbol)) == want {
+			existing += p.MarkValue
+		}
+	}
+	if existing+m.Notional > limit+floatTol {
+		return guardErr("position_too_large",
+			"this buy would put $%.2f into a single option position, over the per-position limit of $%.2f (about %.0f%% of $%.2f equity). Size down or spread across names.",
+			existing+m.Notional, limit, MaxSingleOptionFrac*100, s.Equity)
+	}
+	return nil
+}
+
+/*
+CheckUnderlyingExposure caps total exposure to one underlying at
+MaxPerUnderlyingFrac of account equity (every position keyed to that
+underlying plus the proposed buy). Applies to option buys only.
+*/
+func CheckUnderlyingExposure(s Snapshot, m Move) *GuardError {
+	if m.Action != ActionBuyOption || s.Equity <= 0 {
+		return nil
+	}
+	limit := MaxPerUnderlyingFrac * s.Equity
+	want := strings.ToUpper(strings.TrimSpace(m.Underlying))
+	existing := 0.0
+	for _, p := range s.Positions {
+		if strings.ToUpper(strings.TrimSpace(p.Underlying)) == want {
+			existing += p.MarkValue
+		}
+	}
+	if existing+m.Notional > limit+floatTol {
+		return guardErr("underlying_concentration",
+			"this buy would put $%.2f of total exposure into %s, over the per-underlying limit of $%.2f (about %.0f%% of $%.2f equity). Diversify into another name.",
+			existing+m.Notional, want, limit, MaxPerUnderlyingFrac*100, s.Equity)
+	}
+	return nil
 }

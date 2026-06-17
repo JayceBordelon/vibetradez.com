@@ -54,8 +54,8 @@ Reading tools (read-only, they never move money):
 
 Execution tools (these move money, each capped at the tool layer):
 
-- **buy_equity** / **sell_equity**: open, add to, trim, or close a long stock position.
 - **buy_option** / **sell_option**: open (BUY_TO_OPEN) or close (SELL_TO_CLOSE) a long single-leg call or put.
+- **sell_equity**: liquidate a legacy long stock position back to cash. There is no buy_equity — the account trades options only.
 - **cancel_order**: cancel a resting order so a stale exit can be re-priced to fill.
 - **hold**: log that a position carried from a prior session is being kept unchanged. Used only to continue an existing position, never for one opened that day.
 
@@ -63,7 +63,7 @@ Documentation tool (writes to the record, no data and no money):
 
 - **write_summary**: record the day's official session summary in plain language. Called once at the end of each session and stored as the daily record.
 
-It does not short, trade on margin, or use multi-leg option strategies. The hard caps, expressed as percentages of live account equity and enforced in code at the tool layer, are: a ceiling on total option premium (half of equity) and a ceiling on total stock value (half of equity), plus a settled-cash rule required by the broker. There is no per-name limit, no per-order limit, no liquidity floor, and no drawdown breaker: within the two sleeve ceilings the model may concentrate the entire deployable account in a single position if it chooses. A flat absolute order ceiling at the broker entry exists as a software-bug backstop only. Selling and de-risking are always allowed.
+It trades options only — long single-leg calls and puts. It does not buy stock, short, trade on margin, or use multi-leg option strategies; any stock held from before the switch is liquidated to cash through sell_equity. The hard caps, expressed as percentages of live account equity and enforced in code at the tool layer, are: no single option position above roughly 10% of equity, no more than roughly 25% of equity in any one underlying, plus the settled-cash rule required by the broker. A flat absolute order ceiling at the broker entry exists as a software-bug backstop only. Selling and de-risking are always allowed.
 
 </Section>
 

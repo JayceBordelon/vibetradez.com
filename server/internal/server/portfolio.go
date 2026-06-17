@@ -381,10 +381,14 @@ func decoratePnlSeries(points []equityCurvePointView, unrealizedByDate map[strin
 			realized += closed[ci].RealizedPnl
 		}
 		points[i].RealizedCum = realized
-		// A synthetic live point arrives carrying its own (live) unrealized
-		// value; only EOD points read from the snapshot map.
-		if v, ok := unrealizedByDate[points[i].Date]; ok || points[i].Unrealized == 0 {
-			points[i].Unrealized = v
+		// The synthetic live point carries its own (live) unrealized value
+		// computed from the broker book; only EOD points read from the
+		// snapshot map (keyed off the Live flag, not a fragile "== 0" check
+		// that would zero out a live point that happens to be flat).
+		if !points[i].Live {
+			if v, ok := unrealizedByDate[points[i].Date]; ok {
+				points[i].Unrealized = v
+			}
 		}
 	}
 	return points

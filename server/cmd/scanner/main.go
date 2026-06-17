@@ -555,10 +555,10 @@ func saveSessionTranscript(db *store.Store, date, slot string, tr *transcript.Tr
 func portfolioSessionSeparator(slot string) string {
 	switch slot {
 	case "open":
-		return "═══ OPEN SESSION (≈9:45 AM ET) ═══"
+		return "Open session · 9:45 AM ET"
 	case "close":
-		return "═══ PRE-CLOSE SESSION (≈3:30 PM ET) ═══"
+		return "Pre-close session · 3:30 PM ET"
 	default:
-		return "═══ MIDDAY SESSION (≈12:30 PM ET) ═══"
+		return "Midday session · 12:30 PM ET"
 	}
 }

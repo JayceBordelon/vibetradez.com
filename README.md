@@ -1,6 +1,6 @@
 # vibetradez.com
 
-An AI runs a single real brokerage account. Each trading day Claude (we call her Claudia) reads the book, the tape, and the news, then decides from scratch what to do with the money: buy equity, buy options, trim, sell, or hold cash. Positions are held across days, every move is sized at the model's full discretion (the only hard rule in code is that it spends settled cash), and the benchmark is buy-and-hold SPY. Subscribers watch and get one recap email a day.
+An AI runs a single real brokerage account. Each trading day Claude (we call her Claudia) reads the book, the tape, and the news, then decides from scratch what to do with the money: buy options, trim, sell, or hold cash. It trades options only — calls and puts — and liquidates any leftover stock to fund them. Positions are held across days, sizing is the model's call within code-enforced caps (no single contract over ~10% of equity, no single name over ~25%), and the benchmark is buy-and-hold SPY. Subscribers watch and get one recap email a day.
 
 > **This is live.** The account trades real money against the Schwab Trader API whenever `TRADING_ENABLED=true`. There is no paper mode. Every number on the site comes from one real account.
 
@@ -37,16 +37,19 @@ Orders are fire-and-forget LIMITs that fill asynchronously. Alongside the broker
 
 ## The guardrails
 
-There aren't any on the allocation, by design. The model has full discretion over how the account is split: any mix of stocks and options, any size, the whole account behind one name if that is the conviction. There is no allocation split, no per-name cap, no stop loss, and no drawdown breaker.
+The model trades options only, and the code keeps it from putting the whole account on one bet. Equity buys are disabled (any stock held from before is liquidated to cash); beyond that the model sizes and picks however it judges best.
 
-Two rules remain, and neither is a risk policy:
+The rules enforced in code, none of them a market view:
 
 | Rule | Why it exists |
 |---|---|
-| Spends settled cash only | Broker T+1 compliance for a cash account, not a risk preference |
-| Flat absolute per-order ceiling at the broker entry | A fat-finger backstop against code bugs, not a trading constraint |
+| Options only — equity buys disabled | The mandate; legacy stock is liquidated via `sell_equity` |
+| No single option position over ~10% of equity | Per-position concentration cap |
+| No single underlying over ~25% of equity | Per-name concentration cap |
+| Spends settled cash only | Broker T+1 compliance for a cash account |
+| Flat absolute per-order ceiling at the broker entry | A fat-finger backstop against code bugs |
 
-The model concentrates and sizes however it judges best, and it can absolutely lose the money. That is the show.
+The model concentrates and sizes however it judges best within those caps, and it can absolutely lose the money. That is the show.
 
 ## Architecture
 

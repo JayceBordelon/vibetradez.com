@@ -29,8 +29,8 @@ const KIND_COPY: Record<Kind, { title: string; blurb: string; stage: string }> =
   },
   portfolio: {
     title: "Session ledger",
-    blurb: "Everything Claudia looked at and every move she made with the account that day, rendered entry by entry like a desk blotter.",
-    stage: "midday portfolio session",
+    blurb: "Everything Claudia looked at and every move she made with the account that day, across all of the day's sessions, rendered entry by entry like a desk blotter.",
+    stage: "open · midday · pre-close",
   },
 };
 
@@ -44,6 +44,23 @@ function prettyDate(d: string): string {
   const month = MONTHS[Number(m[2]) - 1];
   if (!month) return d;
   return `${month} ${Number(m[3])}, ${m[1]}`;
+}
+
+// sessionAnchor turns a session-marker label ("Open session · 9:45 AM ET")
+// into a stable anchor id the jump bar links to.
+function sessionAnchor(text: string): string {
+  const t = (text ?? "").toLowerCase();
+  if (t.includes("open")) return "session-open";
+  if (t.includes("midday")) return "session-midday";
+  if (t.includes("close")) return "session-close";
+  return `session-${t.replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 24) || "x"}`;
+}
+
+// sessionShort is the compact jump-bar chip label: the part before the "·",
+// with a trailing "session" trimmed ("Open session · 9:45 AM ET" → "Open").
+function sessionShort(text: string): string {
+  const head = (text ?? "").split("·")[0]?.trim() ?? "";
+  return head.replace(/\s*session$/i, "") || "Session";
 }
 
 type LoadState = { kind: "loading" } | { kind: "ready"; data: TranscriptResponse } | { kind: "error"; message: string };
@@ -175,8 +192,11 @@ function weekdayOf(date: string): number {
   return new Date(`${date}T12:00:00Z`).getUTCDay();
 }
 
-const SESSION_START_MIN = 12 * 60 + 30; // the daily session kicks off ~12:30 PM ET
-const SESSION_SETTLED_MIN = 14 * 60; // by ~2:00 PM ET its transcript is saved
+// Claudia runs three sessions a trading day; the OPEN is the earliest
+// (~9:45 ET), so "today" messaging keys off it: before 9:45 nothing has run,
+// and the first transcript lands shortly after the open session wraps.
+const SESSION_OPEN_MIN = 9 * 60 + 45; // first session (open) ~9:45 AM ET
+const SESSION_OPEN_SETTLED_MIN = 10 * 60 + 30; // its transcript is saved by ~10:30 AM ET
 
 function EmptyTranscript({ date, kind }: { date: string; kind: Kind }) {
   const human = prettyDate(date);
@@ -189,13 +209,13 @@ function EmptyTranscript({ date, kind }: { date: string; kind: Kind }) {
   if (kind === "portfolio") {
     const now = etNow();
     if (date > now.date) {
-      return <StatusBlock tone="muted" title="Hasn't happened yet" body={`${human} is still in the future. The session runs around 12:30 PM Eastern on trading days, and its transcript lands here once the session wraps.`} />;
+      return <StatusBlock tone="muted" title="Hasn't happened yet" body={`${human} is still in the future. Claudia runs three sessions on a trading day — the open (~9:45 AM Eastern), midday (~12:30 PM), and pre-close (~3:30 PM) — and the day's transcript lands here once the first one wraps.`} />;
     }
-    if (date === now.date && now.minutes < SESSION_START_MIN) {
-      return <StatusBlock tone="muted" title="Hasn't run yet" body={`Today's session starts around 12:30 PM Eastern. The full transcript lands here once it wraps, usually within the hour.`} />;
+    if (date === now.date && now.minutes < SESSION_OPEN_MIN) {
+      return <StatusBlock tone="muted" title="Hasn't run yet" body={`Today's first session (the open) runs around 9:45 AM Eastern. Claudia trades three times a day, and each session is appended here as it wraps.`} />;
     }
-    if (date === now.date && now.minutes < SESSION_SETTLED_MIN) {
-      return <StatusBlock tone="muted" title="Session in progress" body={`Today's session is running right now (or just wrapped). The transcript appears here as soon as it is saved, so check back in a few minutes.`} />;
+    if (date === now.date && now.minutes < SESSION_OPEN_SETTLED_MIN) {
+      return <StatusBlock tone="muted" title="Session in progress" body={`Today's open session is running right now (or just wrapped). The transcript appears here as soon as it is saved — check back in a few minutes.`} />;
     }
   }
 
@@ -206,8 +226,30 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
   const events = data.events ?? [];
   const usage = data.usage;
   const durationMs = data.duration_ms ?? 0;
+  // Session markers (open / midday / pre-close) drive the jump bar and anchor
+  // each session within the merged day.
+  const sessionMarkers = events.filter((e) => e.type === "session_marker");
+  // Only the most recent write_summary keeps the canonical #session-summary
+  // anchor ("Skip to the summary" targets it); earlier sessions' summaries get
+  // unique ids so multiple sessions in a day don't collide on one id.
+  let lastSummaryIndex = -1;
+  for (let i = 0; i < events.length; i++) if (events[i].tool_name === "write_summary") lastSummaryIndex = i;
   return (
     <div className="mt-6">
+      {sessionMarkers.length > 1 && (
+        <div className="mb-5 flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-card-elevated/40 px-3 py-2.5">
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Sessions</span>
+          {sessionMarkers.map((m) => (
+            <a
+              key={sessionAnchor(m.text ?? "")}
+              href={`#${sessionAnchor(m.text ?? "")}`}
+              className="inline-flex min-h-7 items-center rounded-md border border-border/60 px-2 font-mono text-[11px] font-medium text-muted-foreground transition-colors hover:border-claude/40 hover:text-claude"
+            >
+              {sessionShort(m.text ?? "")}
+            </a>
+          ))}
+        </div>
+      )}
       {data.model && (
         <div className="mb-5 grid grid-cols-2 gap-x-6 gap-y-2.5 rounded-lg border border-border/60 bg-card-elevated/60 px-4 py-3 sm:grid-cols-5">
           <MetaCell label="Model" value={data.model} />
@@ -246,12 +288,23 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
             .map((ev, i) => ({ ev, i }))
             .filter(({ ev }) => ev.type !== "tool_result")
             .map(({ ev, i }) => {
-              const newRound = ev.round !== lastRound && lastRound !== undefined;
+              // A session marker is itself the divider, so it suppresses the
+              // round rule that would otherwise stack right on top of it.
+              const newRound = ev.round !== lastRound && lastRound !== undefined && ev.type !== "session_marker";
               lastRound = ev.round;
+              // Anchors live on the <li>: each session marker carries its slot
+              // anchor (for the jump bar); the latest write_summary keeps the
+              // canonical #session-summary id, earlier ones a unique id.
+              const anchorId =
+                ev.type === "session_marker"
+                  ? sessionAnchor(ev.text ?? "")
+                  : ev.tool_name === "write_summary"
+                    ? i === lastSummaryIndex
+                      ? "session-summary"
+                      : `session-summary-${i}`
+                    : undefined;
               return (
-                // The write_summary entry doubles as the #session-summary
-                // anchor the header's "Skip to the summary" link targets.
-                <li key={`${ev.round}-${ev.type}-${ev.tool_use_id ?? i}`} id={ev.tool_name === "write_summary" ? "session-summary" : undefined} className={ev.tool_name === "write_summary" ? "scroll-mt-24" : undefined}>
+                <li key={`${ev.round}-${ev.type}-${ev.tool_use_id ?? i}`} id={anchorId} className={anchorId ? "scroll-mt-24" : undefined}>
                   {newRound && (
                     // Rounds are 0-indexed in the event stream; display
                     // 1-indexed so the labels agree with the header's
@@ -404,6 +457,16 @@ function EventBlock({ event, resultPayload }: { event: TranscriptEvent; resultPa
       );
     case "tool_use":
       return <ToolSlip event={event} resultRaw={resultPayload} />;
+    case "session_marker":
+      // The seam between two intraday sessions (open / midday / pre-close)
+      // merged into one day's ledger: a labeled divider, anchored on its <li>.
+      return (
+        <div className="flex items-center gap-3 py-1">
+          <span className="h-px flex-1 bg-claude/30" aria-hidden />
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-claude">{event.text}</span>
+          <span className="h-px flex-1 bg-claude/30" aria-hidden />
+        </div>
+      );
     default:
       return null;
   }
