@@ -152,6 +152,12 @@ const liveTradingUpdateKey = "live_trading_update_2026_06_09"
 // other one-time updates.
 const fullDiscretionUpdateKey = "full_discretion_update_v1"
 
+// optionsOnlyUpdateKey is the sent_emails ledger key for the one-time product
+// update announcing the pivot to options-only trading: equity buys disabled,
+// any leftover stock liquidated to cash, and per-contract / per-underlying
+// sizing caps now in force. Self-gating like the other one-time updates.
+const optionsOnlyUpdateKey = "options_only_update_v1"
+
 /*
 sendAnalysisWindowUpdate sends the one-time product-update email announcing
 the longer daily session window (one hour, up from nine minutes), the
@@ -294,6 +300,52 @@ func sendFullDiscretionUpdate(cfg *config.Config, db *store.Store, emailClient *
 	if res.Succeeded > 0 {
 		if err := db.MarkEmailSent(fullDiscretionUpdateKey); err != nil {
 			log.Printf("full-discretion update: WARNING sent but failed to record in ledger (could re-send on next boot): %v", err)
+		}
+	}
+}
+
+/*
+sendOptionsOnlyUpdate sends the one-time product update announcing the pivot
+to options-only trading: equity buys are disabled, any leftover stock is
+liquidated to cash, and single-contract / single-name sizing caps now apply.
+Same self-gating shape as sendFullDiscretionUpdate: runs on every boot, claims
+its sent_emails key only after at least one recipient received it, and never
+re-blasts. Best-effort: a render or send failure is logged, never fatal.
+*/
+func sendOptionsOnlyUpdate(cfg *config.Config, db *store.Store, emailClient *email.Client) {
+	if sent, err := db.EmailAlreadySent(optionsOnlyUpdateKey); err != nil {
+		log.Printf("options-only update: could not read send ledger, skipping to be safe: %v", err)
+		return
+	} else if sent {
+		log.Printf("options-only update: already sent (key=%s), nothing to do", optionsOnlyUpdateKey)
+		return
+	}
+
+	recipients := getRecipients(db)
+	if len(recipients) == 0 {
+		log.Printf("options-only update: no subscribers, nothing to send")
+		return
+	}
+
+	base := strings.TrimRight(cfg.PublicBaseURL, "/")
+	data := templates.OptionsOnlyUpdateData{
+		BaseURL:       base,
+		TranscriptURL: base + "/transcripts/" + todayDate(),
+	}
+	html, err := templates.RenderOptionsOnlyUpdate(data)
+	if err != nil {
+		log.Printf("options-only update: render email: %v", err)
+		return
+	}
+	subject := "VibeTradez update: options only (the stocks were boring)"
+	res := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, html, unsubURLBuilder(cfg))
+	log.Printf("options-only update: email sent to %d/%d subscribers", res.Succeeded, res.Total)
+	if res.Failed > 0 {
+		log.Printf("options-only update: email failures: %s", res.FailureDetail())
+	}
+	if res.Succeeded > 0 {
+		if err := db.MarkEmailSent(optionsOnlyUpdateKey); err != nil {
+			log.Printf("options-only update: WARNING sent but failed to record in ledger (could re-send on next boot): %v", err)
 		}
 	}
 }

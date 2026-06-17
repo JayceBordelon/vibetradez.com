@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed portfolio_update.html schwab_reauth.html analysis_window.html live_trading_update.html full_discretion_update.html
+//go:embed portfolio_update.html schwab_reauth.html analysis_window.html live_trading_update.html full_discretion_update.html options_only_update.html
 var templateFS embed.FS
 
 // ── Daily portfolio-update email ──
@@ -132,6 +132,22 @@ type FullDiscretionUpdateData struct {
 
 func RenderFullDiscretionUpdate(d FullDiscretionUpdateData) (string, error) {
 	return renderOne("full_discretion_update.html", d)
+}
+
+// ── One-time options-only product update ──
+
+// OptionsOnlyUpdateData backs the one-time product-update email announcing
+// the pivot to options-only trading: equity buys are disabled, any leftover
+// stock is liquidated to cash, and single-contract / single-name sizing caps
+// now apply. BaseURL is the public site root (no trailing slash);
+// TranscriptURL points at the day's session.
+type OptionsOnlyUpdateData struct {
+	BaseURL       string
+	TranscriptURL string
+}
+
+func RenderOptionsOnlyUpdate(d OptionsOnlyUpdateData) (string, error) {
+	return renderOne("options_only_update.html", d)
 }
 
 // emailFuncs gives templates locale-correct currency + percent helpers so
