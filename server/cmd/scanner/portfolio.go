@@ -66,9 +66,9 @@ func runPortfolioSession(db *store.Store, agent *portfolio.Agent, slot string) {
 
 	// Persist the day's reasoning + tool-call transcript so it's viewable
 	// at /transcript/<date>/portfolio. It is captured verbatim (this is one
-	// public account, so balances are shown, not redacted).
-	// The single subscriber recap goes out at the EOD snapshot cron (16:00),
-	// not here, so it reflects the full day and the closing book.
+	// public account, so balances are shown, not redacted). The recap email is
+	// authored and sent by the model itself (send_recap_email) at the end of a
+	// session it traded, not from here.
 	saveSessionTranscript(db, date, slot, result.Transcript)
 }
 
@@ -130,13 +130,6 @@ const analysisWindowKey = "analysis_window_update_v1"
 // change set (real-time UI, P&L decomposition, executions ledger,
 // per-trade pages, and that day's risk framing).
 const liveTradingUpdateKey = "live_trading_update_2026_06_09"
-
-// fullDiscretionUpdateKey is the sent_emails ledger key for the one-time
-// product update announcing the removal of the 50/50 stock-vs-options split.
-// The model now allocates the account however it judges best, with the
-// settled-cash rule as the only buy-side gate left. Self-gating like the
-// other one-time updates.
-const fullDiscretionUpdateKey = "full_discretion_update_v1"
 
 // optionsOnlyUpdateKey is the sent_emails ledger key for the one-time product
 // update announcing the pivot to options-only trading: equity buys disabled,
@@ -244,57 +237,10 @@ func sendLiveTradingUpdate(cfg *config.Config, db *store.Store, emailClient *ema
 }
 
 /*
-sendFullDiscretionUpdate sends the one-time product update announcing that
-the 50/50 stock-vs-options split was removed and the model now has full
-discretion over allocation, with the settled-cash rule as the only buy-side
-gate left. Same self-gating shape as sendLiveTradingUpdate: runs on every
-boot, claims its sent_emails key only after at least one recipient received
-it, and never re-blasts. Best-effort: a render or send failure is logged,
-never fatal.
-*/
-func sendFullDiscretionUpdate(cfg *config.Config, db *store.Store, emailClient *email.Client) {
-	if sent, err := db.EmailAlreadySent(fullDiscretionUpdateKey); err != nil {
-		log.Printf("full-discretion update: could not read send ledger, skipping to be safe: %v", err)
-		return
-	} else if sent {
-		log.Printf("full-discretion update: already sent (key=%s), nothing to do", fullDiscretionUpdateKey)
-		return
-	}
-
-	recipients := getRecipients(db)
-	if len(recipients) == 0 {
-		log.Printf("full-discretion update: no subscribers, nothing to send")
-		return
-	}
-
-	base := strings.TrimRight(cfg.PublicBaseURL, "/")
-	data := templates.FullDiscretionUpdateData{
-		BaseURL:       base,
-		TranscriptURL: base + "/transcripts/" + todayDate(),
-	}
-	html, err := templates.RenderFullDiscretionUpdate(data)
-	if err != nil {
-		log.Printf("full-discretion update: render email: %v", err)
-		return
-	}
-	subject := "VibeTradez update: full discretion"
-	res := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, html, unsubURLBuilder(cfg))
-	log.Printf("full-discretion update: email sent to %d/%d subscribers", res.Succeeded, res.Total)
-	if res.Failed > 0 {
-		log.Printf("full-discretion update: email failures: %s", res.FailureDetail())
-	}
-	if res.Succeeded > 0 {
-		if err := db.MarkEmailSent(fullDiscretionUpdateKey); err != nil {
-			log.Printf("full-discretion update: WARNING sent but failed to record in ledger (could re-send on next boot): %v", err)
-		}
-	}
-}
-
-/*
 sendOptionsOnlyUpdate sends the one-time product update announcing the pivot
 to options-only trading: equity buys are disabled, any leftover stock is
 liquidated to cash, and single-contract / single-name sizing caps now apply.
-Same self-gating shape as sendFullDiscretionUpdate: runs on every boot, claims
+Same self-gating shape as the other one-time updates: runs on every boot, claims
 its sent_emails key only after at least one recipient received it, and never
 re-blasts. Best-effort: a render or send failure is logged, never fatal.
 */
@@ -348,10 +294,10 @@ func longDate(date string) string {
 
 /*
 runPortfolioRisk is the intraday cron body (every 15 min, market hours).
-There is no intraday risk policy to enforce (the model has full discretion
-over allocation), so the job's remaining duty is reconciling the decision
-log's order statuses against the broker so fills show up on the dashboard
-within minutes.
+Sizing limits are enforced at the tool layer when the model trades, not
+intraday, so the job's remaining duty is reconciling the decision log's
+order statuses against the broker so fills show up on the dashboard within
+minutes.
 */
 func runPortfolioRisk(db *store.Store, executor *exec.Service) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -407,7 +353,7 @@ high-water mark, and the SPY close for the benchmark. Upserted by date, so
 a re-run overwrites cleanly. The day's last order-status reconcile runs
 here too, so overnight readers see the settled truth.
 */
-func runPortfolioEODSnapshot(cfg *config.Config, db *store.Store, emailClient *email.Client, reader *portfoliowire.Reader) {
+func runPortfolioEODSnapshot(db *store.Store, reader *portfoliowire.Reader) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 

@@ -4,7 +4,7 @@ import { Section } from "@/components/legal/section";
 
 VibeTradez is an **experimental, educational project** in which a large language model (Claude) runs a single personal brokerage account as an autonomous portfolio manager. The platform is provided on an "as-is" basis for informational and entertainment purposes only. It is not a registered investment advisory service, a broker-dealer, or a financial institution, and it does not manage money for anyone other than the operator.
 
-Three times per trading day — at the open, around midday, and before the close — the model is invoked with a fixed prompt and a fixed, locked-down toolset. It reads the current account and the market, then decides for itself what to do with the money: buy a stock, buy an option, add to a position, trim it, sell it, or hold cash. It holds positions across days. None of its outputs are reviewed, verified, or endorsed by any licensed financial professional.
+Three times per trading day — at the open, around midday, and before the close — the model is invoked with a fixed prompt and a fixed, locked-down toolset. It reads the current account and the market, then decides for itself what to do with the money: buy an option, add to a position, trim it, sell it, or hold cash. It trades options only — it cannot open new stock positions, and any stock left from before is liquidated to cash. It holds positions across days. None of its outputs are reviewed, verified, or endorsed by any licensed financial professional.
 
 </Section>
 
@@ -28,7 +28,7 @@ By using this platform you acknowledge that you understand these risks and accep
 
 <Section id="how-it-trades" num={4} title="How the Portfolio Manager Trades">
 
-The manager trades a **single personal brokerage account** belonging to the operator (Jayce Bordelon), who is the only party with capital at risk. Subscribers receive an informational daily recap but no order is ever placed on a subscriber's behalf, and subscribers cannot configure, trigger, or disable the manager.
+The manager trades a **single personal brokerage account** belonging to the operator (Jayce Bordelon), who is the only party with capital at risk. Subscribers receive informational recap emails but no order is ever placed on a subscriber's behalf, and subscribers cannot configure, trigger, or disable the manager.
 
 **This is a single-account project.** VibeTradez manages only the operator's own brokerage account, and no other person's account is connected. Managing money for anyone else is a regulated activity that would require registering as an investment adviser, so there is no current plan to onboard outside funds — the platform is watch-only for everyone but the operator. Were that to ever change, it would require its own separate registration, authorization, and terms before any order is placed on another person's behalf.
 

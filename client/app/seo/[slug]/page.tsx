@@ -18,7 +18,7 @@ type Card = { eyebrow: string; title: React.ReactNode; subtitle: string };
 
 const CARDS: Record<string, Card> = {
   landing: {
-    eyebrow: "Live now · free daily picks at the open",
+    eyebrow: "Live now · one AI runs real money",
     title: (
       <>
         One silly model.
@@ -26,29 +26,29 @@ const CARDS: Record<string, Card> = {
         <span className="text-[#34d399]">Zero humans.</span>
       </>
     ),
-    subtitle: "An LLM picks 3 options contracts before the bell and auto-fires all 3 in a real brokerage account at the open. By close, you see whether it was right.",
+    subtitle: "An autonomous AI runs a real brokerage account, options only. Three sessions a trading day it decides from scratch: buy, sell, trim, or hold. Every move is public and live.",
   },
   dashboard: {
     eyebrow: "Live dashboard",
     title: (
       <>
-        Three real trades,
+        The live book,
         <br />
-        <span className="text-[#34d399]">ticking live.</span>
+        <span className="text-[#34d399]">ticking in real time.</span>
       </>
     ),
-    subtitle: "Today's auto-fired options picks with marks streaming in real time, each badged as a real Schwab position.",
+    subtitle: "Today's option moves with marks streaming in real time, each a real Schwab position.",
   },
   history: {
     eyebrow: "Historical analytics",
     title: (
       <>
-        Every pick.
+        Every trade.
         <br />
         <span className="text-[#34d399]">Every outcome.</span>
       </>
     ),
-    subtitle: "Win rate, P&L, and conviction calibration across every trade the model has ever fired. Fully public, nothing hidden.",
+    subtitle: "Win rate, P&L, and conviction calibration across every trade the model has ever made. Fully public, nothing hidden.",
   },
   faq: {
     eyebrow: "FAQ",
@@ -59,7 +59,7 @@ const CARDS: Record<string, Card> = {
         <span className="text-[#34d399]">actually works.</span>
       </>
     ),
-    subtitle: "One model, no humans, real money. The two-call pipeline, the data sources, the guardrails, and the honest odds.",
+    subtitle: "One model, no humans, real money. The schedule, the data sources, the guardrails, and the honest odds.",
   },
   terms: {
     eyebrow: "Terms of service",

@@ -295,7 +295,7 @@ func main() {
 				defer cancel()
 				reconcileOrderStatuses(ctx, db, executor)
 			}()
-			runPortfolioEODSnapshot(cfg, db, emailClient, portfolioReader)
+			runPortfolioEODSnapshot(db, portfolioReader)
 		}
 		for _, ps := range portfolioSlots {
 			ps := ps
@@ -385,7 +385,6 @@ func main() {
 	// and never again, no trigger flag needed.
 	sendAnalysisWindowUpdate(cfg, db, emailClient)
 	sendLiveTradingUpdate(cfg, db, emailClient)
-	sendFullDiscretionUpdate(cfg, db, emailClient)
 	sendOptionsOnlyUpdate(cfg, db, emailClient)
 
 	quit := make(chan os.Signal, 1)

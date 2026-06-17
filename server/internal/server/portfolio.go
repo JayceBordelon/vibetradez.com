@@ -183,14 +183,20 @@ func (s *Server) handlePortfolio(w http.ResponseWriter, r *http.Request) {
 		haveCurve = true
 	}
 
-	// Live book from the broker, best-effort.
-	liveBook := false
+	// Live book from the broker, best-effort. liveOK means the broker CALL
+	// itself succeeded — a successful call that returns ZERO positions is a
+	// genuinely flat account and is authoritative, so it must not be masked by
+	// a stale snapshot below (otherwise an account holding nothing shows
+	// yesterday's positions and their unrealized P&L).
+	liveOK := false
 	if s.executor != nil {
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
 		if positions, err := s.executor.GetPositionsAgent(ctx); err == nil {
+			liveOK = true
 			resp.Enabled = true
 			resp.Mode = s.executor.Mode()
+			resp.PositionsSource = "live"
 			var positionsValue float64
 			for _, bp := range positions {
 				pv := positionView(bp)
@@ -201,16 +207,14 @@ func (s *Server) handlePortfolio(w http.ResponseWriter, r *http.Request) {
 				resp.SettledCash = settled
 				resp.Equity = positionsValue + settled
 			}
-			if len(positions) > 0 {
-				liveBook = true
-				resp.PositionsSource = "live"
-			}
 		}
 	}
 
-	// Fall back to the last recorded book when the live broker is flat or
-	// unreachable, so the holdings table still shows the last known book.
-	if !liveBook {
+	// Fall back to the last recorded book ONLY when the live broker call failed
+	// (or there is no executor) — never for a flat-but-healthy account. A
+	// genuinely empty book shows $0 unrealized and no holdings; the snapshot is
+	// a last-known-good for when the broker is unreachable, not for "flat".
+	if !liveOK {
 		if rows, err := s.db.GetLatestPositions(); err == nil && len(rows) > 0 {
 			resp.Enabled = true
 			resp.PositionsSource = "snapshot"

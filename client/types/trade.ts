@@ -38,6 +38,10 @@ export interface TranscriptEvent {
   tool_use_id?: string;
   tool_input?: unknown;
   tool_result?: string;
+  // Set only on session_marker events: that session's token usage + wall-clock,
+  // for the per-session cost breakdown.
+  usage?: TranscriptUsage;
+  duration_ms?: number;
 }
 
 /*
