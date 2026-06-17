@@ -105,7 +105,7 @@ export function TranscriptView({ date, kind }: { date: string; kind: Kind }) {
       </div>
       <p className="mt-2 text-sm text-muted-foreground">{copy.blurb}</p>
 
-      {kind === "portfolio" && <SessionPager date={date} hasSummary={state.kind === "ready" && (state.data.events ?? []).some((e) => e.tool_name === "write_summary")} />}
+      {kind === "portfolio" && <SessionPager date={date} />}
 
       {state.kind === "loading" && <TranscriptSkeleton />}
       {state.kind === "error" && <StatusBlock tone="error" title="Couldn't load the transcript" body={state.message} />}
@@ -117,10 +117,9 @@ export function TranscriptView({ date, kind }: { date: string; kind: Kind }) {
 
 /*
 SessionPager is the transcript's wayfinding strip: step to the previous or
-next trading day (weekends skipped, forward capped at today in market
-time) and, once the ledger has loaded, jump straight to the session
-summary at the bottom of a multi-thousand-pixel page. Sessions are
-browsable instead of URL-editable.
+next trading day (weekends skipped, forward capped at today in market time).
+Sessions are browsable instead of URL-editable. The session summary now leads
+the page, so there is no jump-to-bottom link.
 */
 function stepTradingDay(date: string, dir: 1 | -1): string {
   const d = new Date(`${date}T12:00:00Z`);
@@ -130,7 +129,7 @@ function stepTradingDay(date: string, dir: 1 | -1): string {
   return d.toISOString().slice(0, 10);
 }
 
-function SessionPager({ date, hasSummary }: { date: string; hasSummary: boolean }) {
+function SessionPager({ date }: { date: string }) {
   const prev = stepTradingDay(date, -1);
   const next = stepTradingDay(date, 1);
   const showNext = next <= etNow().date;
@@ -150,11 +149,6 @@ function SessionPager({ date, hasSummary }: { date: string; hasSummary: boolean 
         </Link>
       ) : (
         <span className="inline-flex min-h-9 items-center text-muted-foreground/40 sm:min-h-0">latest session</span>
-      )}
-      {hasSummary && (
-        <a href="#session-summary" className="ml-auto inline-flex min-h-9 items-center gap-1 font-semibold text-claude underline decoration-claude/30 underline-offset-4 transition-colors hover:decoration-claude sm:min-h-0">
-          Skip to the summary
-        </a>
       )}
     </div>
   );
@@ -222,6 +216,64 @@ function EmptyTranscript({ date, kind }: { date: string; kind: Kind }) {
   return <StatusBlock tone="muted" title="No transcript recorded" body={`No session activity was recorded for ${human}. That usually means a market holiday, or a session that failed before anything could be recorded.`} />;
 }
 
+// summaryText normalizes a write_summary field (synopsis / action_items),
+// which is normally a string but tolerates an array of strings from older
+// seeded transcripts.
+function summaryText(v: unknown): string {
+  if (typeof v === "string") return v.trim();
+  if (Array.isArray(v)) return v.filter((x) => typeof x === "string").join("\n");
+  return "";
+}
+
+/*
+SessionSummaries lifts each session's write_summary (synopsis + the action
+items it left for next time) to the TOP of the page, so the conclusion leads
+instead of hiding at the bottom of a long ledger. On a multi-session day each
+summary is labeled with the session it closed (the most recent session marker
+before it). The write_summary entry still renders inline in the ledger below
+as the verbatim record.
+*/
+function SessionSummaries({ events }: { events: TranscriptEvent[] }) {
+  const items: { label: string | null; synopsis: string; actions: string }[] = [];
+  let label: string | null = null;
+  for (const e of events) {
+    if (e.type === "session_marker") {
+      label = sessionShort(e.text ?? "");
+      continue;
+    }
+    if (e.type === "tool_use" && e.tool_name === "write_summary") {
+      const input = (e.tool_input ?? {}) as { synopsis?: unknown; action_items?: unknown };
+      const synopsis = summaryText(input.synopsis);
+      const actions = summaryText(input.action_items);
+      if (synopsis || actions) items.push({ label, synopsis, actions });
+    }
+  }
+  if (items.length === 0) return null;
+  const multi = items.length > 1;
+  return (
+    <section aria-label="Session summary" className="mb-6 rounded-lg border border-claude-border bg-claude-light px-4 py-4 sm:px-5">
+      <div className="mb-3 flex items-center gap-2">
+        <NotebookPen className="h-4 w-4 text-claude" aria-hidden />
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-claude">{multi ? "Session summaries" : "Session summary"}</h2>
+      </div>
+      <div className="space-y-4">
+        {items.map((it, i) => (
+          <div key={`summary-${i}`} className={i > 0 ? "border-t border-claude-border/40 pt-4" : undefined}>
+            {multi && it.label && <p className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{it.label}</p>}
+            {it.synopsis && <p className="wrap-anywhere whitespace-pre-wrap text-[15px] leading-relaxed text-foreground/90">{it.synopsis}</p>}
+            {it.actions && (
+              <div className="mt-2.5">
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Action items for next session</p>
+                <p className="mt-1 wrap-anywhere whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground">{it.actions}</p>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function TranscriptBody({ data }: { data: TranscriptResponse }) {
   const events = data.events ?? [];
   const usage = data.usage;
@@ -229,13 +281,9 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
   // Session markers (open / midday / pre-close) drive the jump bar and anchor
   // each session within the merged day.
   const sessionMarkers = events.filter((e) => e.type === "session_marker");
-  // Only the most recent write_summary keeps the canonical #session-summary
-  // anchor ("Skip to the summary" targets it); earlier sessions' summaries get
-  // unique ids so multiple sessions in a day don't collide on one id.
-  let lastSummaryIndex = -1;
-  for (let i = 0; i < events.length; i++) if (events[i].tool_name === "write_summary") lastSummaryIndex = i;
   return (
     <div className="mt-6">
+      <SessionSummaries events={events} />
       {sessionMarkers.length > 1 && (
         <div className="mb-5 flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-card-elevated/40 px-3 py-2.5">
           <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Sessions</span>
@@ -292,17 +340,10 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
               // round rule that would otherwise stack right on top of it.
               const newRound = ev.round !== lastRound && lastRound !== undefined && ev.type !== "session_marker";
               lastRound = ev.round;
-              // Anchors live on the <li>: each session marker carries its slot
-              // anchor (for the jump bar); the latest write_summary keeps the
-              // canonical #session-summary id, earlier ones a unique id.
-              const anchorId =
-                ev.type === "session_marker"
-                  ? sessionAnchor(ev.text ?? "")
-                  : ev.tool_name === "write_summary"
-                    ? i === lastSummaryIndex
-                      ? "session-summary"
-                      : `session-summary-${i}`
-                    : undefined;
+              // Each session marker carries its slot anchor so the jump bar can
+              // scroll to it; nothing else needs an id now that the summary
+              // leads the page.
+              const anchorId = ev.type === "session_marker" ? sessionAnchor(ev.text ?? "") : undefined;
               return (
                 <li key={`${ev.round}-${ev.type}-${ev.tool_use_id ?? i}`} id={anchorId} className={anchorId ? "scroll-mt-24" : undefined}>
                   {newRound && (
