@@ -114,15 +114,28 @@ across multiple buys in one session correctly (the second buy sees the
 first buy's spend). Adding tools or relaxing gates without thinking about
 blast radius is how this becomes a real-money incident.
 */
+/*
+RecapSender sends a single model-authored recap email to every subscriber.
+The send_recap_email tool calls it; the implementation (cmd/scanner) owns the
+email client, the subscriber list, and the per-recipient unsubscribe wiring,
+and returns how many recipients the email reached. Optional: when nil (tests,
+or a build with no email configured) the tool refuses gracefully.
+*/
+type RecapSender interface {
+	SendRecapEmail(ctx context.Context, subject, html string) (int, error)
+}
+
 type ToolDispatcher struct {
 	reader PortfolioReader
 	exec   PortfolioExecutor
+	recap  RecapSender
 
 	mu          sync.Mutex
 	work        Snapshot // mutable working snapshot; updated as moves commit
 	decisions   []Decision
 	summary     string // synopsis of the day, from write_summary
 	actionItems string // plan for the next session, from write_summary
+	recapSent   bool   // a recap email has already gone out this session
 }
 
 func NewToolDispatcher(reader PortfolioReader, exec PortfolioExecutor, snap Snapshot) *ToolDispatcher {
@@ -132,6 +145,11 @@ func NewToolDispatcher(reader PortfolioReader, exec PortfolioExecutor, snap Snap
 		work:   snap,
 	}
 }
+
+// SetRecapSender wires the email sender the send_recap_email tool uses. Left
+// nil in tests and in any build without email configured, in which case the
+// tool refuses gracefully rather than panicking.
+func (d *ToolDispatcher) SetRecapSender(s RecapSender) { d.recap = s }
 
 /*
 ToolDefinitions returns the anthropic tool surface for the portfolio
@@ -323,6 +341,17 @@ func ToolDefinitions() []anthropic.ToolUnionParam {
 				Required: []string{"synopsis", "action_items"},
 			},
 		}},
+		{OfTool: &anthropic.ToolParam{
+			Name:        "send_recap_email",
+			Description: anthropic.String("Write and send the recap email to all subscribers. You author the FULL HTML body yourself (the prompt describes the house style). Call it ONCE near the end of a session, and ONLY if you bought or sold something this session — never on a hold-only session, and never one email per trade (one email covers all of today's moves). Refused if you made no trades, or if a recap already went out this session."),
+			InputSchema: anthropic.ToolInputSchemaParam{
+				Properties: map[string]any{
+					"subject": str("The subject line, specific to today's moves (e.g. \"VibeTradez: opened NVDA calls, trimmed the winners\")."),
+					"html":    str("The complete HTML email body in the house style described in the prompt: table-based layout, the brand palette, the day's moves and headline numbers, a link to the dashboard, and an unsubscribe link using the literal @@VT_UNSUBSCRIBE_URL@@ placeholder. Do NOT set a page/body background color — let the client's background show through."),
+				},
+				Required: []string{"subject", "html"},
+			},
+		}},
 	}
 }
 
@@ -372,6 +401,8 @@ func (d *ToolDispatcher) Dispatch(ctx context.Context, name string, input json.R
 		return d.dispatchHold(input)
 	case "write_summary":
 		return d.dispatchWriteSummary(input)
+	case "send_recap_email":
+		return d.dispatchSendRecapEmail(ctx, input)
 	default:
 		return jsonError(fmt.Sprintf("unknown tool: %s", name))
 	}
@@ -901,6 +932,68 @@ func (d *ToolDispatcher) dispatchWriteSummary(input json.RawMessage) string {
 
 // Summary returns today's synopsis recorded via write_summary (empty if the
 // model never called it).
+/*
+dispatchSendRecapEmail sends the model-authored recap email to all
+subscribers, enforcing the two session-level gates: at most ONE email per
+session, and ONLY when the session actually traded (a buy or sell, never a
+hold). The model authors the HTML; the configured RecapSender owns delivery
+and the per-recipient unsubscribe wiring.
+*/
+func (d *ToolDispatcher) dispatchSendRecapEmail(ctx context.Context, input json.RawMessage) string {
+	var args struct {
+		Subject string `json:"subject"`
+		HTML    string `json:"html"`
+	}
+	if err := json.Unmarshal(input, &args); err != nil {
+		return jsonError("send_recap_email: invalid arguments")
+	}
+	args.Subject = strings.TrimSpace(args.Subject)
+	if args.Subject == "" || strings.TrimSpace(args.HTML) == "" {
+		return jsonError("send_recap_email: subject and html are both required")
+	}
+
+	d.mu.Lock()
+	if d.recap == nil {
+		d.mu.Unlock()
+		return jsonError("send_recap_email: email is not available in this environment, so skip it.")
+	}
+	if d.recapSent {
+		d.mu.Unlock()
+		return jsonError("send_recap_email: a recap email already went out this session. Only one is allowed per session — do not send another.")
+	}
+	if !d.tradedLocked() {
+		d.mu.Unlock()
+		return jsonError("send_recap_email: this session has not bought or sold anything. The recap is only for sessions with at least one trade, so skip it on a hold-only session.")
+	}
+	// Claim the slot before the network send so a second call cannot race a
+	// duplicate email out; released again only if the send itself fails.
+	d.recapSent = true
+	sender := d.recap
+	d.mu.Unlock()
+
+	n, err := sender.SendRecapEmail(ctx, args.Subject, args.HTML)
+	if err != nil {
+		d.mu.Lock()
+		d.recapSent = false
+		d.mu.Unlock()
+		return jsonError(fmt.Sprintf("send_recap_email: send failed (%v). You may try once more.", err))
+	}
+	out, _ := json.Marshal(map[string]any{"ok": true, "action": "send_recap_email", "recipients": n})
+	return string(out)
+}
+
+// tradedLocked reports whether any committed decision this session is a real
+// trade (a buy or sell), not a hold. Caller must hold d.mu.
+func (d *ToolDispatcher) tradedLocked() bool {
+	for _, dec := range d.decisions {
+		switch dec.Action {
+		case ActionBuyEquity, ActionSellEquity, ActionBuyOption, ActionSellOption:
+			return true
+		}
+	}
+	return false
+}
+
 func (d *ToolDispatcher) Summary() string {
 	d.mu.Lock()
 	defer d.mu.Unlock()

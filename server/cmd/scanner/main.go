@@ -244,6 +244,7 @@ func main() {
 		portfolioReader = portfoliowire.NewReader(schwabClient, executor, db, marketnews.NewClient())
 		portfolioExecutor := portfoliowire.NewExecutor(executor)
 		portfolioAgent = portfolio.NewAgent(cfg.AnthropicAPIKey, cfg.AnthropicModel, portfolioReader, portfolioExecutor)
+		portfolioAgent.SetRecapSender(&recapEmailSender{cfg: cfg, db: db, client: emailClient})
 		log.Printf("portfolio: manager ready (model=%s, mode=live)", cfg.AnthropicModel)
 	} else {
 		log.Printf("portfolio: manager NOT started (needs TRADING_ENABLED=true and a configured Schwab client to trade live)")
