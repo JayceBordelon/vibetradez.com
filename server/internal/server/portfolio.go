@@ -173,13 +173,16 @@ func (s *Server) handlePortfolio(w http.ResponseWriter, r *http.Request) {
 	}
 	// Latest equity-curve point seeds SPY + high-water, and is the aggregate
 	// fallback for equity/cash when the live broker isn't the source.
-	var curveCash float64
+	var curveCash, curveEquity float64
+	var curveDate string
 	haveCurve := false
 	if pts, err := s.db.GetEquityCurve("0000-00-00", date); err == nil && len(pts) > 0 {
 		last := pts[len(pts)-1]
 		resp.SPYClose = last.SPYClose
 		resp.HighWaterMark = last.HighWaterMark
 		curveCash = last.SettledCash
+		curveEquity = last.AccountEquity
+		curveDate = last.Date
 		haveCurve = true
 	}
 
@@ -215,7 +218,30 @@ func (s *Server) handlePortfolio(w http.ResponseWriter, r *http.Request) {
 	// genuinely empty book shows $0 unrealized and no holdings; the snapshot is
 	// a last-known-good for when the broker is unreachable, not for "flat".
 	if !liveOK {
-		if rows, err := s.db.GetLatestPositions(); err == nil && len(rows) > 0 {
+		// Live broker unreachable: fall back to the recorded book, kept
+		// INTERNALLY CONSISTENT. The latest equity-curve point is the recorded
+		// truth for equity and cash. Attach the positions snapshot only if it is
+		// as-of that same point — an older snapshot is stale (e.g. the positions
+		// were sold since, and the account is now flat), and pairing stale
+		// positions with the newer recorded cash would double-count equity, so a
+		// sale would read as a phantom gain.
+		rows, rerr := s.db.GetLatestPositions()
+		haveRows := rerr == nil && len(rows) > 0
+		switch {
+		case haveCurve:
+			resp.Enabled = true
+			resp.PositionsSource = "snapshot"
+			resp.SettledCash = curveCash
+			resp.Equity = curveEquity
+			if haveRows && rows[0].Date == curveDate {
+				for _, p := range rows {
+					resp.Positions = append(resp.Positions, snapshotPositionView(p))
+					resp.PositionsAsOf = p.Date
+				}
+			}
+		case haveRows:
+			// No curve yet (brand-new account): show the snapshot positions and
+			// derive equity from them alone, since there is no recorded cash.
 			resp.Enabled = true
 			resp.PositionsSource = "snapshot"
 			var positionsValue float64
@@ -225,12 +251,7 @@ func (s *Server) handlePortfolio(w http.ResponseWriter, r *http.Request) {
 				resp.Positions = append(resp.Positions, v)
 				resp.PositionsAsOf = p.Date
 			}
-			// Derive equity from the actual holdings plus the recorded cash so
-			// the summary reconciles with the holdings table (positions + cash).
-			if haveCurve {
-				resp.SettledCash = curveCash
-				resp.Equity = positionsValue + curveCash
-			}
+			resp.Equity = positionsValue
 		}
 	}
 
