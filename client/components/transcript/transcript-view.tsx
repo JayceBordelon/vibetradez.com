@@ -307,7 +307,44 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
           {usage && usage.rounds > 0 && <MetaCell label="Rounds" value={String(usage.rounds)} />}
         </div>
       )}
-      {usage && usage.rounds > 0 && <UsageBreakdown usage={usage} model={data.model} />}
+      {(() => {
+        // Break the day's cost + timing down by session when the merged
+        // transcript carries per-session markers (each holds its own usage and
+        // wall-clock); otherwise fall back to one breakdown for the whole
+        // capture. Entries per session = events between this marker and the next.
+        const sessions = sessionMarkers.filter((m) => m.usage);
+        if (sessions.length > 0) {
+          const counts = sessions.map(() => 0);
+          let si = -1;
+          for (const e of events) {
+            if (e.type === "session_marker") {
+              si = sessions.indexOf(e);
+              continue;
+            }
+            if (si >= 0) counts[si]++;
+          }
+          return (
+            <div className="mb-6 space-y-5">
+              {sessions.map((m, i) => {
+                const u = m.usage as TranscriptUsage;
+                return (
+                  <div key={`cost-${sessionAnchor(m.text ?? "")}`}>
+                    <div className="mb-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 font-mono text-[11px] text-muted-foreground">
+                      <span className="font-semibold uppercase tracking-[0.14em] text-claude">{m.text}</span>
+                      {m.duration_ms ? <span>{formatDuration(m.duration_ms)}</span> : null}
+                      <span>{counts[i]} entries</span>
+                      {u.rounds > 0 ? <span>{u.rounds} rounds</span> : null}
+                    </div>
+                    <UsageBreakdown usage={u} model={data.model} label="Cost for this session" />
+                  </div>
+                );
+              })}
+              {usage && usage.rounds > 0 && <UsageBreakdown usage={usage} model={data.model} label="Whole day · all sessions" />}
+            </div>
+          );
+        }
+        return usage && usage.rounds > 0 ? <UsageBreakdown usage={usage} model={data.model} /> : null;
+      })()}
       <ol className="space-y-5">
         {(() => {
           // Fold each tool_result into its matching tool_use so a call and
@@ -674,7 +711,7 @@ total. Token rows price per million tokens; the web rows price per request
 (web fetch is free). When the model's list prices are unknown the money
 columns are dropped and only the quantities are shown.
 */
-function UsageBreakdown({ usage, model }: { usage: TranscriptUsage; model: string }) {
+function UsageBreakdown({ usage, model, label }: { usage: TranscriptUsage; model: string; label?: string }) {
   const r = MODEL_RATES[model];
   const showCost = r !== undefined;
 
@@ -696,7 +733,7 @@ function UsageBreakdown({ usage, model }: { usage: TranscriptUsage; model: strin
   return (
     <div className="mb-6">
       <div className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        {showCost ? "Session cost breakdown" : "Token usage"}
+        {label ?? (showCost ? "Session cost breakdown" : "Token usage")}
       </div>
       <div className="overflow-x-auto rounded-md border border-border/60">
         <table className="w-full border-collapse text-sm">

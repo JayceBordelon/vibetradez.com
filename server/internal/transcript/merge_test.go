@@ -33,6 +33,11 @@ func TestMergeOffsetsRoundsAndSumsUsage(t *testing.T) {
 	if sep := got.Events[2]; sep.Type != EventSessionMarker || sep.Text != "SEP" || sep.Round != 2 {
 		t.Fatalf("separator at seam: got %+v", sep)
 	}
+	// The marker carries the incoming session's own usage + wall-clock so the
+	// UI can break the merged day's cost down by session.
+	if sep := got.Events[2]; sep.Usage == nil || sep.Usage.OutputTokens != 3 || sep.DurationMS != 50 {
+		t.Fatalf("session marker should carry next's usage + duration, got %+v", sep)
+	}
 	if got.Events[3].Round != 2 || got.Events[4].Round != 3 {
 		t.Fatalf("next rounds offset: got %d,%d want 2,3", got.Events[3].Round, got.Events[4].Round)
 	}

@@ -53,6 +53,12 @@ type Event struct {
 	ToolUseID  string          `json:"tool_use_id,omitempty"`
 	ToolInput  json.RawMessage `json:"tool_input,omitempty"`
 	ToolResult string          `json:"tool_result,omitempty"`
+
+	// Set only on EventSessionMarker events: the token usage and wall-clock of
+	// the session this marker opens, so the UI can break the merged day's cost
+	// and timing down by session (open / midday / pre-close).
+	Usage      *Usage `json:"usage,omitempty"`
+	DurationMS int64  `json:"duration_ms,omitempty"`
 }
 
 /*
@@ -215,7 +221,10 @@ func Merge(prior, next Transcript, separatorLabel string) Transcript {
 	merged := make([]Event, 0, len(prior.Events)+len(next.Events)+1)
 	merged = append(merged, prior.Events...)
 	if separatorLabel != "" {
-		merged = append(merged, Event{Round: offset, Type: EventSessionMarker, Text: separatorLabel})
+		// Carry the incoming session's own usage + wall-clock on its marker so
+		// the UI can attribute cost and timing to each session of the day.
+		u := next.Usage
+		merged = append(merged, Event{Round: offset, Type: EventSessionMarker, Text: separatorLabel, Usage: &u, DurationMS: next.DurationMS})
 	}
 	for _, e := range next.Events {
 		e.Round += offset
