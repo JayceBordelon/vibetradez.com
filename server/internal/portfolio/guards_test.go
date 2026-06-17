@@ -13,10 +13,10 @@ func baseSnapshot() Snapshot {
 	}
 }
 
-func TestCheckBuy_AllowsHealthyEquityBuy(t *testing.T) {
-	m := Move{Action: ActionBuyEquity, AssetType: AssetEquity, Symbol: "MDT", Underlying: "MDT", Notional: 1_500}
+func TestCheckBuy_AllowsHealthyOptionBuy(t *testing.T) {
+	m := Move{Action: ActionBuyOption, AssetType: AssetOption, Symbol: "NVDA  260116C00150000", Underlying: "NVDA", Notional: 1_500}
 	if err := CheckBuy(baseSnapshot(), m); err != nil {
-		t.Fatalf("healthy buy should pass, got %s: %s", err.Code, err.Message)
+		t.Fatalf("healthy option buy should pass, got %s: %s", err.Code, err.Message)
 	}
 }
 
@@ -26,43 +26,59 @@ func TestCheckBuy_SettledCashRule(t *testing.T) {
 	// cash: a cash account cannot redeploy unsettled proceeds until T+1.
 	s.SettledCash = 500
 	s.UnsettledCash = 5_500
-	m := Move{Action: ActionBuyEquity, AssetType: AssetEquity, Symbol: "MDT", Underlying: "MDT", Notional: 600}
+	m := Move{Action: ActionBuyOption, AssetType: AssetOption, Symbol: "NVDA  260116C00150000", Underlying: "NVDA", Notional: 600}
 	if err := CheckBuy(s, m); err == nil || err.Code != "settled_cash" {
 		t.Fatalf("expected settled_cash violation, got %v", err)
 	}
 }
 
-func TestCheckBuy_FullDiscretionOverAllocation(t *testing.T) {
-	// The model has full discretion: no stock/option split, no per-name cap,
-	// no drawdown breaker. The only buy-side gate is settled cash, so any
-	// allocation that fits the settled cash on hand is allowed.
+// CheckOptionSize caps a single option position at MaxSingleOptionFrac of
+// equity. baseSnapshot is $6,000 equity, so the per-position limit is $600.
+func TestCheckOptionSize(t *testing.T) {
 	s := baseSnapshot()
-	s.HighWaterMark = 12_000 // down 50% from the peak: no breaker anymore
-
-	// The whole account into a single equity name passes.
-	allInEquity := Move{Action: ActionBuyEquity, AssetType: AssetEquity, Symbol: "MDT", Underlying: "MDT", Notional: 6_000}
-	if err := CheckBuy(s, allInEquity); err != nil {
-		t.Fatalf("all-in single-name equity buy must pass, got %s: %s", err.Code, err.Message)
+	over := Move{Action: ActionBuyOption, AssetType: AssetOption, Symbol: "NVDA  OPT", Underlying: "NVDA", Notional: 700}
+	if err := CheckOptionSize(s, over); err == nil || err.Code != "position_too_large" {
+		t.Fatalf("a $700 position should breach the $600 cap, got %v", err)
 	}
-
-	// The whole account into options (the old allocation caps blocked this)
-	// passes now.
-	allInOptions := Move{Action: ActionBuyOption, AssetType: AssetOption, Symbol: "NVDA_OPT", Underlying: "NVDA", Notional: 6_000}
-	if err := CheckBuy(s, allInOptions); err != nil {
-		t.Fatalf("all-in options buy must pass, got %s: %s", err.Code, err.Message)
+	ok := Move{Action: ActionBuyOption, AssetType: AssetOption, Symbol: "NVDA  OPT", Underlying: "NVDA", Notional: 500}
+	if err := CheckOptionSize(s, ok); err != nil {
+		t.Fatalf("a $500 position should pass the $600 cap, got %s", err.Code)
 	}
-
-	// Adding to an already-concentrated single name is fine: no per-name cap.
-	s.Positions = []Position{{Symbol: "MDT", Underlying: "MDT", AssetType: AssetEquity, MarkValue: 5_000, Quantity: 50}}
-	addMore := Move{Action: ActionBuyEquity, AssetType: AssetEquity, Symbol: "MDT", Underlying: "MDT", Notional: 1_000}
-	if err := CheckBuy(s, addMore); err != nil {
-		t.Fatalf("adding to a concentrated single name must pass, got %s: %s", err.Code, err.Message)
+	// The resulting exposure counts: $400 already held + $300 new = $700 > cap.
+	s.Positions = []Position{{Symbol: "NVDA  OPT", Underlying: "NVDA", AssetType: AssetOption, MarkValue: 400, Quantity: 1}}
+	add := Move{Action: ActionBuyOption, AssetType: AssetOption, Symbol: "NVDA  OPT", Underlying: "NVDA", Notional: 300}
+	if err := CheckOptionSize(s, add); err == nil || err.Code != "position_too_large" {
+		t.Fatalf("expected position_too_large on the resulting exposure, got %v", err)
 	}
+	// Non-buy moves are skipped.
+	if err := CheckOptionSize(s, Move{Action: ActionSellOption, AssetType: AssetOption, Symbol: "X", Notional: 9_999}); err != nil {
+		t.Fatalf("a non-buy must be skipped, got %v", err)
+	}
+}
 
-	// The only line is settled cash: one dollar past it trips.
-	overCash := Move{Action: ActionBuyEquity, AssetType: AssetEquity, Symbol: "MDT", Underlying: "MDT", Notional: 6_001}
-	if err := CheckBuy(s, overCash); err == nil || err.Code != "settled_cash" {
-		t.Fatalf("expected settled_cash just past the cash on hand, got %v", err)
+// CheckUnderlyingExposure caps total exposure per underlying at
+// MaxPerUnderlyingFrac of equity. baseSnapshot is $6,000, so the limit is
+// $1,500 across all positions keyed to one underlying.
+func TestCheckUnderlyingExposure(t *testing.T) {
+	s := baseSnapshot()
+	s.Positions = []Position{
+		{Symbol: "NVDA  C1", Underlying: "NVDA", AssetType: AssetOption, MarkValue: 800, Quantity: 1},
+		{Symbol: "NVDA  C2", Underlying: "NVDA", AssetType: AssetOption, MarkValue: 400, Quantity: 1},
+	}
+	// $1,200 already on NVDA + $400 new = $1,600 > the $1,500 cap.
+	over := Move{Action: ActionBuyOption, AssetType: AssetOption, Symbol: "NVDA  C3", Underlying: "NVDA", Notional: 400}
+	if err := CheckUnderlyingExposure(s, over); err == nil || err.Code != "underlying_concentration" {
+		t.Fatalf("expected underlying_concentration, got %v", err)
+	}
+	// $1,200 + $200 = $1,400 is under the cap.
+	ok := Move{Action: ActionBuyOption, AssetType: AssetOption, Symbol: "NVDA  C4", Underlying: "NVDA", Notional: 200}
+	if err := CheckUnderlyingExposure(s, ok); err != nil {
+		t.Fatalf("$1,400 total on NVDA should pass the $1,500 cap, got %s", err.Code)
+	}
+	// A different underlying is unaffected by NVDA's exposure.
+	other := Move{Action: ActionBuyOption, AssetType: AssetOption, Symbol: "AAPL  C1", Underlying: "AAPL", Notional: 1_400}
+	if err := CheckUnderlyingExposure(s, other); err != nil {
+		t.Fatalf("a fresh underlying should pass, got %s", err.Code)
 	}
 }
 

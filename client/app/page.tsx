@@ -35,7 +35,7 @@ export const revalidate = 60;
 export const metadata: Metadata = {
   title: "VibeTradez | A Model Runs My Real Brokerage Account",
   description:
-    "I gave a language model my real brokerage account. It trades stocks and options with actual money, capped in code so it cannot fully ruin me. Free to watch.",
+    "I gave a language model my real brokerage account. It buys options with actual money — calls and puts, no stocks — sized in code so it can't faceplant the whole account on one contract. Free to watch.",
 };
 
 // Session stamp for the status bar, in market time. ISR re-renders keep
@@ -153,8 +153,8 @@ export default async function LandingPage() {
       </LogSection>
 
       {/* ══ 03 · THE GUARDRAILS ══ */}
-      <LogSection id="guardrails" command="cat guards.go" comment="what little governs the money" weight="figure" title={<>The leash came off. <span className="phosphor text-green">One rule.</span></>} aside={<GuardsReadout />}>
-        <p>Any name, any size, any mix of stocks and options, all in if it likes the setup. There is no split it has to hold and no cap on a single name. The only rule in the file is the broker's: it spends cash that has settled, nothing more. It can absolutely lose my money. That is the show.</p>
+      <LogSection id="guardrails" command="cat guards.go" comment="what little governs the money" weight="figure" title={<>Options only. <span className="phosphor text-green">A short leash.</span></>} aside={<GuardsReadout />}>
+        <p>Calls and puts only — no stocks. If it is still holding shares from before, it dumps them for cash and buys contracts. It can crowd into a name, but the code will not let it faceplant the whole account on one contract or one ticker, and it spends settled cash only. Past that it sizes however it likes. It can absolutely still lose my money. That is the show.</p>
       </LogSection>
 
       {/* ══ 04 · THE TOOLBOX ══ */}

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>VibeTradez update: options only</title>
+<style>
+  /* No page/card background is set anywhere — the email inherits whatever
+     background the mail client uses. The dark-mode query only flips TEXT and
+     BORDER colors so the copy stays legible without us painting the canvas. */
+  :root { color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) {
+    .vt-card { border-color:#272727 !important; }
+    .vt-h1 { color:#f5f5f5 !important; }
+    .vt-strong { color:#fafafa !important; }
+    .vt-text { color:#cfcfcf !important; }
+    .vt-muted { color:#9a9a9a !important; }
+    .vt-rule { border-color:#262626 !important; }
+    .vt-note { border-color:#2a2a2a !important; }
+    .vt-tradez { color:#51F0A8 !important; }
+    .vt-eyebrow { color:#51F0A8 !important; }
+    .vt-srcbtn { color:#51F0A8 !important; border-color:#2f5e45 !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">I got bored watching it sit on stale stocks. It trades options only now.</div>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 0;">
+<tr><td align="center">
+<table role="presentation" width="640" cellspacing="0" cellpadding="0" class="vt-card" style="border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;">
+
+<tr><td style="padding:26px 28px 0 28px;">
+<p style="margin:0;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700;">
+<span class="vt-strong" style="color:#0f172a;">Vibe</span><span class="vt-tradez" style="color:#0D9F5D;">Tradez</span>
+<span class="vt-muted" style="color:#94a3b8;font-weight:600;">&middot; product update</span>
+</p>
+<h1 class="vt-h1" style="margin:10px 0 0 0;font-size:24px;line-height:1.25;color:#0f172a;">Options only now</h1>
+</td></tr>
+
+<tr><td style="padding:16px 28px 0 28px;">
+<p class="vt-text" style="margin:0;color:#334155;font-size:15px;line-height:1.7;">
+Confession: watching the model buy stocks and then just <em>sit</em> on them was boring as hell. Big, slow equity positions, nothing happening for days while I refreshed the dashboard waiting for a number to move. So I changed the deal. From here, VibeTradez trades <strong class="vt-strong" style="color:#0f172a;">options only</strong> &mdash; long calls and puts &mdash; and any stock it is still holding gets sold off, even at a loss, to free up cash for contracts.
+</p>
+</td></tr>
+
+<tr><td style="padding:20px 28px 0 28px;">
+<p class="vt-eyebrow" style="margin:0 0 4px 0;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;color:#0D9F5D;">What changed</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+
+<tr><td style="padding:12px 0 0 0;">
+<p class="vt-strong" style="margin:0;color:#0f172a;font-size:14px;font-weight:700;">&#9679;&nbsp; Options only</p>
+<p class="vt-text" style="margin:4px 0 0 16px;color:#334155;font-size:14px;line-height:1.65;">
+Calls and puts, nothing else. The buy-stock tool is switched off &mdash; the model literally cannot open a new equity position anymore.
+</p>
+</td></tr>
+
+<tr><td style="padding:14px 0 0 0;">
+<p class="vt-strong" style="margin:0;color:#0f172a;font-size:14px;font-weight:700;">&#9679;&nbsp; The stale stock gets dumped</p>
+<p class="vt-text" style="margin:4px 0 0 16px;color:#334155;font-size:14px;line-height:1.65;">
+Whatever shares it is carrying get liquidated back to cash &mdash; even at a loss &mdash; so the next session can put that money into options instead of watching it sit there.
+</p>
+</td></tr>
+
+<tr><td style="padding:14px 0 0 0;">
+<p class="vt-strong" style="margin:0;color:#0f172a;font-size:14px;font-weight:700;">&#9679;&nbsp; Sized so it cannot torch the account on one bet</p>
+<p class="vt-text" style="margin:4px 0 0 16px;color:#334155;font-size:14px;line-height:1.65;">
+The code caps any single contract at about a tenth of the account and any single name at about a quarter. Past that it sizes however it likes.
+</p>
+</td></tr>
+
+<tr><td style="padding:14px 0 0 0;">
+<p class="vt-strong" style="margin:0;color:#0f172a;font-size:14px;font-weight:700;">&#9679;&nbsp; More action, more ways to lose</p>
+<p class="vt-text" style="margin:4px 0 0 16px;color:#334155;font-size:14px;line-height:1.65;">
+Options move faster and they decay; premium can go to zero. The account can lose value quicker now than it could buying and holding stock. That is the show.
+</p>
+</td></tr>
+
+</table>
+</td></tr>
+
+<tr><td style="padding:22px 28px 0 28px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="vt-note" style="border:1px solid #e2e8f0;border-radius:12px;">
+<tr><td style="padding:16px 18px;">
+<p class="vt-muted" style="margin:0;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;color:#0D9F5D;">The flow from here</p>
+<p class="vt-text" style="margin:6px 0 0 0;color:#334155;font-size:14px;line-height:1.65;">
+Every market day the model reads the book, the tape, and the news three times &mdash; the open, midday, and the close &mdash; and trades options around it. The dashboard is live during the day, every move links to its reasoning, and the recap email still lands after each close. Nothing for you to do but watch (and judge).
+</p>
+</td></tr>
+</table>
+</td></tr>
+
+<tr><td align="center" style="padding:22px 28px 0 28px;">
+<table role="presentation" cellspacing="0" cellpadding="0"><tr>
+<td style="padding:5px;">
+<a href="{{ .BaseURL }}/dashboard" style="display:inline-block;background:#51F0A8;color:#0a0a0a;text-decoration:none;font-size:15px;font-weight:700;padding:12px 22px;border-radius:9999px;white-space:nowrap;">Open the live dashboard</a>
+</td>
+<td style="padding:5px;">
+<a href="{{ .TranscriptURL }}" class="vt-srcbtn" style="display:inline-block;background:transparent;border:1px solid #0D9F5D;color:#0D9F5D;text-decoration:none;font-size:15px;font-weight:700;padding:11px 21px;border-radius:9999px;white-space:nowrap;">Read today's session</a>
+</td>
+</tr></table>
+</td></tr>
+
+<tr><td style="padding:18px 28px 24px 28px;">
+<div class="vt-rule" style="border-top:1px solid #eef2f7;padding-top:16px;">
+<p class="vt-muted" style="margin:0;color:#94a3b8;font-size:12px;line-height:1.6;">
+This is one real account run by an AI, and none of it is advice. Options carry substantial risk of loss &mdash; premium can go to zero, and the account can lose most or all of its value, now faster than before. Past performance does not guarantee future results.
+</p>
+<p class="vt-muted" style="margin:10px 0 0 0;color:#94a3b8;font-size:11px;">
+<a href="@@VT_UNSUBSCRIBE_URL@@" class="vt-muted" style="color:#94a3b8;text-decoration:underline;">Unsubscribe</a>
+</p>
+</div>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

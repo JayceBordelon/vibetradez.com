@@ -30,7 +30,7 @@ func TestMergeOffsetsRoundsAndSumsUsage(t *testing.T) {
 	if len(got.Events) != 5 { // 2 prior + separator + 2 next
 		t.Fatalf("event count: got %d want 5", len(got.Events))
 	}
-	if sep := got.Events[2]; sep.Type != EventText || sep.Text != "SEP" || sep.Round != 2 {
+	if sep := got.Events[2]; sep.Type != EventSessionMarker || sep.Text != "SEP" || sep.Round != 2 {
 		t.Fatalf("separator at seam: got %+v", sep)
 	}
 	if got.Events[3].Round != 2 || got.Events[4].Round != 3 {

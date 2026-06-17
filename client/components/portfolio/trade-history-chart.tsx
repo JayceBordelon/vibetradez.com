@@ -72,12 +72,14 @@ function fmtUsdTick(n: number): string {
 type Row = { date: string; price: number | null; value: number | null };
 
 /*
-mergeSeries outer-joins the two series so Recharts gets one data array;
-either side may be missing at any key (weekends exist only in snapshots,
-snapshot gaps exist only in closes) and connectNulls bridges the gaps.
-When the price series is intraday, the EOD snapshots are keyed at 16:00
-so each day's book value sorts to the close it was captured at instead
-of the day's open.
+mergeSeries outer-joins the two series so the shared category x-axis spans
+every date either series touches; either side may be missing at any key
+(weekends exist only in snapshots, snapshot gaps exist only in closes). The
+nulls are NOT bridged with connectNulls — Recharts v3 zero-fills nulls (see
+client/CLAUDE.md), which would crater each line to $0 on the other series'
+days — so each Area is fed its own null-free slice of this array instead.
+When the price series is intraday, the EOD snapshots are keyed at 16:00 so
+each day's book value sorts to the close it was captured at, not the open.
 */
 function mergeSeries(prices: PricePoint[], snapshots: PositionValuePoint[], perContract: boolean): Row[] {
   const intraday = prices.some((p) => p.date.includes("T"));
@@ -169,6 +171,13 @@ export function TradeHistoryChart({ kind, symbol, underlying, openedDate, closed
   // times; multi-day intraday windows keep the date in front.
   const singleDay = data.every((d) => dayOf(d.date) === dayOf(data[0].date));
 
+  // Each Area gets its OWN null-free slice (not the outer-joined array): with
+  // Recharts v3 zero-filling nulls, feeding the full array would crater each
+  // line to $0 on the other series' days. The shared category x-axis still
+  // spans the union via the chart-level data + allowDuplicatedCategory={false}.
+  const priceData = data.filter((d) => d.price != null);
+  const valueData = data.filter((d) => d.value != null);
+
   // The POSITION line is win/loss colored, like every other P&L surface:
   // green when the latest mark sits at or above the entry, red below it.
   // Entry prefers the recorded avg cost / premium; a missing entry falls
@@ -187,7 +196,7 @@ export function TradeHistoryChart({ kind, symbol, underlying, openedDate, closed
       <ChartContainer config={chartConfig} className="h-60 w-full">
         <AreaChart data={data} margin={{ top: 8, right: isOption ? 4 : 12, left: 4, bottom: 4 }}>
           <CartesianGrid vertical={false} stroke="var(--chart-grid)" xAxisId="x" yAxisId="price" />
-          <XAxis xAxisId="x" dataKey="date" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} minTickGap={36} tickFormatter={(v: string) => fmtTick(v, lastYear, singleDay)} />
+          <XAxis xAxisId="x" dataKey="date" allowDuplicatedCategory={false} tickLine={false} axisLine={false} tickMargin={8} fontSize={11} minTickGap={36} tickFormatter={(v: string) => fmtTick(v, lastYear, singleDay)} />
           {/* yAxisId names are alphabetical on purpose: Recharts v3 renders
               multiple y-axes in alphabetical id order, so "price" (left)
               paints before "value" (right). */}
@@ -211,9 +220,9 @@ export function TradeHistoryChart({ kind, symbol, underlying, openedDate, closed
             }
           />
           {havePrice && (
-            <Area xAxisId="x" yAxisId="price" type="monotone" dataKey="price" stroke={isOption ? "var(--muted-foreground)" : posColor} strokeWidth={isOption ? 1.5 : 2.5} fill="none" dot={sparse} connectNulls />
+            <Area xAxisId="x" yAxisId="price" type="monotone" data={priceData} dataKey="price" stroke={isOption ? "var(--muted-foreground)" : posColor} strokeWidth={isOption ? 1.5 : 2.5} fill="none" dot={sparse} />
           )}
-          {haveValue && <Area xAxisId="x" yAxisId="value" type="monotone" dataKey="value" stroke={posColor} strokeWidth={2.5} fill="none" dot={sparse} connectNulls />}
+          {haveValue && <Area xAxisId="x" yAxisId="value" type="monotone" data={valueData} dataKey="value" stroke={posColor} strokeWidth={2.5} fill="none" dot={sparse} />}
         </AreaChart>
       </ChartContainer>
       {isOption && (

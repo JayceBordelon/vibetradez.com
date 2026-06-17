@@ -97,14 +97,15 @@ export function CronTable() {
   );
 }
 
-/* ── guards.go, dumped like a config file. The joke is how little is left
-      in it: every allocation limit is gone, so those keys print "none" in
-      red, and the one real rule is the broker's. ── */
+/* ── guards.go, dumped like a config file. Options only now: equity buys are
+      off, and a single contract and a single name are each capped as a slice
+      of equity so it can't faceplant the account on one bet. The broker's
+      settled-cash rule still rules. ── */
 const GUARD_LINES: { key: string; value: ReactNode; tone?: "red" | "muted" }[] = [
-  { key: "allocation_split", value: "none", tone: "red" },
-  { key: "per_name_cap", value: "none", tone: "red" },
-  { key: "per_order_cap", value: "none", tone: "red" },
-  { key: "drawdown_halt", value: "none", tone: "red" },
+  { key: "instruments", value: "options only", tone: "muted" },
+  { key: "equity_buys", value: "disabled", tone: "red" },
+  { key: "per_contract_cap", value: "~10% of equity", tone: "muted" },
+  { key: "per_name_cap", value: "~25% of equity", tone: "muted" },
   { key: "settled_cash", value: "settled cash only (the broker insists)", tone: "muted" },
 ];
 
@@ -149,7 +150,7 @@ const TOOL_DIRS: ToolDir[] = [
     bits: "drwx------",
     dir: "execution/",
     note: "real money",
-    names: ["buy_equity", "sell_equity", "buy_option", "sell_option", "cancel_order", "hold"],
+    names: ["buy_option", "sell_option", "sell_equity", "cancel_order", "hold"],
     accent: "green",
   },
   {
@@ -205,14 +206,14 @@ export function HeroStatStrip({ equity }: { equity: number | null }) {
       the log, scrolling the kind of lines the session actually emits. ── */
 const TAPE: { text: string; tone?: "green" | "red" | "muted" }[] = [
   { text: "NVDA +2.14%", tone: "green" },
-  { text: "buy_equity NVDA x9 @ 141.19 · filled" },
+  { text: "buy_option NVDA 150C x5 @ 4.20 · filled" },
   { text: "hold MSFT", tone: "muted" },
   { text: "SPY · the one to beat", tone: "muted" },
   { text: "buy_option NVDA 145C · all in", tone: "green" },
   { text: "write_summary · very confident note filed" },
   { text: "settled_cash $3,920.10", tone: "muted" },
   { text: "sell_equity · loser cut, lesson pending", tone: "red" },
-  { text: "no allocation cap · full discretion", tone: "muted" },
+  { text: "options only · no whole-account yolo on one contract", tone: "muted" },
   { text: "cancel_order · second thoughts", tone: "muted" },
 ];
 

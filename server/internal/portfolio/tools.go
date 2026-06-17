@@ -248,21 +248,8 @@ func ToolDefinitions() []anthropic.ToolUnionParam {
 			},
 		}},
 		{OfTool: &anthropic.ToolParam{
-			Name:        "buy_equity",
-			Description: anthropic.String("Submit a BUY LIMIT order for shares of an equity. Notional (quantity × limit_price) is checked against the settled-cash rule before anything reaches the broker. Returns the order id on success or a clear refusal string."),
-			InputSchema: anthropic.ToolInputSchemaParam{
-				Properties: map[string]any{
-					"symbol":      str("Equity ticker."),
-					"quantity":    num("Number of shares (whole shares)."),
-					"limit_price": num("Per-share LIMIT price in USD, > 0."),
-					"rationale":   str("One to three sentences a human will read explaining this buy."),
-				},
-				Required: []string{"symbol", "quantity", "limit_price", "rationale"},
-			},
-		}},
-		{OfTool: &anthropic.ToolParam{
 			Name:        "sell_equity",
-			Description: anthropic.String("Submit a SELL LIMIT order for shares you currently hold. Refused if you do not hold the position or try to sell more than you own. De-risking is always allowed."),
+			Description: anthropic.String("Submit a SELL LIMIT order to LIQUIDATE shares you currently hold from a prior session (there is no buy_equity — the account trades options only). Refused if you do not hold the position or try to sell more than you own. De-risking is always allowed."),
 			InputSchema: anthropic.ToolInputSchemaParam{
 				Properties: map[string]any{
 					"symbol":      str("Equity ticker you hold."),
@@ -773,38 +760,13 @@ func round2(v float64) float64 { return math.Round(v*100) / 100 }
 
 // ── write tools ──
 
-func (d *ToolDispatcher) dispatchBuyEquity(ctx context.Context, input json.RawMessage) string {
-	var args struct {
-		Symbol     string  `json:"symbol"`
-		Quantity   float64 `json:"quantity"`
-		LimitPrice float64 `json:"limit_price"`
-		Rationale  string  `json:"rationale"`
-	}
-	if err := json.Unmarshal(input, &args); err != nil {
-		return jsonError("buy_equity: invalid arguments")
-	}
-	args.Symbol = strings.ToUpper(strings.TrimSpace(args.Symbol))
-	if args.Symbol == "" || args.Quantity <= 0 || args.LimitPrice <= 0 {
-		return jsonError("buy_equity: symbol, positive quantity, and positive limit_price are required")
-	}
-	// Whole shares only: the broker order quantity is an int (wire.go), so a
-	// fractional quantity would be truncated there while the cap checks and the
-	// working snapshot below were computed on the fractional value, desyncing
-	// authorized-vs-sent. Reject it so the model re-issues a whole-share order.
-	if args.Quantity != math.Trunc(args.Quantity) {
-		return jsonError("buy_equity: quantity must be a whole number of shares (fractional shares are not supported)")
-	}
-	m := Move{
-		Action:     ActionBuyEquity,
-		AssetType:  AssetEquity,
-		Symbol:     args.Symbol,
-		Underlying: args.Symbol,
-		Quantity:   args.Quantity,
-		Notional:   args.Quantity * args.LimitPrice,
-	}
-	return d.commitBuy(ctx, m, args.LimitPrice, args.Rationale, func() (string, int, error) {
-		return d.exec.BuyEquity(ctx, args.Symbol, args.Quantity, args.LimitPrice)
-	})
+// dispatchBuyEquity is disabled under the options-only mandate. Equity buys
+// are refused at the tool layer; legacy shares are converted to cash with
+// sell_equity, and all new exposure goes through buy_option. buy_equity is
+// also absent from ToolDefinitions, so the model should never reach here —
+// this is a defensive refusal for any stale or replayed call.
+func (d *ToolDispatcher) dispatchBuyEquity(_ context.Context, _ json.RawMessage) string {
+	return jsonError("buy_equity is disabled: VibeTradez trades options only. Liquidate any shares you hold with sell_equity to free cash, then express the view with buy_option.")
 }
 
 func (d *ToolDispatcher) dispatchBuyOption(ctx context.Context, input json.RawMessage) string {
@@ -963,6 +925,12 @@ func (d *ToolDispatcher) commitBuy(ctx context.Context, m Move, limitPrice float
 	defer d.mu.Unlock()
 
 	if gErr := CheckBuy(d.work, m); gErr != nil {
+		return jsonError(fmt.Sprintf("%s refused (%s): %s", m.Action, gErr.Code, gErr.Message))
+	}
+	if gErr := CheckOptionSize(d.work, m); gErr != nil {
+		return jsonError(fmt.Sprintf("%s refused (%s): %s", m.Action, gErr.Code, gErr.Message))
+	}
+	if gErr := CheckUnderlyingExposure(d.work, m); gErr != nil {
 		return jsonError(fmt.Sprintf("%s refused (%s): %s", m.Action, gErr.Code, gErr.Message))
 	}
 

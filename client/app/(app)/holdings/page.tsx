@@ -33,7 +33,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const holdings = await fetchHoldings();
   const n = holdings.length;
   const title = `Holdings (${n})`;
-  const description = n > 0 ? `The ${n} position${n === 1 ? "" : "s"} the model is holding right now, stocks and options, with cost basis and unrealized P&L.` : "The model is fully in cash right now. No open positions.";
+  const description = n > 0 ? `The ${n} position${n === 1 ? "" : "s"} the model is holding right now, with cost basis and unrealized P&L.` : "The model is fully in cash right now. No open positions.";
   return {
     title,
     description,

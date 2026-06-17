@@ -115,7 +115,10 @@ export function PortfolioShell() {
   //     completed day and overnight becomes the LIVE drift since the
   //     close, the period we're actually in.
   // When neither split is anchorable, fall back to the unsplit day change.
-  const baseline = [...curve].reverse().find((p) => p.date < data.date)?.account_equity ?? 0;
+  // Skip zero-equity gap days (a missing or failed EOD snapshot) so the
+  // day-change baseline is the last day the account actually had value — a 0
+  // baseline would otherwise suppress the entire day-change readout.
+  const baseline = [...curve].reverse().find((p) => p.date < data.date && p.account_equity > 0)?.account_equity ?? 0;
   const todayClosePoint = curve.find((p) => p.date === data.date && !p.live);
   const dayDollars = baseline > 0 ? equity - baseline : null;
   let todayPct: number | null = null;
