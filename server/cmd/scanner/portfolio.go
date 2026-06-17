@@ -93,7 +93,8 @@ func (s *recapEmailSender) SendRecapEmail(_ context.Context, subject, html strin
 		log.Printf("portfolio recap: no subscribers, nothing to send")
 		return 0, nil
 	}
-	res := s.client.SendPersonalizedToList(s.cfg.EmailFrom, recipients, subject, ensureUnsubscribe(html), unsubURLBuilder(s.cfg))
+	body := signByModel(ensureUnsubscribe(html), s.cfg.AnthropicModel)
+	res := s.client.SendPersonalizedToList(s.cfg.EmailFrom, recipients, subject, body, unsubURLBuilder(s.cfg))
 	log.Printf("portfolio recap: model-authored email sent to %d/%d subscribers", res.Succeeded, res.Total)
 	if res.Failed > 0 {
 		log.Printf("portfolio recap: email failures: %s", res.FailureDetail())
@@ -116,6 +117,22 @@ func ensureUnsubscribe(html string) string {
 		return html[:i] + footer + html[i:]
 	}
 	return html + footer
+}
+
+// signByModel stamps the recap with the model that actually wrote it, so every
+// email is attributed to its author (e.g. "claude-opus-4-8"). The name is the
+// configured model the agent runs on — authoritative, not the model's own
+// guess — inserted just before </body>.
+func signByModel(html, model string) string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return html
+	}
+	sig := `<p style="margin:14px 0 0;font-size:11px;color:#94a3b8;">Written by Claudia &middot; ` + model + `</p>`
+	if i := strings.LastIndex(strings.ToLower(html), "</body>"); i >= 0 {
+		return html[:i] + sig + html[i:]
+	}
+	return html + sig
 }
 
 // analysisWindowKey is the sent_emails ledger key for the one-time product
