@@ -167,21 +167,42 @@ func (s *Server) currentPositions(ctx context.Context) (views []portfolioPositio
 	if s.executor != nil {
 		cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		if positions, err := s.executor.GetPositionsAgent(cctx); err == nil && len(positions) > 0 {
+		if positions, err := s.executor.GetPositionsAgent(cctx); err == nil {
+			// A successful call is authoritative even when flat (zero positions):
+			// a healthy empty book must not fall through to a stale snapshot.
 			for _, bp := range positions {
 				views = append(views, positionView(bp))
 			}
 			return views, "live", ""
 		}
 	}
-	if rows, err := s.db.GetLatestPositions(); err == nil && len(rows) > 0 {
-		for _, p := range rows {
-			views = append(views, snapshotPositionView(p))
-			asOf = p.Date
-		}
-		return views, "snapshot", asOf
+	rows, rerr := s.db.GetLatestPositions()
+	if rerr != nil || len(rows) == 0 {
+		return nil, "", ""
 	}
-	return nil, "", ""
+	// Broker unreachable: the last snapshot is trustworthy only if it is as-of
+	// the latest equity-curve point. An OLDER snapshot is stale — the positions
+	// were sold since and the account has gone flat — so showing it would
+	// resurrect closed holdings. Report flat in that case.
+	if cd := s.latestCurveDate(); cd != "" && rows[0].Date < cd {
+		return nil, "snapshot", ""
+	}
+	for _, p := range rows {
+		views = append(views, snapshotPositionView(p))
+		asOf = p.Date
+	}
+	return views, "snapshot", asOf
+}
+
+// latestCurveDate returns the date of the most recent equity-curve point (the
+// recorded EOD truth), or "" if there is no curve. Used to detect a stale
+// positions snapshot — one older than the latest recorded book.
+func (s *Server) latestCurveDate() string {
+	pts, err := s.db.GetEquityCurve("0000-00-00", time.Now().In(easternLoc()).Format("2006-01-02"))
+	if err != nil || len(pts) == 0 {
+		return ""
+	}
+	return pts[len(pts)-1].Date
 }
 
 type openMove struct {
