@@ -50,6 +50,7 @@ func assertContract(t *testing.T, name string, v any, want []string) {
 }
 
 func f64(v float64) *float64 { return &v }
+func iptr(v int) *int        { return &v }
 
 func TestContract_PortfolioResponse(t *testing.T) {
 	resp := portfolioResponse{
@@ -69,7 +70,7 @@ func TestContract_PortfolioResponse(t *testing.T) {
 func TestContract_PositionView(t *testing.T) {
 	v := portfolioPositionView{
 		Symbol: "MDT", Underlying: "MDT", AssetType: "EQUITY", ContractType: "CALL", Strike: 1,
-		Expiration: "2026-04-17", DTE: 1, Quantity: 1, MarketValue: 1, CostBasis: 1, UnrealizedPnl: 1,
+		Expiration: "2026-04-17", DTE: iptr(1), Quantity: 1, MarketValue: 1, CostBasis: 1, UnrealizedPnl: 1,
 		OpenValue: 1, PrevCloseValue: 1, TodayCloseValue: 1,
 	}
 	assertContract(t, "portfolioPositionView", v, []string{
@@ -101,7 +102,7 @@ func TestContract_EquityCurve(t *testing.T) {
 func TestContract_Holdings(t *testing.T) {
 	h := holdingView{
 		ID: "MDT", Kind: "stock", Symbol: "MDT", Underlying: "MDT", Label: "MDT", ContractType: "CALL",
-		Strike: 1, Expiration: "2026-04-17", DTE: 1, Quantity: 1, MarketValue: 1, CostBasis: 1,
+		Strike: 1, Expiration: "2026-04-17", DTE: iptr(1), Quantity: 1, MarketValue: 1, CostBasis: 1,
 		UnrealizedPnl: 1, OpenedDate: "2026-06-01", OpenRationale: "r", OpenValue: 1, PrevCloseValue: 1,
 		TodayCloseValue: 1,
 	}

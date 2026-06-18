@@ -38,7 +38,7 @@ type holdingView struct {
 	ContractType  string  `json:"contract_type,omitempty"`
 	Strike        float64 `json:"strike,omitempty"`
 	Expiration    string  `json:"expiration,omitempty"`
-	DTE           int     `json:"dte,omitempty"`
+	DTE           *int    `json:"dte,omitempty"`
 	Quantity      float64 `json:"quantity"`
 	MarketValue   float64 `json:"market_value"`
 	CostBasis     float64 `json:"cost_basis"`
@@ -298,21 +298,24 @@ func instrumentLabel(assetType, underlying, symbol, contractType string, strike 
 	return symbol
 }
 
-// dteFromExpiration returns calendar days to expiration from today (ET).
-// 0 for equity (no expiration) or unparseable dates.
-func dteFromExpiration(expiration string) int {
+// dteFromExpiration returns calendar days to expiration from today (ET), or
+// nil for an equity (no expiration) or an unparseable date. Returning a
+// pointer lets the wire distinguish "not applicable" (nil, omitted) from a
+// genuine 0 — an option expiring TODAY — which a plain int with omitempty
+// would silently drop, hiding the highest-risk state an option can be in.
+func dteFromExpiration(expiration string) *int {
 	if expiration == "" {
-		return 0
+		return nil
 	}
 	exp, err := time.ParseInLocation("2006-01-02", expiration, easternLoc())
 	if err != nil {
-		return 0
+		return nil
 	}
 	today := time.Now().In(easternLoc())
 	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, easternLoc())
 	d := int(exp.Sub(today).Hours() / 24)
 	if d < 0 {
-		return 0
+		d = 0
 	}
-	return d
+	return &d
 }
