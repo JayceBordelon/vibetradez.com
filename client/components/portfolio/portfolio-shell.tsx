@@ -11,7 +11,7 @@ import { AnimatedNumber } from "@/components/ui/animated-number";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { useLiveQuotes } from "@/hooks/use-live-quotes";
 import { aggregateOvernight } from "@/lib/day-split";
-import { repricePositions } from "@/lib/live-pricing";
+import { freshMark, repricePositions } from "@/lib/live-pricing";
 import { useVisiblePoll } from "@/hooks/use-visible-poll";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -104,7 +104,14 @@ export function PortfolioShell() {
   const positions = repricePositions(data.positions ?? [], quotes);
   const positionsValue = positions.reduce((s, p) => s + p.market_value, 0);
   const totalUnrealized = positions.reduce((s, p) => s + p.unrealized_pnl, 0);
-  const equity = positionsValue + data.settled_cash + data.unsettled_cash;
+  // Equity is positions + settled cash, the SAME definition the server uses
+  // for `data.equity` and the equity curve (positionsValue + settledCash).
+  // We recompute it here (rather than read data.equity) only so the live
+  // quote overlay moves it tick by tick. Do NOT add unsettled_cash: the
+  // server's equity omits it, so adding it here would double-count sale
+  // proceeds the moment unsettled cash is ever populated (it is always 0
+  // today) and overstate equity against every server-reported figure.
+  const equity = positionsValue + data.settled_cash;
   const investedPct = equity > 0 ? (positionsValue / equity) * 100 : 0;
   // Day change measures LIVE equity against the last end-of-day close
   // BEFORE today, split phase-aware:
@@ -162,7 +169,7 @@ export function PortfolioShell() {
       {/* No border-t here: the summary strip above already draws its own
           bottom rule, and the doubled hairline read as a ghost band in dark. */}
       <Section title="Performance" className="mt-8">
-        <EquityCurveChart points={curve} today={data.date} liveEquity={equity} liveUnrealized={totalUnrealized} liveSpyMark={quotes.get("SPY")?.mark ?? null} />
+        <EquityCurveChart points={curve} today={data.date} liveEquity={equity} liveUnrealized={totalUnrealized} liveSpyMark={freshMark(quotes, "SPY")} />
         {curve.length >= 2 && <PerformanceMetrics points={curve} trades={trades} today={data.date} liveEquity={equity} />}
       </Section>
 

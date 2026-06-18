@@ -21,6 +21,9 @@ export interface LiveQuote {
   mark: number;
   bid?: number;
   ask?: number;
+  /** Wall-clock ms (Date.now) when this mark arrived, so consumers can drop
+   *  a mark that's gone stale after the stream stopped ticking. */
+  ts: number;
 }
 
 type TickMsg = { type: "equity" | "option"; symbol: string; mark: number; bid?: number; ask?: number };
@@ -51,7 +54,7 @@ export function useLiveQuotes(enabled = true): Map<string, LiveQuote> {
     const onTick = (msg: TickMsg) => {
       if (!msg.symbol || !(msg.mark > 0)) return;
       pending.current ??= new Map();
-      pending.current.set(msg.symbol, { mark: msg.mark, bid: msg.bid, ask: msg.ask });
+      pending.current.set(msg.symbol, { mark: msg.mark, bid: msg.bid, ask: msg.ask, ts: Date.now() });
       if (!frame.current) frame.current = requestAnimationFrame(flush);
     };
 
