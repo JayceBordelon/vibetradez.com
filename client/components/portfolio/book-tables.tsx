@@ -244,8 +244,8 @@ export function ClosedTable({ items }: { items: ClosedTrade[] }) {
                 </span>
                 <span className="ml-2 text-xs text-muted-foreground">{t.hold_days}d</span>
               </TableCell>
-              <TableCell className={cn(cellCls, numCls, "max-sm:hidden")}>{fmtMoney(t.entry_price)}</TableCell>
-              <TableCell className={cn(cellCls, numCls, "max-sm:hidden")}>{fmtMoney(t.exit_price)}</TableCell>
+              <TableCell className={cn(cellCls, numCls, "max-sm:hidden")}>{t.entry_price > 0 ? fmtMoney(t.entry_price) : "-"}</TableCell>
+              <TableCell className={cn(cellCls, numCls, "max-sm:hidden")}>{t.exit_price > 0 ? fmtMoney(t.exit_price) : "-"}</TableCell>
               <TableCell className={cn(cellCls, numCls, "font-semibold", pnlColor(t.realized_pnl))}>
                 <AnimatedNumber value={t.realized_pnl} kind="pnlInt" />
               </TableCell>

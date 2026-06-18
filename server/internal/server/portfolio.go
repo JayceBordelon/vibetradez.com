@@ -30,7 +30,7 @@ type portfolioPositionView struct {
 	ContractType  string  `json:"contract_type,omitempty"`
 	Strike        float64 `json:"strike,omitempty"`
 	Expiration    string  `json:"expiration,omitempty"`
-	DTE           int     `json:"dte,omitempty"`
+	DTE           *int    `json:"dte,omitempty"`
 	Quantity      float64 `json:"quantity"`
 	MarketValue   float64 `json:"market_value"`
 	CostBasis     float64 `json:"cost_basis"`

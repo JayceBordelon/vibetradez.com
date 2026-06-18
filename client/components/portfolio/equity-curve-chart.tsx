@@ -56,17 +56,26 @@ const pnlChartConfig: ChartConfig = {
 };
 
 function buildSeries(points: EquityCurvePoint[]) {
-  const firstEquity = points.find((p) => p.account_equity > 0)?.account_equity ?? 0;
-  const firstSpy = points.find((p) => p.spy_close > 0)?.spy_close ?? 0;
+  // Anchor the SPY counterfactual to the first day BOTH the account and SPY
+  // have a value, and base it on the account's equity THAT day. Picking the
+  // first non-zero equity and the first non-zero SPY close independently can
+  // resolve to DIFFERENT dates (e.g. early days where the EOD SPY fetch
+  // failed), which silently rebases the ghost line to a later start than the
+  // account line and falsifies the "Beating/Trailing SPY" verdict. Tying both
+  // to one anchor day makes the ghost start level with the account on the
+  // same date; days before that anchor gap out (we can't compare without SPY).
+  const anchor = points.find((p) => p.account_equity > 0 && p.spy_close > 0);
+  const baseEquity = anchor?.account_equity ?? 0;
+  const baseSpy = anchor?.spy_close ?? 0;
   return points.map((p) => ({
     date: p.date,
     realized: p.realized_cum,
     unrealized: p.unrealized,
-    // Hypothetical buy-and-hold: the window's starting equity riding SPY,
-    // as P&L (`spy`) for the decomposition view and as account value
-    // (`spyValue`) for the value view.
-    spy: firstEquity > 0 && firstSpy > 0 && p.spy_close > 0 ? firstEquity * (p.spy_close / firstSpy - 1) : null,
-    spyValue: firstEquity > 0 && firstSpy > 0 && p.spy_close > 0 ? firstEquity * (p.spy_close / firstSpy) : null,
+    // Hypothetical buy-and-hold: the anchor day's equity riding SPY, as P&L
+    // (`spy`) for the decomposition view and as account value (`spyValue`)
+    // for the value view.
+    spy: baseEquity > 0 && baseSpy > 0 && p.spy_close > 0 ? baseEquity * (p.spy_close / baseSpy - 1) : null,
+    spyValue: baseEquity > 0 && baseSpy > 0 && p.spy_close > 0 ? baseEquity * (p.spy_close / baseSpy) : null,
     // A zero-equity day is a missing snapshot, not a wiped account: null
     // it so the line gaps (connectNulls bridges it) instead of cratering.
     equity: p.account_equity > 0 ? p.account_equity : null,
@@ -81,10 +90,24 @@ function lastValue(series: Array<number | null>): number {
   return 0;
 }
 
-// Signed compact dollars for the headline stats ("+$1,204", "-$86").
+// Signed compact dollars for the headline stats ("+$1,204", "-$86"). The sign
+// is taken from the rounded magnitude, so a value that rounds to $0 reads as a
+// neutral "$0" rather than a self-contradicting "-$0".
 function fmtUsdSigned(n: number): string {
-  const body = Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
-  return `${n < 0 ? "-" : "+"}$${body}`;
+  const r = Math.round(n);
+  if (r === 0) return "$0";
+  const body = Math.abs(r).toLocaleString("en-US");
+  return `${r < 0 ? "-" : "+"}$${body}`;
+}
+
+// signColor picks the P&L color for a headline stat, but stays neutral when
+// the value rounds to $0 at the displayed (whole-dollar) precision — so a
+// figure shown as "$0" is never tinted red or green as if it had direction.
+function signColor(n: number): string {
+  const r = Math.round(n);
+  if (r < 0) return "text-red";
+  if (r > 0) return "text-green";
+  return "text-foreground";
 }
 
 // Axis ticks: compact unsigned dollars, negative as -$120.
@@ -161,7 +184,7 @@ function HeadlineStat({
         )}
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
       </div>
-      <div className={cn("mt-0.5 text-2xl font-bold tabular-nums", signed ? (value < 0 ? "text-red" : "text-green") : "text-foreground")}>
+      <div className={cn("mt-0.5 text-2xl font-bold tabular-nums", signed ? signColor(value) : "text-foreground")}>
         <AnimatedNumber value={value} kind={kind} />
       </div>
       {pctOfStart !== null && (
@@ -178,9 +201,17 @@ function HeadlineStat({
 // value view measures it level vs level, the P&L view sum vs ghost; the
 // two agree by construction up to snapshot drift).
 function EdgePill({ edge }: { edge: number }) {
+  // Decide the verb from the SAME rounded magnitude the pill displays. An edge
+  // that rounds to under a dollar (or a dead tie) reads "Even with SPY" rather
+  // than asserting a "Beating/Trailing SPY by $0" win the account never had.
+  const rounded = Math.round(edge);
+  if (rounded === 0) {
+    return <div className="mb-1 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-semibold text-muted-foreground">Even with SPY</div>;
+  }
+  const beating = rounded > 0;
   return (
-    <div className={cn("mb-1 rounded-full border px-2.5 py-1 text-xs font-semibold", edge >= 0 ? "border-green-border bg-green-bg text-green" : "border-red-border bg-red-bg text-red")}>
-      {edge >= 0 ? "Beating SPY by " : "Trailing SPY by "}
+    <div className={cn("mb-1 rounded-full border px-2.5 py-1 text-xs font-semibold", beating ? "border-green-border bg-green-bg text-green" : "border-red-border bg-red-bg text-red")}>
+      {beating ? "Beating SPY by " : "Trailing SPY by "}
       <AnimatedNumber value={Math.abs(edge)} kind="moneyInt" />
     </div>
   );
