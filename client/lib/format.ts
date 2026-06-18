@@ -25,18 +25,27 @@ export function fmtMoneyInt(n: number): string {
 }
 
 export function fmtPnlInt(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return "$0";
-  const body = usd0.format(Math.abs(n));
-  return n > 0 ? `+${body}` : `-${body}`;
+  if (!Number.isFinite(n)) return "$0";
+  // Round to the displayed unit (whole dollars) BEFORE choosing the sign, so
+  // a value that rounds to $0 reads as a neutral "$0" rather than a signed
+  // "+$0"/"-$0" whose sign contradicts its own (zero) magnitude.
+  const rounded = Math.round(n);
+  if (rounded === 0) return "$0";
+  const body = usd0.format(Math.abs(rounded));
+  return rounded > 0 ? `+${body}` : `-${body}`;
 }
 
 // Signed P&L with cents, for readouts that sit next to other cents-precision
 // money (the dashboard stat strip shows $4,589.75 equity, so a whole-dollar
 // +$206 beside it read as a different unit).
 export function fmtPnl(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return "$0.00";
-  const body = usd.format(Math.abs(n));
-  return n > 0 ? `+${body}` : `-${body}`;
+  if (!Number.isFinite(n)) return "$0.00";
+  // Round to cents before choosing the sign (see fmtPnlInt): a sub-cent
+  // value shows neutral "$0.00", never "-$0.00".
+  const rounded = Math.round(n * 100) / 100;
+  if (rounded === 0) return "$0.00";
+  const body = usd.format(Math.abs(rounded));
+  return rounded > 0 ? `+${body}` : `-${body}`;
 }
 
 export function plural(n: number, unit: string): string {

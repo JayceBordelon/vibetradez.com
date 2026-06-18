@@ -30,6 +30,17 @@ components render these readouts too, and functions don't cross the RSC
 boundary. Add new kinds to FORMATS as call sites need them.
 */
 
+// signedPct formats a percent with a leading sign, but decides the sign from
+// the value AFTER rounding to the displayed precision: a magnitude that rounds
+// to zero renders a neutral "0.0%"/"0.00%" instead of "-0.0%" (a minus on a
+// number that displays as zero) or "+0.0%" (a win claimed on a flat position).
+function signedPct(n: number, d: number): string {
+  const body = fmt(n, d); // toFixed already carries a "-" for negatives
+  const rounded = Number(body); // "-0.00" -> -0, which === 0
+  if (rounded === 0) return `${fmt(0, d)}%`;
+  return `${rounded > 0 ? "+" : ""}${body}%`;
+}
+
 const FORMATS = {
   /** $1,480.42 */
   money: fmtMoney,
@@ -42,11 +53,17 @@ const FORMATS = {
   /** $79.50 / $1,234: cents only when present */
   price: fmtPrice,
   /** +$1,204 / -$86: signed compact dollars (chart headline style) */
-  usdSigned: (n: number) => `${n < 0 ? "-" : "+"}$${Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
+  usdSigned: (n: number) => {
+    // Sign comes from the rounded magnitude, so a value that rounds to $0
+    // reads as a neutral "$0", never a self-contradicting "-$0"/"+$0".
+    const r = Math.round(n);
+    if (r === 0) return "$0";
+    return `${r < 0 ? "-" : "+"}$${Math.abs(r).toLocaleString("en-US")}`;
+  },
   /** +4.3% (one decimal, signed) */
-  pctSigned1: (n: number) => `${n >= 0 ? "+" : ""}${fmt(n, 1)}%`,
+  pctSigned1: (n: number) => signedPct(n, 1),
   /** +3.77% (two decimals, signed) */
-  pctSigned2: (n: number) => `${n >= 0 ? "+" : ""}${fmt(n, 2)}%`,
+  pctSigned2: (n: number) => signedPct(n, 2),
   /** 68% (whole, unsigned) */
   pct0: (n: number) => `${fmt(n, 0)}%`,
   /** -19.5% (one decimal, sign only when negative) */
