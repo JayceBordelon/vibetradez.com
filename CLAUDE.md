@@ -159,7 +159,7 @@ Visit `https://vibetradez.com/auth/schwab` in a browser. Tokens are stored in th
 curl https://vibetradez.com/health | jq
 ```
 
-Returns per-service status for `database`, `anthropic`, `schwab_market_data`, `market_signals`, `api`, `morning_picks` with latencies. The Anthropic check goes through the official SDK and warns (instead of fails) when a stub local key is detected.
+Returns per-service status for `database`, `anthropic`, `schwab_market_data`, `schwab_trading`, `api` with latencies. The Anthropic check goes through the official SDK and warns (instead of fails) when a stub local key is detected.
 
 ### Docker commands on production
 
@@ -179,7 +179,7 @@ docker compose up -d --force-recreate trading-server  # Full recreate (env reloa
 | Gates (the security boundary): settled-cash + sell validation | `server/internal/portfolio/guards.go` |
 | Portfolio tool layer (buy/sell equity + option, hold, reads) | `server/internal/portfolio/tools.go` |
 | Portfolio agent loop + final-JSON stance parse | `server/internal/portfolio/agent.go` |
-| Mandate prompt | `server/internal/portfolio/prompt.go` |
+| Mandate prompt | `server/internal/portfolio/prompt.md` (embedded by `prompt.go`) |
 | Adapters to Schwab + exec + store | `server/internal/portfoliowire/wire.go` |
 | Broker layer (equity + options orders, positions, account, portfolio entry points) | `server/internal/exec/` |
 | Schwab market cap (instruments fundamentals) | `server/internal/schwab/instruments.go` |
