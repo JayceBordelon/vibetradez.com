@@ -62,7 +62,15 @@ func runPortfolioSession(db *store.Store, agent *portfolio.Agent, slot string) {
 			log.Printf("portfolio: persist decision (%s %s): %v", d.Action, d.Symbol, serr)
 		}
 	}
-	log.Printf("portfolio: session complete (%d decisions, mode=live)", len(result.Decisions))
+	if err != nil {
+		// The session aborted (deadline, API failure, malformed response). Don't
+		// log "complete" — that reads as a clean no-trade day and is exactly what
+		// masked the 2026-06-18 container_id crash in the logs. The underlying
+		// error is already logged above; this terminal line must reflect failure.
+		log.Printf("portfolio: session ENDED WITH ERROR (%d decisions persisted before failure, mode=live)", len(result.Decisions))
+	} else {
+		log.Printf("portfolio: session complete (%d decisions, mode=live)", len(result.Decisions))
+	}
 
 	// Persist the day's reasoning + tool-call transcript so it's viewable
 	// at /transcript/<date>/portfolio. It is captured verbatim (this is one
