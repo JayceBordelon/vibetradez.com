@@ -4,8 +4,8 @@ reasoning, tool calls, tool results, token usage, and session duration can
 be persisted and surfaced on the dashboard.
 
 The Recorder is appended to from inside the conversation loop and is
-nil-safe: a nil *Recorder swallows every Add call, so the paths that
-don't want capture (EOD analysis, tests) can pass nil without guarding.
+nil-safe: a nil *Recorder swallows every Add call, so a caller that
+doesn't want capture (e.g. tests) can pass nil without guarding.
 
 What's captured: the model's summarized extended-thinking blocks, the
 assistant narration emitted between tool calls, the tool calls and their

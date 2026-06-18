@@ -93,7 +93,7 @@ type Config struct {
 
 /*
 DefaultAnthropicModel must be refreshed from the official Anthropic Go SDK
-documentation each time work touches the trade picker. It should always
+documentation each time work touches the portfolio agent. It should always
 point at the latest production Claude model available in the SDK at the
 time of the edit. See CLAUDE.md "Model version refresh" for the policy.
 */

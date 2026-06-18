@@ -221,7 +221,9 @@ export function ClosedTable({ items }: { items: ClosedTrade[] }) {
       <TableBody>
         {items.map((t) => {
           const href = tradeHref("closed", t.id);
-          const win = t.realized_pnl >= 0;
+          // Win = strictly profitable; a $0 scratch counts as a loss, matching
+          // the win-rate stats (server trades.Summarize + dashboard strip).
+          const win = t.realized_pnl > 0;
           return (
             <TableRow key={t.id} {...rowNav(href)}>
               <TableCell className={cellCls}>

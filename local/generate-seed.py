@@ -992,7 +992,7 @@ def main():
     for ds in sorted(transcripts):
         usage, duration_ms = usage_and_duration(transcripts[ds])
         tvals.append(
-            f"  ({sql_str(ds)}, 'portfolio', 'claude-fable-5', {sql_str(json.dumps(transcripts[ds]))}::jsonb, "
+            f"  ({sql_str(ds)}, 'portfolio', 'claude-opus-4-8', {sql_str(json.dumps(transcripts[ds]))}::jsonb, "
             f"{sql_str(json.dumps(usage))}::jsonb, {duration_ms})"
         )
     p(",\n".join(tvals) + ";")

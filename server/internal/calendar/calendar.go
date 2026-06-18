@@ -60,6 +60,7 @@ holiday lands on a weekend it is observed as a FULL closure on the
 adjacent weekday and belongs in Holidays, not here.
 */
 var HalfDays = map[string]string{
+	"2025-07-03": "Independence Day (Early Close)",
 	"2025-11-28": "Day after Thanksgiving",
 	"2025-12-24": "Christmas Eve",
 	"2026-11-27": "Day after Thanksgiving",

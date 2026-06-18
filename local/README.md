@@ -5,7 +5,7 @@ A self-contained Docker stack for testing VibeTradez locally with realistic seed
 ## What's included
 
 - **Postgres 16** — auto-seeded for the portfolio manager: ~1 year of daily equity-curve points (account vs SPY), the last few daily sessions with stance notes, the recent moves, a few subscribers, and one session transcript
-- **Go API server** — runs against the local Postgres in PAPER mode (`TRADING_ENABLED=true`, `TRADING_MODE=paper`), with stub env vars for Anthropic/Resend/Schwab so it never makes real API calls. The live paper book starts empty (a fresh $6,000 cash account); the seeded tables drive the dashboard's history
+- **Go API server** — runs against the local Postgres with `TRADING_ENABLED=true` but **no broker wired**: the stub Schwab/Anthropic/Resend keys mean no real Schwab client is built, so the manager never places orders or makes real API calls. There is no paper mode — the dashboard is driven entirely by the seeded tables
 - **Next.js frontend** — proxies `/api`, `/auth`, `/admin`, and `/health` to the Go server via `next.config.ts` rewrites
 
 ## Prerequisites
@@ -74,7 +74,7 @@ FROM portfolio_decisions ORDER BY created_at DESC, id DESC;
 
 ## What you can test
 
-- **Dashboard at `/dashboard`** — the portfolio view: equity/cash summary, the equity curve vs SPY, the (empty paper) holdings table, today's moves with rationale, and the stance. Refresh the seed (below) if "today's moves" is empty because the seed date has gone stale.
+- **Dashboard at `/dashboard`** — the portfolio view: equity/cash summary, the equity curve vs SPY, the seeded holdings table, today's moves with rationale, and the stance. Refresh the seed (below) if "today's moves" is empty because the seed date has gone stale.
 - **Session transcript** — the "view the full session reasoning" link under today's moves opens `/transcript/<date>/portfolio`.
 - **Subscribe modal** — opens via the top bar button. Submitting writes to the local subscribers table.
 - **Terms & FAQ** — `/terms` and `/faq` pages.
@@ -93,7 +93,7 @@ docker compose -f docker-compose.local.yml up --build
 ## Disabled in local mode
 
 - **Cron jobs** — the portfolio session/risk/EOD crons are pushed to Sunday so they never fire (no real broker or model to call).
-- **Anthropic / Schwab / Resend** — stub keys; the server starts but never makes real calls. Live trading stays off (`TRADING_MODE=paper`).
+- **Anthropic / Schwab / Resend** — stub keys; the server starts but never makes real calls. Live trading stays off because no Schwab broker is wired (not a paper-mode flag — there is no paper mode).
 
 ## Files in this directory
 

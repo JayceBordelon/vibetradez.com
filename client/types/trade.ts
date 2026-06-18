@@ -1,28 +1,11 @@
 /*
-Shared API types still used after the v1 options-bot was removed. The
-portfolio surface has its own types in types/portfolio.ts.
+Shared API types. The portfolio surface has its own types in
+types/portfolio.ts.
 */
 
 export interface ApiResponse {
   ok: boolean;
   message: string;
-}
-
-/*
-MarketStatus is GET /api/market/status. The dashboard polls this to decide
-whether the market is open (drives the auto-refresh cadence).
-
-session is a coarse label matching the server's calendar.Status:
-  - "premarket": trading day, before 9:30 ET
-  - "open": trading day, 9:30 ET to close
-  - "afterhours": trading day, after close
-  - "closed": weekend or holiday
-*/
-export interface MarketStatus {
-  open: boolean;
-  session: "premarket" | "open" | "afterhours" | "closed";
-  next_open?: string;
-  next_close?: string;
 }
 
 /*

@@ -436,7 +436,11 @@ func checkSchwabReauth(cfg *config.Config, db *store.Store, emailClient *email.C
 		return
 	}
 	todayET := time.Now().In(loc)
-	if !lastNag.IsZero() && sameDate(lastNag.In(loc), todayET) {
+	// lastNag is the stored ET date read back as midnight UTC (DATE column),
+	// so compare its UTC calendar day against today's ET day directly — do
+	// NOT convert it back into ET, which would shift it to the prior day and
+	// defeat the once-per-day dedupe. See store.MarkReauthNagSent.
+	if !lastNag.IsZero() && sameDate(lastNag, todayET) {
 		return
 	}
 
@@ -492,9 +496,9 @@ func getRecipients(db *store.Store) []string {
 saveTranscript persists a captured model conversation for the
 dashboard's /transcript/<date>/<kind> view. Best-effort: a nil
 transcript (capture disabled / no run) and any marshal or DB error are
-logged and swallowed so a transcript write can never break the picks,
-the morning email, or the at-open basket. kind is "selection" or
-"execution".
+logged and swallowed so a transcript write can never break a trading
+session, the EOD snapshot, or the recap. kind is "portfolio" for the
+merged daily session (the only kind written now).
 */
 func saveTranscript(db *store.Store, date, kind string, tr *transcript.Transcript) {
 	if tr == nil {

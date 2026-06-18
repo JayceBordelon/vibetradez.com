@@ -48,10 +48,6 @@ export function fmtPnl(n: number): string {
   return rounded > 0 ? `+${body}` : `-${body}`;
 }
 
-export function plural(n: number, unit: string): string {
-  return n === 1 ? unit : `${unit}s`;
-}
-
 export function pnlColor(v: number): string {
   if (v > 0) return "text-green";
   if (v < 0) return "text-red";

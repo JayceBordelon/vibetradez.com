@@ -183,7 +183,9 @@ export function HoldingDetail({ h: initial }: { h: Holding }) {
 }
 
 export function ClosedDetail({ t }: { t: ClosedTrade }) {
-  const win = t.realized_pnl >= 0;
+  // Win = strictly profitable; a $0 scratch is a loss (paid the spread),
+  // matching the win-rate stats on the dashboard and /closed.
+  const win = t.realized_pnl > 0;
   const tone = win ? "positive" : "negative";
   return (
     <div className="mx-auto min-w-0 max-w-[1100px] px-4 py-6 sm:px-7">

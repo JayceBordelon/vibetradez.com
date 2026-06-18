@@ -1,5 +1,5 @@
 import type { ClosedTradesResponse, EquityCurveResponse, HoldingsResponse, PortfolioResponse, PositionHistoryResponse, PriceHistoryResponse } from "@/types/portfolio";
-import type { ApiResponse, MarketStatus, TranscriptResponse } from "@/types/trade";
+import type { ApiResponse, TranscriptResponse } from "@/types/trade";
 
 export interface SessionUser {
   id: number;
@@ -137,34 +137,16 @@ export const api = {
   },
 
   /*
-  Daily model-reasoning transcript. kind is "selection" (the 9:25
-  picker conversation) or "execution" (the 9:30 at-open agent). Returns
-  available:false with empty events when nothing was captured for the
-  date.
+  Daily model-reasoning transcript. kind is "portfolio" for the merged
+  daily session (open/midday/pre-close). "selection"/"execution" are legacy
+  v1 kinds the route still reads for any archived rows. Returns
+  available:false with empty events when nothing was captured for the date.
   */
   getTranscript: (date: string, kind: "selection" | "execution" | "portfolio") =>
     clientFetch<TranscriptResponse>(`/api/transcript?date=${encodeURIComponent(date)}&kind=${kind}`),
-
-  // /api/market/status: the cheap polled endpoint that tells the dashboard
-  // whether the market is open (drives the auto-refresh cadence).
-  getMarketStatus: () => clientFetch<MarketStatus>("/api/market/status"),
 
   me: () => clientFetch<MeResponse>("/api/me"),
 
   // Note: /auth/logout lives under /auth/*, not /api/*, so no X-VT-Source header.
   logout: () => authFetch<ApiResponse>("/auth/logout", { method: "POST" }),
-
-  /*
-  Programmatic unsubscribe path, requires the HMAC token minted server-side
-  and emailed to the subscriber. No call site uses it from the website
-  today (UnsubscribeForm now points users to the link in their email),
-  but kept as a thin wrapper so any future tool that already holds a
-  valid token can call it.
-  */
-  unsubscribe: (email: string, token: string) =>
-    clientFetch<ApiResponse>("/api/unsubscribe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...HEADERS },
-      body: JSON.stringify({ email, token }),
-    }),
 };

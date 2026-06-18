@@ -30,9 +30,8 @@ func NewClient(apiKey string) *Client {
 /*
 perRecipientSendSpacing is the minimum delay between Resend calls in
 SendPersonalizedToList. Resend Pro is 10 req/s; 200ms = 5 req/s,
-under cap with headroom. Free tier is 2 req/s; operators on free
-should set RESEND_SEND_SPACING_MS=550 (not currently wired — add if
-needed). Without spacing, a 100-subscriber morning email burns
+under cap with headroom. Without spacing, blasting the model-authored
+recap (or a one-time product update) to a 100-subscriber list burns
 through the rate limit in <10s and every call after that returns
 429 until the bucket refills.
 */

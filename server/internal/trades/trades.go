@@ -2,6 +2,7 @@ package trades
 
 import (
 	"sort"
+	"strings"
 	"time"
 
 	"vibetradez.com/internal/store"
@@ -63,6 +64,25 @@ func AssetMult(assetType string) float64 {
 
 const qtyEpsilon = 1e-6
 
+/*
+traded reports whether a decision actually executed and so should feed
+round-trip P&L. An order that reached a terminal NON-filled state
+(canceled / rejected / expired / replaced) never traded, and folding it in
+would fabricate a round trip — at its unfilled limit price, since
+DecisionPrice falls back to LimitPrice when there's no recorded fill.
+Filled, still-working, and legacy-blank (pre-status-tracking) rows are
+kept. Schwab has no partial-fill state — a partial stays WORKING and only
+flips to FILLED once the whole order completes — so a kept row never
+overstates quantity.
+*/
+func traded(d store.PortfolioDecisionRow) bool {
+	switch strings.ToUpper(strings.TrimSpace(d.Status)) {
+	case "CANCELED", "CANCELLED", "REJECTED", "EXPIRED", "REPLACED":
+		return false
+	}
+	return true
+}
+
 // acc accumulates an open round trip until a sell flattens it.
 type acc struct {
 	openQty      float64
@@ -93,6 +113,9 @@ func Derive(decisions []store.PortfolioDecisionRow) []RoundTrip {
 	var out []RoundTrip
 
 	for _, d := range decisions {
+		if !traded(d) {
+			continue // canceled / rejected / expired / replaced: never executed
+		}
 		switch d.Action {
 		case "buy_equity", "buy_option":
 			a := open[d.Symbol]

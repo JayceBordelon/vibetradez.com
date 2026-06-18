@@ -2,7 +2,7 @@
 
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Coins, Gauge, Wallet } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DashboardSkeleton } from "@/components/layout/dashboard-skeleton";
 import { Section } from "@/components/layout/section";
@@ -55,17 +55,33 @@ export function PortfolioShell() {
   // tick by tick rather than once a minute.
   const quotes = useLiveQuotes(Boolean(data?.enabled));
 
+  // Sequence guard: useVisiblePoll fires load() on an interval AND immediately
+  // on tab re-focus, so two polls can be in flight at once. Stamp each load
+  // and only commit responses from the latest one, or a slow earlier poll can
+  // resolve last and clobber fresher data with a stale snapshot.
+  const loadSeq = useRef(0);
   const load = useCallback(() => {
-    api.getPortfolio().then(setData).catch(() => {});
+    const seq = ++loadSeq.current;
+    const fresh = () => seq === loadSeq.current;
+    api
+      .getPortfolio()
+      .then((d) => {
+        if (fresh()) setData(d);
+      })
+      .catch(() => {});
     api
       .getEquityCurve()
-      .then((r) => setCurve(r.points ?? []))
+      .then((r) => {
+        if (fresh()) setCurve(r.points ?? []);
+      })
       .catch(() => {});
     // Closed trades feed the win-rate / profit-factor strip; polled with
     // the rest so an intraday fill (the 15-minute reconcile) shows up.
     api
       .getClosedTrades()
-      .then((r) => setTrades(r.trades ?? []))
+      .then((r) => {
+        if (fresh()) setTrades(r.trades ?? []);
+      })
       .catch(() => {});
   }, []);
 
