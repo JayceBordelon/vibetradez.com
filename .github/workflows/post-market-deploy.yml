@@ -1,12 +1,13 @@
 name: Post-market deploy replay
 
-# main-pipeline.yml defers every deploy during the 09:00-16:30 ET window:
-# its market_hours_guard skips sync/build/deploy so a restart never lands
-# mid-session on the live trading server. This workflow is that window's
-# safety net. After the close it checks whether the droplet is behind
+# main-pipeline.yml defers a deploy only when it would land within +/-5 min
+# of a Claude trading session (open/midday/pre-close): its market_hours_guard
+# skips sync/build/deploy so a force-recreate never kills an in-flight model
+# run. This workflow is the safety net for a push that happened to land in one
+# of those windows. After the close it checks whether the droplet is behind
 # origin/main and, if so, re-runs the pipeline with the market-hours guard
-# overridden, so a push merged during the trading window still ships the
-# same day instead of waiting for the next out-of-window push.
+# overridden, so a push deferred during a session window still ships the same
+# day instead of waiting for the next out-of-window push.
 on:
   schedule:
     # GitHub cron is UTC with no DST. 16:35 ET is 20:35 UTC during EDT and
