@@ -202,15 +202,15 @@ export function ClosedDetail({ t }: { t: ClosedTrade }) {
         <StatStrip cols={4}>
           <Stat label="Realized P&L" value={<AnimatedNumber value={t.realized_pnl} kind="pnlInt" />} tone={tone} />
           <Stat label="Return" value={<AnimatedNumber value={t.realized_pct} kind="pctSigned1" />} tone={tone} />
-          <Stat label="Entry" value={<AnimatedNumber value={t.entry_price} kind="money" />} />
-          <Stat label="Exit" value={<AnimatedNumber value={t.exit_price} kind="money" />} />
+          <Stat label="Entry" value={t.entry_price > 0 ? <AnimatedNumber value={t.entry_price} kind="money" /> : "-"} />
+          <Stat label="Exit" value={t.exit_price > 0 ? <AnimatedNumber value={t.exit_price} kind="money" /> : "-"} />
         </StatStrip>
       </div>
 
       <div className="mt-8">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{t.kind === "option" ? "Contract value & underlying over the hold" : "Price over the hold"}</h2>
         <div className="mt-3">
-          <TradeHistoryChart kind={t.kind} symbol={t.symbol} underlying={t.underlying} openedDate={t.opened_date} closedDate={t.closed_date} strike={t.strike} entryPrice={t.entry_price} />
+          <TradeHistoryChart kind={t.kind} symbol={t.symbol} underlying={t.underlying} openedDate={t.opened_date} closedDate={t.closed_date} strike={t.strike} entryPrice={t.entry_price > 0 ? t.entry_price : undefined} />
         </div>
       </div>
 

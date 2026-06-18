@@ -221,7 +221,7 @@ function renderPortfolio(r: ParsedResult): ReactNode {
         {equity !== undefined && <Cell label="Account equity" value={fmtUsd(equity)} />}
         {cash !== undefined && <Cell label="Settled cash" value={fmtUsd(cash)} />}
         {unsettled !== undefined && unsettled > 0 && <Cell label="Unsettled" value={fmtUsd(unsettled)} />}
-        {hwm !== undefined && <Cell label="High-water mark" value={fmtUsd(hwm)} />}
+        {hwm !== undefined && hwm > 0 && <Cell label="High-water mark" value={fmtUsd(hwm)} />}
       </div>
       {positions.length > 0 && (
         <div className="overflow-x-auto">
