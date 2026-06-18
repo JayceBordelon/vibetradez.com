@@ -6,12 +6,15 @@ name: CI/CD Pipeline
 # owns Traefik + its own network; all docker commands run from
 # REPO_DIR.
 #
-# Market-hours guard runs in `defer` mode: during 09:00-16:30 ET,
-# Mon-Fri the downstream jobs are skipped silently. The 16:35 ET
-# post-market replay (post-market-deploy.yml) dispatches this
-# workflow again with override_market_hours_guard=true so the deferred
-# push goes out post-close. Use the override input for emergency
-# deploys.
+# Market-hours guard runs in `defer` mode: it skips the downstream jobs
+# only when a deploy would land within +/-5 min of a Claude trading
+# session (open 9:45, midday 12:30, pre-close 15:30 ET, Mon-Fri) -- the
+# model runs that place live orders, which a force-recreate would kill
+# mid-flight. Merges that land between sessions deploy immediately. The
+# 16:35 ET post-market replay (post-market-deploy.yml) dispatches this
+# workflow again with override_market_hours_guard=true so a push deferred
+# inside a session window still goes out post-close. Use the override
+# input for emergency deploys.
 on:
   push:
     branches: [main]
@@ -52,17 +55,45 @@ jobs:
             echo "in_window=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-          # America/New_York handles DST automatically. Window is
-          # weekday 09:00-16:30 ET; everything else (weekends, before
-          # 9am ET, after 4:30pm ET, holidays modulo a separate
-          # holiday-aware cron we don't have here) deploys immediately.
+          # Defer a deploy ONLY when it would land within +/-5 min of a
+          # Claude trading session. The session crons run inside the
+          # trading-server container, and the deploy force-recreates that
+          # container; shutdown only calls cron.Stop() (no in-flight drain),
+          # so a recreate mid-session SIGKILLs the run. Blocking just these
+          # narrow windows (instead of all of 09:00-16:30 ET) lets a merge
+          # land in the GAPS between sessions and ship immediately, while a
+          # merge inside a window is still deferred to the 16:35 ET replay.
+          # America/New_York handles DST automatically.
+          #
+          # Session START times (ET), from the cmd/scanner cron defaults
+          # (CRON_SCHEDULE_PORTFOLIO_{OPEN,MIDDAY,CLOSE}):
+          #   open 9:45 (585)   midday 12:30 (750)   pre-close 15:30 (930)
+          # These three are the model runs that place live orders. The
+          # every-15-min risk sweep and the 16:00 EOD snapshot are NOT model
+          # runs (idempotent reconcile / deterministic snapshot) and are not
+          # guarded. Keep the minute marks below in sync if the cron times
+          # ever change.
           DOW=$(TZ=America/New_York date +'%u')
-          HHMM=$(TZ=America/New_York date +'%H%M')
-          if [ "$DOW" -ge 1 ] && [ "$DOW" -le 5 ] && [ "$HHMM" -ge 0900 ] && [ "$HHMM" -le 1630 ]; then
-            echo "Deferring: weekday $DOW $HHMM ET is inside the 09:00-16:30 ET window"
+          if [ "$DOW" -lt 1 ] || [ "$DOW" -gt 5 ]; then
+            echo "Proceeding: weekend (DOW $DOW), no Claude sessions today"
+            echo "in_window=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          HHMM=$(TZ=America/New_York date +'%H:%M')
+          NOW=$(( 10#${HHMM%%:*} * 60 + 10#${HHMM##*:} ))
+          BUF=5
+          in_window=false
+          for s in 585 750 930; do
+            if [ "$NOW" -ge $(( s - BUF )) ] && [ "$NOW" -le $(( s + BUF )) ]; then
+              in_window=true
+              break
+            fi
+          done
+          if [ "$in_window" = "true" ]; then
+            echo "Deferring: $HHMM ET is within +/-${BUF}min of a Claude session"
             echo "in_window=true" >> $GITHUB_OUTPUT
           else
-            echo "Proceeding: $DOW $HHMM ET is outside the market window"
+            echo "Proceeding: $HHMM ET is between Claude sessions"
             echo "in_window=false" >> $GITHUB_OUTPUT
           fi
 
@@ -288,7 +319,7 @@ jobs:
             echo "| Stage | Result | Notes |"
             echo "|---|---|---|"
             if [ "$IN_WINDOW" = "true" ]; then
-              guard_note="deferred (inside 09:00-16:30 ET window)"
+              guard_note="deferred (within +/-5 min of a Claude session)"
             else
               guard_note="proceeded"
             fi
@@ -304,7 +335,7 @@ jobs:
             echo "| Cleanup | $(badge "$CLEANUP") | docker image prune |"
             echo ""
             if [ "$IN_WINDOW" = "true" ]; then
-              echo "> Inside the market-hours window. Downstream jobs deliberately skipped. The 16:35 ET post-market replay (\`post-market-deploy.yml\`) re-fires this workflow with the override input set so the deferred push goes out post-close."
+              echo "> Within +/-5 min of a Claude trading session. Downstream jobs deliberately skipped so a force-recreate can't kill an in-flight model run. The 16:35 ET post-market replay (\`post-market-deploy.yml\`) re-fires this workflow with the override input set so the deferred push goes out post-close."
             fi
             if [ "$DEPLOY" = "failure" ] || [ "$BUILD" = "failure" ] || [ "$SYNC" = "failure" ] || [ "$HEALTHCHECK" = "failure" ]; then
               echo ""
