@@ -60,7 +60,10 @@ export default async function ClosedTradesPage({ searchParams }: PageProps) {
 
   const trades = await fetchClosedTrades();
   const realized = trades.reduce((s, t) => s + t.realized_pnl, 0);
-  const wins = trades.filter((t) => t.realized_pnl >= 0).length;
+  // A win is strictly profitable: a scratch (exactly $0) paid the spread for
+  // nothing and counts as a loss, matching the server's track-record stats
+  // (trades.Summarize) and the dashboard's win-rate strip.
+  const wins = trades.filter((t) => t.realized_pnl > 0).length;
   const winRate = trades.length > 0 ? (wins / trades.length) * 100 : 0;
 
   // Page through the round trips. The headline stats stay over the full set;

@@ -150,7 +150,7 @@ export function LiveTranscript({ lines }: { lines: TranscriptLine[] }) {
         <>
           <ol className="mt-5 space-y-5">
             {shown.slice(0, step).map((l, i) => (
-              <li key={l.type === "tool" ? l.tool : `${l.type}-${i}`} className="animate-in fade-in slide-in-from-bottom-1 duration-500">
+              <li key={`${l.type}-${i}`} className="animate-in fade-in slide-in-from-bottom-1 duration-500">
                 {l.type === "text" && <Block icon={<ClaudeLogo className="h-4 w-4" />} label="Narration" text={l.text} />}
                 {l.type === "thinking" && <Block icon={<Brain className="h-3.5 w-3.5 text-claude" />} label="Extended thinking" text={l.text} italic />}
                 {l.type === "tool" && <ToolRow tool={l.tool} payload={l.payload} result={l.result} open={l.open} />}

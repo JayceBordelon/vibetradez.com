@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
 import { OptionsTable, StocksTable } from "@/components/portfolio/book-tables";
@@ -26,10 +26,17 @@ export function LiveHoldings({ initial }: { initial: Holding[] }) {
   const [holdings, setHoldings] = useState<Holding[]>(initial);
   const quotes = useLiveQuotes(initial.length > 0);
 
+  // Sequence guard: useVisiblePoll re-fires load() on interval and on tab
+  // re-focus, so commit only the latest poll's result — otherwise a slow
+  // earlier fetch can resolve last and revert the book to a stale snapshot.
+  const loadSeq = useRef(0);
   const load = useCallback(() => {
+    const seq = ++loadSeq.current;
     api
       .getHoldings()
-      .then((r) => setHoldings(r.holdings ?? []))
+      .then((r) => {
+        if (seq === loadSeq.current) setHoldings(r.holdings ?? []);
+      })
       .catch(() => {});
   }, []);
   // The server already rendered the current book; start polling for book

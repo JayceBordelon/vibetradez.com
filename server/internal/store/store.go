@@ -455,9 +455,16 @@ func (s *Store) GetRefreshTokenIssuedAt(provider string) (issuedAt time.Time, la
 }
 
 func (s *Store) MarkReauthNagSent(provider string, sentOn time.Time) error {
+	// Store the ET calendar date as a YYYY-MM-DD string, not the time.Time.
+	// Passing a wall-clock time lets Postgres cast it to DATE in the session
+	// timezone (UTC), which rolls an evening-ET nag to the next day; the read
+	// path then read midnight-UTC back as the prior ET day, so the per-day
+	// dedupe missed and the operator could be re-nagged. A bare date string
+	// pins the exact ET day. Compared in GetRefreshTokenIssuedAt's caller
+	// against the UTC date components (see checkSchwabReauth).
 	_, err := s.db.Exec(`
 		UPDATE oauth_tokens SET reauth_nag_sent_on = $2 WHERE provider = $1
-	`, provider, sentOn)
+	`, provider, sentOn.Format("2006-01-02"))
 	return err
 }
 
