@@ -794,4 +794,66 @@ body {
     color: var(--green);
     box-shadow: var(--crt-glow);
   }
+
+  /*
+  ── TerminalLoader boot FX ───────────────────────────────────────────
+  The loader sequences its own content in JS (typed command, cascading
+  status lines, spinner, block progress bar, uptime counter). These
+  utilities add the ambient CRT motion the JS doesn't: a scanline band
+  that sweeps the panel like a refreshing tube, and a soft phosphor
+  breath on the panel edge (dark mode only — --crt-glow is `none` on the
+  light printout). Both fall back to static under prefers-reduced-motion.
+  */
+  .vt-loader {
+    position: relative;
+    overflow: hidden;
+  }
+  .vt-loader-scan {
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 40%;
+    z-index: 0;
+    pointer-events: none;
+    background: linear-gradient(to bottom, transparent 0%, color-mix(in srgb, var(--green) 11%, transparent) 65%, transparent 100%);
+    opacity: 0.5;
+    animation: vt-loader-scan 3.4s linear infinite;
+  }
+  .dark .vt-loader-scan {
+    background: linear-gradient(to bottom, transparent 0%, color-mix(in srgb, var(--green) 17%, transparent) 65%, transparent 100%);
+  }
+  @keyframes vt-loader-scan {
+    0% {
+      transform: translateY(-110%);
+    }
+    100% {
+      transform: translateY(320%);
+    }
+  }
+  .vt-loader-glow {
+    animation: vt-loader-glow 2.8s ease-in-out infinite;
+  }
+  @keyframes vt-loader-glow {
+    0%,
+    100% {
+      box-shadow: none;
+    }
+    50% {
+      box-shadow: var(--crt-glow);
+    }
+  }
+  /* Keep the JS-driven content above the sweeping scanline band. */
+  .vt-loader > *:not(.vt-loader-scan) {
+    position: relative;
+    z-index: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .vt-loader-scan {
+      animation: none;
+      opacity: 0;
+    }
+    .vt-loader-glow {
+      animation: none;
+    }
+  }
 }
