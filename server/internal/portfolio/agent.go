@@ -540,11 +540,11 @@ or empty slot falls through to the midday directive.
 func slotDirective(slot string) string {
 	switch slot {
 	case "open":
-		return "RIGHT NOW you are the OPEN session (about 9:45 AM Eastern). The overnight tape and the opening move are your freshest information — gaps, pre-market headlines, earnings reactions. Spreads are still wider than they will be midday, so size entries carefully and favor liquid names. This is the session to cut a thesis that broke overnight or to press a clear, news-driven move; you get two more looks today, so you need not do everything at once."
+		return "RIGHT NOW you are the OPEN session, session 1 of 3 today (about 9:45 AM Eastern). The overnight tape and the opening move are your freshest information — gaps, pre-market headlines, earnings reactions. Spreads are still wider than they will be midday, so size entries carefully and favor liquid names. This is the session to cut a thesis that broke overnight or to press a clear, news-driven move; you get two more looks today, so you need not do everything at once."
 	case "close":
-		return "RIGHT NOW you are the PRE-CLOSE session (about 3:30 PM Eastern), your last look before the 16:00 close. Decide what to carry overnight versus trim now, manage anything near option expiry, and clean up any dangling exits. A LIMIT order you place now may not fill before the close, so price closes to execute and treat anything left working as overnight risk."
+		return "RIGHT NOW you are the PRE-CLOSE session, session 3 of 3 today and your last look before the 16:00 close (about 3:30 PM Eastern). Decide what to carry overnight versus trim now, manage anything near option expiry, and clean up any dangling exits. A LIMIT order you place now may not fill before the close, so price closes to execute and treat anything left working as overnight risk."
 	default:
-		return "RIGHT NOW you are the MIDDAY session (about 12:30 PM Eastern). Spreads have settled and the morning's information is on the tape. This is your primary read of the book and your deepest research pass: set the day's core positioning, and carry out or consciously revise the action items your open session left you."
+		return "RIGHT NOW you are the MIDDAY session, session 2 of 3 today (about 12:30 PM Eastern). Spreads have settled and the morning's information is on the tape. This is your primary read of the book and your deepest research pass: set the day's core positioning, and carry out or consciously revise the action items your open session left you."
 	}
 }
 

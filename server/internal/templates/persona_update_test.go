@@ -14,9 +14,9 @@ func TestRenderPersonaUpdate(t *testing.T) {
 		t.Fatalf("render persona update: %v", err)
 	}
 	for _, want := range []string{
-		"She trades the trend now",
-		"aggressive momentum trader",
-		"puts the whole account to work",
+		"Ten plays, three trades",
+		"ten researched option plays",
+		"Only the top three actually trade",
 		"https://vibetradez.com/dashboard",
 		"https://vibetradez.com/transcripts/2026-06-22",
 		"@@VT_UNSUBSCRIBE_URL@@",
@@ -25,9 +25,9 @@ func TestRenderPersonaUpdate(t *testing.T) {
 			t.Errorf("persona update email missing %q", want)
 		}
 	}
-	// The retired portfolio-manager framing must not reappear as the live policy
-	// in the announcement copy.
-	for _, banned := range []string{"hold roughly 20", "dry powder", "you are NOT a day-trader"} {
+	// The retired framings (portfolio-manager AND the trade-the-trend persona)
+	// must not reappear as the live policy in the announcement copy.
+	for _, banned := range []string{"hold roughly 20", "dry powder", "you are NOT a day-trader", "She trades the trend now", "the whole account to work"} {
 		if strings.Contains(html, banned) {
 			t.Errorf("persona update email should not mention %q", banned)
 		}
