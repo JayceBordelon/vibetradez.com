@@ -6,11 +6,12 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
-import { Skeleton } from "@/components/ui/skeleton";
+import { TerminalLoader } from "@/components/ui/terminal-loader";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { TranscriptEvent, TranscriptResponse, TranscriptUsage } from "@/types/trade";
 
+import { CollapsibleOutput } from "./collapsible-output";
 import { resultStatus, safeStringify } from "./format";
 import { ToolBody } from "./tool-views";
 
@@ -107,7 +108,7 @@ export function TranscriptView({ date, kind }: { date: string; kind: Kind }) {
 
       {kind === "portfolio" && <SessionPager date={date} />}
 
-      {state.kind === "loading" && <TranscriptSkeleton />}
+      {state.kind === "loading" && <TranscriptLoading />}
       {state.kind === "error" && <StatusBlock tone="error" title="Couldn't load the transcript" body={state.message} />}
       {state.kind === "ready" && (!state.data.available || (state.data.events ?? []).length === 0) && <EmptyTranscript date={date} kind={kind} />}
       {state.kind === "ready" && state.data.available && (state.data.events ?? []).length > 0 && <TranscriptBody data={state.data} />}
@@ -530,7 +531,9 @@ function EventBlock({ event, resultPayload }: { event: TranscriptEvent; resultPa
             <Brain className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Extended thinking</span>
           </div>
-          <p className="whitespace-pre-wrap text-[13px] italic leading-relaxed text-muted-foreground">{event.text}</p>
+          <CollapsibleOutput>
+            <p className="whitespace-pre-wrap text-[13px] italic leading-relaxed text-muted-foreground">{event.text}</p>
+          </CollapsibleOutput>
         </div>
       );
     case "tool_use":
@@ -630,9 +633,9 @@ function ToolSlip({ event, resultRaw }: { event: TranscriptEvent; resultRaw?: st
           raw
         </button>
       </div>
-      <div className="mt-2 sm:pl-[22px]">
+      <CollapsibleOutput className="mt-2 sm:pl-[22px]">
         <ToolBody name={event.tool_name} input={event.tool_input} rawResult={resultRaw} />
-      </div>
+      </CollapsibleOutput>
       <div
         className={cn("grid transition-all duration-200 ease-out motion-reduce:transition-none", showRaw ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}
         aria-hidden={!showRaw}
@@ -665,14 +668,14 @@ function StatusBlock({ tone, title, body }: { tone: "error" | "muted"; title: st
   );
 }
 
-function TranscriptSkeleton() {
+function TranscriptLoading() {
   return (
-    <div className="mt-6 space-y-3" aria-busy="true" aria-live="polite">
-      <Skeleton className="h-24 w-full rounded-lg" />
-      <Skeleton className="h-10 w-full rounded-lg" />
-      <Skeleton className="h-10 w-3/4 rounded-lg" />
-      <Skeleton className="h-24 w-full rounded-lg" />
-    </div>
+    <TerminalLoader
+      className="mt-6"
+      minHeightClass="min-h-[44vh]"
+      command="vt session --replay"
+      lines={["opening the session ledger", "replaying the day's tool calls", "reconciling fills against the broker"]}
+    />
   );
 }
 

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed schwab_reauth.html analysis_window.html live_trading_update.html options_only_update.html
+//go:embed schwab_reauth.html analysis_window.html live_trading_update.html options_only_update.html persona_update.html
 var templateFS embed.FS
 
 // ── Schwab re-auth operator nag ──
@@ -75,6 +75,24 @@ type OptionsOnlyUpdateData struct {
 
 func RenderOptionsOnlyUpdate(d OptionsOnlyUpdateData) (string, error) {
 	return renderOne("options_only_update.html", d)
+}
+
+// ── One-time persona-update product update ──
+
+// PersonaUpdateData backs the one-time product-update email announcing the
+// pivot from the cautious portfolio-manager brief to an aggressive
+// momentum/trend-following trader: she follows trends, scrapes news and retail
+// sentiment before committing, and deploys the account's full buying power
+// into her strongest setups within the same per-contract / per-underlying
+// caps. BaseURL is the public site root (no trailing slash); TranscriptURL
+// points at the day's session.
+type PersonaUpdateData struct {
+	BaseURL       string
+	TranscriptURL string
+}
+
+func RenderPersonaUpdate(d PersonaUpdateData) (string, error) {
+	return renderOne("persona_update.html", d)
 }
 
 // emailFuncs gives templates locale-correct currency + percent helpers so
