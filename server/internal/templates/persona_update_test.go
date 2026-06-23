@@ -14,9 +14,9 @@ func TestRenderPersonaUpdate(t *testing.T) {
 		t.Fatalf("render persona update: %v", err)
 	}
 	for _, want := range []string{
-		"Ten plays, three trades",
-		"ten researched option plays",
-		"Only the top three actually trade",
+		"Forget my last email",
+		"only the top three trade",
+		"ten candidate option plays",
 		"https://vibetradez.com/dashboard",
 		"https://vibetradez.com/transcripts/2026-06-22",
 		"@@VT_UNSUBSCRIBE_URL@@",
