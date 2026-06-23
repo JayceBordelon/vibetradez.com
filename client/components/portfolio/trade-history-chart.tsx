@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from "recharts";
 
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { TerminalLoader } from "@/components/ui/terminal-loader";
 import { api } from "@/lib/api";
 import { fmtPrice } from "@/lib/format";
 import type { PositionValuePoint, PricePoint } from "@/types/portfolio";
@@ -146,7 +147,7 @@ export function TradeHistoryChart({ kind, symbol, underlying, openedDate, closed
   }, [prices, snapshots, isOption, openedDate, closedDate]);
 
   if (data === null) {
-    return <div className="h-60 w-full animate-pulse rounded-md bg-muted/40" aria-busy="true" aria-label="Loading trade history" />;
+    return <TerminalLoader compact minHeightClass="h-60" command="vt chart --trade" lines={["loading price history", "marking the position over time"]} />;
   }
 
   const havePrice = data.some((d) => d.price != null);

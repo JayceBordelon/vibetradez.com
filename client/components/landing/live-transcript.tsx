@@ -141,41 +141,56 @@ export function LiveTranscript({ lines }: { lines: TranscriptLine[] }) {
         )}
       </div>
 
-      {step === 0 ? (
-        <div className="mt-5 flex items-center justify-center gap-2 py-16 text-center font-mono text-[12px] text-muted-foreground/60" aria-hidden>
-          <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-muted-foreground/40" />
-          Loading session&hellip;
-        </div>
-      ) : (
-        <>
-          <ol className="mt-5 space-y-5">
-            {shown.slice(0, step).map((l, i) => (
-              <li key={`${l.type}-${i}`} className="animate-in fade-in slide-in-from-bottom-1 duration-500">
-                {l.type === "text" && <Block icon={<ClaudeLogo className="h-4 w-4" />} label="Narration" text={l.text} />}
-                {l.type === "thinking" && <Block icon={<Brain className="h-3.5 w-3.5 text-claude" />} label="Extended thinking" text={l.text} italic />}
-                {l.type === "tool" && <ToolRow tool={l.tool} payload={l.payload} result={l.result} open={l.open} />}
-              </li>
-            ))}
-          </ol>
+      {/* Every line is mounted from the first frame and revealed by fading in
+          place (opacity + transform, which don't reflow), so the block holds
+          its full height the whole time instead of growing line by line and
+          shoving the page below it down as each event "streams" in. */}
+      <ol className="mt-5 space-y-5">
+        {shown.map((l, i) => {
+          const revealed = step > i;
+          return (
+            <li
+              key={`${l.type}-${i}`}
+              aria-hidden={!revealed}
+              className={cn(
+                "transition-all duration-500 ease-out motion-reduce:transition-none",
+                revealed ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-1 opacity-0"
+              )}
+            >
+              {l.type === "text" && <Block icon={<ClaudeLogo className="h-4 w-4" />} label="Narration" text={l.text} />}
+              {l.type === "thinking" && <Block icon={<Brain className="h-3.5 w-3.5 text-claude" />} label="Extended thinking" text={l.text} italic />}
+              {l.type === "tool" && <ToolRow tool={l.tool} payload={l.payload} result={l.result} open={l.open} />}
+            </li>
+          );
+        })}
+      </ol>
 
-          {streaming && (
-            <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[12px] text-muted-foreground">
-              <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-claude" aria-hidden />
-              <span className="font-semibold text-claude">{GERUNDS[gerund]}&hellip;</span>
-              <span className="text-muted-foreground/60">
-                ({fmtTime(secs)} &middot; &uarr; {fmtTokens(tokens)})
-              </span>
-            </div>
-          )}
-
-          {!streaming && step >= shown.length && hiddenCount > 0 && (
-            <div className="mt-6 flex items-center gap-2 border-t border-dashed border-border/60 pt-4 font-mono text-[11px] text-muted-foreground/60">
-              <span aria-hidden>&middot;&middot;&middot;</span>
-              transcript truncated, {hiddenCount} more events this session
-            </div>
-          )}
-        </>
-      )}
+      {/* A fixed-height status rail: the idle, streaming, and truncated states
+          all share one reserved slot, so swapping between them never changes
+          the block's height either. */}
+      <div className="relative mt-4 min-h-[3.25rem] font-mono text-[12px]">
+        {step === 0 && (
+          <div className="flex items-center gap-2 text-muted-foreground/60" aria-hidden>
+            <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-muted-foreground/40" />
+            Loading session&hellip;
+          </div>
+        )}
+        {streaming && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
+            <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-claude" aria-hidden />
+            <span className="font-semibold text-claude">{GERUNDS[gerund]}&hellip;</span>
+            <span className="text-muted-foreground/60">
+              ({fmtTime(secs)} &middot; &uarr; {fmtTokens(tokens)})
+            </span>
+          </div>
+        )}
+        {!streaming && step >= shown.length && hiddenCount > 0 && (
+          <div className="flex items-center gap-2 border-t border-dashed border-border/60 pt-4 text-[11px] text-muted-foreground/60">
+            <span aria-hidden>&middot;&middot;&middot;</span>
+            transcript truncated, {hiddenCount} more events this session
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { ArrowDownRight, ArrowRight, ArrowUpRight, Coins, Gauge, Wallet } from "
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { DashboardSkeleton } from "@/components/layout/dashboard-skeleton";
+import { TerminalLoader } from "@/components/ui/terminal-loader";
 import { Section } from "@/components/layout/section";
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
 import { AnimatedNumber } from "@/components/ui/animated-number";
@@ -95,7 +95,10 @@ export function PortfolioShell() {
   if (!data) {
     return (
       <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-7">
-        <DashboardSkeleton />
+        <TerminalLoader
+          command="vt book --live"
+          lines={["connecting to the broker", "loading the live book and cash", "marking option positions", "pulling the equity curve vs SPY", "reading the executions tape"]}
+        />
       </div>
     );
   }

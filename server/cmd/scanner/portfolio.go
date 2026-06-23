@@ -162,6 +162,13 @@ const liveTradingUpdateKey = "live_trading_update_2026_06_09"
 // sizing caps now in force. Self-gating like the other one-time updates.
 const optionsOnlyUpdateKey = "options_only_update_v1"
 
+// personaUpdateKey is the sent_emails ledger key for the one-time product
+// update announcing the pivot from the cautious portfolio-manager brief to an
+// aggressive momentum/trend-following trader (follows trends, scrapes news and
+// sentiment before committing, deploys the account's full buying power within
+// the existing caps). Self-gating like the other one-time updates.
+const personaUpdateKey = "persona_update_v1"
+
 /*
 sendAnalysisWindowUpdate sends the one-time product-update email announcing
 the longer daily session window (one hour, up from nine minutes), the
@@ -303,6 +310,54 @@ func sendOptionsOnlyUpdate(cfg *config.Config, db *store.Store, emailClient *ema
 	if res.Succeeded > 0 {
 		if err := db.MarkEmailSent(optionsOnlyUpdateKey); err != nil {
 			log.Printf("options-only update: WARNING sent but failed to record in ledger (could re-send on next boot): %v", err)
+		}
+	}
+}
+
+/*
+sendPersonaUpdate sends the one-time product update announcing the new trading
+persona: the cautious portfolio-manager brief is retired in favor of an
+aggressive momentum/trend trader that follows trends, scrapes news and retail
+sentiment before committing, and deploys the account's full buying power into
+its strongest setups within the same per-contract / per-underlying caps. Same
+self-gating shape as the other one-time updates: runs on every boot, claims its
+sent_emails key only after at least one recipient received it, and never
+re-blasts. Best-effort: a render or send failure is logged, never fatal.
+*/
+func sendPersonaUpdate(cfg *config.Config, db *store.Store, emailClient *email.Client) {
+	if sent, err := db.EmailAlreadySent(personaUpdateKey); err != nil {
+		log.Printf("persona update: could not read send ledger, skipping to be safe: %v", err)
+		return
+	} else if sent {
+		log.Printf("persona update: already sent (key=%s), nothing to do", personaUpdateKey)
+		return
+	}
+
+	recipients := getRecipients(db)
+	if len(recipients) == 0 {
+		log.Printf("persona update: no subscribers, nothing to send")
+		return
+	}
+
+	base := strings.TrimRight(cfg.PublicBaseURL, "/")
+	data := templates.PersonaUpdateData{
+		BaseURL:       base,
+		TranscriptURL: base + "/transcripts/" + todayDate(),
+	}
+	html, err := templates.RenderPersonaUpdate(data)
+	if err != nil {
+		log.Printf("persona update: render email: %v", err)
+		return
+	}
+	subject := "VibeTradez update: she trades the trend now"
+	res := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, html, unsubURLBuilder(cfg))
+	log.Printf("persona update: email sent to %d/%d subscribers", res.Succeeded, res.Total)
+	if res.Failed > 0 {
+		log.Printf("persona update: email failures: %s", res.FailureDetail())
+	}
+	if res.Succeeded > 0 {
+		if err := db.MarkEmailSent(personaUpdateKey); err != nil {
+			log.Printf("persona update: WARNING sent but failed to record in ledger (could re-send on next boot): %v", err)
 		}
 	}
 }
