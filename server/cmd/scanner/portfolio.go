@@ -166,10 +166,13 @@ const optionsOnlyUpdateKey = "options_only_update_v1"
 // update announcing the trading method: each session the agent researches a
 // slate of ten candidate option plays, ranks them, and trades only its top
 // three (aggressive but grounded, diversified across names, within the existing
-// caps). Self-gating like the other one-time updates. The key is unchanged from
-// the earlier draft of this email on purpose, so subscribers get at most one
-// persona announcement total even though the copy was revised before it fired.
-const personaUpdateKey = "persona_update_v1"
+// caps). Self-gating like the other one-time updates.
+//
+// Bumped to v2 on purpose: v1 already fired an earlier, since-superseded draft
+// of this announcement, so this is a deliberate fresh send. The copy openly
+// disowns the previous email, which is why a second send to the same list is
+// the intended behavior, not a mistake.
+const personaUpdateKey = "persona_update_v2"
 
 /*
 sendAnalysisWindowUpdate sends the one-time product-update email announcing
@@ -351,7 +354,7 @@ func sendPersonaUpdate(cfg *config.Config, db *store.Store, emailClient *email.C
 		log.Printf("persona update: render email: %v", err)
 		return
 	}
-	subject := "VibeTradez update: ten plays, three trades"
+	subject := "Forget my last email"
 	res := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, html, unsubURLBuilder(cfg))
 	log.Printf("persona update: email sent to %d/%d subscribers", res.Succeeded, res.Total)
 	if res.Failed > 0 {
