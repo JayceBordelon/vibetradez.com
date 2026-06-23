@@ -163,10 +163,12 @@ const liveTradingUpdateKey = "live_trading_update_2026_06_09"
 const optionsOnlyUpdateKey = "options_only_update_v1"
 
 // personaUpdateKey is the sent_emails ledger key for the one-time product
-// update announcing the pivot from the cautious portfolio-manager brief to an
-// aggressive momentum/trend-following trader (follows trends, scrapes news and
-// sentiment before committing, deploys the account's full buying power within
-// the existing caps). Self-gating like the other one-time updates.
+// update announcing the trading method: each session the agent researches a
+// slate of ten candidate option plays, ranks them, and trades only its top
+// three (aggressive but grounded, diversified across names, within the existing
+// caps). Self-gating like the other one-time updates. The key is unchanged from
+// the earlier draft of this email on purpose, so subscribers get at most one
+// persona announcement total even though the copy was revised before it fired.
 const personaUpdateKey = "persona_update_v1"
 
 /*
@@ -315,14 +317,14 @@ func sendOptionsOnlyUpdate(cfg *config.Config, db *store.Store, emailClient *ema
 }
 
 /*
-sendPersonaUpdate sends the one-time product update announcing the new trading
-persona: the cautious portfolio-manager brief is retired in favor of an
-aggressive momentum/trend trader that follows trends, scrapes news and retail
-sentiment before committing, and deploys the account's full buying power into
-its strongest setups within the same per-contract / per-underlying caps. Same
-self-gating shape as the other one-time updates: runs on every boot, claims its
-sent_emails key only after at least one recipient received it, and never
-re-blasts. Best-effort: a render or send failure is logged, never fatal.
+sendPersonaUpdate sends the one-time product update announcing the trading
+method: each session the agent researches a slate of ten candidate option
+plays, ranks them by realistic payoff, and trades only its top three
+(aggressive but grounded in tool data, diversified across names, within the
+same per-contract / per-underlying caps). Same self-gating shape as the other
+one-time updates: runs on every boot, claims its sent_emails key only after at
+least one recipient received it, and never re-blasts. Best-effort: a render or
+send failure is logged, never fatal.
 */
 func sendPersonaUpdate(cfg *config.Config, db *store.Store, emailClient *email.Client) {
 	if sent, err := db.EmailAlreadySent(personaUpdateKey); err != nil {
@@ -349,7 +351,7 @@ func sendPersonaUpdate(cfg *config.Config, db *store.Store, emailClient *email.C
 		log.Printf("persona update: render email: %v", err)
 		return
 	}
-	subject := "VibeTradez update: she trades the trend now"
+	subject := "VibeTradez update: ten plays, three trades"
 	res := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, html, unsubURLBuilder(cfg))
 	log.Printf("persona update: email sent to %d/%d subscribers", res.Succeeded, res.Total)
 	if res.Failed > 0 {

@@ -80,12 +80,11 @@ func RenderOptionsOnlyUpdate(d OptionsOnlyUpdateData) (string, error) {
 // ── One-time persona-update product update ──
 
 // PersonaUpdateData backs the one-time product-update email announcing the
-// pivot from the cautious portfolio-manager brief to an aggressive
-// momentum/trend-following trader: she follows trends, scrapes news and retail
-// sentiment before committing, and deploys the account's full buying power
-// into her strongest setups within the same per-contract / per-underlying
-// caps. BaseURL is the public site root (no trailing slash); TranscriptURL
-// points at the day's session.
+// trading method: each session the agent researches a slate of ten candidate
+// option plays, ranks them by realistic payoff, and trades only its top three
+// (aggressive but grounded, diversified across names, within the same
+// per-contract / per-underlying caps). BaseURL is the public site root (no
+// trailing slash); TranscriptURL points at the day's session.
 type PersonaUpdateData struct {
 	BaseURL       string
 	TranscriptURL string
