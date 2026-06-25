@@ -185,7 +185,7 @@ export function LiveTranscript({ lines }: { lines: TranscriptLine[] }) {
           </div>
         )}
         {!streaming && step >= shown.length && hiddenCount > 0 && (
-          <div className="flex items-center gap-2 border-t border-dashed border-border/60 pt-4 text-[11px] text-muted-foreground/60">
+          <div className="flex items-center gap-2 border-t border-border/60 pt-4 text-[11px] text-muted-foreground/60">
             <span aria-hidden>&middot;&middot;&middot;</span>
             transcript truncated, {hiddenCount} more events this session
           </div>

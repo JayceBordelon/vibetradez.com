@@ -33,7 +33,7 @@ export function TrustedBy() {
   return (
     <section className="relative px-5 sm:px-6" aria-label="Trusted by, allegedly">
       <div className="relative z-10 mx-auto max-w-6xl">
-        <p className="mb-7 text-center font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:mb-9">
+        <p className="mb-7 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground sm:mb-9">
           Trusted by <span className="ml-1 normal-case italic tracking-normal text-muted-foreground/70">(allegedly)</span>
         </p>
 
