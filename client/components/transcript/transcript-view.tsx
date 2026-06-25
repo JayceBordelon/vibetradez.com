@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, BookOpen, Braces, Brain, CheckCircle2, CircleDollarSign, Globe, NotebookPen, SquareTerminal, XCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Braces, Brain, CheckCircle2, CircleDollarSign, Download, Globe, NotebookPen, SquareTerminal, XCircle } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
@@ -111,7 +111,7 @@ export function TranscriptView({ date, kind }: { date: string; kind: Kind }) {
       {state.kind === "loading" && <TranscriptLoading />}
       {state.kind === "error" && <StatusBlock tone="error" title="Couldn't load the transcript" body={state.message} />}
       {state.kind === "ready" && (!state.data.available || (state.data.events ?? []).length === 0) && <EmptyTranscript date={date} kind={kind} />}
-      {state.kind === "ready" && state.data.available && (state.data.events ?? []).length > 0 && <TranscriptBody data={state.data} />}
+      {state.kind === "ready" && state.data.available && (state.data.events ?? []).length > 0 && <TranscriptBody data={state.data} date={date} />}
     </div>
   );
 }
@@ -223,185 +223,271 @@ function summaryText(v: unknown): string {
   return "";
 }
 
-/*
-SessionSummaries lifts each session's write_summary (synopsis + the action
-items it left for next time) to the TOP of the page, so the conclusion leads
-instead of hiding at the bottom of a long ledger. On a multi-session day each
-summary is labeled with the session it closed (the most recent session marker
-before it). The write_summary entry still renders inline in the ledger below
-as the verbatim record.
-*/
-function SessionSummaries({ events }: { events: TranscriptEvent[] }) {
-  const items: { label: string | null; synopsis: string; actions: string }[] = [];
-  let label: string | null = null;
+// summaryFor extracts a session's write_summary (synopsis + the action items
+// it left for next time) from that session's events, if it wrote one.
+function summaryFor(events: TranscriptEvent[]): { synopsis: string; actions: string } | null {
   for (const e of events) {
-    if (e.type === "session_marker") {
-      label = sessionShort(e.text ?? "");
-      continue;
-    }
     if (e.type === "tool_use" && e.tool_name === "write_summary") {
       const input = (e.tool_input ?? {}) as { synopsis?: unknown; action_items?: unknown };
       const synopsis = summaryText(input.synopsis);
       const actions = summaryText(input.action_items);
-      if (synopsis || actions) items.push({ label, synopsis, actions });
+      if (synopsis || actions) return { synopsis, actions };
     }
   }
-  if (items.length === 0) return null;
-  const multi = items.length > 1;
+  return null;
+}
+
+/*
+A day's transcript is ONE merged event stream across the open / midday /
+pre-close sessions, delimited by session_marker events. splitSessions
+partitions it into one group per session (each marker plus the events up to
+the next marker) so the page can show one session at a time behind a toggle.
+Any preamble before the first marker attaches to the first group; a transcript
+with no markers becomes a single anonymous group (the toggle then hides).
+*/
+type SessionGroup = {
+  label: string;
+  fullLabel: string;
+  anchor: string;
+  events: TranscriptEvent[];
+  usage?: TranscriptUsage;
+  durationMs: number;
+};
+
+function splitSessions(events: TranscriptEvent[]): SessionGroup[] {
+  const groups: SessionGroup[] = [];
+  const preamble: TranscriptEvent[] = [];
+  let current: SessionGroup | null = null;
+  for (const e of events) {
+    if (e.type === "session_marker") {
+      current = {
+        label: sessionShort(e.text ?? ""),
+        fullLabel: (e.text ?? "Session").trim() || "Session",
+        anchor: sessionAnchor(e.text ?? ""),
+        events: [],
+        usage: e.usage as TranscriptUsage | undefined,
+        durationMs: e.duration_ms ?? 0,
+      };
+      groups.push(current);
+      continue;
+    }
+    if (current) current.events.push(e);
+    else preamble.push(e);
+  }
+  if (groups.length === 0) {
+    return [{ label: "Session", fullLabel: "Session", anchor: "session", events: preamble, durationMs: 0 }];
+  }
+  if (preamble.length > 0) groups[0].events = [...preamble, ...groups[0].events];
+  return groups;
+}
+
+// SessionTabs is the within-day toggle: pick which session (open / midday /
+// pre-close) to show. Underline-active to match the de-carded nav, no boxy
+// container. The caller hides it when there is only one session.
+function SessionTabs({ sessions, active, onChange }: { sessions: SessionGroup[]; active: number; onChange: (i: number) => void }) {
+  return (
+    <div role="tablist" aria-label="Session" className="inline-flex flex-wrap items-center gap-x-5 gap-y-1">
+      {sessions.map((s, i) => (
+        <button
+          key={s.anchor}
+          type="button"
+          role="tab"
+          aria-selected={i === active}
+          onClick={() => onChange(i)}
+          className={cn("relative min-h-9 pb-1.5 text-sm font-medium transition-colors sm:min-h-0", i === active ? "text-foreground" : "text-muted-foreground hover:text-foreground")}
+        >
+          {s.label}
+          {i === active && <span aria-hidden className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-primary" />}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// SessionSummaryBlock surfaces the SELECTED session's write_summary above its
+// ledger — the conclusion leading the entry.
+function SessionSummaryBlock({ events }: { events: TranscriptEvent[] }) {
+  const summary = summaryFor(events);
+  if (!summary) return null;
   return (
     <section aria-label="Session summary" className="mb-6 rounded-r-lg border-l-2 border-claude/40 bg-claude-light px-4 py-4 sm:px-5">
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-2.5 flex items-center gap-2">
         <NotebookPen className="h-4 w-4 text-claude" aria-hidden />
-        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-claude">{multi ? "Session summaries" : "Session summary"}</h2>
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-claude">Session summary</h2>
       </div>
-      <div className="space-y-4">
-        {items.map((it, i) => (
-          <div key={`summary-${i}`} className={i > 0 ? "border-t border-claude-border/40 pt-4" : undefined}>
-            {multi && it.label && <p className="mb-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{it.label}</p>}
-            {it.synopsis && <p className="wrap-anywhere whitespace-pre-wrap text-[15px] leading-relaxed text-foreground/90">{it.synopsis}</p>}
-            {it.actions && (
-              <div className="mt-2.5">
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Action items for next session</p>
-                <p className="mt-1 wrap-anywhere whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground">{it.actions}</p>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+      {summary.synopsis && <p className="wrap-anywhere whitespace-pre-wrap text-[15px] leading-relaxed text-foreground/90">{summary.synopsis}</p>}
+      {summary.actions && (
+        <div className="mt-2.5">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Action items for next session</p>
+          <p className="mt-1 wrap-anywhere whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground">{summary.actions}</p>
+        </div>
+      )}
     </section>
   );
 }
 
-function TranscriptBody({ data }: { data: TranscriptResponse }) {
+// DownloadButton exports the WHOLE day's transcript (all sessions) as a
+// portable Markdown file, built client-side from the already-loaded data.
+function DownloadButton({ data, date }: { data: TranscriptResponse; date: string }) {
+  const onClick = () => {
+    const blob = new Blob([buildMarkdown(data, date)], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `vibetradez-sessions-${date}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border/60 px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground sm:min-h-0"
+    >
+      <Download className="h-4 w-4" aria-hidden />
+      Download
+    </button>
+  );
+}
+
+// buildMarkdown renders the full day (every session) as a Markdown document:
+// day meta, then per session its summary and every event (narration,
+// thinking, tool calls with input + result) in order.
+function buildMarkdown(data: TranscriptResponse, date: string): string {
+  const out: string[] = [`# VibeTradez — session transcript for ${prettyDate(date)}`, ""];
+  if (data.model) out.push(`- **Model:** ${data.model}`);
+  if (data.created_at) out.push(`- **Captured:** ${new Date(data.created_at).toLocaleString()}`);
+  out.push("");
+  for (const s of splitSessions(data.events ?? [])) {
+    out.push(`## ${s.fullLabel}`, "");
+    const summary = summaryFor(s.events);
+    if (summary?.synopsis) out.push(`**Synopsis:** ${summary.synopsis}`, "");
+    if (summary?.actions) out.push(`**Action items:** ${summary.actions}`, "");
+    for (const e of s.events) {
+      if (e.type === "text") {
+        const t = parseStanceText(e.text ?? "") ?? e.text ?? "";
+        out.push(
+          t
+            .split("\n")
+            .map((l) => `> ${l}`)
+            .join("\n"),
+          "",
+        );
+      } else if (e.type === "thinking") {
+        out.push(`_Thinking:_ ${(e.text ?? "").trim()}`, "");
+      } else if (e.type === "tool_use") {
+        out.push(`### \`${e.tool_name ?? "tool"}\``, "```json", safeStringify(e.tool_input ?? {}, 2), "```", "");
+      } else if (e.type === "tool_result") {
+        out.push("```", prettyResult(e.tool_result ?? ""), "```", "");
+      }
+    }
+  }
+  out.push("---", "Exported from vibetradez.com — the model's own narration and tool activity, captured verbatim. Not financial advice.");
+  return out.join("\n");
+}
+
+function TranscriptBody({ data, date }: { data: TranscriptResponse; date: string }) {
   const events = data.events ?? [];
-  const usage = data.usage;
-  const durationMs = data.duration_ms ?? 0;
-  // Session markers (open / midday / pre-close) drive the jump bar and anchor
-  // each session within the merged day.
-  const sessionMarkers = events.filter((e) => e.type === "session_marker");
+  const sessions = useMemo(() => splitSessions(events), [events]);
+  const multi = sessions.length > 1;
+  // Default to the latest session (the freshest state); the toggle steps back
+  // through the day. null = "not yet chosen", so the default tracks new data
+  // without a first-render flash.
+  const [active, setActive] = useState<number | null>(null);
+  const idx = Math.min(Math.max(active ?? sessions.length - 1, 0), sessions.length - 1);
+  const session = sessions[idx];
+
   return (
     <div className="mt-6">
-      <SessionSummaries events={events} />
-      {sessionMarkers.length > 1 && (
-        <div className="mb-5 flex flex-wrap items-center gap-2 border-y border-border/60 py-3">
-          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Sessions</span>
-          {sessionMarkers.map((m) => (
-            <a
-              key={sessionAnchor(m.text ?? "")}
-              href={`#${sessionAnchor(m.text ?? "")}`}
-              className="inline-flex min-h-7 items-center rounded-md border border-border/60 px-2 font-mono text-[11px] font-medium text-muted-foreground transition-colors hover:border-claude/40 hover:text-claude"
-            >
-              {sessionShort(m.text ?? "")}
-            </a>
-          ))}
+      {/* Within-day toggle + download: one session shows at a time. The
+          toggle only appears on a multi-session day; the Download (whole day)
+          is always offered, right-aligned. */}
+      <div className="mb-6 flex flex-wrap items-center gap-x-5 gap-y-3 border-b border-border/60 pb-3">
+        {multi && <SessionTabs sessions={sessions} active={idx} onChange={setActive} />}
+        <div className="ml-auto">
+          <DownloadButton data={data} date={date} />
         </div>
-      )}
-      {data.model && (
-        <div className="mb-5 grid grid-cols-2 gap-x-6 gap-y-2.5 border-y border-border/60 py-3.5 sm:grid-cols-5">
-          <MetaCell label="Model" value={data.model} />
-          {data.created_at && <MetaCell label="Captured" value={new Date(data.created_at).toLocaleString()} />}
-          {durationMs > 0 && <MetaCell label="Wall clock" value={formatDuration(durationMs)} />}
-          <MetaCell label="Entries" value={String(events.length)} />
-          {usage && usage.rounds > 0 && <MetaCell label="Rounds" value={String(usage.rounds)} />}
-        </div>
-      )}
-      {(() => {
-        // Break the day's cost + timing down by session when the merged
-        // transcript carries per-session markers (each holds its own usage and
-        // wall-clock); otherwise fall back to one breakdown for the whole
-        // capture. Entries per session = events between this marker and the next.
-        const sessions = sessionMarkers.filter((m) => m.usage);
-        if (sessions.length > 0) {
-          const counts = sessions.map(() => 0);
-          let si = -1;
-          for (const e of events) {
-            if (e.type === "session_marker") {
-              si = sessions.indexOf(e);
-              continue;
-            }
-            if (si >= 0) counts[si]++;
-          }
-          return (
-            <div className="mb-6 space-y-5">
-              {sessions.map((m, i) => {
-                const u = m.usage as TranscriptUsage;
-                return (
-                  <div key={`cost-${sessionAnchor(m.text ?? "")}`}>
-                    <div className="mb-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 font-mono text-[11px] text-muted-foreground">
-                      <span className="font-semibold uppercase tracking-[0.14em] text-claude">{m.text}</span>
-                      {m.duration_ms ? <span>{formatDuration(m.duration_ms)}</span> : null}
-                      <span>{counts[i]} entries</span>
-                      {u.rounds > 0 ? <span>{u.rounds} rounds</span> : null}
-                    </div>
-                    <UsageBreakdown usage={u} model={data.model} label="Cost for this session" />
-                  </div>
-                );
-              })}
-              {usage && usage.rounds > 0 && <UsageBreakdown usage={usage} model={data.model} label="Whole day · all sessions" />}
-            </div>
-          );
-        }
-        return usage && usage.rounds > 0 ? <UsageBreakdown usage={usage} model={data.model} /> : null;
-      })()}
-      <ol className="space-y-5">
-        {(() => {
-          // Fold each tool_result into its matching tool_use so a call and
-          // its outcome render as one ledger entry, not two stacked ones. The
-          // result is the tool_result that follows a tool_use (matched by
-          // tool_use_id when both carry one, else by adjacency so seeded /
-          // id-less transcripts still pair).
-          const resultFor = new Map<number, string>();
-          for (let i = 0; i < events.length; i++) {
-            if (events[i].type !== "tool_use") continue;
-            for (let j = i + 1; j < events.length; j++) {
-              if (events[j].type === "tool_use") break;
-              if (events[j].type === "tool_result") {
-                const u = events[i].tool_use_id;
-                const r = events[j].tool_use_id;
-                if (!u || !r || u === r) resultFor.set(i, events[j].tool_result ?? "");
-                break;
-              }
-            }
-          }
-          // A thin labeled rule at each round boundary gives the multi-
-          // thousand-pixel scroll its landmarks; the header advertises the
-          // round count but the body otherwise never shows where one ends.
-          let lastRound: number | undefined;
-          return events
-            .map((ev, i) => ({ ev, i }))
-            .filter(({ ev }) => ev.type !== "tool_result")
-            .map(({ ev, i }) => {
-              // A session marker is itself the divider, so it suppresses the
-              // round rule that would otherwise stack right on top of it.
-              const newRound = ev.round !== lastRound && lastRound !== undefined && ev.type !== "session_marker";
-              lastRound = ev.round;
-              // Each session marker carries its slot anchor so the jump bar can
-              // scroll to it; nothing else needs an id now that the summary
-              // leads the page.
-              const anchorId = ev.type === "session_marker" ? sessionAnchor(ev.text ?? "") : undefined;
-              return (
-                <li key={`${ev.round}-${ev.type}-${ev.tool_use_id ?? i}`} id={anchorId} className={anchorId ? "scroll-mt-24" : undefined}>
-                  {newRound && (
-                    // Rounds are 0-indexed in the event stream; display
-                    // 1-indexed so the labels agree with the header's
-                    // "N rounds" count (the unlabeled preamble is Round 1).
-                    <div className="mb-5 flex items-center gap-3" aria-hidden>
-                      <span className="h-px flex-1 bg-border" />
-                      <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Round {ev.round + 1}</span>
-                      <span className="h-px flex-1 bg-border" />
-                    </div>
-                  )}
-                  <EventBlock event={ev} resultPayload={resultFor.get(i)} />
-                </li>
-              );
-            });
-        })()}
-      </ol>
+      </div>
+
+      <SessionMeta data={data} session={session} />
+      <SessionSummaryBlock events={session.events} />
+      {session.usage && session.usage.rounds > 0 && <UsageBreakdown usage={session.usage} model={data.model} label="Cost for this session" />}
+      <Ledger events={session.events} />
+
       <p className="mt-8 text-[11px] leading-relaxed text-muted-foreground">
         This is the model's own narration and tool activity, captured verbatim from the run. This is a single public
         account, so balances are shown openly rather than hidden. Not financial advice.
       </p>
     </div>
+  );
+}
+
+// SessionMeta is the compact meta row for the active session: day-level model
+// and capture time, then the session's wall-clock, entry count, and rounds.
+function SessionMeta({ data, session }: { data: TranscriptResponse; session: SessionGroup }) {
+  if (!data.model) return null;
+  const entries = session.events.filter((e) => e.type !== "tool_result").length;
+  const rounds = session.usage?.rounds ?? 0;
+  return (
+    <div className="mb-6 grid grid-cols-2 gap-x-6 gap-y-2.5 border-b border-border/60 pb-3.5 sm:grid-cols-5">
+      <MetaCell label="Model" value={data.model} />
+      {data.created_at && <MetaCell label="Captured" value={new Date(data.created_at).toLocaleString()} />}
+      {session.durationMs > 0 && <MetaCell label="Wall clock" value={formatDuration(session.durationMs)} />}
+      <MetaCell label="Entries" value={String(entries)} />
+      {rounds > 0 && <MetaCell label="Rounds" value={String(rounds)} />}
+    </div>
+  );
+}
+
+/*
+Ledger renders ONE session's events as the desk-blotter <ol>: each tool_use
+folded with its following tool_result into a single entry (matched by
+tool_use_id when both carry one, else by adjacency so seeded / id-less
+transcripts still pair), with a thin labeled rule at each round boundary. A
+single session carries no session_marker events, so none of the merged-day
+divider handling is needed here.
+*/
+function Ledger({ events }: { events: TranscriptEvent[] }) {
+  const resultFor = new Map<number, string>();
+  for (let i = 0; i < events.length; i++) {
+    if (events[i].type !== "tool_use") continue;
+    for (let j = i + 1; j < events.length; j++) {
+      if (events[j].type === "tool_use") break;
+      if (events[j].type === "tool_result") {
+        const u = events[i].tool_use_id;
+        const r = events[j].tool_use_id;
+        if (!u || !r || u === r) resultFor.set(i, events[j].tool_result ?? "");
+        break;
+      }
+    }
+  }
+  // Rounds are 0-indexed in the event stream; display 1-indexed so the labels
+  // agree with the header's "N rounds" count.
+  let lastRound: number | undefined;
+  return (
+    <ol className="space-y-5">
+      {events
+        .map((ev, i) => ({ ev, i }))
+        .filter(({ ev }) => ev.type !== "tool_result")
+        .map(({ ev, i }) => {
+          const newRound = ev.round !== lastRound && lastRound !== undefined;
+          lastRound = ev.round;
+          return (
+            <li key={`${ev.round}-${ev.type}-${ev.tool_use_id ?? i}`}>
+              {newRound && (
+                <div className="mb-5 flex items-center gap-3" aria-hidden>
+                  <span className="h-px flex-1 bg-border" />
+                  <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Round {ev.round + 1}</span>
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+              )}
+              <EventBlock event={ev} resultPayload={resultFor.get(i)} />
+            </li>
+          );
+        })}
+    </ol>
   );
 }
 
