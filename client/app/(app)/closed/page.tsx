@@ -81,7 +81,7 @@ export default async function ClosedTradesPage({ searchParams }: PageProps) {
         <p className="mt-1 text-sm text-muted-foreground">Every completed round trip the model has closed, with realized P&L.</p>
       </header>
       {trades.length === 0 ? (
-        <div className="rounded-2xl border border-border bg-card px-6 py-16 text-center text-sm text-muted-foreground shadow-sm">No closed trades yet. Round trips show up here once the model sells out of a position.</div>
+        <div className="px-2 py-20 text-center text-sm text-muted-foreground">No closed trades yet. Round trips show up here once the model sells out of a position.</div>
       ) : (
         <>
           <StatStrip cols={3}>
@@ -89,7 +89,7 @@ export default async function ClosedTradesPage({ searchParams }: PageProps) {
             <Stat label="Win rate" value={`${winRate.toFixed(0)}%`} />
             <Stat label="Trades" value={`${trades.length}`} />
           </StatStrip>
-          <h2 className="mt-7 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Round trips ({trades.length})</h2>
+          <h2 className="mt-10 mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Round trips ({trades.length})</h2>
           <ClosedTable items={pageTrades} />
           <Pagination basePath="/closed" page={page} pageSize={PAGE_SIZE} totalItems={trades.length} />
         </>

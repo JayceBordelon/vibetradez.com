@@ -105,9 +105,9 @@ export function PortfolioShell() {
   if (!data.enabled) {
     return (
       <div className="mx-auto max-w-[1200px] px-4 py-8 sm:px-7">
-        <div className="rounded-2xl border border-border bg-card px-6 py-16 text-center shadow-sm">
+        <div className="mx-auto max-w-md px-2 py-20 text-center">
           <h2 className="font-display text-xl font-semibold tracking-tight">The portfolio manager isn&apos;t running yet</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+          <p className="mx-auto mt-2.5 text-sm leading-relaxed text-muted-foreground">
             Once it&apos;s switched on, this page shows the live book: holdings, cash, the equity curve against SPY, and every move the model makes with its reasoning.
           </p>
         </div>
@@ -162,8 +162,10 @@ export function PortfolioShell() {
 
       <SummaryStrip equity={equity} settledCash={data.settled_cash} unsettledCash={data.unsettled_cash} investedPct={investedPct} unrealized={totalUnrealized} todayPct={todayPct} overnightPct={overnightPct} dayChangePct={dayChangePct} />
 
-      {/* The day's narrative, right under the numbers. */}
-      <section className="mt-4 overflow-hidden rounded-2xl border border-claude-border bg-claude-light px-5 py-5">
+      {/* The day's narrative, right under the numbers — one of the few
+          intentional containers: a soft clay tint with a left accent rule
+          (Claudia's voice), no hard border or shadow. */}
+      <section className="mt-8 rounded-xl bg-claude-light px-5 py-5 sm:border-l-2 sm:border-claude/40 sm:rounded-none sm:rounded-r-xl">
         <div className="flex items-center gap-2">
           <ClaudeLogo className="h-4 w-4" />
           <span className="text-[12px] font-semibold uppercase tracking-[0.1em] text-claude">Claudia&apos;s read</span>
@@ -181,21 +183,17 @@ export function PortfolioShell() {
         </a>
       </section>
 
-      <Section title="Performance" subtitle="Account value and P&L against a buy-and-hold SPY benchmark." className="mt-6 border-t border-border/60 pt-8">
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
-          <EquityCurveChart points={curve} today={data.date} liveEquity={equity} liveUnrealized={totalUnrealized} liveSpyMark={freshMark(quotes, "SPY")} />
-        </div>
+      <Section title="Performance" subtitle="Account value and P&L against a buy-and-hold SPY benchmark." className="mt-4 border-t border-border/60 pt-9">
+        <EquityCurveChart points={curve} today={data.date} liveEquity={equity} liveUnrealized={totalUnrealized} liveSpyMark={freshMark(quotes, "SPY")} />
         {curve.length >= 2 && <PerformanceMetrics points={curve} trades={trades} today={data.date} liveEquity={equity} />}
       </Section>
 
-      <Section title="Today's executions" subtitle={todaysExecutionsSubtitle(data.decisions ?? [])} className="mt-2 border-t border-border/60 pt-8">
-        <div className="rounded-2xl border border-border bg-card p-2 shadow-sm sm:p-4">
-          <TodaysExecutions decisions={data.decisions ?? []} />
-        </div>
+      <Section title="Today's executions" subtitle={todaysExecutionsSubtitle(data.decisions ?? [])} className="border-t border-border/60 pt-9">
+        <TodaysExecutions decisions={data.decisions ?? []} />
       </Section>
 
-      <Section title="Explore the book" subtitle="The full book, the trade history, and the session log live on their own pages." className="mt-2 border-t border-border/60 pt-8">
-        <div className="grid gap-3 sm:grid-cols-3">
+      <Section title="Explore the book" subtitle="The full book, the trade history, and the session log live on their own pages." className="border-t border-border/60 pt-9">
+        <div className="-mt-2 divide-y divide-border/60">
           <ExploreLink href="/holdings" title="Holdings" blurb={`${positions.length} open position${positions.length === 1 ? "" : "s"} the account holds right now.`} />
           <ExploreLink href="/closed" title="Closed trades" blurb="Every completed round trip, with realized P&L." />
           <ExploreLink href="/transcripts" title="Sessions" blurb="The day-by-day session log, back through every trading day." />
@@ -219,9 +217,9 @@ function LiveBadge() {
 
 function ExploreLink({ href, title, blurb }: { href: string; title: string; blurb: string }) {
   return (
-    <Link href={href} className="group flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+    <Link href={href} className="group flex items-center justify-between gap-4 py-4 transition-colors hover:bg-foreground/[0.02]">
       <span className="min-w-0">
-        <span className="block font-medium">{title}</span>
+        <span className="block font-medium transition-colors group-hover:text-primary">{title}</span>
         <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{blurb}</span>
       </span>
       <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
@@ -250,14 +248,14 @@ function SummaryStrip({
 }) {
   const investedClamped = Math.min(100, Math.max(0, investedPct));
   return (
-    <div className="mt-6 grid gap-3 sm:gap-4 lg:grid-cols-3">
-      {/* Hero metric: account equity leads everything. */}
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-sm lg:col-span-1 lg:row-span-1">
+    <div className="mt-9">
+      {/* Hero metric: account equity leads everything, open on the page. */}
+      <div>
         <div className="flex items-center gap-1.5">
           <Wallet className="h-4 w-4 text-muted-foreground" aria-hidden />
           <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Account equity</span>
         </div>
-        <div className="mt-2.5 text-[40px] font-semibold leading-none tracking-tight tabular-nums sm:text-[44px]">
+        <div className="mt-2.5 text-[48px] font-semibold leading-none tracking-tight tabular-nums sm:text-[56px]">
           <AnimatedNumber value={equity} kind="money" crumb />
         </div>
         <div className="mt-3 text-sm">
@@ -283,45 +281,47 @@ function SummaryStrip({
         </div>
       </div>
 
-      {/* Supporting KPI tiles. */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 lg:col-span-2">
-        <Stat
-          label="Invested"
-          value={<AnimatedNumber value={investedPct} kind="pct0" crumb neutral />}
-          icon={Gauge}
-          sub={
-            <span className="mt-0.5 block h-1.5 w-full max-w-[160px] overflow-hidden rounded-full bg-foreground/[0.07]">
-              <span className="block h-full rounded-full bg-primary transition-[width] duration-700 ease-out" style={{ width: `${investedClamped}%` }} />
-            </span>
-          }
-        />
-        <Stat
-          label="Settled cash"
-          value={<AnimatedNumber value={settledCash} kind="money" crumb />}
-          icon={Coins}
-          sub={
-            equity > 0 ? (
-              <>
-                <AnimatedNumber value={(settledCash / equity) * 100} kind="pct0" neutral /> of the book
-                {unsettledCash > 0 && (
-                  <>
-                    {" · "}
-                    <AnimatedNumber value={unsettledCash} kind="moneyInt" neutral /> settling
-                  </>
-                )}
-              </>
-            ) : (
-              "dry powder"
-            )
-          }
-        />
-        <Stat
-          label="Unrealized P&L"
-          value={<AnimatedNumber value={unrealized} kind="pnl" crumb />}
-          tone={unrealized > 0 ? "positive" : unrealized < 0 ? "negative" : "neutral"}
-          icon={ArrowUpRight}
-          sub="open positions"
-        />
+      {/* Supporting KPIs: an open divided row under a hairline, not a row of tiles. */}
+      <div className="mt-8 border-t border-border/60 pt-7">
+        <StatStrip cols={3}>
+          <Stat
+            label="Invested"
+            value={<AnimatedNumber value={investedPct} kind="pct0" crumb neutral />}
+            icon={Gauge}
+            sub={
+              <span className="mt-0.5 block h-1.5 w-full max-w-[160px] overflow-hidden rounded-full bg-foreground/[0.07]">
+                <span className="block h-full rounded-full bg-primary transition-[width] duration-700 ease-out" style={{ width: `${investedClamped}%` }} />
+              </span>
+            }
+          />
+          <Stat
+            label="Settled cash"
+            value={<AnimatedNumber value={settledCash} kind="money" crumb />}
+            icon={Coins}
+            sub={
+              equity > 0 ? (
+                <>
+                  <AnimatedNumber value={(settledCash / equity) * 100} kind="pct0" neutral /> of the book
+                  {unsettledCash > 0 && (
+                    <>
+                      {" · "}
+                      <AnimatedNumber value={unsettledCash} kind="moneyInt" neutral /> settling
+                    </>
+                  )}
+                </>
+              ) : (
+                "dry powder"
+              )
+            }
+          />
+          <Stat
+            label="Unrealized P&L"
+            value={<AnimatedNumber value={unrealized} kind="pnl" crumb />}
+            tone={unrealized > 0 ? "positive" : unrealized < 0 ? "negative" : "neutral"}
+            icon={ArrowUpRight}
+            sub="open positions"
+          />
+        </StatStrip>
       </div>
     </div>
   );

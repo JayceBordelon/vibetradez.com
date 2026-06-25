@@ -99,12 +99,11 @@ export function OptionsTable({ items }: { items: Holding[] }) {
   const rowNav = useRowNav();
   if (items.length === 0) return null;
   return (
-    <section className="mt-6">
-      <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Options ({items.length})</h2>
-      <div className="rounded-2xl border border-border bg-card px-4 shadow-sm sm:px-5">
+    <section className="mt-8">
+      <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Options ({items.length})</h2>
       <Table>
         <TableHeader>
-          <TableRow className="border-border/50 hover:bg-transparent">
+          <TableRow className="border-border hover:bg-transparent">
             <TableHead className={headCls}>Contract</TableHead>
             <TableHead className={cn(headCls, "text-right")}>Qty</TableHead>
             <TableHead className={cn(headCls, "text-right max-sm:hidden")}>Strike</TableHead>
@@ -147,7 +146,6 @@ export function OptionsTable({ items }: { items: Holding[] }) {
           })}
         </TableBody>
       </Table>
-      </div>
     </section>
   );
 }
@@ -156,12 +154,11 @@ export function StocksTable({ items }: { items: Holding[] }) {
   const rowNav = useRowNav();
   if (items.length === 0) return null;
   return (
-    <section className="mt-6">
-      <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Stocks ({items.length})</h2>
-      <div className="rounded-2xl border border-border bg-card px-4 shadow-sm sm:px-5">
+    <section className="mt-8">
+      <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Stocks ({items.length})</h2>
       <Table>
         <TableHeader>
-          <TableRow className="border-border/50 hover:bg-transparent">
+          <TableRow className="border-border hover:bg-transparent">
             <TableHead className={headCls}>Symbol</TableHead>
             <TableHead className={cn(headCls, "text-right")}>Shares</TableHead>
             <TableHead className={cn(headCls, "text-right max-sm:hidden")}>Avg cost</TableHead>
@@ -201,7 +198,6 @@ export function StocksTable({ items }: { items: Holding[] }) {
           })}
         </TableBody>
       </Table>
-      </div>
     </section>
   );
 }
@@ -210,10 +206,9 @@ export function ClosedTable({ items }: { items: ClosedTrade[] }) {
   const rowNav = useRowNav();
   if (items.length === 0) return null;
   return (
-    <div className="mt-3 rounded-2xl border border-border bg-card px-4 shadow-sm sm:px-5">
     <Table>
       <TableHeader>
-        <TableRow className="border-border/50 hover:bg-transparent">
+        <TableRow className="border-border hover:bg-transparent">
           <TableHead className={headCls}>Trade</TableHead>
           <TableHead className={cn(headCls, "max-sm:hidden")}>Held</TableHead>
           <TableHead className={cn(headCls, "text-right max-sm:hidden")}>Entry</TableHead>
@@ -267,6 +262,5 @@ export function ClosedTable({ items }: { items: ClosedTrade[] }) {
         })}
       </TableBody>
     </Table>
-    </div>
   );
 }
