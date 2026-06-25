@@ -1,233 +1,213 @@
+import { Ban, Clock, Lock, type LucideIcon, Mail, RefreshCw, Sunrise, Sunset, TrendingUp } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { CountUp } from "@/components/landing/count-up";
 import { cn } from "@/lib/utils";
 
 /*
-Supporting visuals for the terminal landing page. Everything here reads
-as command output: mono type, hard hairlines, no cards and no soft
-shadows. Each one fills the opposite column of a LogSection.
+Supporting visuals for the marketing landing — OPEN editorial data readouts
+in the product's design language: big calm numbers, hairline-divided rows,
+chips, soft sage tints. No boxed cards. Each fills the opposite column of a
+feature section and reads as a data readout sitting on the page, not a tile.
 */
 
-/* ── Shell prompt line that opens every section. The command is the
-      section's title card, the trailing comment is the aside. ── */
-export function PromptLine({ command, comment }: { command: string; comment?: string }) {
+// A soft decorative sage sparkline for the live-account card. Purely
+// ornamental (aria-hidden); the shape suggests a gently rising curve.
+function HeroSparkline({ className }: { className?: string }) {
   return (
-    <p className="flex flex-wrap items-baseline gap-x-3 font-mono text-[13px] leading-relaxed">
-      <span aria-hidden className="font-bold text-green phosphor">
-        $
-      </span>
-      <span className="font-semibold text-foreground">{command}</span>
-      {comment && <span className="text-muted-foreground/80">&middot; {comment}</span>}
-    </p>
+    <svg viewBox="0 0 320 80" preserveAspectRatio="none" className={className} aria-hidden>
+      <defs>
+        <linearGradient id="heroSpark" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.22} />
+          <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d="M0 62 C 28 58, 44 50, 70 52 S 120 40, 150 44 S 210 22, 250 26 S 300 10, 320 14 L320 80 L0 80 Z" fill="url(#heroSpark)" />
+      <path d="M0 62 C 28 58, 44 50, 70 52 S 120 40, 150 44 S 210 22, 250 26 S 300 10, 320 14" fill="none" stroke="var(--primary)" strokeWidth={2.25} strokeLinecap="round" />
+    </svg>
   );
 }
 
-/* ── The account equity, printed like a quote readout. The headline
-      figure of the whole page, so it gets the phosphor bloom. ── */
+/* ── The live account readout: the hero's headline figure, open on the page
+      (no box) — the big number leads, a soft sparkline underneath, then a
+      hairline-divided fact row. ── */
 export function EquityReadout({ equity }: { equity: number | null }) {
   return (
-    <div className="font-mono">
-      <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">acct_equity</div>
-      <div className="phosphor mt-3 text-[52px] font-extrabold leading-none tracking-tight tabular-nums text-green sm:text-[64px]">
-        <CountUp to={Math.round(equity ?? 5000)} prefix="$" durationMs={2600} />
+    <div className="lg:pl-8">
+      <div className="flex items-center justify-between">
+        <span className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <span className="relative flex h-2 w-2" aria-hidden>
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green opacity-60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
+          </span>
+          Live account
+        </span>
+        <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">vs SPY</span>
       </div>
-      <dl className="mt-6 space-y-2 border-t border-dashed border-border pt-4 text-[13px]">
-        <div className="flex items-baseline justify-between gap-6">
-          <dt className="text-muted-foreground">status</dt>
-          <dd className="font-semibold text-green">{equity ? "live, trading" : "live, not a simulation"}</dd>
+      <div className="mt-5 text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Account equity</div>
+      <div className="mt-1.5 text-[clamp(48px,8vw,72px)] font-semibold leading-none tracking-tight tabular-nums text-foreground">
+        <CountUp to={Math.round(equity ?? 5000)} prefix="$" durationMs={2200} />
+      </div>
+      <div className="-mx-1 mt-6 h-16">
+        <HeroSparkline className="h-full w-full" />
+      </div>
+      <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-border/70 pt-5 text-sm">
+        <div>
+          <dt className="text-xs text-muted-foreground">Status</dt>
+          <dd className="mt-0.5 font-medium text-green">{equity ? "Live, trading" : "Live, not a simulation"}</dd>
         </div>
-        <div className="flex items-baseline justify-between gap-6">
-          <dt className="text-muted-foreground">benchmark</dt>
-          <dd className="font-semibold text-foreground">buy-and-hold SPY</dd>
-        </div>
-        <div className="flex items-baseline justify-between gap-6">
-          <dt className="text-muted-foreground">my expectations</dt>
-          <dd className="font-semibold text-red">written off</dd>
+        <div>
+          <dt className="text-xs text-muted-foreground">Benchmark</dt>
+          <dd className="mt-0.5 font-medium text-foreground">Buy-and-hold SPY</dd>
         </div>
       </dl>
     </div>
   );
 }
 
-/* ── crontab -l. The five real crons that drive the day, verbatim from
-      the server, with the punchline that no strategy lives here. ── */
-const CRONS = [
-  {
-    expr: "45 9 * * MON-FRI",
-    job: "the open",
-    detail: "reacts to the overnight tape and the opening move, once spreads settle",
-  },
-  {
-    expr: "30 12 * * MON-FRI",
-    job: "midday",
-    detail: "the primary read: the book, the news and hype, and the tape, then trades",
-  },
-  {
-    expr: "30 15 * * MON-FRI",
-    job: "the pre-close",
-    detail: "decides what to carry overnight versus trim, before the bell",
-  },
-  {
-    expr: "*/15 10-15 * * MON-FRI",
-    job: "the sweep",
-    detail: "reconciles its orders against the broker, finds out what actually filled",
-  },
-  {
-    expr: "00 16 * * MON-FRI",
-    job: "the close",
-    detail: "snapshots equity vs SPY, then emails everyone the day's damage",
-  },
+/* ── The daily schedule, as clean cards. ── */
+const CRONS: { icon: LucideIcon; time: string; job: string; detail: string }[] = [
+  { icon: Sunrise, time: "9:45 AM ET", job: "The open", detail: "Reacts to the overnight tape and the opening move, once spreads settle." },
+  { icon: Clock, time: "12:30 PM ET", job: "Midday", detail: "The primary read: the book, the news and hype, and the tape, then trades." },
+  { icon: Sunset, time: "3:30 PM ET", job: "The pre-close", detail: "Decides what to carry overnight versus trim, before the bell." },
+  { icon: RefreshCw, time: "Every 15m", job: "The sweep", detail: "Reconciles its orders against the broker — finds out what actually filled." },
+  { icon: Mail, time: "4:00 PM ET", job: "The close", detail: "Snapshots equity vs SPY, then emails everyone the day's damage." },
 ];
 
 export function CronTable() {
   return (
-    <div className="font-mono text-[13px]">
-      <ol className="space-y-5">
+    <div>
+      <div className="divide-y divide-border/60 border-t border-border/60">
         {CRONS.map((c) => (
-          <li key={c.job} className="border-l-2 border-green/40 pl-4">
-            <div className="phosphor text-[12px] font-bold tracking-tight text-green">{c.expr}</div>
-            <div className="mt-1 font-bold text-foreground">{c.job}</div>
-            <div className="mt-0.5 leading-relaxed text-muted-foreground">{c.detail}</div>
-          </li>
+          <div key={c.job} className="flex items-start gap-3.5 py-4">
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
+              <c.icon className="h-4.5 w-4.5" />
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-baseline gap-x-2.5">
+                <span className="font-medium text-foreground">{c.job}</span>
+                <span className="text-xs font-medium text-muted-foreground tabular-nums">{c.time}</span>
+              </div>
+              <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{c.detail}</p>
+            </div>
+          </div>
         ))}
-      </ol>
-      <p className="mt-5 border-t border-dashed border-border pt-3 text-[12px] text-muted-foreground/80">there is no strategy in this file. it makes one up every session.</p>
+      </div>
+      <p className="pt-4 text-sm text-muted-foreground">There is no fixed strategy. It makes one up every session.</p>
     </div>
   );
 }
 
-/* ── guards.go, dumped like a config file. Options only now: equity buys are
-      off, and a single contract and a single name are each capped as a slice
-      of equity so it can't faceplant the account on one bet. The broker's
-      settled-cash rule still rules. ── */
-const GUARD_LINES: { key: string; value: ReactNode; tone?: "red" | "muted" }[] = [
-  { key: "instruments", value: "options only", tone: "muted" },
-  { key: "equity_buys", value: "disabled", tone: "red" },
-  { key: "per_contract_cap", value: "~10% of equity", tone: "muted" },
-  { key: "per_name_cap", value: "~25% of equity", tone: "muted" },
-  { key: "settled_cash", value: "settled cash only (the broker insists)", tone: "muted" },
+/* ── The guardrails, as a clean spec card. ── */
+const GUARD_LINES: { icon: LucideIcon; key: string; value: ReactNode; tone?: "red" }[] = [
+  { icon: TrendingUp, key: "Instruments", value: "Options only" },
+  { icon: Ban, key: "Equity buys", value: "Disabled", tone: "red" },
+  { icon: Lock, key: "Per-contract cap", value: "~10% of equity" },
+  { icon: Lock, key: "Per-name cap", value: "~25% of equity" },
+  { icon: Lock, key: "Cash rule", value: "Settled cash only" },
 ];
 
 export function GuardsReadout() {
   return (
-    <div className="font-mono text-[13px]">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">guards.go</span>
-        <span className="phosphor text-[11px] font-bold uppercase tracking-[0.14em] text-green">enforced in code</span>
+    <div>
+      <div className="flex items-center justify-between pb-3.5">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Hard caps</span>
+        <span className="rounded-full bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-secondary-foreground">Enforced in code</span>
       </div>
-      <dl className="mt-4 border-b border-border">
+      <dl className="divide-y divide-border/60 border-t border-border/60">
         {GUARD_LINES.map((c) => (
-          <div key={c.key} className="flex items-baseline justify-between gap-6 border-t border-border py-3">
-            <dt className="shrink-0 font-bold text-foreground">{c.key}</dt>
-            <dd className={cn("text-right tabular-nums", c.tone === "red" ? "text-red" : "text-muted-foreground")}>{c.value}</dd>
+          <div key={c.key} className="flex items-center justify-between gap-4 py-3.5">
+            <dt className="flex items-center gap-2.5 text-sm text-muted-foreground">
+              <c.icon className={cn("h-4 w-4 shrink-0", c.tone === "red" ? "text-red" : "text-primary")} />
+              {c.key}
+            </dt>
+            <dd className={cn("text-right text-sm font-medium tabular-nums", c.tone === "red" ? "text-red" : "text-foreground")}>{c.value}</dd>
           </div>
         ))}
       </dl>
-      <p className="mt-3 text-[12px] text-muted-foreground/80">that is the whole file.</p>
     </div>
   );
 }
 
-/* ── ls -l tools/. The fixed tool surface, with permission bits doing
-      the talking: reading can only read, execution can execute. ── */
+/* ── The toolbox: the fixed tool surface, grouped by what it can do. ── */
 interface ToolDir {
-  bits: string;
   dir: string;
   note: string;
   names: string[];
-  accent?: "green" | "red" | "claude";
+  accent: "neutral" | "green" | "claude";
 }
 
 const TOOL_DIRS: ToolDir[] = [
   {
-    bits: "dr--r--r--",
-    dir: "reading/",
-    note: "look, never touch",
+    dir: "Reading",
+    note: "Look, never touch",
+    accent: "neutral",
     names: ["get_portfolio", "get_stock_quotes", "get_option_chain", "get_price_history", "get_fundamentals", "get_track_record", "get_market_context", "get_recent_decisions", "get_order_status", "get_ticker_news", "get_trending_tickers", "get_social_sentiment", "web_search", "web_fetch"],
   },
   {
-    bits: "drwx------",
-    dir: "execution/",
-    note: "real money",
-    names: ["buy_option", "sell_option", "sell_equity", "cancel_order", "hold"],
+    dir: "Execution",
+    note: "Real money",
     accent: "green",
+    names: ["buy_option", "sell_option", "sell_equity", "cancel_order", "hold"],
   },
   {
-    bits: "drw-r--r--",
-    dir: "documentation/",
-    note: "writes the log",
-    names: ["write_summary"],
+    dir: "Documentation",
+    note: "Writes the log",
     accent: "claude",
+    names: ["write_summary"],
   },
 ];
 
 export function ToolLs() {
   return (
-    <div className="space-y-6 font-mono text-[13px]">
-      {TOOL_DIRS.map((d) => (
-        <div key={d.dir}>
-          <div className="flex flex-wrap items-baseline gap-x-3">
-            <span className="text-[12px] tracking-tight text-muted-foreground/80">{d.bits}</span>
-            <span className={cn("font-bold", d.accent === "green" ? "phosphor text-green" : d.accent === "claude" ? "text-claude" : "text-foreground")}>{d.dir}</span>
-            <span className="ml-auto text-[12px] text-muted-foreground/70">{d.note}</span>
+    <div>
+      <div className="divide-y divide-border/60 border-t border-border/60">
+        {TOOL_DIRS.map((d) => (
+          <div key={d.dir} className="py-4">
+            <div className="mb-2.5 flex items-center gap-2">
+              <span className={cn("h-2 w-2 rounded-full", d.accent === "green" ? "bg-green" : d.accent === "claude" ? "bg-claude" : "bg-muted-foreground/50")} aria-hidden />
+              <span className="text-sm font-medium text-foreground">{d.dir}</span>
+              <span className="ml-auto text-xs text-muted-foreground">{d.note}</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {d.names.map((n) => (
+                <span key={n} className="rounded-md bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
+                  {n}
+                </span>
+              ))}
+            </div>
           </div>
-          <p className="mt-2 break-words border-l-2 border-border pl-4 leading-relaxed text-foreground/75">{d.names.join("  ")}</p>
-        </div>
-      ))}
-      <p className="border-t border-dashed border-border pt-3 text-[12px] text-muted-foreground/80">every tool hand-built and tested in CI. if it is not on this list, she cannot do it.</p>
+        ))}
+      </div>
+      <p className="pt-4 text-sm text-muted-foreground">Every tool is hand-built and tested in CI. If it's not on this list, she can't do it.</p>
     </div>
   );
 }
 
-/* ── The hero's bottom strip: three facts printed as one ledger row. ── */
+/* ── The hero's bottom strip: three facts as an open, hairline-divided row. ── */
 export function HeroStatStrip({ equity }: { equity: number | null }) {
   return (
-    <dl className="grid grid-cols-1 divide-y divide-dashed divide-border border-y border-dashed border-border font-mono sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-      <div className="flex flex-col gap-1 px-1 py-4 sm:px-6 sm:first:pl-1">
-        <dt className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">acct_equity</dt>
-        <dd className="phosphor text-xl font-extrabold tabular-nums text-green sm:text-2xl">
-          <CountUp to={Math.round(equity ?? 5000)} prefix="$" durationMs={2600} />
-        </dd>
-      </div>
-      <div className="flex flex-col gap-1 px-1 py-4 sm:px-6">
-        <dt className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">benchmark</dt>
-        <dd className="text-xl font-extrabold text-foreground sm:text-2xl">SPY</dd>
-      </div>
-      <div className="flex flex-col gap-1 px-1 py-4 sm:px-6">
-        <dt className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">adult_supervision</dt>
-        <dd className="text-xl font-extrabold text-red sm:text-2xl">none</dd>
-      </div>
+    <dl className="grid grid-cols-3 divide-x divide-border border-t border-border/60 pt-5 [&>*]:px-4 [&>*:first-child]:pl-0 [&>*:last-child]:pr-0">
+      <Tile label="Account equity">
+        <span className="tabular-nums text-foreground">
+          <CountUp to={Math.round(equity ?? 5000)} prefix="$" durationMs={2200} />
+        </span>
+      </Tile>
+      <Tile label="Benchmark">
+        <span className="text-foreground">SPY</span>
+      </Tile>
+      <Tile label="Supervision">
+        <span className="text-red">None</span>
+      </Tile>
     </dl>
   );
 }
 
-/* ── Ticker tape. A dashed-bordered marquee seam between the hero and
-      the log, scrolling the kind of lines the session actually emits. ── */
-const TAPE: { text: string; tone?: "green" | "red" | "muted" }[] = [
-  { text: "NVDA +2.14%", tone: "green" },
-  { text: "buy_option NVDA 150C x5 @ 4.20 · filled" },
-  { text: "hold MSFT", tone: "muted" },
-  { text: "SPY · the one to beat", tone: "muted" },
-  { text: "buy_option NVDA 145C · all in", tone: "green" },
-  { text: "write_summary · very confident note filed" },
-  { text: "settled_cash $3,920.10", tone: "muted" },
-  { text: "sell_equity · loser cut, lesson pending", tone: "red" },
-  { text: "options only · no whole-account yolo on one contract", tone: "muted" },
-  { text: "cancel_order · second thoughts", tone: "muted" },
-];
-
-export function TickerTape() {
+function Tile({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div aria-hidden className="overflow-hidden border-y border-dashed border-border py-2.5 [-webkit-mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)] [mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)]">
-      <div className="flex w-max animate-marquee gap-10 whitespace-nowrap font-mono text-[12px]" style={{ animationDuration: "45s" }}>
-        {[...TAPE, ...TAPE].map((t, i) => (
-          <span key={`${t.text}-${i}`} className={cn("inline-flex items-center gap-10", t.tone === "green" ? "text-green" : t.tone === "red" ? "text-red" : t.tone === "muted" ? "text-muted-foreground" : "text-foreground/80")}>
-            {t.text}
-            <span className="text-muted-foreground/40">///</span>
-          </span>
-        ))}
-      </div>
+    <div className="min-w-0">
+      <dt className="truncate text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</dt>
+      <dd className="mt-1 truncate text-xl font-semibold tracking-tight sm:text-2xl">{children}</dd>
     </div>
   );
 }

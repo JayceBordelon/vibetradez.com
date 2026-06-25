@@ -1,7 +1,6 @@
 import { Info } from "lucide-react";
 import type * as React from "react";
 
-import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -47,8 +46,10 @@ export function StatCard({ label, value, sub, icon: Icon, tone = "neutral", valu
     </div>
   );
 
-  const body = (
-    <CardContent className="p-5">
+  // Open metric, no box: the label/number/sub sit directly on the page,
+  // separated by spacing rather than card chrome.
+  const card = (
+    <div className={cn("group flex min-w-0 flex-col", className)}>
       {eyebrow}
       <div className={cn("mt-2 text-[28px] font-semibold tabular-nums leading-tight", valueToneClass)} style={valueColor ? { color: valueColor } : undefined}>
         {value}
@@ -57,10 +58,8 @@ export function StatCard({ label, value, sub, icon: Icon, tone = "neutral", valu
         <div className={cn("mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium", delta.positive ? "bg-green-bg text-green" : "bg-red-bg text-red")}>{delta.value}</div>
       )}
       {sub && <div className="mt-1 text-xs text-muted-foreground">{sub}</div>}
-    </CardContent>
+    </div>
   );
-
-  const card = <Card className={cn("lg-card group gap-0 py-0 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md", className)}>{body}</Card>;
 
   if (!tooltip) return card;
 

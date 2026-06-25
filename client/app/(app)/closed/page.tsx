@@ -75,9 +75,13 @@ export default async function ClosedTradesPage({ searchParams }: PageProps) {
   const pageTrades = trades.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <div className="mx-auto min-w-0 max-w-[1200px] px-4 py-6 sm:px-7">
+    <div className="animate-soft-rise mx-auto min-w-0 max-w-[1200px] px-4 py-8 sm:px-7">
+      <header className="mb-6">
+        <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-[28px]">Closed trades</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Every completed round trip the model has closed, with realized P&L.</p>
+      </header>
       {trades.length === 0 ? (
-        <div className="border-y border-border/50 px-1 py-12 text-center text-sm text-muted-foreground">No closed trades yet. Round trips show up here once the model sells out of a position.</div>
+        <div className="px-2 py-20 text-center text-sm text-muted-foreground">No closed trades yet. Round trips show up here once the model sells out of a position.</div>
       ) : (
         <>
           <StatStrip cols={3}>
@@ -85,11 +89,7 @@ export default async function ClosedTradesPage({ searchParams }: PageProps) {
             <Stat label="Win rate" value={`${winRate.toFixed(0)}%`} />
             <Stat label="Trades" value={`${trades.length}`} />
           </StatStrip>
-          {/* Same letter-spaced caps header the holdings groups use, so the
-              sibling pages read as one family. */}
-          <h2 className="mt-6 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            Round trips ({trades.length})
-          </h2>
+          <h2 className="mt-10 mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Round trips ({trades.length})</h2>
           <ClosedTable items={pageTrades} />
           <Pagination basePath="/closed" page={page} pageSize={PAGE_SIZE} totalItems={trades.length} />
         </>

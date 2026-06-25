@@ -57,7 +57,11 @@ export default async function HoldingsPage({ searchParams }: PageProps) {
   const holdings = await fetchHoldings();
 
   return (
-    <div className="mx-auto min-w-0 max-w-[1200px] px-4 py-6 sm:px-7">
+    <div className="animate-soft-rise mx-auto min-w-0 max-w-[1200px] px-4 py-8 sm:px-7">
+      <header className="mb-6">
+        <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-[28px]">Holdings</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Every open position the account holds right now, marked live.</p>
+      </header>
       <LiveHoldings initial={holdings} />
     </div>
   );

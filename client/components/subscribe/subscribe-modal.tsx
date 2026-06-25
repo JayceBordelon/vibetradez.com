@@ -12,25 +12,23 @@ export function SubscribeModal({ children, open, onOpenChange }: { children?: Re
       {children && <DialogTrigger asChild>{children}</DialogTrigger>}
       <DialogContent className="lg-modal top-[8%] max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-[calc(100%-1.5rem)] translate-y-0 overflow-y-auto sm:top-[50%] sm:w-auto sm:max-w-md sm:translate-y-[-50%]">
         <DialogHeader>
-          <DialogTitle className="font-mono text-lg font-extrabold uppercase tracking-tight">
-            Sign in or <span className="text-green">sign up</span>
+          <DialogTitle className="font-display text-xl font-bold tracking-tight">
+            Sign in or <span className="text-primary">sign up</span>
           </DialogTitle>
           <DialogDescription>One click with Google gets you the recap email each session the model trades.</DialogDescription>
         </DialogHeader>
 
-        <div className="flex gap-2">
-          <div className="flex-1 border border-dashed border-border bg-muted p-2.5 text-center">
-            <div className="font-mono text-lg font-extrabold text-green">1</div>
-            <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Session Recaps</div>
-          </div>
-          <div className="flex-1 border border-dashed border-border bg-muted p-2.5 text-center">
-            <div className="font-mono text-lg font-extrabold text-green">16:00</div>
-            <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">After the Close</div>
-          </div>
-          <div className="flex-1 border border-dashed border-border bg-muted p-2.5 text-center">
-            <div className="font-mono text-lg font-extrabold text-green">$0</div>
-            <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Always Free</div>
-          </div>
+        <div className="flex divide-x divide-border/70 border-y border-border/60 py-3 text-center">
+          {[
+            { v: "1", l: "Session recap" },
+            { v: "16:00", l: "After the close" },
+            { v: "$0", l: "Always free" },
+          ].map((s) => (
+            <div key={s.l} className="flex-1 px-2">
+              <div className="text-lg font-bold tracking-tight text-primary tabular-nums">{s.v}</div>
+              <div className="mt-0.5 text-[10px] font-medium text-muted-foreground">{s.l}</div>
+            </div>
+          ))}
         </div>
 
         <SubscribeForm />

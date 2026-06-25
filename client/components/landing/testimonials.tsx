@@ -175,14 +175,9 @@ export function Testimonials() {
     <section className="relative px-5 pb-12 sm:px-6 sm:pb-16">
       <div className="relative z-10 mx-auto max-w-6xl">
         <Reveal effect="blur" duration={1000} className="mx-auto mb-10 max-w-2xl text-center sm:mb-14">
-          <p className="font-mono text-[12px] text-muted-foreground">
-            <span className="phosphor font-bold text-green" aria-hidden>
-              $
-            </span>{" "}
-            <span className="font-semibold text-foreground">cat guestbook.txt</span>
-          </p>
-          <h2 className="term-display mt-4 text-2xl font-extrabold uppercase tracking-tight sm:text-3xl">
-            From <span className="phosphor text-green">definitely real</span> people
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Testimonials</p>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">
+            From <span className="text-primary">definitely real</span> people
           </h2>
           <p className="mt-3 text-sm text-muted-foreground sm:text-base">Loved by titans of industry. Allegedly.</p>
         </Reveal>
@@ -229,19 +224,19 @@ function TestimonialCard({ t, hidden }: { t: Testimonial; hidden?: boolean }) {
   return (
     <article
       aria-hidden={hidden || undefined}
-      className="group flex w-full shrink-0 flex-col gap-4 border border-dashed border-border p-6 transition-colors duration-300 hover:border-green/50"
+      className="group flex w-full shrink-0 flex-col gap-4 rounded-2xl border border-border/60 p-6 transition-colors duration-300 hover:border-border"
     >
       <div className="flex items-center justify-between gap-3">
         <Stars rating={t.rating} />
-        <Quote className="h-4 w-4 shrink-0 text-foreground/20" aria-hidden />
+        <Quote className="h-4 w-4 shrink-0 text-foreground/15" aria-hidden />
       </div>
       <p className="text-[15px] leading-relaxed text-foreground/85">&ldquo;{t.quote}&rdquo;</p>
-      <div className="mt-auto flex items-start gap-3 border-t border-dashed border-border pt-4">
-        <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center font-mono text-[11px] font-bold", t.avatarClass)} aria-hidden>
+      <div className="mt-auto flex items-start gap-3 border-t border-border/70 pt-4">
+        <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold", t.avatarClass)} aria-hidden>
           {t.initials}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="font-mono text-sm font-semibold tracking-tight">{t.name}</div>
+          <div className="text-sm font-semibold tracking-tight">{t.name}</div>
           <div className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">{t.title}</div>
         </div>
       </div>
