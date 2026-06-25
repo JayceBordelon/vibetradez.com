@@ -50,7 +50,7 @@ export function TerminalLoader({
 
   return (
     <div className={cn("flex w-full items-center justify-center", minHeightClass, className)} role="status" aria-busy="true">
-      <div className={cn("vt-shimmer w-full rounded-2xl border border-border bg-card shadow-sm", compact ? "max-w-sm p-5" : "max-w-md p-6")}>
+      <div className={cn("vt-shimmer w-full rounded-2xl border border-border/70", compact ? "max-w-sm p-5" : "max-w-md p-6")}>
         <div className="flex items-center gap-2.5">
           <Loader2 className={cn("h-4 w-4 shrink-0 text-primary", !reduced && "animate-spin")} aria-hidden />
           <span className={cn("font-medium text-foreground", compact ? "text-sm" : "text-[15px]")}>{command}…</span>

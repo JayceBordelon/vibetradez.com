@@ -135,7 +135,7 @@ function SessionPager({ date }: { date: string }) {
   const next = stepTradingDay(date, 1);
   const showNext = next <= etNow().date;
   return (
-    <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2 text-[13px] shadow-sm">
+    <div className="mt-5 flex items-center justify-between gap-3 border-y border-border/60 py-1.5 text-[13px]">
       <Link href={`/transcripts/${prev}`} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:min-h-0">
         <ArrowLeft className="h-4 w-4" aria-hidden />
         {prettyDate(prev)}
@@ -249,7 +249,7 @@ function SessionSummaries({ events }: { events: TranscriptEvent[] }) {
   if (items.length === 0) return null;
   const multi = items.length > 1;
   return (
-    <section aria-label="Session summary" className="mb-6 rounded-lg border border-claude-border bg-claude-light px-4 py-4 sm:px-5">
+    <section aria-label="Session summary" className="mb-6 rounded-r-lg border-l-2 border-claude/40 bg-claude-light px-4 py-4 sm:px-5">
       <div className="mb-3 flex items-center gap-2">
         <NotebookPen className="h-4 w-4 text-claude" aria-hidden />
         <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-claude">{multi ? "Session summaries" : "Session summary"}</h2>
@@ -283,7 +283,7 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
     <div className="mt-6">
       <SessionSummaries events={events} />
       {sessionMarkers.length > 1 && (
-        <div className="mb-5 flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-card-elevated/40 px-3 py-2.5">
+        <div className="mb-5 flex flex-wrap items-center gap-2 border-y border-border/60 py-3">
           <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Sessions</span>
           {sessionMarkers.map((m) => (
             <a
@@ -297,7 +297,7 @@ function TranscriptBody({ data }: { data: TranscriptResponse }) {
         </div>
       )}
       {data.model && (
-        <div className="mb-5 grid grid-cols-2 gap-x-6 gap-y-2.5 rounded-lg border border-border/60 bg-card-elevated/60 px-4 py-3 sm:grid-cols-5">
+        <div className="mb-5 grid grid-cols-2 gap-x-6 gap-y-2.5 border-y border-border/60 py-3.5 sm:grid-cols-5">
           <MetaCell label="Model" value={data.model} />
           {data.created_at && <MetaCell label="Captured" value={new Date(data.created_at).toLocaleString()} />}
           {durationMs > 0 && <MetaCell label="Wall clock" value={formatDuration(durationMs)} />}
@@ -735,7 +735,7 @@ function UsageBreakdown({ usage, model, label }: { usage: TranscriptUsage; model
       <div className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {label ?? (showCost ? "Session cost breakdown" : "Token usage")}
       </div>
-      <div className="overflow-x-auto rounded-md border border-border/60">
+      <div className="overflow-x-auto border-t border-border/60">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-border/60 bg-muted/30 text-[10px] uppercase tracking-wider text-muted-foreground">

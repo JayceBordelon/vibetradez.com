@@ -18,13 +18,13 @@ export function SubscribeModal({ children, open, onOpenChange }: { children?: Re
           <DialogDescription>One click with Google gets you the recap email each session the model trades.</DialogDescription>
         </DialogHeader>
 
-        <div className="flex gap-2.5">
+        <div className="flex divide-x divide-border/70 border-y border-border/60 py-3 text-center">
           {[
             { v: "1", l: "Session recap" },
             { v: "16:00", l: "After the close" },
             { v: "$0", l: "Always free" },
           ].map((s) => (
-            <div key={s.l} className="flex-1 rounded-xl border border-border bg-muted/50 p-3 text-center">
+            <div key={s.l} className="flex-1 px-2">
               <div className="text-lg font-bold tracking-tight text-primary tabular-nums">{s.v}</div>
               <div className="mt-0.5 text-[10px] font-medium text-muted-foreground">{s.l}</div>
             </div>

@@ -54,13 +54,13 @@ export function NotFoundContent() {
         </Button>
       </div>
 
-      <div className="mt-12 grid w-full grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="mt-12 grid w-full grid-cols-1 divide-y divide-border/60 border-y border-border/60 text-left sm:grid-cols-3 sm:divide-x sm:divide-y-0 sm:border-x-0 sm:border-y-0 sm:[&>*]:px-5 sm:[&>*:first-child]:pl-0 sm:[&>*:last-child]:pr-0">
         {SUGGESTIONS.map((s) => (
-          <Link key={s.href} href={s.href} className="lg-panel lg-edge-shine group flex flex-col items-start gap-2 p-4 text-left transition-transform duration-300 hover:-translate-y-0.5">
+          <Link key={s.href} href={s.href} className="group flex flex-col items-start gap-2 py-5 transition-colors sm:py-0">
             <div className="rounded-md bg-foreground/5 p-1.5 dark:bg-white/5">
               <s.Icon className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" aria-hidden />
             </div>
-            <div className="text-sm font-semibold">{s.label}</div>
+            <div className="text-sm font-semibold transition-colors group-hover:text-primary">{s.label}</div>
             <div className="text-xs leading-relaxed text-muted-foreground">{s.description}</div>
           </Link>
         ))}
