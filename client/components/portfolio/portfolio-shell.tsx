@@ -10,7 +10,6 @@ import { Stat, StatStrip } from "@/components/layout/stat-strip";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
 import { useLiveQuotes } from "@/hooks/use-live-quotes";
-import { aggregateOvernight } from "@/lib/day-split";
 import { freshMark, repricePositions } from "@/lib/live-pricing";
 import { useVisiblePoll } from "@/hooks/use-visible-poll";
 import { api } from "@/lib/api";
@@ -43,8 +42,8 @@ const REFRESH_SECONDS = 60;
 PortfolioShell is the live dashboard for the single account the agent
 manages. It leads with one clear number (account equity), supports it with
 a calm KPI row (invested, cash, unrealized), surfaces Claudia's current
-read, then the performance section (account value / P&L vs SPY plus the
-risk strip), today's executions, and links into the rest of the book.
+read, then the performance section (account value vs SPY plus the risk
+strip), today's executions, and links into the rest of the book.
 */
 export function PortfolioShell() {
   const [data, setData] = useState<PortfolioResponse | null>(null);
@@ -131,23 +130,10 @@ export function PortfolioShell() {
   // today) and overstate equity against every server-reported figure.
   const equity = positionsValue + data.settled_cash;
   const investedPct = equity > 0 ? (positionsValue / equity) * 100 : 0;
-  // Day change measures LIVE equity against the last end-of-day close
-  // BEFORE today, split phase-aware (see original derivation).
+  // Today's delta: LIVE equity against the last end-of-day close BEFORE
+  // today (one clean number — the change since yesterday's close).
   const baseline = [...curve].reverse().find((p) => p.date < data.date && p.account_equity > 0)?.account_equity ?? 0;
-  const todayClosePoint = curve.find((p) => p.date === data.date && !p.live);
   const dayDollars = baseline > 0 ? equity - baseline : null;
-  let todayPct: number | null = null;
-  let overnightPct: number | null = null;
-  if (baseline > 0 && todayClosePoint && todayClosePoint.account_equity > 0) {
-    todayPct = ((todayClosePoint.account_equity - baseline) / baseline) * 100;
-    overnightPct = ((equity - todayClosePoint.account_equity) / baseline) * 100;
-  } else {
-    const overnightDollars = aggregateOvernight(positions);
-    if (baseline > 0 && dayDollars !== null && overnightDollars !== null) {
-      overnightPct = (overnightDollars / baseline) * 100;
-      todayPct = ((dayDollars - overnightDollars) / baseline) * 100;
-    }
-  }
   const dayChangePct = baseline > 0 && dayDollars !== null ? (dayDollars / baseline) * 100 : null;
 
   return (
@@ -160,7 +146,7 @@ export function PortfolioShell() {
         <LiveBadge />
       </div>
 
-      <SummaryStrip equity={equity} settledCash={data.settled_cash} unsettledCash={data.unsettled_cash} investedPct={investedPct} unrealized={totalUnrealized} todayPct={todayPct} overnightPct={overnightPct} dayChangePct={dayChangePct} />
+      <SummaryStrip equity={equity} settledCash={data.settled_cash} unsettledCash={data.unsettled_cash} investedPct={investedPct} unrealized={totalUnrealized} dayChangePct={dayChangePct} />
 
       {/* The day's narrative, right under the numbers — one of the few
           intentional containers: a soft clay tint with a left accent rule
@@ -183,7 +169,7 @@ export function PortfolioShell() {
         </a>
       </section>
 
-      <Section title="Performance" subtitle="Account value and P&L against a buy-and-hold SPY benchmark." className="mt-4 border-t border-border/60 pt-9">
+      <Section title="Performance" subtitle="Total account value over time against a buy-and-hold SPY benchmark." className="mt-4 border-t border-border/60 pt-9">
         <EquityCurveChart points={curve} today={data.date} liveEquity={equity} liveUnrealized={totalUnrealized} liveSpyMark={freshMark(quotes, "SPY")} />
         {curve.length >= 2 && <PerformanceMetrics points={curve} trades={trades} today={data.date} liveEquity={equity} />}
       </Section>
@@ -233,8 +219,6 @@ function SummaryStrip({
   unsettledCash,
   investedPct,
   unrealized,
-  todayPct,
-  overnightPct,
   dayChangePct,
 }: {
   equity: number;
@@ -242,8 +226,6 @@ function SummaryStrip({
   unsettledCash: number;
   investedPct: number;
   unrealized: number;
-  todayPct: number | null;
-  overnightPct: number | null;
   dayChangePct: number | null;
 }) {
   const investedClamped = Math.min(100, Math.max(0, investedPct));
@@ -259,19 +241,7 @@ function SummaryStrip({
           <AnimatedNumber value={equity} kind="money" crumb />
         </div>
         <div className="mt-3 text-sm">
-          {todayPct !== null && overnightPct !== null ? (
-            <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 font-medium">
-              <span className={todayPct >= 0 ? "text-green" : "text-red"}>
-                <AnimatedNumber value={todayPct} kind="pctSigned2" /> today
-              </span>
-              <span className="text-border" aria-hidden>
-                ·
-              </span>
-              <span className={overnightPct >= 0 ? "text-green" : "text-red"}>
-                <AnimatedNumber value={overnightPct} kind="pctSigned2" /> overnight
-              </span>
-            </span>
-          ) : dayChangePct !== null ? (
+          {dayChangePct !== null ? (
             <span className={cn("font-medium", dayChangePct >= 0 ? "text-green" : "text-red")}>
               <AnimatedNumber value={dayChangePct} kind="pctSigned2" /> today
             </span>
