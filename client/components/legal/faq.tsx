@@ -35,12 +35,12 @@ export function FaqList({ children }: { children: React.ReactNode }) {
   return (
     <>
       <div className="mb-8 flex items-start gap-3">
-        <div className="lg-control p-2">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary">
           <HelpCircle className="h-5 w-5 text-primary" />
         </div>
         <div>
-          <h1 className="term-display text-xl font-extrabold uppercase tracking-tight sm:text-2xl">Frequently Asked Questions</h1>
-          <div className="mt-1 flex items-center gap-2">
+          <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">Frequently asked questions</h1>
+          <div className="mt-1.5 flex items-center gap-2">
             <p className="text-sm text-muted-foreground">How VibeTradez works under the hood.</p>
             <Badge variant="secondary" className="text-[11px]">
               {count} questions
