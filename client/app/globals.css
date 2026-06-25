@@ -7,11 +7,15 @@
 ═══════════════════════════════════════════════════════════════════════
 SOFT MINIMALIST LIGHT — the VibeTradez design language.
 
-Calm, airy, restrained: an off-white warm canvas, clean white cards, ONE
-sage/forest-green accent, generous whitespace, soft low-opacity shadows,
-and bold-but-quiet type. Light is the hero; dark is a gentle warm charcoal
-counterpart (never harsh near-black). Lead with one clear number; let the
-data breathe. References: Mercury, Ramp, Stripe, Linear.
+Calm, airy, EDITORIAL: an off-white warm canvas that content sits directly
+on, ONE sage/forest-green accent, and generous whitespace. Hierarchy comes
+from TYPE SIZE, WEIGHT, COLOR, and SPACING — NOT from boxes. Sections are
+grouped by whitespace + the occasional 1px hairline rule + a small label,
+never by a bordered/shadowed card. Big calm numbers lead each section.
+Containers are the rare exception (a floating menu, the modal, one tinted
+callout), kept minimal — a soft tint OR a single hairline, never a full
+border+shadow+fill. Light is the hero; dark is a gentle warm charcoal
+counterpart (never harsh near-black). References: Mercury, Ramp, Linear.
 ═══════════════════════════════════════════════════════════════════════
 */
 
@@ -380,31 +384,33 @@ body {
   }
 
   /*
-  Surface primitives. Clean white card fill, a hairline border, and a very
-  soft shadow — the entire visual language of the product. Names are kept
-  from the previous "liquid-glass" system so call sites don't break, but
-  they now render as calm flat surfaces, not frosted glass.
+  Surface primitives — used sparingly, only for surfaces that genuinely
+  FLOAT above the page (the account dropdown, the subscribe modal). The
+  in-page layout is otherwise chromeless: content sits on the canvas,
+  grouped by whitespace + hairlines, NOT wrapped in these. Names are kept
+  from the previous system so the few legitimate call sites don't break.
   */
   .lg-panel {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-sm);
   }
   .lg-panel-strong {
     background: var(--card);
   }
+  /* A real floating surface (dropdown menu): hairline + a soft lift so it
+     reads as hovering above the page, the one place a shadow earns its keep. */
   .lg-card {
-    background: var(--card);
+    background: var(--popover);
     border: 1px solid var(--border);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-sm);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
   }
   .lg-modal {
     background: var(--popover);
     border: 1px solid var(--border);
     border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-xl);
+    box-shadow: var(--shadow-lg);
   }
   .lg-control {
     background: var(--card);
@@ -415,7 +421,6 @@ body {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 999px;
-    box-shadow: var(--shadow-xs);
   }
 
   /*

@@ -2,8 +2,13 @@ import type * as React from "react";
 
 import { cn } from "@/lib/utils";
 
+// Chromeless by default: in the editorial system, content sits on the page
+// background grouped by whitespace + hairlines, not wrapped in a bordered,
+// shadowed, filled box. Callers that genuinely need a container opt into it
+// explicitly via className (a hairline border, a soft tint) — the primitive
+// no longer imposes card chrome on every consumer.
 function Card({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="card" className={cn("flex flex-col gap-6 rounded-xl border bg-card py-6 text-card-foreground shadow-sm", className)} {...props} />;
+  return <div data-slot="card" className={cn("flex flex-col gap-6 text-card-foreground", className)} {...props} />;
 }
 
 function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
