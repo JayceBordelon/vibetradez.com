@@ -5,9 +5,10 @@ import { CountUp } from "@/components/landing/count-up";
 import { cn } from "@/lib/utils";
 
 /*
-Supporting visuals for the marketing landing — clean cards and soft data
-viz in the product's design language, no terminal chrome. Each fills the
-opposite column of a feature section.
+Supporting visuals for the marketing landing — OPEN editorial data readouts
+in the product's design language: big calm numbers, hairline-divided rows,
+chips, soft sage tints. No boxed cards. Each fills the opposite column of a
+feature section and reads as a data readout sitting on the page, not a tile.
 */
 
 // A soft decorative sage sparkline for the live-account card. Purely
@@ -27,11 +28,12 @@ function HeroSparkline({ className }: { className?: string }) {
   );
 }
 
-/* ── The live account card: the hero's headline figure, presented like a
-      real product balance card. ── */
+/* ── The live account readout: the hero's headline figure, open on the page
+      (no box) — the big number leads, a soft sparkline underneath, then a
+      hairline-divided fact row. ── */
 export function EquityReadout({ equity }: { equity: number | null }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-lg">
+    <div className="lg:pl-8">
       <div className="flex items-center justify-between">
         <span className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground">
           <span className="relative flex h-2 w-2" aria-hidden>
@@ -40,16 +42,16 @@ export function EquityReadout({ equity }: { equity: number | null }) {
           </span>
           Live account
         </span>
-        <span className="rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">vs SPY</span>
+        <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">vs SPY</span>
       </div>
-      <div className="mt-4 text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Account equity</div>
-      <div className="mt-1.5 text-[44px] font-semibold leading-none tracking-tight tabular-nums text-foreground sm:text-[52px]">
+      <div className="mt-5 text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">Account equity</div>
+      <div className="mt-1.5 text-[clamp(48px,8vw,72px)] font-semibold leading-none tracking-tight tabular-nums text-foreground">
         <CountUp to={Math.round(equity ?? 5000)} prefix="$" durationMs={2200} />
       </div>
-      <div className="-mx-1 mt-5 h-16">
+      <div className="-mx-1 mt-6 h-16">
         <HeroSparkline className="h-full w-full" />
       </div>
-      <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-border/70 pt-4 text-sm">
+      <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-border/70 pt-5 text-sm">
         <div>
           <dt className="text-xs text-muted-foreground">Status</dt>
           <dd className="mt-0.5 font-medium text-green">{equity ? "Live, trading" : "Live, not a simulation"}</dd>
@@ -74,22 +76,24 @@ const CRONS: { icon: LucideIcon; time: string; job: string; detail: string }[] =
 
 export function CronTable() {
   return (
-    <div className="space-y-3">
-      {CRONS.map((c) => (
-        <div key={c.job} className="flex items-start gap-3.5 rounded-xl border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
-          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
-            <c.icon className="h-4.5 w-4.5" />
-          </span>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-baseline gap-x-2.5">
-              <span className="font-medium text-foreground">{c.job}</span>
-              <span className="text-xs font-medium text-muted-foreground tabular-nums">{c.time}</span>
+    <div>
+      <div className="divide-y divide-border/60 border-t border-border/60">
+        {CRONS.map((c) => (
+          <div key={c.job} className="flex items-start gap-3.5 py-4">
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
+              <c.icon className="h-4.5 w-4.5" />
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-baseline gap-x-2.5">
+                <span className="font-medium text-foreground">{c.job}</span>
+                <span className="text-xs font-medium text-muted-foreground tabular-nums">{c.time}</span>
+              </div>
+              <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{c.detail}</p>
             </div>
-            <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{c.detail}</p>
           </div>
-        </div>
-      ))}
-      <p className="px-1 pt-1 text-sm text-muted-foreground">There is no fixed strategy. It makes one up every session.</p>
+        ))}
+      </div>
+      <p className="pt-4 text-sm text-muted-foreground">There is no fixed strategy. It makes one up every session.</p>
     </div>
   );
 }
@@ -105,14 +109,14 @@ const GUARD_LINES: { icon: LucideIcon; key: string; value: ReactNode; tone?: "re
 
 export function GuardsReadout() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-      <div className="flex items-center justify-between border-b border-border/70 px-5 py-3.5">
-        <span className="text-sm font-medium text-foreground">Hard caps</span>
+    <div>
+      <div className="flex items-center justify-between pb-3.5">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Hard caps</span>
         <span className="rounded-full bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-secondary-foreground">Enforced in code</span>
       </div>
-      <dl>
+      <dl className="divide-y divide-border/60 border-t border-border/60">
         {GUARD_LINES.map((c) => (
-          <div key={c.key} className="flex items-center justify-between gap-4 border-b border-border/60 px-5 py-3 last:border-0">
+          <div key={c.key} className="flex items-center justify-between gap-4 py-3.5">
             <dt className="flex items-center gap-2.5 text-sm text-muted-foreground">
               <c.icon className={cn("h-4 w-4 shrink-0", c.tone === "red" ? "text-red" : "text-primary")} />
               {c.key}
@@ -156,32 +160,34 @@ const TOOL_DIRS: ToolDir[] = [
 
 export function ToolLs() {
   return (
-    <div className="space-y-4">
-      {TOOL_DIRS.map((d) => (
-        <div key={d.dir} className="rounded-xl border border-border bg-card p-4 shadow-sm">
-          <div className="mb-2.5 flex items-center gap-2">
-            <span className={cn("h-2 w-2 rounded-full", d.accent === "green" ? "bg-green" : d.accent === "claude" ? "bg-claude" : "bg-muted-foreground/50")} aria-hidden />
-            <span className="text-sm font-medium text-foreground">{d.dir}</span>
-            <span className="ml-auto text-xs text-muted-foreground">{d.note}</span>
+    <div>
+      <div className="divide-y divide-border/60 border-t border-border/60">
+        {TOOL_DIRS.map((d) => (
+          <div key={d.dir} className="py-4">
+            <div className="mb-2.5 flex items-center gap-2">
+              <span className={cn("h-2 w-2 rounded-full", d.accent === "green" ? "bg-green" : d.accent === "claude" ? "bg-claude" : "bg-muted-foreground/50")} aria-hidden />
+              <span className="text-sm font-medium text-foreground">{d.dir}</span>
+              <span className="ml-auto text-xs text-muted-foreground">{d.note}</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {d.names.map((n) => (
+                <span key={n} className="rounded-md bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
+                  {n}
+                </span>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {d.names.map((n) => (
-              <span key={n} className="rounded-md bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
-                {n}
-              </span>
-            ))}
-          </div>
-        </div>
-      ))}
-      <p className="px-1 text-sm text-muted-foreground">Every tool is hand-built and tested in CI. If it's not on this list, she can't do it.</p>
+        ))}
+      </div>
+      <p className="pt-4 text-sm text-muted-foreground">Every tool is hand-built and tested in CI. If it's not on this list, she can't do it.</p>
     </div>
   );
 }
 
-/* ── The hero's bottom strip: three facts as clean tiles. ── */
+/* ── The hero's bottom strip: three facts as an open, hairline-divided row. ── */
 export function HeroStatStrip({ equity }: { equity: number | null }) {
   return (
-    <dl className="grid grid-cols-3 gap-3 sm:gap-4">
+    <dl className="grid grid-cols-3 divide-x divide-border border-t border-border/60 pt-5 [&>*]:px-4 [&>*:first-child]:pl-0 [&>*:last-child]:pr-0">
       <Tile label="Account equity">
         <span className="tabular-nums text-foreground">
           <CountUp to={Math.round(equity ?? 5000)} prefix="$" durationMs={2200} />
@@ -199,9 +205,9 @@ export function HeroStatStrip({ equity }: { equity: number | null }) {
 
 function Tile({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-card px-3 py-3.5 shadow-sm sm:px-4">
-      <dt className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</dt>
-      <dd className="mt-1 text-lg font-semibold tracking-tight sm:text-xl">{children}</dd>
+    <div className="min-w-0">
+      <dt className="truncate text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{label}</dt>
+      <dd className="mt-1 truncate text-xl font-semibold tracking-tight sm:text-2xl">{children}</dd>
     </div>
   );
 }

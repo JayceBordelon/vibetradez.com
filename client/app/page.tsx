@@ -151,7 +151,7 @@ export default async function LandingPage() {
         comment="Streams live as you reach it"
         title={<>Every move, <span className="text-primary">on the record.</span></>}
         aside={
-          <div className="rounded-2xl border border-border bg-card p-5 shadow-lg sm:p-6">
+          <div className="border-l border-border/70 pl-5 sm:pl-6">
             <LiveTranscript lines={transcript} />
           </div>
         }
@@ -169,7 +169,7 @@ export default async function LandingPage() {
       <section className="relative px-5 pb-20 pt-14 sm:px-6 sm:pb-24 sm:pt-20">
         <div className="mx-auto max-w-3xl">
           <Reveal effect="rise" duration={800}>
-            <div className="relative overflow-hidden rounded-3xl border border-border bg-card px-6 py-12 text-center shadow-lg sm:px-12 sm:py-14">
+            <div className="relative overflow-hidden rounded-3xl bg-secondary/25 px-6 py-12 text-center sm:px-12 sm:py-14 dark:bg-secondary/15">
               <div className="pointer-events-none absolute inset-0" aria-hidden>
                 <div className="lg-mesh" />
               </div>
@@ -198,9 +198,9 @@ export default async function LandingPage() {
             </div>
           </Reveal>
 
-          {/* Three quiet reassurances under the ask. */}
+          {/* Three quiet reassurances under the ask, open on the page. */}
           <Reveal effect="fade" delay={150} duration={700}>
-            <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="mt-10 grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-3 sm:gap-y-0 sm:divide-x sm:divide-border/70 sm:[&>*]:pl-6 sm:[&>*:first-child]:pl-0">
               <Assurance Icon={LineChart} title="Fully transparent" body="Every position and decision is public, marked live." />
               <Assurance Icon={Lock} title="Hard-capped" body="Position and per-name sizing enforced in code." />
               <Assurance Icon={Mail} title="Always free" body="No fees, no upsell — watch and get the recap." />
@@ -216,7 +216,7 @@ export default async function LandingPage() {
 
 function Assurance({ Icon, title, body }: { Icon: typeof LineChart; title: string; body: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 text-left shadow-sm">
+    <div className="text-left">
       <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-primary">
         <Icon className="h-4 w-4" />
       </span>

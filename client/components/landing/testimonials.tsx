@@ -224,7 +224,7 @@ function TestimonialCard({ t, hidden }: { t: Testimonial; hidden?: boolean }) {
   return (
     <article
       aria-hidden={hidden || undefined}
-      className="group flex w-full shrink-0 flex-col gap-4 rounded-2xl border border-border bg-card p-6 shadow-sm transition-shadow duration-300 hover:shadow-md"
+      className="group flex w-full shrink-0 flex-col gap-4 rounded-2xl border border-border/60 p-6 transition-colors duration-300 hover:border-border"
     >
       <div className="flex items-center justify-between gap-3">
         <Stars rating={t.rating} />
