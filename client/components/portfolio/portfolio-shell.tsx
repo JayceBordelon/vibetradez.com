@@ -165,7 +165,7 @@ export function PortfolioShell() {
       {/* The day's narrative, right under the numbers — one of the few
           intentional containers: a soft clay tint with a left accent rule
           (Claudia's voice), no hard border or shadow. */}
-      <section className="mt-8 rounded-xl bg-claude-light px-5 py-5 sm:border-l-2 sm:border-claude/40 sm:rounded-none sm:rounded-r-xl">
+      <section className="mt-8 rounded-r-xl border-l-2 border-claude/40 bg-claude-light px-5 py-5">
         <div className="flex items-center gap-2">
           <ClaudeLogo className="h-4 w-4" />
           <span className="text-[12px] font-semibold uppercase tracking-[0.1em] text-claude">Claudia&apos;s read</span>
