@@ -95,16 +95,16 @@ export function HoldingDetail({ h: initial }: { h: Holding }) {
   const pct = h.cost_basis > 0 ? (h.unrealized_pnl / h.cost_basis) * 100 : 0;
   const tone = h.unrealized_pnl > 0 ? "positive" : h.unrealized_pnl < 0 ? "negative" : "neutral";
   return (
-    <div className="mx-auto min-w-0 max-w-[1100px] px-4 py-6 sm:px-7">
+    <div className="animate-soft-rise mx-auto min-w-0 max-w-[1100px] px-4 py-8 sm:px-7">
       <BackLink href="/holdings" label="Back to holdings" />
 
       <div className="flex flex-wrap items-center gap-2">
         <KindChip kind={h.kind} contractType={h.contract_type} />
         {/* Neutral on purpose: red/green are reserved for P&L direction
             everywhere else, and an "Open" badge in red read as a loss. */}
-        <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-secondary-foreground">Open</span>
+        <span className="rounded-full bg-secondary px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-secondary-foreground">Open</span>
       </div>
-      <h1 className="term-display mt-2 text-2xl font-extrabold uppercase tracking-tight sm:text-3xl">{h.label}</h1>
+      <h1 className="mt-2.5 font-display text-2xl font-bold tracking-tight sm:text-3xl">{h.label}</h1>
       {h.opened_date && <p className="mt-1 text-sm text-muted-foreground">Opened {h.opened_date}</p>}
 
       <div className="mt-6">
@@ -143,7 +143,7 @@ export function HoldingDetail({ h: initial }: { h: Holding }) {
 
       <div className="mt-8">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{h.kind === "option" ? "Contract value & underlying since open" : "Price since open"}</h2>
-        <div className="mt-3">
+        <div className="mt-3 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
           <TradeHistoryChart
             kind={h.kind}
             symbol={h.symbol}
@@ -188,14 +188,14 @@ export function ClosedDetail({ t }: { t: ClosedTrade }) {
   const win = t.realized_pnl > 0;
   const tone = win ? "positive" : "negative";
   return (
-    <div className="mx-auto min-w-0 max-w-[1100px] px-4 py-6 sm:px-7">
+    <div className="animate-soft-rise mx-auto min-w-0 max-w-[1100px] px-4 py-8 sm:px-7">
       <BackLink href="/closed" label="Back to closed trades" />
 
       <div className="flex flex-wrap items-center gap-2">
         <KindChip kind={t.kind} contractType={t.contract_type} />
-        <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider", win ? "bg-green-bg text-green" : "bg-red-bg text-red")}>{win ? "Win" : "Loss"}</span>
+        <span className={cn("rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider", win ? "bg-green-bg text-green" : "bg-red-bg text-red")}>{win ? "Win" : "Loss"}</span>
       </div>
-      <h1 className="term-display mt-2 text-2xl font-extrabold uppercase tracking-tight sm:text-3xl">{t.label}</h1>
+      <h1 className="mt-2.5 font-display text-2xl font-bold tracking-tight sm:text-3xl">{t.label}</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         Held {t.opened_date} to {t.closed_date} ({t.hold_days} days)
       </p>
@@ -211,7 +211,7 @@ export function ClosedDetail({ t }: { t: ClosedTrade }) {
 
       <div className="mt-8">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{t.kind === "option" ? "Contract value & underlying over the hold" : "Price over the hold"}</h2>
-        <div className="mt-3">
+        <div className="mt-3 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
           <TradeHistoryChart kind={t.kind} symbol={t.symbol} underlying={t.underlying} openedDate={t.opened_date} closedDate={t.closed_date} strike={t.strike} entryPrice={t.entry_price > 0 ? t.entry_price : undefined} />
         </div>
       </div>

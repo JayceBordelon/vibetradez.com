@@ -147,7 +147,7 @@ export function TradeHistoryChart({ kind, symbol, underlying, openedDate, closed
   }, [prices, snapshots, isOption, openedDate, closedDate]);
 
   if (data === null) {
-    return <TerminalLoader compact minHeightClass="h-60" command="vt chart --trade" lines={["loading price history", "marking the position over time"]} />;
+    return <TerminalLoader compact minHeightClass="h-60" command="Loading price history" lines={["Loading the underlying's price", "Marking the position over time"]} />;
   }
 
   const havePrice = data.some((d) => d.price != null);

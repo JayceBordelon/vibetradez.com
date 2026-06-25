@@ -99,9 +99,10 @@ export function OptionsTable({ items }: { items: Holding[] }) {
   const rowNav = useRowNav();
   if (items.length === 0) return null;
   return (
-    <section className="mt-8 first:mt-4">
-      <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Options ({items.length})</h2>
-      <Table className="mt-1">
+    <section className="mt-6">
+      <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Options ({items.length})</h2>
+      <div className="rounded-2xl border border-border bg-card px-4 shadow-sm sm:px-5">
+      <Table>
         <TableHeader>
           <TableRow className="border-border/50 hover:bg-transparent">
             <TableHead className={headCls}>Contract</TableHead>
@@ -146,6 +147,7 @@ export function OptionsTable({ items }: { items: Holding[] }) {
           })}
         </TableBody>
       </Table>
+      </div>
     </section>
   );
 }
@@ -154,9 +156,10 @@ export function StocksTable({ items }: { items: Holding[] }) {
   const rowNav = useRowNav();
   if (items.length === 0) return null;
   return (
-    <section className="mt-8 first:mt-4">
-      <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Stocks ({items.length})</h2>
-      <Table className="mt-1">
+    <section className="mt-6">
+      <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Stocks ({items.length})</h2>
+      <div className="rounded-2xl border border-border bg-card px-4 shadow-sm sm:px-5">
+      <Table>
         <TableHeader>
           <TableRow className="border-border/50 hover:bg-transparent">
             <TableHead className={headCls}>Symbol</TableHead>
@@ -198,6 +201,7 @@ export function StocksTable({ items }: { items: Holding[] }) {
           })}
         </TableBody>
       </Table>
+      </div>
     </section>
   );
 }
@@ -206,7 +210,8 @@ export function ClosedTable({ items }: { items: ClosedTrade[] }) {
   const rowNav = useRowNav();
   if (items.length === 0) return null;
   return (
-    <Table className="mt-2">
+    <div className="mt-3 rounded-2xl border border-border bg-card px-4 shadow-sm sm:px-5">
+    <Table>
       <TableHeader>
         <TableRow className="border-border/50 hover:bg-transparent">
           <TableHead className={headCls}>Trade</TableHead>
@@ -262,5 +267,6 @@ export function ClosedTable({ items }: { items: ClosedTrade[] }) {
         })}
       </TableBody>
     </Table>
+    </div>
   );
 }

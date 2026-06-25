@@ -53,18 +53,20 @@ export function LiveHoldings({ initial }: { initial: Holding[] }) {
   const totalPnl = live.reduce((s, h) => s + h.unrealized_pnl, 0);
 
   if (live.length === 0) {
-    return <div className="border-y border-border/50 px-1 py-12 text-center text-sm text-muted-foreground">No open positions. The account is in cash.</div>;
+    return <div className="rounded-2xl border border-border bg-card px-6 py-16 text-center text-sm text-muted-foreground shadow-sm">No open positions. The account is in cash.</div>;
   }
 
   return (
-    <>
+    <div className="space-y-6">
       <StatStrip cols={3}>
         <Stat label="Market value" value={<AnimatedNumber value={totalMV} kind="money" crumb />} />
         <Stat label="Unrealized P&L" value={<AnimatedNumber value={totalPnl} kind="pnlInt" crumb />} tone={totalPnl > 0 ? "positive" : totalPnl < 0 ? "negative" : "neutral"} />
         <Stat label="Positions" value={`${live.length}`} />
       </StatStrip>
-      <OptionsTable items={options} />
-      <StocksTable items={equities} />
-    </>
+      <div>
+        <OptionsTable items={options} />
+        <StocksTable items={equities} />
+      </div>
+    </div>
   );
 }
