@@ -33,22 +33,21 @@ function BackLink({ href, label }: { href: string; label: string }) {
 
 /*
 The model's reasoning, rendered in Claude's clay so it reads as Claude's
-own voice and stays distinct from the neutral fact cards beside it. When a
-session is linked, the whole card is the link and opens the transcript in a
-new tab; without one it's a plain panel.
+own voice. A soft tinted block with a left accent rule — one of the few
+intentional containers, kept minimal (no hard border or drop shadow). When
+a session is linked, the whole block is the link and opens the transcript.
 */
 function Reasoning({ title, body, transcriptDate, transcriptLabel }: { title: string; body: string; transcriptDate?: string; transcriptLabel?: string }) {
-  const base = "relative block overflow-hidden rounded-xl border border-claude-border bg-claude-light p-5";
+  const base = "block rounded-r-xl border-l-2 border-claude/40 bg-claude-light px-5 py-4";
   const inner = (
     <>
-      <span aria-hidden className="pointer-events-none absolute -top-10 -right-8 h-28 w-28 rounded-full bg-claude/20 blur-2xl" />
-      <div className="relative flex items-center gap-2">
+      <div className="flex items-center gap-2">
         <ClaudeLogo className="h-4 w-4" />
         <span className="text-[11px] font-semibold uppercase tracking-wider text-claude">{title}</span>
       </div>
-      <p className="relative mt-2 max-w-2xl text-sm leading-relaxed text-foreground/85">{body}</p>
+      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-foreground/85">{body}</p>
       {transcriptDate && transcriptLabel && (
-        <span className="relative mt-4 inline-flex items-center gap-2 text-sm font-semibold text-claude underline decoration-claude/30 underline-offset-4 transition-colors group-hover:decoration-claude">
+        <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-claude underline decoration-claude/30 underline-offset-4 transition-colors group-hover:decoration-claude">
           <ClaudeLogo className="h-4 w-4" />
           {transcriptLabel}
           <ArrowUpRight className="h-3.5 w-3.5" />
@@ -59,7 +58,7 @@ function Reasoning({ title, body, transcriptDate, transcriptLabel }: { title: st
 
   if (transcriptDate) {
     return (
-      <a href={`/transcripts/${transcriptDate}`} target="_blank" rel="noopener noreferrer" className={cn(base, "group transition-all hover:border-claude hover:shadow-md")}>
+      <a href={`/transcripts/${transcriptDate}`} target="_blank" rel="noopener noreferrer" className={cn(base, "group transition-colors hover:bg-claude-light/70")}>
         {inner}
       </a>
     );
@@ -143,7 +142,7 @@ export function HoldingDetail({ h: initial }: { h: Holding }) {
 
       <div className="mt-8">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{h.kind === "option" ? "Contract value & underlying since open" : "Price since open"}</h2>
-        <div className="mt-3 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+        <div className="mt-4">
           <TradeHistoryChart
             kind={h.kind}
             symbol={h.symbol}
@@ -211,7 +210,7 @@ export function ClosedDetail({ t }: { t: ClosedTrade }) {
 
       <div className="mt-8">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{t.kind === "option" ? "Contract value & underlying over the hold" : "Price over the hold"}</h2>
-        <div className="mt-3 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+        <div className="mt-4">
           <TradeHistoryChart kind={t.kind} symbol={t.symbol} underlying={t.underlying} openedDate={t.opened_date} closedDate={t.closed_date} strike={t.strike} entryPrice={t.entry_price > 0 ? t.entry_price : undefined} />
         </div>
       </div>
