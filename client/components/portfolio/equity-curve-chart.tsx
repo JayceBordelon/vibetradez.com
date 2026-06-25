@@ -226,7 +226,7 @@ function ViewToggle({ view, onChange }: { view: ChartView; onChange: (v: ChartVi
     { id: "pnl", label: "P&L vs SPY" },
   ];
   return (
-    <div role="tablist" aria-label="Chart view" className="inline-flex border border-border">
+    <div role="tablist" aria-label="Chart view" className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 p-1">
       {tabs.map((t) => (
         <button
           key={t.id}
@@ -235,8 +235,8 @@ function ViewToggle({ view, onChange }: { view: ChartView; onChange: (v: ChartVi
           aria-selected={view === t.id}
           onClick={() => onChange(t.id)}
           className={cn(
-            "min-h-9 px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wider transition-colors sm:min-h-0",
-            view === t.id ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+            "min-h-8 rounded-full px-3 py-1 text-xs font-medium transition-colors sm:min-h-0",
+            view === t.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
           )}
         >
           {t.label}

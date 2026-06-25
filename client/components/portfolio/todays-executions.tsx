@@ -88,7 +88,7 @@ function ExecutionRow({ d }: { d: PortfolioDecision }) {
       onClick={href ? () => router.push(href) : undefined}
     >
       <TableCell className={cellCls}>
-        <span className={cn("font-mono text-[11px] font-bold uppercase tracking-wider whitespace-nowrap", ink.text)}>{ink.label}</span>
+        <span className={cn("text-[11px] font-semibold uppercase tracking-[0.06em] whitespace-nowrap", ink.text)}>{ink.label}</span>
       </TableCell>
       <TableCell className={cellCls}>
         <div className="flex flex-col">
