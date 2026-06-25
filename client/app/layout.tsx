@@ -1,30 +1,33 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Lora, Martian_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import { IBM_Plex_Mono, Inter, Lora, Plus_Jakarta_Sans } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { SessionProvider } from "@/lib/session";
 import "./globals.css";
 
-const plusJakarta = Plus_Jakarta_Sans({
+// Clean humanist sans for the whole product — calm, neutral, highly legible.
+const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
 });
 
+// Geometric display face for big, calm headlines (.font-display / headings).
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800"],
+  variable: "--font-display",
+});
+
+// Editorial serif for the model's own narration voice in transcripts.
 const lora = Lora({
   subsets: ["latin"],
   variable: "--font-serif",
 });
 
+// Monospace for tabular figures and verbatim tool/JSON output.
 const plexMono = IBM_Plex_Mono({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-mono",
-});
-
-// Display face for the terminal headlines (.term-display), site-wide.
-const martianMono = Martian_Mono({
-  subsets: ["latin"],
-  weight: ["400", "700", "800"],
-  variable: "--font-display",
 });
 
 export const metadata: Metadata = {
@@ -69,15 +72,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body suppressHydrationWarning className={`${plusJakarta.variable} ${lora.variable} ${plexMono.variable} ${martianMono.variable} bg-background font-sans text-foreground antialiased`}>
+      <body suppressHydrationWarning className={`${inter.variable} ${plusJakarta.variable} ${lora.variable} ${plexMono.variable} bg-background font-sans text-foreground antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          {/* CRT chrome, site-wide: scanlines + vignette on the tube
-              (dark), perforated tractor-feed strips on the printout
-              (light). Fixed, pointer-transparent, above content but
-              below the z-50 nav and modals. */}
-          <div className="crt-overlay" aria-hidden />
-          <div className="crt-tractor crt-tractor-left" aria-hidden />
-          <div className="crt-tractor crt-tractor-right" aria-hidden />
           <SessionProvider>{children}</SessionProvider>
         </ThemeProvider>
       </body>
