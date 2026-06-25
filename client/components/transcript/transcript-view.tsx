@@ -97,14 +97,14 @@ export function TranscriptView({ date, kind }: { date: string; kind: Kind }) {
       </Link>
 
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2.5">
         <ClaudeLogo className="h-5 w-5" />
-        <h1 className="term-display text-xl font-extrabold uppercase tracking-tight sm:text-2xl">
+        <h1 className="font-display text-xl font-bold tracking-tight sm:text-2xl">
           {copy.title} for {prettyDate(date)}
         </h1>
         <Badge variant="secondary">{copy.stage}</Badge>
       </div>
-      <p className="mt-2 text-sm text-muted-foreground">{copy.blurb}</p>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{copy.blurb}</p>
 
       {kind === "portfolio" && <SessionPager date={date} />}
 
@@ -135,21 +135,18 @@ function SessionPager({ date }: { date: string }) {
   const next = stepTradingDay(date, 1);
   const showNext = next <= etNow().date;
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-dashed border-border py-2.5 font-mono text-[12px]">
-      <Link href={`/transcripts/${prev}`} className="inline-flex min-h-9 items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground sm:min-h-0">
-        <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+    <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2 text-[13px] shadow-sm">
+      <Link href={`/transcripts/${prev}`} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:min-h-0">
+        <ArrowLeft className="h-4 w-4" aria-hidden />
         {prettyDate(prev)}
       </Link>
-      <span className="text-muted-foreground/40" aria-hidden>
-        //
-      </span>
       {showNext ? (
-        <Link href={`/transcripts/${next}`} className="inline-flex min-h-9 items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground sm:min-h-0">
+        <Link href={`/transcripts/${next}`} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:min-h-0">
           {prettyDate(next)}
-          <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          <ArrowRight className="h-4 w-4" aria-hidden />
         </Link>
       ) : (
-        <span className="inline-flex min-h-9 items-center text-muted-foreground/40 sm:min-h-0">latest session</span>
+        <span className="inline-flex min-h-9 items-center px-2 text-muted-foreground/50 sm:min-h-0">Latest session</span>
       )}
     </div>
   );
@@ -673,8 +670,8 @@ function TranscriptLoading() {
     <TerminalLoader
       className="mt-6"
       minHeightClass="min-h-[44vh]"
-      command="vt session --replay"
-      lines={["opening the session ledger", "replaying the day's tool calls", "reconciling fills against the broker"]}
+      command="Loading the session"
+      lines={["Opening the session ledger", "Replaying the day's tool calls", "Reconciling fills against the broker"]}
     />
   );
 }
