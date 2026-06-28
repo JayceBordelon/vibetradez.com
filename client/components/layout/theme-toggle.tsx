@@ -16,7 +16,11 @@ export function ThemeToggle({ className }: { className?: string }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const isDark = resolvedTheme === "dark";
+  // Gate the resolved theme on `mounted` so the server render and the first
+  // client render agree: pre-mount, isDark is always false (server can't know
+  // the theme), so aria-label, onClick, and icon all match until the effect
+  // runs. Without this, only the icon was guarded and aria-label mismatched.
+  const isDark = mounted && resolvedTheme === "dark";
   return (
     <button
       type="button"
