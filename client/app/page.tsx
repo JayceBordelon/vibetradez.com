@@ -1,4 +1,4 @@
-import { ArrowRight, LineChart, Lock, Mail } from "lucide-react";
+import { ArrowRight, Mail } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -22,7 +22,7 @@ The marketing landing in the soft-minimalist-light system: a calm hero
 that leads with the live account number, then clean alternating feature
 sections that tell the story (the setup, the daily loop, the guardrails,
 the toolbox, the live receipts), parody social proof, and the subscribe
-ask. Same design language as the in-app dashboard — one cohesive product.
+ask. Same design language as the in-app dashboard, one cohesive product.
 */
 
 // The hero's headline figure is the LIVE account equity, refreshed at most
@@ -33,7 +33,7 @@ export const revalidate = 60;
 export const metadata: Metadata = {
   title: "VibeTradez | A Model Runs My Real Brokerage Account",
   description:
-    "I gave a language model my real brokerage account. It buys options with actual money — calls and puts, no stocks — sized in code so it can't faceplant the whole account on one contract. Free to watch.",
+    "I gave a language model my real brokerage account. It buys options with real money, calls and puts, no stocks, sized in code so it can't faceplant the whole account on one contract. Free to watch.",
 };
 
 export default async function LandingPage() {
@@ -46,7 +46,7 @@ export default async function LandingPage() {
       </div>
 
       {/* ── Nav ── */}
-      <nav className="sticky top-0 z-50 border-b border-border/70 bg-background/80 backdrop-blur-xl">
+      <nav className="sticky top-0 z-50 border-b border-border/70 bg-transparent backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-3 sm:px-6">
           <Link href="/" aria-label="VibeTradez home">
             <Wordmark />
@@ -75,19 +75,19 @@ export default async function LandingPage() {
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green opacity-60" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
                 </span>
-                Autonomous AI portfolio manager · Live
+                An AI is trading my money right now · Live
               </span>
             </Reveal>
 
             <Reveal effect="rise" delay={80} duration={700}>
               <h1 className="mt-6 font-display text-[clamp(34px,6vw,60px)] font-bold leading-[1.05] tracking-tight text-foreground">
-                A language model runs a <span className="text-primary">real brokerage account.</span>
+                I gave a chatbot my <span className="text-primary">real brokerage account.</span>
               </h1>
             </Reveal>
 
             <Reveal effect="rise" delay={160} duration={700}>
               <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-                Every weekday, Claudia reads the book, the news, and the tape, then buys options with actual money — calls and puts, no stocks, sized in code so it can&apos;t faceplant the account on one trade. Watch it beat the S&amp;P or invent new ways to lose my money.
+                Every weekday, Claudia skims the news, squints at some charts, and YOLOs my money into options. No boring stocks. I wrote just enough code to stop her nuking the account on one trade. Watch her beat the S&amp;P or speedrun bankruptcy.
               </p>
             </Reveal>
 
@@ -99,7 +99,7 @@ export default async function LandingPage() {
                 </Link>
                 <SubscribeCTA className="term-btn term-btn-ghost">
                   <Mail className="h-4 w-4" />
-                  Get the daily recap
+                  Get the recaps
                 </SubscribeCTA>
               </div>
             </Reveal>
@@ -126,37 +126,38 @@ export default async function LandingPage() {
       </section>
 
       {/* ── 01 · The setup ── */}
-      <LogSection id="setup" comment="What this is" weight="text" title={<>One real account. <span className="text-primary">No safety net.</span></>} aside={<HeroStatStrip equity={equity} />}>
-        <p>A real brokerage account with my actual money in it, run by one model with unlimited confidence and zero dollars of its own at stake. You just watch and judge whether it has any idea what it&apos;s doing.</p>
+      <LogSection id="setup" comment="What am I doing" weight="text" title={<>One real account. <span className="text-primary">No adult supervision.</span></>} aside={<HeroStatStrip equity={equity} />}>
+        <p>My real account, my real money, run by one model with infinite confidence and zero of its own dollars at risk. You watch and decide if it has any idea what it&apos;s doing.</p>
+        <p>Yes, I named her, gave her a gender, and talk about her like a coworker I worry about. I am anthropomorphizing a language model shamelessly and I will not be stopping.</p>
       </LogSection>
 
       {/* ── 02 · The daily loop ── */}
-      <LogSection id="loop" comment="The whole schedule" flip title={<>Every weekday, it <span className="text-primary">starts from scratch.</span></>} aside={<CronTable />}>
-        <p>No fixed strategy. Three times a day — at the open, midday, and before the close — it checks the positions, the news and retail hype, and the tape, then decides to buy, trim, sell, or hide in cash and call that discipline. It holds what it believes in across days, which is either conviction or stubbornness depending on next week.</p>
+      <LogSection id="loop" comment="Her daily routine" flip title={<>Every morning, she wings it <span className="text-primary">from scratch.</span></>} aside={<CronTable />}>
+        <p>No strategy, no plan, no memory of yesterday. Three times a day she reads the book, the news, and whatever Reddit is screaming about, then buys, trims, sells, or hides in cash and calls it discipline. She holds losers for days on pure conviction. Next week tells us if that was smart.</p>
       </LogSection>
 
       {/* ── 03 · The guardrails ── */}
-      <LogSection id="guardrails" comment="What governs the money" weight="figure" title={<>Options only. <span className="text-primary">A short leash.</span></>} aside={<GuardsReadout />}>
-        <p>Calls and puts only — no stocks. If it&apos;s still holding shares from before, it dumps them for cash and buys contracts. It can crowd into a name, but the code won&apos;t let it faceplant the whole account on one contract or one ticker, and it spends settled cash only. Past that it sizes however it likes. It can absolutely still lose my money. That&apos;s the show.</p>
+      <LogSection id="guardrails" comment="The few rules she can't break" weight="figure" title={<>Options only. <span className="text-primary">A very short leash.</span></>} aside={<GuardsReadout />}>
+        <p>Calls and puts only, no stocks. Any leftover shares get dumped for cash and turned into contracts. She can crowd into one name, but the code won&apos;t let her bet the whole account on a single contract or ticker, and she only spends settled cash. Past that she sizes however she likes. Can she still lose it all? Absolutely. That&apos;s the show.</p>
       </LogSection>
 
       {/* ── 04 · The toolbox ── */}
-      <LogSection id="tools" comment="The only actions that exist" flip title={<>It can only use the <span className="text-primary">tools I built.</span></>} aside={<ToolLs />}>
-        <p>Claudia gets the tools I hand-built and nothing else. No surprise powers, no rogue wire transfers, no ordering GPUs on my card. If a button doesn&apos;t exist, she can&apos;t press it.</p>
+      <LogSection id="tools" comment="What she's allowed to touch" flip title={<>She only gets the <span className="text-primary">buttons I gave her.</span></>} aside={<ToolLs />}>
+        <p>Claudia gets the exact tools I built her and nothing else. No surprise superpowers, no midnight wire transfers, no expensing GPUs to my card. If I didn&apos;t build the button, she can&apos;t press it. (I checked. Twice.)</p>
       </LogSection>
 
       {/* ── 05 · The receipts ── */}
       <LogSection
         id="receipts"
         comment="Streams live as you reach it"
-        title={<>Every move, <span className="text-primary">on the record.</span></>}
+        title={<>No take-backs, <span className="text-primary">all on the record.</span></>}
         aside={
           <div className="border-l border-border/70 pl-5 sm:pl-6">
             <LiveTranscript lines={transcript} />
           </div>
         }
       >
-        <p>Every move is logged, tool by tool. The session beside this streams on its own: watch it overthink a quote, buy something anyway, and file a very confident note about why. It can&apos;t hide a bad call from you, and it has a real talent for them.</p>
+        <p>Every move is logged, tool by tool, no edits. The session beside this plays out live. Watch her overthink a quote, buy it anyway, and file a very confident memo about why. She can&apos;t hide a bad trade, and she has a real talent for them.</p>
       </LogSection>
 
       {/* ── Parody social proof ── */}
@@ -176,13 +177,13 @@ export default async function LandingPage() {
               <div className="relative">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
                   <Mail className="h-3.5 w-3.5" />
-                  Daily recap · free
+                  Session recaps · still free
                 </span>
                 <h2 className="mt-5 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-                  Start getting <span className="text-primary">the recap</span>
+                  Get the <span className="text-primary">carnage</span> in your inbox
                 </h2>
                 <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-                  One email a day so you can watch the carnage. Free, no catch, leave whenever. <span className="italic">(I will hate you.)</span>
+                  An email every session she actually buys or sells, so you never miss a fresh disaster. Free, no catch, leave whenever. <span className="italic">(I&apos;ll quietly resent you forever.)</span>
                 </p>
                 <div className="mt-8 flex flex-col items-center gap-4">
                   <SubscribeCTA className="term-btn term-btn-solid">
@@ -197,31 +198,10 @@ export default async function LandingPage() {
               </div>
             </div>
           </Reveal>
-
-          {/* Three quiet reassurances under the ask, open on the page. */}
-          <Reveal effect="fade" delay={150} duration={700}>
-            <div className="mt-10 grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-3 sm:gap-y-0 sm:divide-x sm:divide-border/70 sm:[&>*]:pl-6 sm:[&>*:first-child]:pl-0">
-              <Assurance Icon={LineChart} title="Fully transparent" body="Every position and decision is public, marked live." />
-              <Assurance Icon={Lock} title="Hard-capped" body="Position and per-name sizing enforced in code." />
-              <Assurance Icon={Mail} title="Always free" body="No fees, no upsell — watch and get the recap." />
-            </div>
-          </Reveal>
         </div>
       </section>
 
       <Footer />
-    </div>
-  );
-}
-
-function Assurance({ Icon, title, body }: { Icon: typeof LineChart; title: string; body: string }) {
-  return (
-    <div className="text-left">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-primary">
-        <Icon className="h-4 w-4" />
-      </span>
-      <div className="mt-3 text-sm font-medium">{title}</div>
-      <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{body}</div>
     </div>
   );
 }
@@ -278,7 +258,7 @@ const transcript: TranscriptLine[] = [
     type: "tool",
     tool: "write_summary",
     payload: {
-      synopsis: "Added a small NVDA call on a 50-day hold; kept MSFT.",
+      synopsis: "Added a small NVDA call on a 50-day hold, kept MSFT.",
       action_items: ["Trim NVDA if it loses the 50-day", "Confirm the NVDA fill settled before redeploying"],
     },
     result: { ok: true, action: "write_summary", stored: true },

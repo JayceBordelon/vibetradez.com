@@ -70,7 +70,7 @@ const CRONS: { icon: LucideIcon; time: string; job: string; detail: string }[] =
   { icon: Sunrise, time: "9:45 AM ET", job: "The open", detail: "Reacts to the overnight tape and the opening move, once spreads settle." },
   { icon: Clock, time: "12:30 PM ET", job: "Midday", detail: "The primary read: the book, the news and hype, and the tape, then trades." },
   { icon: Sunset, time: "3:30 PM ET", job: "The pre-close", detail: "Decides what to carry overnight versus trim, before the bell." },
-  { icon: RefreshCw, time: "Every 15m", job: "The sweep", detail: "Reconciles its orders against the broker — finds out what actually filled." },
+  { icon: RefreshCw, time: "Every 15m", job: "The sweep", detail: "Reconciles its orders against the broker and finds out what actually filled." },
   { icon: Mail, time: "4:00 PM ET", job: "The close", detail: "Snapshots equity vs SPY, then emails everyone the day's damage." },
 ];
 
