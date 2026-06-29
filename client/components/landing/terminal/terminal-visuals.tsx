@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { CountUp } from "@/components/landing/count-up";
 import { cn } from "@/lib/utils";
+import type { EquityCurvePoint } from "@/types/portfolio";
 
 /*
 Supporting visuals for the marketing landing — OPEN editorial data readouts
@@ -11,8 +12,8 @@ chips, soft sage tints. No boxed cards. Each fills the opposite column of a
 feature section and reads as a data readout sitting on the page, not a tile.
 */
 
-// A soft decorative sage sparkline for the live-account card. Purely
-// ornamental (aria-hidden); the shape suggests a gently rising curve.
+// A soft decorative sage sparkline, shown only as a fallback before there are
+// at least two real equity snapshots. Purely ornamental (aria-hidden).
 function HeroSparkline({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 320 80" preserveAspectRatio="none" className={className} aria-hidden>
@@ -28,10 +29,54 @@ function HeroSparkline({ className }: { className?: string }) {
   );
 }
 
+// Project the real equity series into the 320x80 viewBox as line + area paths.
+// Pure geometry, computed server-side, so the hero ships a real chart with no
+// client JS. A flat series (min === max) draws a centered line rather than
+// dividing by zero.
+function buildSpark(values: number[]) {
+  const W = 320;
+  const H = 80;
+  const padY = 12;
+  const n = values.length;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min;
+  const x = (i: number) => (n === 1 ? W : (i / (n - 1)) * W);
+  const y = (v: number) => (span === 0 ? H / 2 : padY + (1 - (v - min) / span) * (H - padY * 2));
+  const line = values.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+  return { line, area: `${line} L${W} ${H} L0 ${H} Z` };
+}
+
+// The hero sparkline driven by the account's real daily equity. Green when the
+// window ends at or above where it started, red when it's down (so it is no
+// longer "always green"). Falls back to the decorative curve until there are
+// two real snapshots to draw a line between.
+function EquitySparkline({ points, className }: { points: EquityCurvePoint[]; className?: string }) {
+  const values = points.map((p) => p.account_equity).filter((v) => v > 0);
+  if (values.length < 2) return <HeroSparkline className={className} />;
+
+  const { line, area } = buildSpark(values);
+  const up = values[values.length - 1] >= values[0];
+  const color = up ? "var(--green)" : "var(--red)";
+  const gradId = up ? "heroEquityUp" : "heroEquityDown";
+  return (
+    <svg viewBox="0 0 320 80" preserveAspectRatio="none" className={className} role="img" aria-label={`Account equity across ${values.length} daily snapshots, ${up ? "up" : "down"} over the window`}>
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={0.22} />
+          <stop offset="100%" stopColor={color} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gradId})`} />
+      <path d={line} fill="none" stroke={color} strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /* ── The live account readout: the hero's headline figure, open on the page
       (no box) — the big number leads, a soft sparkline underneath, then a
       hairline-divided fact row. ── */
-export function EquityReadout({ equity }: { equity: number | null }) {
+export function EquityReadout({ equity, points = [] }: { equity: number | null; points?: EquityCurvePoint[] }) {
   return (
     <div className="lg:pl-8">
       <div className="flex items-center justify-between">
@@ -49,7 +94,7 @@ export function EquityReadout({ equity }: { equity: number | null }) {
         <CountUp to={Math.round(equity ?? 5000)} prefix="$" durationMs={2200} />
       </div>
       <div className="-mx-1 mt-6 h-16">
-        <HeroSparkline className="h-full w-full" />
+        <EquitySparkline points={points} className="h-full w-full" />
       </div>
       <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-border/70 pt-5 text-sm">
         <div>

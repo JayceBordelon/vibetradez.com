@@ -1,5 +1,5 @@
 import { serverFetch } from "@/lib/api";
-import type { ClosedTrade, ClosedTradesResponse, Holding, HoldingsResponse, PortfolioResponse } from "@/types/portfolio";
+import type { ClosedTrade, ClosedTradesResponse, EquityCurvePoint, EquityCurveResponse, Holding, HoldingsResponse, PortfolioResponse } from "@/types/portfolio";
 
 /*
 Server-side data access for the /holdings and /closed pages. These run in
@@ -34,6 +34,18 @@ export async function fetchAccountEquity(): Promise<number | null> {
     return data.enabled && data.equity > 0 ? data.equity : null;
   } catch {
     return null;
+  }
+}
+
+// Daily account-equity series for the landing hero sparkline. Returns [] when
+// the manager is disabled or the fetch fails (including at build time), so the
+// hero degrades to a decorative curve instead of erroring.
+export async function fetchEquityCurve(): Promise<EquityCurvePoint[]> {
+  try {
+    const data = await serverFetch<EquityCurveResponse>("/api/portfolio/equity-curve");
+    return data.points ?? [];
+  } catch {
+    return [];
   }
 }
 

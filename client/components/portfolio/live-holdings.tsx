@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { Pagination } from "@/components/layout/pagination";
 import { Stat, StatStrip } from "@/components/layout/stat-strip";
 import { OptionsTable, StocksTable } from "@/components/portfolio/book-tables";
 import { AnimatedNumber } from "@/components/ui/animated-number";
@@ -21,9 +22,13 @@ of flickering.
 */
 
 const REFRESH_SECONDS = 60;
+// Page the book once it gets long. Matches the /closed page size so both book
+// surfaces page at the same cadence; the pager hides itself at or below it.
+const PAGE_SIZE = 10;
 
 export function LiveHoldings({ initial }: { initial: Holding[] }) {
   const [holdings, setHoldings] = useState<Holding[]>(initial);
+  const [page, setPage] = useState(1);
   const quotes = useLiveQuotes(initial.length > 0);
 
   // Sequence guard: useVisiblePoll re-fires load() on interval and on tab
@@ -56,6 +61,18 @@ export function LiveHoldings({ initial }: { initial: Holding[] }) {
     return <div className="px-2 py-20 text-center text-sm text-muted-foreground">No open positions. The account is in cash.</div>;
   }
 
+  // Page the combined book (options first, then any legacy stock). The headline
+  // stats stay over the FULL book; only the tables are sliced. A live poll can
+  // grow or shrink the book and leave `page` out of range, so clamp on read —
+  // the stored page never has to be corrected, and the pager auto-hides at or
+  // below PAGE_SIZE.
+  const ordered = [...options, ...equities];
+  const totalPages = Math.max(1, Math.ceil(ordered.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(page, 1), totalPages);
+  const slice = ordered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pageOptions = slice.filter((h) => h.kind === "option");
+  const pageStocks = slice.filter((h) => h.kind === "stock");
+
   return (
     <div>
       <StatStrip cols={3}>
@@ -63,8 +80,9 @@ export function LiveHoldings({ initial }: { initial: Holding[] }) {
         <Stat label="Unrealized P&L" value={<AnimatedNumber value={totalPnl} kind="pnlInt" crumb />} tone={totalPnl > 0 ? "positive" : totalPnl < 0 ? "negative" : "neutral"} />
         <Stat label="Positions" value={`${live.length}`} />
       </StatStrip>
-      <OptionsTable items={options} />
-      <StocksTable items={equities} />
+      <OptionsTable items={pageOptions} total={options.length} />
+      <StocksTable items={pageStocks} total={equities.length} />
+      <Pagination page={safePage} pageSize={PAGE_SIZE} totalItems={ordered.length} onPageChange={setPage} />
     </div>
   );
 }

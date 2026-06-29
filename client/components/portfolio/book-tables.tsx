@@ -22,8 +22,8 @@ the trade detail. Columns that don't fit a phone collapse away (the
 symbol, value, and P&L always survive).
 */
 
-const headCls = "h-9 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground first:pl-0 last:pr-0";
-const cellCls = "px-2 py-3 first:pl-0 last:pr-0";
+const headCls = "h-10 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground first:pl-0 last:pr-0";
+const cellCls = "px-2.5 py-4 first:pl-0 last:pr-0";
 const numCls = "text-right tabular-nums";
 
 function useRowNav() {
@@ -38,7 +38,7 @@ function useRowNav() {
 // animated, colored by sign.
 function PnlCell({ pnl, pct }: { pnl: number; pct: number }) {
   return (
-    <div className={cn("flex flex-col items-end", pnlColor(pnl))}>
+    <div className={cn("flex flex-col items-end gap-0.5", pnlColor(pnl))}>
       <span className="font-semibold tabular-nums">
         <AnimatedNumber value={pnl} kind="pnlInt" />
       </span>
@@ -59,7 +59,7 @@ function DayCell({ h }: { h: Holding }) {
   const parts = dayParts(h);
   if (parts.day !== null) {
     return (
-      <div className={cn("flex flex-col items-end tabular-nums", pnlColor(parts.day))}>
+      <div className={cn("flex flex-col items-end gap-0.5 tabular-nums", pnlColor(parts.day))}>
         <span className="text-sm font-medium">
           <AnimatedNumber value={parts.day} kind="pnlInt" />
         </span>
@@ -69,7 +69,7 @@ function DayCell({ h }: { h: Holding }) {
   }
   if (parts.today === null) return <span className="text-muted-foreground">-</span>;
   return (
-    <div className="flex flex-col items-end tabular-nums">
+    <div className="flex flex-col items-end gap-0.5 tabular-nums">
       <span className={cn("text-sm font-medium", pnlColor(parts.today))}>
         <AnimatedNumber value={parts.today} kind="pnlInt" />
         <span className="ml-1 text-[10px] font-normal tracking-wider text-muted-foreground uppercase">today</span>
@@ -95,12 +95,12 @@ function SymbolCell({ href, label, chip }: { href: string; label: string; chip: 
   );
 }
 
-export function OptionsTable({ items }: { items: Holding[] }) {
+export function OptionsTable({ items, total }: { items: Holding[]; total?: number }) {
   const rowNav = useRowNav();
   if (items.length === 0) return null;
   return (
     <section className="mt-8">
-      <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Options ({items.length})</h2>
+      <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Options ({total ?? items.length})</h2>
       <Table>
         <TableHeader>
           <TableRow className="border-border hover:bg-transparent">
@@ -150,12 +150,12 @@ export function OptionsTable({ items }: { items: Holding[] }) {
   );
 }
 
-export function StocksTable({ items }: { items: Holding[] }) {
+export function StocksTable({ items, total }: { items: Holding[]; total?: number }) {
   const rowNav = useRowNav();
   if (items.length === 0) return null;
   return (
     <section className="mt-8">
-      <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Stocks ({items.length})</h2>
+      <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Stocks ({total ?? items.length})</h2>
       <Table>
         <TableHeader>
           <TableRow className="border-border hover:bg-transparent">

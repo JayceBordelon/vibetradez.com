@@ -15,7 +15,7 @@ import { Footer } from "@/components/layout/footer";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Wordmark } from "@/components/layout/wordmark";
 import { ClaudeLogo } from "@/components/ui/brand-icons";
-import { fetchAccountEquity } from "@/lib/portfolio-data";
+import { fetchAccountEquity, fetchEquityCurve } from "@/lib/portfolio-data";
 
 /*
 The marketing landing in the soft-minimalist-light system: a calm hero
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
 };
 
 export default async function LandingPage() {
-  const equity = await fetchAccountEquity();
+  const [equity, equityCurve] = await Promise.all([fetchAccountEquity(), fetchEquityCurve()]);
   return (
     <div className="relative min-h-dvh overflow-hidden">
       {/* Soft ambient wash behind the hero. */}
@@ -118,7 +118,7 @@ export default async function LandingPage() {
           </div>
 
           <Reveal effect="scale" delay={120} duration={800}>
-            <EquityReadout equity={equity} />
+            <EquityReadout equity={equity} points={equityCurve} />
           </Reveal>
         </div>
 
