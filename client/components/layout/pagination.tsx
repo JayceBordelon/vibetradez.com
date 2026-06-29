@@ -1,14 +1,21 @@
+"use client";
+
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
 /*
-Pagination is a server-renderable pager (plain links, no client state) for the
-list surfaces like /closed. It matches the rest of the book: hairline rule on
-top, a muted "showing X to Y of Z" range on the left, and pill page controls
-on the right where the current page wears the mint gradient the CTAs use.
-Page is 1-based and carried in the ?page= query param.
+Pagination is the shared pager for the book's list surfaces. It runs in two
+modes:
+  - Link mode (basePath): server-rendered lists like /closed carry the page in
+    the ?page= query param, so each page is a real, shareable URL.
+  - Controlled mode (onPageChange): live client lists like /holdings page in
+    place without navigating, so the streamed re-pricing keeps running.
+It matches the rest of the book: hairline rule on top, a muted "showing X to Y
+of Z" range on the left, and pill page controls on the right where the current
+page wears the mint gradient the CTAs use. Page is 1-based.
 */
 
 // pageWindow returns the pages to render, collapsing long runs to a "gap"
@@ -26,30 +33,57 @@ function pageWindow(current: number, total: number): (number | "gap")[] {
 }
 
 const cell = "inline-flex h-9 min-w-9 items-center justify-center rounded-lg px-3 text-sm font-medium tabular-nums transition-colors";
+const inactiveCell = cn(cell, "border border-border text-muted-foreground hover:bg-muted hover:text-foreground");
 
-function Arrow({ href, dir, disabled }: { href: string; dir: "prev" | "next"; disabled: boolean }) {
-  const Icon = dir === "prev" ? ChevronLeft : ChevronRight;
-  if (disabled) {
-    return (
-      <span aria-disabled className={cn(cell, "cursor-not-allowed border border-border/60 text-muted-foreground/40")}>
-        <Icon className="h-4 w-4" />
-      </span>
-    );
-  }
-  return (
-    <Link href={href} aria-label={dir === "prev" ? "Previous page" : "Next page"} className={cn(cell, "border border-border text-muted-foreground hover:bg-muted hover:text-foreground")}>
-      <Icon className="h-4 w-4" />
-    </Link>
-  );
+interface PaginationProps {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  /** Link mode: each page target becomes `${basePath}?page=N`. */
+  basePath?: string;
+  /** Controlled mode: called with the target page; no navigation. */
+  onPageChange?: (page: number) => void;
 }
 
-export function Pagination({ basePath, page, pageSize, totalItems }: { basePath: string; page: number; pageSize: number; totalItems: number }) {
+export function Pagination({ page, pageSize, totalItems, basePath, onPageChange }: PaginationProps) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   if (totalPages <= 1) return null;
 
-  const href = (p: number) => (p <= 1 ? basePath : `${basePath}?page=${p}`);
   const from = (page - 1) * pageSize + 1;
   const to = Math.min(totalItems, page * pageSize);
+
+  // goTo renders one page target as a <button> (controlled mode) or a <Link>
+  // (link mode), so a single set of styles serves both the server list pages
+  // and the live client lists.
+  const goTo = (target: number, label: string, className: string, children: ReactNode, key?: number) => {
+    if (onPageChange) {
+      return (
+        <button key={key} type="button" onClick={() => onPageChange(target)} aria-label={label} className={className}>
+          {children}
+        </button>
+      );
+    }
+    const href = target <= 1 ? (basePath ?? "") : `${basePath}?page=${target}`;
+    return (
+      <Link key={key} href={href} aria-label={label} className={className}>
+        {children}
+      </Link>
+    );
+  };
+
+  const arrow = (dir: "prev" | "next") => {
+    const Icon = dir === "prev" ? ChevronLeft : ChevronRight;
+    const target = dir === "prev" ? page - 1 : page + 1;
+    const disabled = dir === "prev" ? page <= 1 : page >= totalPages;
+    if (disabled) {
+      return (
+        <span aria-disabled className={cn(cell, "cursor-not-allowed border border-border/60 text-muted-foreground/40")}>
+          <Icon className="h-4 w-4" />
+        </span>
+      );
+    }
+    return goTo(target, dir === "prev" ? "Previous page" : "Next page", inactiveCell, <Icon className="h-4 w-4" />);
+  };
 
   return (
     <nav aria-label="Pagination" className="mt-8 flex flex-col items-center justify-between gap-4 border-t border-border/50 pt-6 sm:flex-row">
@@ -57,7 +91,7 @@ export function Pagination({ basePath, page, pageSize, totalItems }: { basePath:
         Showing <span className="font-medium text-foreground tabular-nums">{from}</span> to <span className="font-medium text-foreground tabular-nums">{to}</span> of <span className="font-medium text-foreground tabular-nums">{totalItems}</span>
       </p>
       <div className="flex items-center gap-1.5">
-        <Arrow href={href(page - 1)} dir="prev" disabled={page <= 1} />
+        {arrow("prev")}
         {pageWindow(page, totalPages).map((p, i) =>
           p === "gap" ? (
             <span key={`gap-${i}`} className={cn(cell, "text-muted-foreground/60")}>
@@ -68,12 +102,10 @@ export function Pagination({ basePath, page, pageSize, totalItems }: { basePath:
               {p}
             </span>
           ) : (
-            <Link key={p} href={href(p)} className={cn(cell, "border border-border text-muted-foreground hover:bg-muted hover:text-foreground")}>
-              {p}
-            </Link>
+            goTo(p, `Page ${p}`, inactiveCell, p, p)
           ),
         )}
-        <Arrow href={href(page + 1)} dir="next" disabled={page >= totalPages} />
+        {arrow("next")}
       </div>
     </nav>
   );

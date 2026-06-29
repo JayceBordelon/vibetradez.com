@@ -8,9 +8,9 @@ import { fmtPnlInt } from "@/lib/format";
 import { fetchClosedTrades, findClosedTrade } from "@/lib/portfolio-data";
 
 const OG_IMAGE = "/og/dashboard.png";
-// 12 rows fills a 900px desktop viewport without the dead band 5 left, and
-// keeps the pager from fragmenting the history into ten pages.
-const PAGE_SIZE = 12;
+// 10 rows per page keeps each render short and scannable, and matches the
+// holdings list so both book surfaces page at the same cadence.
+const PAGE_SIZE = 10;
 
 // Always render per-request: the book + trade log are live, not build-time data.
 export const dynamic = "force-dynamic";
