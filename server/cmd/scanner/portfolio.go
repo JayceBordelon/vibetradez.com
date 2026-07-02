@@ -86,9 +86,10 @@ func runPortfolioSession(db *store.Store, agent *portfolio.Agent, slot string) {
 recapEmailSender implements portfolio.RecapSender. The model now authors the
 recap email body itself (via the send_recap_email tool) and this delivers it
 to every subscriber — replacing the old templated end-of-day recap. Claude
-writes one per session, but only when it actually traded and at most once per
-session (both gated in the tool layer). Best-effort and per-recipient (so one
-bad address can't sink the batch); a per-recipient unsubscribe link is
+writes one per session, but only when it actually CLOSED something (a sell —
+buy-only and hold-only sessions email nobody) and at most once per session
+(both gated in the tool layer). Best-effort and per-recipient (so one bad
+address can't sink the batch); a per-recipient unsubscribe link is
 guaranteed even if the model forgot it.
 */
 type recapEmailSender struct {
