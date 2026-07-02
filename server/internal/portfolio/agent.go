@@ -27,8 +27,10 @@ const (
 	maxToolRounds = 30
 	/*
 		Adaptive extended thinking is enabled and its depth is driven by the
-		OutputConfig effort level, not a fixed token budget (opus-4.8+ reject
-		the legacy thinking.type=enabled + budget_tokens shape). max_tokens
+		OutputConfig effort level, not a fixed token budget (fable-5 and
+		opus-4.7+ reject the legacy thinking.type=enabled + budget_tokens
+		shape; fable-5 also rejects an explicit thinking.type=disabled, so
+		never send that — omit the field instead). max_tokens
 		still caps the whole response, so it must comfortably cover both the
 		thinking and the visible tool calls + final stance JSON.
 	*/
@@ -162,8 +164,8 @@ func (a *Agent) runConversation(ctx context.Context, prompt string, dispatcher *
 			// recorded into the transcript and threaded back (with signatures)
 			// via the raw assistant echo so multi-round tool use stays valid.
 			//
-			// Display MUST be set explicitly: on opus-4.8/4.7 the server-side
-			// default is "omitted", which returns thinking blocks with an empty
+			// Display MUST be set explicitly: on fable-5 and opus-4.8/4.7 the
+			// server-side default is "omitted", which returns thinking blocks with an empty
 			// Thinking field (signature only), so the transcript would capture no
 			// reasoning at all. "summarized" returns the readable summary we show.
 			Thinking: anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{

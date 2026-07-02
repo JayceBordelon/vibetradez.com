@@ -387,6 +387,7 @@ func main() {
 	sendLiveTradingUpdate(cfg, db, emailClient)
 	sendOptionsOnlyUpdate(cfg, db, emailClient)
 	sendPersonaUpdate(cfg, db, emailClient)
+	sendFableReturnUpdate(cfg, db, emailClient)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
