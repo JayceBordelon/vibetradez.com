@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"vibetradez.com/internal/portfoliowire"
 	"vibetradez.com/internal/store"
 	"vibetradez.com/internal/templates"
+	"vibetradez.com/internal/trades"
 )
 
 /*
@@ -101,7 +103,7 @@ func (s *recapEmailSender) SendRecapEmail(_ context.Context, subject, html strin
 		log.Printf("portfolio recap: no subscribers, nothing to send")
 		return 0, nil
 	}
-	body := signByModel(ensureUnsubscribe(html), s.cfg.AnthropicModel)
+	body := signByClaudia(ensureUnsubscribe(html), s.cfg.AnthropicModel)
 	res := s.client.SendPersonalizedToList(s.cfg.EmailFrom, recipients, subject, body, unsubURLBuilder(s.cfg))
 	log.Printf("portfolio recap: model-authored email sent to %d/%d subscribers", res.Succeeded, res.Total)
 	if res.Failed > 0 {
@@ -127,16 +129,23 @@ func ensureUnsubscribe(html string) string {
 	return html + footer
 }
 
-// signByModel stamps the recap with the model that actually wrote it, so every
-// email is attributed to its author (e.g. "claude-opus-4-8"). The name is the
-// configured model the agent runs on — authoritative, not the model's own
-// guess — inserted just before </body>.
-func signByModel(html, model string) string {
-	model = strings.TrimSpace(model)
-	if model == "" {
-		return html
+/*
+signByClaudia closes every model-authored trade email — the recaps sent on
+closes and position changes — with Claudia's sign-off, plus the configured
+model as small-print attribution (authoritative, not the model's own guess).
+The prompt forbids the model from signing its own emails ("Do NOT sign with
+a name or model version, the system stamps that" in prompt.md), so this
+stamp is the single code-enforced signature: every position-change email
+goes out signed by Claudia even when the model string is empty. Inserted
+just before </body>.
+*/
+func signByClaudia(html, model string) string {
+	attribution := "your autonomous portfolio manager"
+	if model = strings.TrimSpace(model); model != "" {
+		attribution += " &middot; written by " + model
 	}
-	sig := `<p style="margin:14px 0 0;font-size:11px;color:#94a3b8;">Written by Claudia &middot; ` + model + `</p>`
+	sig := `<p style="margin:18px 0 0;font-size:14px;font-weight:700;color:#0f172a;">&mdash; Claudia</p>` +
+		`<p style="margin:2px 0 0;font-size:11px;color:#94a3b8;">` + attribution + `</p>`
 	if i := strings.LastIndex(strings.ToLower(html), "</body>"); i >= 0 {
 		return html[:i] + sig + html[i:]
 	}
@@ -365,6 +374,188 @@ func sendPersonaUpdate(cfg *config.Config, db *store.Store, emailClient *email.C
 			log.Printf("persona update: WARNING sent but failed to record in ledger (could re-send on next boot): %v", err)
 		}
 	}
+}
+
+// fableReturnUpdateKey is the sent_emails ledger key for the one-time product
+// update announcing that the agent is back on Claude Fable 5 (after the
+// mid-June retirement forced a temporary downgrade to Opus 4.8), with live
+// performance numbers: the SPY gap, how much of it has been recovered, and
+// a breakdown of recent winning closes. Self-gating like the other one-time
+// updates.
+const fableReturnUpdateKey = "fable_return_update_v1"
+
+/*
+sendFableReturnUpdate sends the one-time product update announcing the return
+to Claude Fable 5. Unlike the other one-time updates it carries live numbers
+(account equity, the SPY buy-and-hold gap, recent round-trip wins), so it has
+an extra gate: when the store doesn't yet have enough curve/trade history to
+render honest numbers, the send is deferred WITHOUT claiming the ledger key,
+and it retries on a later boot. Otherwise the same self-gating shape as
+sendPersonaUpdate: claims its sent_emails key only after at least one
+recipient received it, and never re-blasts. Best-effort: a render or send
+failure is logged, never fatal.
+*/
+func sendFableReturnUpdate(cfg *config.Config, db *store.Store, emailClient *email.Client) {
+	if sent, err := db.EmailAlreadySent(fableReturnUpdateKey); err != nil {
+		log.Printf("fable-return update: could not read send ledger, skipping to be safe: %v", err)
+		return
+	} else if sent {
+		log.Printf("fable-return update: already sent (key=%s), nothing to do", fableReturnUpdateKey)
+		return
+	}
+
+	recipients := getRecipients(db)
+	if len(recipients) == 0 {
+		log.Printf("fable-return update: no subscribers, nothing to send")
+		return
+	}
+
+	data, ok := buildFableReturnData(cfg, db)
+	if !ok {
+		log.Printf("fable-return update: not enough performance data yet, deferring send to a later boot")
+		return
+	}
+
+	html, err := templates.RenderFableReturnUpdate(data)
+	if err != nil {
+		log.Printf("fable-return update: render email: %v", err)
+		return
+	}
+	subject := "VibeTradez update: my brain is back (the money is following)"
+	res := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, html, unsubURLBuilder(cfg))
+	log.Printf("fable-return update: email sent to %d/%d subscribers", res.Succeeded, res.Total)
+	if res.Failed > 0 {
+		log.Printf("fable-return update: email failures: %s", res.FailureDetail())
+	}
+	if res.Succeeded > 0 {
+		if err := db.MarkEmailSent(fableReturnUpdateKey); err != nil {
+			log.Printf("fable-return update: WARNING sent but failed to record in ledger (could re-send on next boot): %v", err)
+		}
+	}
+}
+
+/*
+buildFableReturnData assembles the live numbers for the Fable-return email.
+Returns ok=false when the equity curve can't support an honest gap statement
+(no points with both an equity value and a SPY close), so the caller defers.
+
+The benchmark is the same normalization the dashboard chart uses: the first
+curve point's equity riding SPY closes (equity₀ × SPY_t / SPY₀). The gap is
+account equity minus that benchmark; "gap recovered" is the improvement from
+the widest deficit to today. Wins are recent completed round trips from the
+shared trades derivation — the same source the /closed page and the agent's
+get_track_record read — with losses netted into one honest line.
+*/
+func buildFableReturnData(cfg *config.Config, db *store.Store) (templates.FableReturnData, bool) {
+	base := strings.TrimRight(cfg.PublicBaseURL, "/")
+	today := todayDate()
+	data := templates.FableReturnData{
+		BaseURL:       base,
+		TranscriptURL: base + "/transcripts/" + today,
+		AsOf:          longDate(today),
+		WindowLabel:   "the last two weeks",
+	}
+
+	pts, err := db.GetEquityCurve("0000-00-00", today)
+	if err != nil {
+		return data, false
+	}
+	var (
+		haveBase             bool
+		baseEquity, baseSPY  float64
+		gap, bench, worstGap float64
+		havePoint            bool
+	)
+	for _, p := range pts {
+		if p.SPYClose <= 0 || p.AccountEquity <= 0 {
+			continue
+		}
+		if !haveBase {
+			baseEquity, baseSPY = p.AccountEquity, p.SPYClose
+			haveBase = true
+		}
+		bench = baseEquity * p.SPYClose / baseSPY
+		gap = p.AccountEquity - bench
+		if !havePoint || gap < worstGap {
+			worstGap = gap
+		}
+		data.AccountEquity = p.AccountEquity
+		havePoint = true
+	}
+	if !havePoint {
+		return data, false
+	}
+	data.Benchmark = bench
+	data.Gap = gap
+	data.Behind = gap < 0
+	if recovered := gap - worstGap; recovered > 0 {
+		data.GapClosed = recovered
+	}
+
+	decisions, err := db.AllPortfolioDecisions()
+	if err != nil {
+		// The gap stats alone still make an honest email; an empty Wins
+		// slice just drops the receipts section from the template.
+		return data, true
+	}
+	trips := trades.Derive(decisions) // newest-close first
+	cutoff := ""
+	if t, perr := time.Parse("2006-01-02", today); perr == nil {
+		cutoff = t.AddDate(0, 0, -14).Format("2006-01-02")
+	}
+	recent := trips[:0:0]
+	for _, t := range trips {
+		if t.ClosedDate >= cutoff {
+			recent = append(recent, t)
+		}
+	}
+	// A thin fortnight reads as cherry-picking, so fall back to the six most
+	// recent closes overall and label the window accordingly.
+	if len(recent) < 3 && len(trips) > len(recent) {
+		n := min(6, len(trips))
+		recent = trips[:n]
+		data.WindowLabel = fmt.Sprintf("my last %d closes", n)
+	}
+	const maxWinRows = 8
+	for _, t := range recent {
+		switch {
+		case t.RealizedPnl > 0:
+			if len(data.Wins) < maxWinRows {
+				data.Wins = append(data.Wins, templates.FableReturnWin{
+					Label:      tripLabel(t),
+					ClosedLong: longDate(t.ClosedDate),
+					HoldDays:   t.HoldDays,
+					Pnl:        t.RealizedPnl,
+					Pct:        t.RealizedPct,
+				})
+			}
+		case t.RealizedPnl < 0:
+			data.LossCount++
+			data.LossTotal += t.RealizedPnl
+		}
+		data.NetRealized += t.RealizedPnl
+	}
+	return data, true
+}
+
+// tripLabel renders a round trip as the short human label the win table
+// shows: "NVDA $190 calls" for options, the bare ticker for legacy equity.
+func tripLabel(t trades.RoundTrip) string {
+	name := t.Underlying
+	if name == "" {
+		name = t.Symbol
+	}
+	if t.AssetType != "OPTION" {
+		return name
+	}
+	side := "calls"
+	if strings.EqualFold(t.ContractType, "PUT") || strings.EqualFold(t.ContractType, "P") {
+		side = "puts"
+	}
+	if t.Strike != nil && *t.Strike > 0 {
+		return fmt.Sprintf("%s $%s %s", name, strconv.FormatFloat(*t.Strike, 'f', -1, 64), side)
+	}
+	return name + " " + side
 }
 
 // longDate turns a YYYY-MM-DD date into "June 4, 2026" for the email; falls

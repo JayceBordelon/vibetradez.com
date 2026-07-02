@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed schwab_reauth.html analysis_window.html live_trading_update.html options_only_update.html persona_update.html
+//go:embed schwab_reauth.html analysis_window.html live_trading_update.html options_only_update.html persona_update.html fable_return_update.html
 var templateFS embed.FS
 
 // ── Schwab re-auth operator nag ──
@@ -92,6 +92,44 @@ type PersonaUpdateData struct {
 
 func RenderPersonaUpdate(d PersonaUpdateData) (string, error) {
 	return renderOne("persona_update.html", d)
+}
+
+// ── One-time Fable-return product update ──
+
+// FableReturnWin is one recent profitable round trip shown in the win
+// breakdown table of the Fable-return email.
+type FableReturnWin struct {
+	Label      string // human instrument label, e.g. "NVDA $190 calls"
+	ClosedLong string // long-form close date, e.g. "June 27, 2026"
+	HoldDays   int
+	Pnl        float64 // realized P&L in dollars (positive)
+	Pct        float64 // realized P&L percent
+}
+
+// FableReturnData backs the one-time product-update email announcing that
+// the agent is back on Claude Fable 5 and reporting live performance: the
+// current account value, the SPY buy-and-hold benchmark gap, how much of
+// that gap has been recovered since its worst point, and a breakdown of
+// recent winning round trips (with the honest net including losses).
+// BaseURL is the public site root (no trailing slash).
+type FableReturnData struct {
+	BaseURL       string
+	TranscriptURL string
+	AsOf          string // long-form date the numbers were read
+	AccountEquity float64
+	Benchmark     float64 // SPY buy-and-hold on the same starting equity
+	Gap           float64 // AccountEquity - Benchmark (negative = behind)
+	GapClosed     float64 // improvement from the worst gap to now (>= 0)
+	Behind        bool    // Gap < 0
+	Wins          []FableReturnWin
+	LossCount     int     // losing round trips in the same window
+	LossTotal     float64 // sum of those losses (negative or zero)
+	NetRealized   float64 // wins + losses over the window
+	WindowLabel   string  // human window description, e.g. "the last two weeks"
+}
+
+func RenderFableReturnUpdate(d FableReturnData) (string, error) {
+	return renderOne("fable_return_update.html", d)
 }
 
 // emailFuncs gives templates locale-correct currency + percent helpers so
