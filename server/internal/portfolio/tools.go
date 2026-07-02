@@ -343,7 +343,7 @@ func ToolDefinitions() []anthropic.ToolUnionParam {
 		}},
 		{OfTool: &anthropic.ToolParam{
 			Name:        "send_recap_email",
-			Description: anthropic.String("Write and send the recap email to all subscribers. You author the FULL HTML body yourself (the prompt describes the house style). Call it ONCE near the end of a session, and ONLY if you bought or sold something this session — never on a hold-only session, and never one email per trade (one email covers all of today's moves). Refused if you made no trades, or if a recap already went out this session."),
+			Description: anthropic.String("Write and send the recap email to all subscribers. You author the FULL HTML body yourself (the prompt describes the house style). Call it ONCE near the end of a session, and ONLY if you SOLD something this session (closed or trimmed a position, including liquidating legacy stock) — never for a session that only bought or held, and never one email per trade (one email covers all of today's moves). Refused if nothing was sold, or if a recap already went out this session."),
 			InputSchema: anthropic.ToolInputSchemaParam{
 				Properties: map[string]any{
 					"subject": str("The subject line, specific to today's moves (e.g. \"VibeTradez: opened NVDA calls, trimmed the winners\")."),
@@ -935,9 +935,9 @@ func (d *ToolDispatcher) dispatchWriteSummary(input json.RawMessage) string {
 /*
 dispatchSendRecapEmail sends the model-authored recap email to all
 subscribers, enforcing the two session-level gates: at most ONE email per
-session, and ONLY when the session actually traded (a buy or sell, never a
-hold). The model authors the HTML; the configured RecapSender owns delivery
-and the per-recipient unsubscribe wiring.
+session, and ONLY when the session closed something (a sell — buys and
+holds never email subscribers). The model authors the HTML; the configured
+RecapSender owns delivery and the per-recipient unsubscribe wiring.
 */
 func (d *ToolDispatcher) dispatchSendRecapEmail(ctx context.Context, input json.RawMessage) string {
 	var args struct {
@@ -961,9 +961,9 @@ func (d *ToolDispatcher) dispatchSendRecapEmail(ctx context.Context, input json.
 		d.mu.Unlock()
 		return jsonError("send_recap_email: a recap email already went out this session. Only one is allowed per session — do not send another.")
 	}
-	if !d.tradedLocked() {
+	if !d.soldLocked() {
 		d.mu.Unlock()
-		return jsonError("send_recap_email: this session has not bought or sold anything. The recap is only for sessions with at least one trade, so skip it on a hold-only session.")
+		return jsonError("send_recap_email: this session has not SOLD anything. The recap email goes out only when a position is closed or trimmed — never for buys or holds — so skip it this session.")
 	}
 	// Claim the slot before the network send so a second call cannot race a
 	// duplicate email out; released again only if the send itself fails.
@@ -982,12 +982,14 @@ func (d *ToolDispatcher) dispatchSendRecapEmail(ctx context.Context, input json.
 	return string(out)
 }
 
-// tradedLocked reports whether any committed decision this session is a real
-// trade (a buy or sell), not a hold. Caller must hold d.mu.
-func (d *ToolDispatcher) tradedLocked() bool {
+// soldLocked reports whether any committed decision this session closed or
+// trimmed a position (a sell). Buys and holds don't count: subscribers only
+// hear from Claudia when trades CLOSE, so a buy-only or hold-only session
+// sends no email. Caller must hold d.mu.
+func (d *ToolDispatcher) soldLocked() bool {
 	for _, dec := range d.decisions {
 		switch dec.Action {
-		case ActionBuyEquity, ActionSellEquity, ActionBuyOption, ActionSellOption:
+		case ActionSellEquity, ActionSellOption:
 			return true
 		}
 	}

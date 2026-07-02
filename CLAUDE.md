@@ -190,6 +190,6 @@ docker compose up -d --force-recreate trading-server  # Full recreate (env reloa
 | Live re-pricing overlays + SSE hook | `client/lib/live-pricing.ts` + `client/hooks/use-live-quotes.ts` |
 | Portfolio store tables + methods | `server/internal/store/portfolio.go` |
 | Portfolio API endpoints | `server/internal/server/portfolio.go` |
-| Recap email (model-authored, per session it trades) | `send_recap_email` tool in `internal/portfolio/tools.go` + `recapEmailSender` in `cmd/scanner/portfolio.go` |
+| Recap email (model-authored, only on sessions that close a position) | `send_recap_email` tool in `internal/portfolio/tools.go` + `recapEmailSender` in `cmd/scanner/portfolio.go` |
 | Market open / holiday gating | `server/internal/calendar/calendar.go` |
 | In-process Google OAuth | `server/internal/auth/` |

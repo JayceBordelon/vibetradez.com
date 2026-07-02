@@ -1,6 +1,6 @@
 # vibetradez.com
 
-An AI runs a single real brokerage account. Each trading day Claude (we call her Claudia) reads the book, the tape, and the news, then decides from scratch what to do with the money: buy options, trim, sell, or hold cash. It trades options only — calls and puts — and liquidates any leftover stock to fund them. Positions are held across days, sizing is the model's call within code-enforced caps (no single contract over ~10% of equity, no single name over ~25%), and the benchmark is buy-and-hold SPY. Subscribers watch and get a recap email every session it trades.
+An AI runs a single real brokerage account. Each trading day Claude (we call her Claudia) reads the book, the tape, and the news, then decides from scratch what to do with the money: buy options, trim, sell, or hold cash. It trades options only — calls and puts — and liquidates any leftover stock to fund them. Positions are held across days, sizing is the model's call within code-enforced caps (no single contract over ~10% of equity, no single name over ~25%), and the benchmark is buy-and-hold SPY. Subscribers watch and get a recap email only when a trade closes — a session that just buys or holds emails nobody.
 
 > **This is live.** The account trades real money against the Schwab Trader API whenever `TRADING_ENABLED=true`. There is no paper mode. Every number on the site comes from one real account.
 
@@ -33,7 +33,7 @@ Five crons drive the day (America/New_York, weekends and holidays skipped):
 00 16 * * MON-FRI    EOD                 snapshots equity vs SPY
 ```
 
-Orders are fire-and-forget LIMITs that fill asynchronously. Alongside the broker feed, the model pulls free, no-account real-time signal to stay current on hot names — headlines (Yahoo Finance + Google News RSS) and retail hype (StockTwits trending + bull/bear sentiment) — on top of its built-in web search. The full tool-by-tool reasoning of all three daily sessions is merged into one public transcript per day at `/transcripts/<date>`. The recap email is model-authored and goes out at the end of any session it actually trades, so a hold-only session sends nothing.
+Orders are fire-and-forget LIMITs that fill asynchronously. Alongside the broker feed, the model pulls free, no-account real-time signal to stay current on hot names — headlines (Yahoo Finance + Google News RSS) and retail hype (StockTwits trending + bull/bear sentiment) — on top of its built-in web search. The full tool-by-tool reasoning of all three daily sessions is merged into one public transcript per day at `/transcripts/<date>`. The recap email is model-authored and goes out only when the session closed a position (a sell, including legacy-stock liquidation) — buy-only and hold-only sessions send nothing.
 
 ## The guardrails
 

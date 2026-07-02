@@ -228,8 +228,9 @@ func (f *fakeRecap) SendRecapEmail(_ context.Context, subject, _ string) (int, e
 	return 7, nil
 }
 
-// send_recap_email is gated: it refuses on a hold-only session, sends once
-// after a real trade, and refuses a second send in the same session.
+// send_recap_email is gated on CLOSES: it refuses on a hold-only session,
+// still refuses after a buy (buys don't email subscribers), sends once after
+// a sell, and refuses a second send in the same session.
 func TestDispatch_SendRecapEmail(t *testing.T) {
 	recap := &fakeRecap{}
 	d := NewToolDispatcher(&fakeReader{}, &fakeExec{}, baseSnapshot())
@@ -247,15 +248,28 @@ func TestDispatch_SendRecapEmail(t *testing.T) {
 		t.Fatalf("a refused recap must not send, got %d sends", recap.calls)
 	}
 
-	// Make a real trade.
+	// A buy alone must NOT unlock the recap: subscribers only hear from
+	// Claudia when a trade closes.
 	buy := mustJSON(t, map[string]any{"occ_symbol": "NVDA  260116C1", "underlying": "NVDA", "contract_type": "CALL", "strike": 150.0, "expiration": "2026-01-16", "contracts": 1, "limit_price": 4.0, "rationale": "x"})
 	if r := d.Dispatch(context.Background(), "buy_option", buy); isErrResult(r) {
 		t.Fatalf("buy should pass, got: %s", r)
 	}
+	if r := d.Dispatch(context.Background(), "send_recap_email", args()); !isErrResult(r) {
+		t.Fatalf("recap on a buy-only session should be refused, got: %s", r)
+	}
+	if recap.calls != 0 {
+		t.Fatalf("a buy-only session must not email subscribers, got %d sends", recap.calls)
+	}
+
+	// Close the position: the sell unlocks the recap.
+	sell := mustJSON(t, map[string]any{"occ_symbol": "NVDA  260116C1", "contracts": 1, "limit_price": 5.0, "rationale": "x"})
+	if r := d.Dispatch(context.Background(), "sell_option", sell); isErrResult(r) {
+		t.Fatalf("sell of the held contract should pass, got: %s", r)
+	}
 
 	// Now the recap sends, exactly once, with the model's subject.
 	if r := d.Dispatch(context.Background(), "send_recap_email", args()); isErrResult(r) {
-		t.Fatalf("recap after a trade should send, got: %s", r)
+		t.Fatalf("recap after a close should send, got: %s", r)
 	}
 	if recap.calls != 1 || recap.lastSubj != "VibeTradez recap" {
 		t.Fatalf("recap should have sent once with the subject, got calls=%d subj=%q", recap.calls, recap.lastSubj)
