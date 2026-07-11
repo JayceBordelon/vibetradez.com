@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -165,8 +166,28 @@ func isLocalStubKey(k string) bool {
 	return false
 }
 
+/*
+decommissioned winds the platform down: the operator has taken a
+research-intensive role and can no longer run the service. With this set,
+the three daily decision sessions are never registered (and RUN_ON_START is
+ignored), so the model can never place another opening order — critical
+because the -liquidate pass leaves the account in cash and a Monday 9:45
+session would happily spend it. The risk sweep and the EOD snapshot stay on
+so the final closing fills still reconcile onto the dashboard, and the
+farewell letter goes out on boot via sendFarewellUpdate.
+*/
+const decommissioned = true
+
 func main() {
+	liquidate := flag.Bool("liquidate", false, "close every open position with aggressive resting limit orders, then exit (decommission mode)")
+	flag.Parse()
+
 	cfg := config.Load()
+
+	if *liquidate {
+		runLiquidation(cfg)
+		return
+	}
 
 	db, err := store.New(cfg.DatabaseURL)
 	if err != nil {
@@ -297,17 +318,21 @@ func main() {
 			}()
 			runPortfolioEODSnapshot(db, portfolioReader)
 		}
-		for _, ps := range portfolioSlots {
-			ps := ps
-			job := func() {
-				if open, reason := isMarketOpen(); !open {
-					log.Printf("Skipping portfolio %s session: market closed (%s)", ps.slot, reason)
-					return
+		if decommissioned {
+			log.Printf("portfolio: DECOMMISSIONED, decision sessions are disabled (open/midday/close crons not registered)")
+		} else {
+			for _, ps := range portfolioSlots {
+				ps := ps
+				job := func() {
+					if open, reason := isMarketOpen(); !open {
+						log.Printf("Skipping portfolio %s session: market closed (%s)", ps.slot, reason)
+						return
+					}
+					runPortfolioSession(db, portfolioAgent, ps.slot)
 				}
-				runPortfolioSession(db, portfolioAgent, ps.slot)
-			}
-			if _, err := c.AddFunc(ps.schedule, job); err != nil {
-				log.Fatalf("Failed to add portfolio %s session cron job: %v", ps.slot, err)
+				if _, err := c.AddFunc(ps.schedule, job); err != nil {
+					log.Fatalf("Failed to add portfolio %s session cron job: %v", ps.slot, err)
+				}
 			}
 		}
 		if _, err := c.AddFunc(cfg.CronScheduleRisk, riskJob); err != nil {
@@ -316,7 +341,7 @@ func main() {
 		if _, err := c.AddFunc(cfg.CronScheduleEODSnapshot, eodSnapshotJob); err != nil {
 			log.Fatalf("Failed to add portfolio EOD snapshot cron job: %v", err)
 		}
-		log.Printf("portfolio: crons registered (open=%s, midday=%s, close=%s, risk=%s, eod=%s)", cfg.CronSchedulePortfolioOpen, cfg.CronSchedulePortfolioMidday, cfg.CronSchedulePortfolioClose, cfg.CronScheduleRisk, cfg.CronScheduleEODSnapshot)
+		log.Printf("portfolio: crons registered (open=%s, midday=%s, close=%s, risk=%s, eod=%s, decommissioned=%t)", cfg.CronSchedulePortfolioOpen, cfg.CronSchedulePortfolioMidday, cfg.CronSchedulePortfolioClose, cfg.CronScheduleRisk, cfg.CronScheduleEODSnapshot, decommissioned)
 	}
 
 	// Daily Schwab refresh-token expiry warning (12:00 ET).
@@ -375,7 +400,7 @@ func main() {
 		log.Printf("Active subscribers: %d", len(subs))
 	}
 
-	if os.Getenv("RUN_ON_START") == "true" && portfolioAgent != nil {
+	if os.Getenv("RUN_ON_START") == "true" && portfolioAgent != nil && !decommissioned {
 		log.Println("Running initial portfolio session...")
 		runPortfolioSession(db, portfolioAgent, "midday")
 	}
@@ -388,6 +413,7 @@ func main() {
 	sendOptionsOnlyUpdate(cfg, db, emailClient)
 	sendPersonaUpdate(cfg, db, emailClient)
 	sendFableReturnUpdate(cfg, db, emailClient)
+	sendFarewellUpdate(cfg, db, emailClient)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed schwab_reauth.html analysis_window.html live_trading_update.html options_only_update.html persona_update.html fable_return_update.html
+//go:embed schwab_reauth.html analysis_window.html live_trading_update.html options_only_update.html persona_update.html fable_return_update.html farewell_update.html
 var templateFS embed.FS
 
 // ── Schwab re-auth operator nag ──
@@ -130,6 +130,40 @@ type FableReturnData struct {
 
 func RenderFableReturnUpdate(d FableReturnData) (string, error) {
 	return renderOne("fable_return_update.html", d)
+}
+
+// ── One-time farewell letter (decommission) ──
+
+// FarewellData backs the one-time farewell email announcing the platform's
+// decommission: the operator has taken a research-intensive role and can no
+// longer run the service, so every position closes at the next Monday open
+// and the account winds down. It carries the final honest accounting (start
+// vs end equity, the SPY buy-and-hold gap, round-trip record) so the letter
+// can joke about exactly how much money was lost. Abs* fields are the
+// magnitudes of their signed counterparts, for "lost $X" phrasing where the
+// usd helpers' sign prefix would read wrong. BaseURL is the public site root
+// (no trailing slash).
+type FarewellData struct {
+	BaseURL       string
+	AsOf          string  // long-form date the letter was sent
+	StartDate     string  // long-form date of the first equity-curve point
+	StartEquity   float64 // equity at the first curve point
+	CurrentEquity float64 // equity at the latest curve point
+	TotalPnl      float64 // CurrentEquity - StartEquity
+	AbsTotalPnl   float64 // |TotalPnl|
+	Lost          bool    // TotalPnl < 0
+	Benchmark     float64 // SPY buy-and-hold on the same starting equity
+	Gap           float64 // CurrentEquity - Benchmark
+	AbsGap        float64 // |Gap|
+	Behind        bool    // Gap < 0
+	TradingDays   int     // equity-curve points with usable data
+	Trips         int     // completed round trips, all time
+	Wins          int     // trips with positive realized P&L
+	Losses        int     // trips with negative realized P&L
+}
+
+func RenderFarewellUpdate(d FarewellData) (string, error) {
+	return renderOne("farewell_update.html", d)
 }
 
 // emailFuncs gives templates locale-correct currency + percent helpers so
