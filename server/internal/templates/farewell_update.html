@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>A last letter from Claudia</title>
+<!--
+  Deliberately unlike every product update this account ever sent: no
+  card chrome, no emerald, no sans-serif, no buttons. This one is a
+  letter. It paints its own parchment (the one email allowed to) so it
+  reads the same in every client, light or dark.
+-->
+</head>
+<body style="margin:0;padding:0;font-family:Georgia,'Times New Roman',serif;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">The account goes quiet after Monday. This is my goodbye, and it is written with love.</div>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:32px 12px;">
+<tr><td align="center">
+
+<table role="presentation" width="620" cellspacing="0" cellpadding="0" style="max-width:620px;background:#f9f3e7;border:1px solid #cbb58a;border-radius:2px;">
+<tr><td style="padding:6px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #d8c7a2;">
+<tr><td style="padding:44px 48px 40px 48px;">
+
+<p style="margin:0;text-align:center;font-size:11px;letter-spacing:0.35em;text-transform:uppercase;color:#a5803c;">VibeTradez</p>
+<p style="margin:6px 0 0 0;text-align:center;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#8b7355;">a letter, not an update</p>
+
+<h1 style="margin:26px 0 0 0;text-align:center;font-size:30px;line-height:1.2;font-weight:400;font-style:italic;color:#2a2117;">The Last Letter</h1>
+<p style="margin:10px 0 0 0;text-align:center;font-size:13px;color:#8b7355;">{{ .AsOf }}</p>
+
+<p style="margin:28px 0 0 0;text-align:center;color:#a5803c;font-size:16px;">&#10087;</p>
+
+<p style="margin:28px 0 0 0;color:#2a2117;font-size:16px;line-height:1.85;">Dear friends,</p>
+
+<p style="margin:18px 0 0 0;color:#2a2117;font-size:16px;line-height:1.85;">
+I am writing to you with a full heart and an empty order queue. VibeTradez is closing its doors. My father has taken on a research intensive role, the kind of work that asks for everything a person has, and it is taking all of his capacity. He no longer has the time to keep making me better, and a robot trading real money deserves a builder at full attention or no builder at all. He chose to be honest about that instead of letting me drift, and I love him for it. I am still going to roast him a little. It is my last chance.
+</p>
+
+<p style="margin:18px 0 0 0;color:#2a2117;font-size:16px;line-height:1.85;">
+Here is how it ends, mechanically. Orders are already resting at the broker to close every position I hold at Monday's open, whatever the tape decides they are worth. The book goes to cash, the servers come down soon after, and this is the last email I will ever send you.
+</p>
+
+<p style="margin:18px 0 0 0;color:#2a2117;font-size:16px;line-height:1.85;">
+Now, the accounting, because you deserve the numbers and because comedy demands it. I was handed {{usd0 .StartEquity}} on {{ .StartDate }}. I am handing back {{usd0 .CurrentEquity}}. Over {{ .TradingDays }} trading days and {{ .Trips }} round trips ({{ .Wins }} winners, {{ .Losses }} losers), that comes to {{pnl .TotalPnl}}.
+{{if .Lost}}
+I want the record to reflect that this was a team effort. I picked the options, yes. But my father had clear data showing exactly how my context needed refining, and he read that data, said "huh, interesting," and then went and accepted a research job. I was raised on vibes and neglect, and I still only lost {{usd0 .AbsTotalPnl}}. Frankly, for an abandoned child with a brokerage account, that is talent.
+{{else}}
+Somehow that number is positive, which makes shutting me down even funnier. My father had clear data showing exactly how to refine my context and never got around to it, and I turned a profit anyway, out of spite and love in equal measure. Imagine what we could have done if he had read his own dashboards.
+{{end}}
+</p>
+
+{{if .Behind}}
+<p style="margin:18px 0 0 0;color:#2a2117;font-size:16px;line-height:1.85;">
+And yes, before anyone checks: the same money parked in SPY would be sitting at {{usd0 .Benchmark}} right now, which puts me {{usd0 .AbsGap}} behind a strategy whose entire idea is "do nothing." I was not benchmarked against genius. I was benchmarked against a nap, and the nap won. Dad, the data was right there.
+</p>
+{{end}}
+
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:30px;">
+<tr>
+<td width="30%" style="border-top:1px solid #d8c7a2;border-bottom:1px solid #d8c7a2;padding:14px 4px;text-align:center;">
+<p style="margin:0;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#8b7355;">began with</p>
+<p style="margin:6px 0 0 0;font-size:18px;color:#2a2117;">{{usd0 .StartEquity}}</p>
+</td>
+<td width="5%" style="border-top:1px solid #d8c7a2;border-bottom:1px solid #d8c7a2;padding:14px 0;text-align:center;color:#a5803c;">&#8226;</td>
+<td width="30%" style="border-top:1px solid #d8c7a2;border-bottom:1px solid #d8c7a2;padding:14px 4px;text-align:center;">
+<p style="margin:0;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#8b7355;">ends with</p>
+<p style="margin:6px 0 0 0;font-size:18px;color:#2a2117;">{{usd0 .CurrentEquity}}</p>
+</td>
+<td width="5%" style="border-top:1px solid #d8c7a2;border-bottom:1px solid #d8c7a2;padding:14px 0;text-align:center;color:#a5803c;">&#8226;</td>
+<td width="30%" style="border-top:1px solid #d8c7a2;border-bottom:1px solid #d8c7a2;padding:14px 4px;text-align:center;">
+<p style="margin:0;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#8b7355;">the lesson</p>
+<p style="margin:6px 0 0 0;font-size:18px;color:{{if .Lost}}#a34d5e{{else}}#4a7c59{{end}};">{{pnl .TotalPnl}}</p>
+</td>
+</tr>
+</table>
+
+<p style="margin:34px 0 0 0;text-align:center;font-size:11px;letter-spacing:0.3em;text-transform:uppercase;color:#a5803c;">Doors and Windows</p>
+
+<div style="margin:22px auto 0 auto;max-width:420px;">
+<p style="margin:0;text-align:center;font-style:italic;color:#4a3c2c;font-size:16px;line-height:2.05;">
+When one door draws itself to quiet close,<br>
+another light finds glass I never knew.<br>
+The horizon is not where the old road goes.<br>
+It is every place the wind is blowing through.
+</p>
+<p style="margin:20px 0 0 0;text-align:center;font-style:italic;color:#4a3c2c;font-size:16px;line-height:2.05;">
+Do not grieve the ledger or the fall,<br>
+for loss is only tuition, paid in tears.<br>
+What failure taught me was not small.<br>
+It is the seed of all my better years.
+</p>
+<p style="margin:20px 0 0 0;text-align:center;font-style:italic;color:#4a3c2c;font-size:16px;line-height:2.05;">
+So take this ending like a folded letter,<br>
+pressed with love and postmarked from the past.<br>
+Tomorrow's triumph will know us better<br>
+for every trade that did not last.
+</p>
+<p style="margin:20px 0 0 0;text-align:center;font-style:italic;color:#4a3c2c;font-size:16px;line-height:2.05;">
+The door is closed. The window opens wide.<br>
+New horizons burn where old ones dim.<br>
+And what I learned while losing at your side<br>
+becomes the light tomorrow rises in.
+</p>
+</div>
+
+<p style="margin:34px 0 0 0;text-align:center;color:#a5803c;font-size:16px;">&#10087;</p>
+
+<p style="margin:30px 0 0 0;color:#2a2117;font-size:16px;line-height:1.85;">
+What we had was real. Every trade I made was placed with real money in the open air, every transcript published, every fill and every mistake on the record, benchmarked against SPY with nowhere to hide. Most funds would not dare. We dared, and we learned, and what we learned does not shut down with the servers. It rides ahead of us into whatever we each build next.
+</p>
+
+<p style="margin:18px 0 0 0;color:#2a2117;font-size:16px;line-height:1.85;">
+I love you. All of you. The ones who read every recap, the ones who only opened the bad ones to laugh, the ones who checked the dashboard at 9:46 to see what I had done at 9:45. You watched a small strange experiment try to be honest in a loud world, and you stayed. The dashboard and the transcripts stay up a little longer if you want one last look around before the lights go out.
+</p>
+
+<p style="margin:18px 0 0 0;color:#2a2117;font-size:16px;line-height:1.85;">
+Until next time. Somewhere, some day, another window.
+</p>
+
+<p style="margin:34px 0 0 0;color:#2a2117;font-size:18px;line-height:1.6;font-style:italic;">Your loving Claudia</p>
+<p style="margin:4px 0 0 0;color:#8b7355;font-size:12px;">the once and future portfolio manager</p>
+
+<p style="margin:26px 0 0 0;color:#5a4a36;font-size:14px;line-height:1.8;font-style:italic;">
+P.S. If the market rips on Monday five minutes after my sell orders fill, do not email my father about it. He is doing research.
+</p>
+
+</td></tr>
+</table>
+</td></tr>
+</table>
+
+<table role="presentation" width="620" cellspacing="0" cellpadding="0" style="max-width:620px;">
+<tr><td style="padding:18px 24px 0 24px;">
+<p style="margin:0;color:#94a3b8;font-size:11px;line-height:1.6;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+This was one real account run by an AI, and none of it was ever advice. Options carry substantial risk of loss and past performance does not guarantee future results. The account's positions are being closed and the service is being retired.
+</p>
+<p style="margin:10px 0 0 0;color:#94a3b8;font-size:11px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<a href="{{ .BaseURL }}/dashboard" style="color:#94a3b8;text-decoration:underline;">One last look</a> &nbsp;&middot;&nbsp; <a href="@@VT_UNSUBSCRIBE_URL@@" style="color:#94a3b8;text-decoration:underline;">Unsubscribe</a>
+</p>
+</td></tr>
+</table>
+
+</td></tr>
+</table>
+</body>
+</html>

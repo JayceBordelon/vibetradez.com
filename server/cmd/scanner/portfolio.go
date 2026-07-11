@@ -559,6 +559,148 @@ func tripLabel(t trades.RoundTrip) string {
 	return name + " " + side
 }
 
+// farewellUpdateKey is the sent_emails ledger key for the one-time farewell
+// letter announcing the platform's decommission: the operator has taken a
+// research-intensive role and can no longer run the service, so the book
+// closes at the next Monday open and the account winds down. Self-gating
+// like the other one-time updates.
+const farewellUpdateKey = "farewell_decommission_v1"
+
+/*
+sendFarewellUpdate sends the one-time farewell letter. Like
+sendFableReturnUpdate it carries live numbers (the final start-vs-end
+accounting, the SPY gap, the round-trip record), so when the store can't
+support honest numbers the send is deferred WITHOUT claiming the ledger key
+and retries on a later boot. Otherwise the same self-gating shape as the
+other one-time updates: claims its sent_emails key only after at least one
+recipient received it, and never re-blasts. Best-effort: a render or send
+failure is logged, never fatal.
+*/
+func sendFarewellUpdate(cfg *config.Config, db *store.Store, emailClient *email.Client) {
+	if sent, err := db.EmailAlreadySent(farewellUpdateKey); err != nil {
+		log.Printf("farewell update: could not read send ledger, skipping to be safe: %v", err)
+		return
+	} else if sent {
+		log.Printf("farewell update: already sent (key=%s), nothing to do", farewellUpdateKey)
+		return
+	}
+
+	recipients := getRecipients(db)
+	if len(recipients) == 0 {
+		log.Printf("farewell update: no subscribers, nothing to send")
+		return
+	}
+
+	data, ok := buildFarewellData(cfg, db)
+	if !ok {
+		log.Printf("farewell update: not enough performance data yet, deferring send to a later boot")
+		return
+	}
+
+	html, err := templates.RenderFarewellUpdate(data)
+	if err != nil {
+		log.Printf("farewell update: render email: %v", err)
+		return
+	}
+	subject := "A last letter from Claudia"
+	res := emailClient.SendPersonalizedToList(cfg.EmailFrom, recipients, subject, html, unsubURLBuilder(cfg))
+	log.Printf("farewell update: email sent to %d/%d subscribers", res.Succeeded, res.Total)
+	if res.Failed > 0 {
+		log.Printf("farewell update: email failures: %s", res.FailureDetail())
+	}
+	if res.Succeeded > 0 {
+		if err := db.MarkEmailSent(farewellUpdateKey); err != nil {
+			log.Printf("farewell update: WARNING sent but failed to record in ledger (could re-send on next boot): %v", err)
+		}
+	}
+}
+
+/*
+buildFarewellData assembles the final accounting for the farewell letter.
+Returns ok=false when the equity curve has no usable point (fresh or broken
+store), so the caller defers rather than sending a letter with hollow
+numbers.
+
+Start/end equity are the first and last curve points with a positive equity
+value. The SPY benchmark is the same normalization the dashboard chart and
+the Fable-return email use: the first dual-valued point's equity riding SPY
+closes (equity0 x SPY_t / SPY0). The round-trip record comes from the shared
+trades derivation, the same source the /closed page reads.
+*/
+func buildFarewellData(cfg *config.Config, db *store.Store) (templates.FarewellData, bool) {
+	base := strings.TrimRight(cfg.PublicBaseURL, "/")
+	today := todayDate()
+	data := templates.FarewellData{
+		BaseURL: base,
+		AsOf:    longDate(today),
+	}
+
+	pts, err := db.GetEquityCurve("0000-00-00", today)
+	if err != nil {
+		return data, false
+	}
+	var (
+		haveStart           bool
+		haveBench           bool
+		baseEquity, baseSPY float64
+	)
+	for _, p := range pts {
+		if p.AccountEquity <= 0 {
+			continue
+		}
+		data.TradingDays++
+		if !haveStart {
+			data.StartEquity = p.AccountEquity
+			data.StartDate = longDate(p.Date)
+			haveStart = true
+		}
+		data.CurrentEquity = p.AccountEquity
+		if p.SPYClose > 0 {
+			if !haveBench {
+				baseEquity, baseSPY = p.AccountEquity, p.SPYClose
+				haveBench = true
+			}
+			data.Benchmark = baseEquity * p.SPYClose / baseSPY
+		}
+	}
+	if !haveStart {
+		return data, false
+	}
+	data.TotalPnl = data.CurrentEquity - data.StartEquity
+	data.AbsTotalPnl = absFloat(data.TotalPnl)
+	data.Lost = data.TotalPnl < 0
+	if haveBench {
+		data.Gap = data.CurrentEquity - data.Benchmark
+		data.AbsGap = absFloat(data.Gap)
+		data.Behind = data.Gap < 0
+	}
+
+	decisions, err := db.AllPortfolioDecisions()
+	if err != nil {
+		// The equity accounting alone still makes an honest letter; a zero
+		// Trips count just softens the record line.
+		return data, true
+	}
+	trips := trades.Derive(decisions)
+	data.Trips = len(trips)
+	for _, t := range trips {
+		switch {
+		case t.RealizedPnl > 0:
+			data.Wins++
+		case t.RealizedPnl < 0:
+			data.Losses++
+		}
+	}
+	return data, true
+}
+
+func absFloat(v float64) float64 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
 // longDate turns a YYYY-MM-DD date into "June 4, 2026" for the email; falls
 // back to the raw string if it doesn't parse.
 func longDate(date string) string {
