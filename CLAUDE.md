@@ -2,6 +2,8 @@
 
 Operator notes for this repo. Read before touching the trading service.
 
+> **Discontinued.** The service stopped operating in July 2026 and the GitHub repo is archived. The notes below are kept for reference and describe the system as it last ran. Do not start new work here.
+
 ## Architecture: autonomous portfolio manager
 
 VibeTradez is an autonomous **portfolio manager** that runs a single personal brokerage account: one agent, three times a trading day, decides from scratch (buy options, trim, sell, liquidate leftover stock, or hold cash), sizes positions within code-enforced caps, and holds positions across days. It trades **options only**. Mandate: grow the account, benchmarked to SPY. (The original three-pick options bot has been removed.)
